@@ -1,221 +1,286 @@
-# NWQ-Sim: Northwest Quantum System Simulation Environment
+# NWQSim: Northwest Quantum Circuit Simulation Environment 
 
-A Density Matrix Quantum Simulation Environment for Single-GPU/CPU, Single-Node-Multi-GPUs/CPUs and Multi-Nodes GPU/CPU Cluster. It supports Intel/AMD/IBM CPUs, NVIDIA/AMD GPUs. 
+A Quantum System Simulation Environment on classical multi-node, multi-CPU/GPU heterogeneous HPC systems. It currently includes a state-vector simulator SV-Sim ([SC'21](doc/svsim_sc21)) for high-performance ideal simulation, and a density matrix simulator DM-Sim ([SC'20](doc/dmsim_sc20)) for noise-aware simulation. It supports C++, Python, Q#/QIR, Qiskit, QASM, XACC as the front-ends, and X86/PPC CPU, NVIDIA/AMD GPU as the backends, see below:
 
-NWQ-Sim is a quantum system simulation environment supporting Qiskit and Q# as the frontend and CPU/GPU/Phi. It supports single-device, scale-up (single-node-multi-devices) and scale-out (multi-node cluster). It supports NVIDIA GPUs and AMD GPUs. It supports AVX512 and AVX2.
-
-This released version supports Qiskit with CPU backends.
-
-![alt text](pic.png)
-
-## Current version
-Latest version: **2.6**
-
-## Supported Gate
-
-Refer to Qiskit Circuit Library [Standard Gates](https://qiskit.org/documentation/apidoc/circuit_library.html), [OpenQASM-2](https://arxiv.org/pdf/1707.03429.pdf), [OpenQASM-3](https://arxiv.org/pdf/2104.14722.pdf), [Q# Intrinsics](https://docs.microsoft.com/en-us/qsharp/api/qsharp/microsoft.quantum.intrinsic), and [QIR](https://github.com/microsoft/qsharp-runtime/blob/main/src/Qir/Runtime/public/QSharpSimApi_I.hpp).
-
-The following gates are natively implemented in NWQSim:
-
-|Gates | Meaning | Qiskit | OpenQASM | Q#/QIR |
-|:---: | ------- | ------ | -------- | ------ |
-|X | Pauli-X bit flip | X | x | X | 
-|Y | Pauli-Y bit and phase flip  | Y | y | Y |
-|Z | Pauli-Z phase flip | Z | z | Z |
-|H | Hadamard  | H | h | H |
-|S | sqrt(Z) phase  | S | s | S |
-|SDG | conjugate of sqrt(Z) | Sdg | sdg | AdjointS |
-|T | sqrt(S) phase | T | t | T |
-|TDG | conjugate of sqrt(S) | Tdg | tdg | AdjointT |
-|RI  | global phase gate | - | - | R(PauliI) |
-|RX | X-axis rotation | RX | rx | R(PauliX) | 
-|RY | Y-axis rotation | RY | ry | R(PauliY) |
-|RZ | Z-axis rotation | RZ | rz | R(PauliZ) |
-|SX | sqrt(X) gate | SX | sx | - |
-|P  | phase gate | Phase | - | R1 | 
-|U  | unitary gate | U | u | - |
-|CX | controlled X | CX | cx | ControlledX |
-|CY | controlled Y | CY | cy | ControlledY |
-|CZ | controlled Z | CZ | cz | ControlledZ |
-|CH | controlled H | CH | ch | ControlledH |
-|CS | controlled S | - | -  | ControlledS |
-|CSDG | controlled SDG | - | - | ControlledAdjointS |
-|CT | controlled T | - | - | ControlledT |
-|CTDG | controlled TDG | - | - | ControlledAdjointT |
-|CRI  | controlled global phase gate | - | - | ControlledR(PauliI) |
-|CRX | controlled X-axis rotation | CRX | crx | ControlledR(PauliX) |
-|CRY | controlled Y-axis rotation | CRY | cry | ControlledR(PauliY) | 
-|CRZ | controlled Z-axis rotation | CRZ | crz | ControlledR(PauliZ) | 
-|CSX | controlled SX | CSX | - | - |
-|CP  | controlled phase gate | CPhase | - | - | 
-|CU  | controlled unitary gate | CU | - | - | 
-|ID  | identity gate | I | id | I |
-|SWAP| swap gate | SWAP | swap | SWAP |
-|M  | measure a qubit | Measure | measure | M |
-|MA | measure all qubits | measure_all | measure | Measure |
-|RESET | reset a qubit | Reset | reset | Reset |
+![alt text](img/nwqsim.png)
 
 
-The following gates are also supported in the wrapper:
+### Current version 2.0
 
-|Gates | Meaning | Qiskit | OpenQASM | Q#/QIR |
-|:---: | ------- | ------ | -------- | ------ |
-|EXP | exponential of a multi-qubit Pauli operator | - | - | Exp | 
-|ControlledExp | multi-controlled EXP | - | - | ControlledExp | 
-|CCX | Toffoli gate | CCX | CCX | CCNOT |
-|CSWAP | Fredkin gate | CSWAP | CSWAP | - |
-|U1 | 1 parameter 0 pulse 1-qubit  | U1 | u1 | - | 
-|U2 | 2 parameter 1 pulse 1-qubit  | U2 | u2 | - |
-|U3 | 3 parameter 2 pulse 1-qubit  | U3 | u3 | - |
-|RXX| rotation about XX | RXX | rxx | - |
-|RYY| rotation about YY | RYY | - | - |
-|RZZ| rotation about ZZ | RZZ | rzz | - |
-|C1 | Arbitrary 1-qubit gate | - | - | - |
-|C2 | Arbitrary 2-qubit gate | - | - | - |
+NWQSim is under active development. Please raise any bugs and suggest features. 
 
-## Configuration
+## About SV-Sim
 
-Update CMakeList.txt.  
+SV-Sim is implemented in C++/CUDA/HIP for general full-state quantum circuit simulation. It assumes qubits are all-to-all connected unless the input circuits are with respect to circuit topology. We use internal gate representations for advanced optimization and profiling.
 
-If you would like multi-threading support (by default enabled), update CMakeLists.txt and enable the option of "USE_OPENMP". Delete the build folder and recompile. 
+![alt text](img/svsim_pip.png)
 
-If your CPU supports AVX512, you can enable the option "USE_AVX512" (by default not enabled) in CMakeLists.txt and recompile. It may bring around 2X on the performance.
+SV-Sim supports the following quantum gates as the interface based on [OpenQASM-2](https://arxiv.org/pdf/1707.03429.pdf), [OpenQASM-3](https://arxiv.org/pdf/2104.14722.pdf), [QIR](https://github.com/microsoft/qsharp-runtime/blob/) and [Qiskit](https://qiskit.org/documentation/apidoc/circuit_library.html):
 
-## Prerequisite
-NWQ-Sim requires the following packages.
+
+|  Gate  | Format | Meaning |
+|:-----: | ------ | ------- |
+| X | X(q) | Pauli-X gate on qubit q |
+| Y | Y(q) | Pauli-Y gate on qubit q |
+| Z | Z(q) | Pauli-Z gate on qubit q |
+| H | H(q) | Clifford Hadamard gate on qubit q |
+| S | S(q) | Clifford sqrt(Z) phase gate on qubit q |
+| SDG | SDG(q) | Clifford inverse of sqrt(Z) on qubit q |
+| T | T(q) | sqrt(S) phase gate on qubit q |
+| TDG | TDG(q) | Inverst of sqrt(S) on qubit q |
+| ID | ID(q) | Identiy gate on qubit q |
+| SX | SX(q) | sqrt(X) gate on qubit q, a basis gate for IBMQ |
+| RI | RI(theta, q) | Global phase gate, U(0,0,a) in QASM3 or RI in Q#|
+| RX | RX(theta, q) | Rotate around X axis for qubit q |
+| RY | RY(theta, q) | Rotate around Y axis for qubit q |
+| RZ | RZ(theta, q) | Rotate around Z axis for qubit q |
+| P  | P(theta, q)  | Phase gate on qubit q as defined by Qiskit | 
+| U  | U(theta, phi, lamb, q) | generic singl-qubit rotation gate with 3 Euler angles, see QASM2 | 
+| CX | CX(ctrl, q) | CNOT or controlled X gate on qubit q|
+| CY | CY(ctrl, q) | Controlled Y gate on qubit q|
+| CZ | CZ(ctrl, q) | Controlled Z gate on qubit q|
+| CH | CH(ctrl, q) | Controlled H gate on qubit q|
+| CS | CS(ctrl, q) | Controlled S gate on qubit q|
+| CSDG | CSDG(ctrl, q) | Controlled SDG gate on qubit q|
+| CT | CT(ctrl, q) | Controlled T gate on qubit q|
+| CTDG | CTDG(ctrl, q) | Controlled TDG gate on qubit q|
+| CRX | CRX(theta, ctrl, q) | Controlled RX gate on qubit q|
+| CRY | CRY(theta, ctrl, q) | Controlled RY gate on qubit q|
+| CRZ | CRZ(theta, ctrl, q) | Controlled RZ gate on qubit q|
+| CSX | CSX(ctrl, q) | Controlled SX gate on qubit q|
+| CP  | CP(theta, ctrl, q) | Controlled P gate on qubit q|
+| CU  | CU(theta, phi, lamb, gamma, ctrl, q) | generic controlled U gate, see Qiskit CU gate | 
+| SWAP | SWAP(ctrl, q) | Swap gate on ctrl and q |
+| M  | M(q) | measure qubit q on pauli-Z basis |
+| MA | MA(n) | sample all qubits for n shots all-together |
+| RESET  | RESET(q) | reset qubit q  to zero state | 
+
+
+Internally, it supports arbitrary 1 or 2 qubit gates for optimization and extension to support new gates:
+|  Gate  | Format | Meaning |
+|:-----: | ------ | ------- |
+| C1 | C1(a0-a3)  | Arbitrary 1-qubit gate |
+| C2 | C2(a0-a15) | Arbitrary 2-qubit gate | 
+
+### Prerequisite
+SV-Sim in general only requires a C++ compiler. However, in order to build for GPUs or scaling (up and out) or using other APIs (python, qir, qiskit), we need the following libraries:
 
 |  Dependency  | Version | Comments |
 |:-----------: | ------- | -------- |
-|  GCC (or XL) | 5.2 or later (16.01 for xlc)  | |
-|    OpenMP    | 4.0     | For single-node scale-up |
-|  Python      | 3.6     | For Python API |
-|  Pybind11    | 2.5.0   | For Python API |
-| Qiskit-Terra | 0.8.0   | For Qiskit API |
-|    Qiskit    | 0.24.0  | For Qiskit API |
-|Qsharp-runtime| 0.15.2101125897 | For Q# QIR backend |
-|   CMake      | - | For compile |
+|     CUDA     | 11.0 or later | NVIDIA GPU backend only | 
+|     GCC      | 7.0 or later  | Or other native C++ compiler |
+|    OpenMP    | Local     | single-node only |
+|     MPI      | Local   | CPU multi-node only | 
+|   NVSHMEM    | 2.6.0   | NVIDIA GPU cluster scale-out only |
+|  Python      | 3.4     | Python API only |
+|  Pybind11    | 2.5.0   | Python API only |
+|  mpi4py      | 3.0.3   | Python API on cluster only |
+|   ROCM       | 3.1.0   | AMD GPU only |
+|   Qiskit     | 0.20.0  | Qiskit interface only |
+|  Q# runtime  | Local   | Q#/QIR interface only |
 
+### Configure and run on ORNL Summit Supercomputer
 
-## Build
-
-For Qiskit API, 
-```text
-python setup.py build
-python setup.py install
 ```
-You may need to install pybind11 (need to ensure pybind/pybind11.h can be found) and cmake. If you install pybind11 using pip, you may need to upgrade to a new version of pip if there are issues with finding pybind11.h.
-```text
-conda install cmake
-conda install pybind11 #python -m pip install pybind11
+$ git clone https://github.com/qir-alliance/nwqsim.git 
+$ cd nwqsim/env
 ```
-
-## Programming
-For Qiskit, after install the qiskit_nwqsim_provider, simply adjust the default Aer to nwqsim provider with dmsim backend:
-```text
-from math import pi
-from qiskit import QuantumCircuit, transpile, execute
-from qiskit_nwqsim_provider import NWQSimProvider
-
-qc = QuantumCircuit(2,2)
-qc.cu(pi/4,pi/5,pi/6,pi/7,0,1)
-qc.x(0)
-qc.swap(0,1)
-qc.measure([0,1], [0,1])
-
-nwqsim = NWQSimProvider('DMSimSimulator')
-backend = nwqsim.backends['svsim_cpu']
-
-trans_qc = transpile(qc, backend)
-job = backend.run(trans_qc)
-print(job.get_counts())
-
-## You can also use execute:
-#result = execute(qc, backend, seed_transpiler=111).result()
-#print(result.get_counts(qc))
+You need to update the env file “setup_summit.sh”, specify the nvshmem path at the end of the LD_LIBRARY_PATH. If you use Q#/QIR, you need to configure the qsharp runtime paths
+```
+$ source setup_summit.sh
+$ cd ../qasm/ibmq_bench/
+$ vim Makefile
+```
+You need to update the Makefile here, mainly the path to NVSHMEM, the GPU arch number, and the project number in run_all.lsf
+```
+$ make -j 8
+$ bsub run_all.lsf
+```
+Alternatively, you can allocate an interactive job and execute
+```
+$ bsub -Is -W 20 -nnodes 2 -P CSCXXX  $SHELL
+$ ./run_all
 ```
 
-For Python, after having the compiled library libdmsim.so,
-```text
-import libdmsim as dmsim
-n_qubits = 4
-sim = dmsim.Simulation(n_qubits)
-sim.H(0)
-sim.X(1)
-sim.H(2)
-sim.CX(0,1)
-res = sim.measure_all(10) #10 shots
-## Print measurement results
-for i in range(len(res)):
-    print ("Test-"+str(i)+": " + "{0:b}".format(res[i]).zfill(n_qubits))
+### Configure and run on NERSC Perlmutter Supercomputer
+```
+$ git clone https://github.com/qir-alliance/nwqsim.git 
+$ cd nwqsim/env
+```
+You need to update the env file “setup_perlmutter.sh”, specify the nvshmem path at the end of the LD_LIBRARY_PATH. If you use Q#/QIR, you need to configure the qsharp runtime paths
+```
+$ source setup_perlmutter.sh
+$ cd ../svsim/qasm/ibmq_bench/
+$ vim makefile_perlmutter
+```
+You need to update the Makefile here, mainly the path to NVSHMEM.
+```
+$ make -j 8 -f makefile_perlmutter
+```
+Alternatively, you can allocate an interactive job and execute
+```
+$ salloc -N 2 -n 8 --qos interactive_ss11 --time 60:00 --constraint gpu -c 1 -G 8 --gpus-per-task 1 --account=m4142_g
+$ ./run_all_perlmutter.sh
 ```
 
-## Noisy Simulation
-We currently support 1-qubit and 2-qubit noisy simulation through the noisy model of Qiskit. The noisy is assumed to be the same for all qubits and for all 1-qubit or 2-qubit gates. See the folowing example:
-```text
-import numpy as np
-from math import pi
-from qiskit import QuantumCircuit, transpile, execute
-from qiskit import ClassicalRegister, QuantumRegister
-from qiskit_nwqsim_provider import NWQSimProvider
-from qiskit.quantum_info import SuperOp
-from qiskit.providers.aer.noise import NoiseModel
-from qiskit.providers.aer.noise import depolarizing_error
-from qiskit.providers.aer.noise import amplitude_damping_error
-from qiskit.providers.aer.noise import phase_damping_error
 
-nwqsim = NWQSimProvider('DMSimSimulator')
-print (nwqsim.backends)
-backend = nwqsim.backends['dmsim']
+## About DM-Sim
 
-#Bell State
-circuit = QuantumCircuit(2,2)
-circuit.h(0)
-circuit.cx(0,1)
-circuit.measure([0,1], [0,1])
-noise_model = NoiseModel()
+DM-Sim is implemented in C++/CUDA/HIP for general density-matrix quantum circuit simulation with noise. It needs to load backend device calibration data (including topology, T1, T2, SPAM, etc.) as a json file for runtime configuration to the simulator instance.  
+We use an array to store the internal gate representations and perform density matrix gate fusion (with more restrictions compared to state-vector) for advanced performance.  
 
-#Add amplitude and phase damping error for 1-qubit
-param_amplitude_damping = 0.05 
-param_phase_damping = 0.03
-amplitude_error = amplitude_damping_error(param_amplitude_damping)
-phase_error = phase_damping_error(param_phase_damping)
-qerror_q1 = phase_error.compose(amplitude_error)
+![alt text](img/dmsim_pip.png)
 
-#Add depolarizing error for 2-qubit
-param_q2 = 0.08
-qerror_q2 = depolarizing_error(param_q2, 2)
-q1_superop = SuperOp(qerror_q1)
-q2_superop = SuperOp(qerror_q2)
-backend.set_noise_1q_sop(q1_superop)
-backend.set_noise_2q_sop(q2_superop)
+#### Noisy Simulation for IBMQ devices
+DM-Sim supports the following basis quantum gates for IBMQ devices:
 
-result = execute(circuit, backend, seed_transpiler=111).result()
-print(result.get_counts(circuit))
-print(result.get_statevector())
+|  Gate  | Format | Meaning |
+|:-----: | ------ | ------- |
+| X | X(q) | Pauli-X gate on qubit q |
+| ID | ID(q) | Identiy gate on qubit q |
+| SX | SX(q) | sqrt(X) gate on qubit q, a basis gate for IBMQ |
+| RZ | RZ(theta, q) | Rotate around Z axis for qubit q |
+| CX | CX(ctrl, q) | CNOT or Controlled X gate on qubit q|
+
+
+#### Noisy Simulation for Rigetti devices
+
+|  Gate  | Format | Meaning |
+|:-----: | ------ | ------- |
+| RX  | | |
+| RZ  | | |
+| CX  | | |
+
+#### Noisy Simulation for IonQ devices
+
+|  Gate  | Format | Meaning |
+|:-----: | ------ | ------- |
+| GPI  | | |
+| GPI2  | | |
+| GZ  | | |
+| MS  | | |
+
+
+#### Noisy Simulation for Quantinuum devices
+|  Gate  | Format | Meaning |
+|:-----: | ------ | ------- |
+| RX  | | |
+| RZ  | | |
+| ZZ  | | |
+
+
+Internally, it supports arbitrary 1 or 2 qubit gates for optimization and extension to support new gates:
+|  Gate  | Format | Meaning |
+|:-----: | ------ | ------- |
+| C2 | C2(array of 0-15)  | Arbitrary density-matrix 1-qubit gate |
+| C4 | C4(array of 0-255) | Arbitrary density-matrix 2-qubit gate | 
+
+
+### Prerequisite
+DM-Sim generally only requires a C++ compiler. However, in order to build for GPUs or scaling (up and out) or using other APIs (python, qir, qiskit), we need the following libraries:
+
+|  Dependency  | Version | Comments |
+|:-----------: | ------- | -------- |
+|     CUDA     | 11.0 or later | NVIDIA GPU backend only | 
+|     GCC      | 7.0 or later  | Or other native C++ compiler |
+|    OpenMP    | Local     | single-node only |
+|     MPI      | Local   | CPU multi-node only | 
+|   NVSHMEM    | 2.6.0   | NVIDIA GPU cluster scale-out only |
+|  Python      | 3.4     | Python API only |
+|  Pybind11    | 2.5.0   | Python API only |
+|  mpi4py      | 3.0.3   | Python API on cluster only |
+|   ROCM       | 3.1.0   | AMD GPU only |
+|   Qiskit     | 0.20.0  | Qiskit interface only |
+|  Q# runtime  | Local   | Q#/QIR interface only |
+
+### Configure and run on ORNL Summit Supercomputer
+
 ```
+$ git clone https://github.com/qir-alliance/nwqsim.git 
+$ cd nwqsim/env
+```
+You need to update the env file “setup_summit.sh”, specify the nvshmem path at the end of the LD_LIBRARY_PATH. If you use Q#/QIR, you need to configure the qsharp runtime paths
+```
+$ source setup_summit.sh
+$ cd ../dmsim/qasm/ibmq_bench/
+$ vim Makefile
+```
+You need to update the Makefile here, mainly the path to NVSHMEM, the GPU arch number, and the project number in run_all.lsf
+```
+$ make -j 8
+$ bsub run_all.lsf
+```
+Alternatively, you can allocate an interactive job and execute
+```
+$ bsub -Is -W 20 -nnodes 2 -P CSCXXX  $SHELL
+$ ./run_all
+```
+
+### Configure and run on NERSC Perlmutter Supercomputer
+```
+$ git clone https://github.com/qir-alliance/nwqsim.git 
+$ cd nwqsim/env
+```
+You need to update the env file “setup_perlmutter.sh”, specify the nvshmem path at the end of the LD_LIBRARY_PATH. If you use Q#/QIR, you need to configure the qsharp runtime paths
+```
+$ source setup_perlmutter.sh
+$ cd ../qasm/ibmq_bench/
+$ vim Makefile
+```
+You need to update the Makefile here, mainly the path to NVSHMEM.
+```
+$ make -j 8
+```
+Alternatively, you can allocate an interactive job and execute
+```
+$ ./run_all
+```
+
+
+
+
+## Authors 
+
+#### [Ang Li](http://www.angliphd.com/), Senior Computer Scientist, Pacific Northwest National Laboratory (PNNL)
+
+Additionally, the following folks contribute the project:
+
+ - Sriram Krishnamoorthy, Pacific Northwest National Laboratory 
+ - Bo Fang, Pacific Northwest National Laboratory
+ - Muqing Zheng, Lehigh University and Pacific Northwest National Laboratory
+ - Cassandra Granade, Microsoft
+ - Martin Roetteler, Microsoft
+ - Bettina Heim, Microsoft
+ - Robin Kuzmin, Microsoft
+ - Stefan Wernli, Microsoft
+ - Guen Prawiroatmodjo, Microsoft
+ - Alan Geller, Microsoft
+ - Samuel Stein, Pacific Northwest National Laboratory
+ - Thien Nguyen, Oak Ridge National Laboratory
+
+
+
 
 ## Citation format
 
-If you find NWQ-Sim useful, please cite our SC-20 paper:
+Please cite our SC'20 and SC'21 papers:
+ - Ang Li, Bo Fang, Christopher Granade, Guen Prawiroatmodjo, Bettina Heim, Martin Roetteler and Sriram Krishnamoorthy, "SV-Sim: Scalable PGAS-based State Vector Simulation of Quantum Circuits" In Proceedings of the International Conference for High Performance Computing, Networking, Storage and Analysis, 2021.
  - Ang Li, Omer Subasi, Xiu Yang, and Sriram Krishnamoorthy. "Density Matrix Quantum Circuit Simulation via the BSP Machine on Modern GPU Clusters." In Proceedings of the International Conference for High Performance Computing, Networking, Storage and Analysis, 2020.
- - Ang Li and Sriram Krishnamoorthy. "SV-Sim: Scalable PGAS-based State Vector Simulation of Quantum Circuits" In Proceedings of the International Conference for High Performance Computing, Networking, Storage and Analysis, 2021.
-
 
 Bibtex:
 ```text
+@inproceedings{li2021svsim,
+    title={SV-Sim: Scalable PGAS-based State Vector Simulation of Quantum Circuits},
+    author={Li, Ang and Fang, Bo and Granade, Christopher and Prawiroatmodjo, Guen and Hein, Bettina and Rotteler, Martin and Krishnamoorthy, Sriram},
+    booktitle={Proceedings of the International Conference for High Performance Computing, Networking, Storage and Analysis},
+    year={2021}
+}
 @inproceedings{li2020density,
     title={Density Matrix Quantum Circuit Simulation via the BSP Machine on Modern GPU Clusters},
     author={Li, Ang and Subasi, Omer and Yang, Xiu and Krishnamoorthy, Sriram},
     booktitle={Proceedings of the International Conference for High Performance Computing, Networking, Storage and Analysis},
     year={2020}
 }
-@inproceedings{li2021svsim,
-    title={SV-Sim: Scalable PGAS-based State Vector Simulation of Quantum Circuits},
-    author={Li, Ang and Krishnamoorthy, Sriram},
-    booktitle={Proceedings of the International Conference for High Performance Computing, Networking, Storage and Analysis},
-    year={2021}
-}
-
 ``` 
 
 ## License
@@ -224,12 +289,12 @@ This project is licensed under the MIT License, see [LICENSE](LICENSE) file for 
 
 ## Acknowledgments
 
-**PNNL-IPID: 31919-E, ECCN: EAR99, IR: PNNL-SA-143160**
-
 **PNNL-IPID: 32166-E, ECCN: EAR99, IR: PNNL-SA-161181**
 
 This project is fully supported by the [Quantum Science Center (QSC)](https://qscience.org/).The Pacific Northwest National Laboratory (PNNL) is operated by Battelle for the U.S. Department of Energy (DOE) under contract DE-AC05-76RL01830. 
 
 ## Contributing
 
-Please contact us If you'd like to contribute to NWQ-Sim. See the contact in our paper or my [webpage](http://www.angliphd.com). Have fun!
+Please contact us If you'd like to contribute to SV-Sim. See the contact in our paper or my [webpage](http://www.angliphd.com).
+
+
