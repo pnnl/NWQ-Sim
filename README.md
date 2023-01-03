@@ -245,6 +245,7 @@ $ ./run_all
 
 Additionally, the following folks contribute the project:
 
+ - Meng Wang, University of British Columbia and Pacific Northwest National Laboratory 
  - Sriram Krishnamoorthy, Pacific Northwest National Laboratory 
  - Bo Fang, Pacific Northwest National Laboratory
  - Muqing Zheng, Lehigh University and Pacific Northwest National Laboratory
