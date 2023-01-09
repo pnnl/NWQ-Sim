@@ -32,6 +32,11 @@
 #include "gate.h"
 #include "device_noise.hpp"
 
+#ifndef DISABLE_GATE_FUSION
+#include "fusion.h"
+#endif
+
+
 namespace NWQSim
 {
 using namespace cooperative_groups;
@@ -46,58 +51,6 @@ __device__ void Normalization(const Simulation* sim, ValType* sv_real, ValType* 
 
 //Declare major simulation kernel
 __global__ void simulation_kernel(Simulation*);
-
-/***********************************************
- * Gate Definition
- ***********************************************/
-class Gate
-{
-public:
-    Gate(enum OP _op_name, IdxType _qubit, IdxType _ctrl, ValType _theta) :
-        op_name(_op_name), qubit(_qubit), ctrl(_ctrl), theta(_theta) {
-            //if (_op_name == C4)
-            //printf("%s(theta:%lf,ctrl:%lld,qubit:%lld)\n",OP_NAMES[op_name], theta, ctrl, qubit);
-            memset(gm_real, 0, sizeof(ValType)*256);
-            memset(gm_imag, 0, sizeof(ValType)*256);
-        }
-    ~Gate() {}
-
-    Gate(const Gate& g):op_name(g.op_name), qubit(g.qubit), ctrl(g.ctrl), theta(g.theta)
-    {
-        memcpy(gm_real, g.gm_real, 256*sizeof(ValType));
-        memcpy(gm_imag, g.gm_imag, 256*sizeof(ValType));
-    }
-
-    //applying the embedded gate operation on GPU side
-    __device__ void exe_op(Simulation* sim, ValType* sv_real, ValType* sv_imag);
-
-    //set gm
-    void set_gm(std::complex<ValType>* gm, IdxType dim)
-    {
-        if (dim == 4 || dim==16)
-        {
-            for (IdxType i=0; i<dim; i++)
-                for (IdxType j=0; j<dim; j++)
-                {
-                    gm_real[i*dim+j] = gm[i*dim+j].real();
-                    gm_imag[i*dim+j] = gm[i*dim+j].imag();
-                }
-        }
-        else
-        {
-            throw std::logic_error("Dim should be 4 (1-qubit gate) or 16 (2-qubit gate)!");
-        }
-    }
-    //Gate name
-    enum OP op_name;
-    //Qubits 
-    IdxType qubit;
-    IdxType ctrl;
-    ValType theta;
-    //4-qubit gate parameters (after fusion)
-    ValType gm_real[256];
-    ValType gm_imag[256];
-}; //end of Gate definition
 
 /***********************************************
  * Circuit Definition
@@ -154,233 +107,7 @@ public:
     {
         clear();
     }
-    //This is to fuse two gates (both 1-qubit gates or 2-qubit gates)
-    //This is essentially matrix multiplication
-    void fuse_gate(const Gate& g0, const Gate& g1, Gate& g, const IdxType dim)
-    {
-        for (IdxType m=0; m<dim; m++)
-        {
-            for (IdxType n=0; n<dim; n++)
-            {
-                g.gm_real[m*dim+n] = 0;
-                g.gm_imag[m*dim+n] = 0;
-                for (IdxType k=0; k<dim; k++)
-                {
-                    g.gm_real[m*dim+n] += g0.gm_real[m*dim+k] * g1.gm_real[k*dim+n] - 
-                        g0.gm_imag[m*dim+k] * g1.gm_imag[k*dim+n];
-                    g.gm_imag[m*dim+n] += g0.gm_real[m*dim+k] * g1.gm_imag[k*dim+n] +
-                        g0.gm_imag[m*dim+k] * g1.gm_real[k*dim+n];
-                }
-            }
-        }
-    }
-    //This is kronecker product
-    void kron(const Gate& g0, const Gate& g1, Gate& g, const IdxType dim)
-    {
-        for (IdxType r = 0; r < dim; r++) 
-        {
-            for (IdxType s = 0; s < dim; s++) 
-            {
-                for (IdxType v = 0; v < dim; v++) 
-                {
-                    for (IdxType w = 0; w < dim; w++) 
-                    {
-                        g.gm_real[(dim*r+v)*dim*dim+(dim*s+w)] = g0.gm_real[r*dim+s] * g1.gm_real[v*dim+w] - 
-                            g0.gm_imag[r*dim+s] * g1.gm_imag[v*dim+w];
-                        g.gm_imag[(dim*r+v)*dim*dim+(dim*s+w)] = g0.gm_real[r*dim+s] * g1.gm_imag[v*dim+w] + 
-                            g0.gm_imag[r*dim+s] * g1.gm_real[v*dim+w];
-                    }
-                }
-            }
-        }
-    }
-    //This function is used for switch ctrl and qubit in C4 gate matrix
-    void reverse_ctrl_qubit(const Gate& g0, Gate& g)
-    {
-        Gate SWAP(OP::C2, -1, -1, 0);
-        SWAP.gm_real[0] = SWAP.gm_real[6] = SWAP.gm_real[9] = SWAP.gm_real[15] = 1;
-        Gate Super_SWAP(OP::C4, -1, -1, 0);
-        kron(SWAP, SWAP, Super_SWAP, 4);
 
-        Gate tmp_g(OP::C4, -1, -1, 0);
-        fuse_gate(g0, Super_SWAP, tmp_g, 16);
-        fuse_gate(Super_SWAP, tmp_g, g, 16);
-    }
-    //This function is to fuse C4 gates (allows switching ctrl/qubit, e.g., in a SWAP gate)
-    void gate_fusion_2q(const vector<Gate>& circuit_in, vector<Gate>& circuit_out)
-    {
-        //prepare
-        IdxType* table = new IdxType[n_qubits*n_qubits];
-        bool* canfuse = new bool[n_qubits*n_qubits];
-        for (IdxType i=0; i<n_qubits*n_qubits; i++) table[i] = -1;
-        for (IdxType i=0; i<n_qubits*n_qubits; i++) canfuse[i] = false;
-        circuit_out.clear();
-
-        for (IdxType i=0; i<circuit_in.size(); i++)
-        {
-            if (circuit_in[i].op_name == C2) //1-qubit gate
-            {
-                IdxType qubit = circuit_in[i].qubit;
-                Gate g(circuit_in[i]);
-                for (IdxType j=0; j<n_qubits; j++)
-                {
-                    canfuse[j*n_qubits+qubit] = false;
-                    canfuse[qubit*n_qubits+j] = false;
-                }
-                circuit_out.push_back(g);
-            }
-            if (circuit_in[i].op_name == C4) //2-qubit gate
-            {
-                IdxType qubit = circuit_in[i].qubit;
-                IdxType ctrl = circuit_in[i].ctrl;
-                Gate g0(circuit_in[i]);
-                
-                //we reverse ctrl-qubit to harvest more fusion opportunities
-                // M = SWAP N SWAP
-                /*
-                if (ctrl > qubit) 
-                {
-                    reverse_ctrl_qubit(circuit_in[i], g0);
-                    g0.ctrl = circuit_in[i].qubit;
-                    ctrl = circuit_in[i].qubit;
-                    g0.qubit = circuit_in[i].ctrl;
-                    qubit = circuit_in[i].ctrl;
-                }
-                */
-
-                if (canfuse[ctrl*n_qubits+qubit] == false) //cannot fuse
-                {
-                    Gate g(g0);
-                    circuit_out.push_back(g);
-                    table[ctrl*n_qubits+qubit] = circuit_out.size()-1; //point for later fusion
-                    for (IdxType j=0; j<n_qubits; j++)
-                    {
-                        canfuse[qubit*n_qubits+j] = false;
-                        canfuse[ctrl*n_qubits+j] = false;
-                        canfuse[j*n_qubits+qubit] = false;
-                        canfuse[j*n_qubits+ctrl] = false;
-                    }
-                    canfuse[ctrl*n_qubits+qubit] = true;
-                }
-                else //able to fuse
-                {
-                    Gate& g1 = circuit_out[table[ctrl*n_qubits+qubit]];
-                    Gate final_g(OP::C4, -1, -1, 0);
-                    fuse_gate(g0, g1, final_g, 16);
-                    memcpy(g1.gm_real, final_g.gm_real, 256*sizeof(ValType));
-                    memcpy(g1.gm_imag, final_g.gm_imag, 256*sizeof(ValType));
-                }
-
-            }
-            if (circuit_in[i].op_name == M) //1-qubit measure gate
-            {
-                IdxType qubit = circuit_in[i].qubit;
-                Gate g(circuit_in[i]);
-                for (IdxType j=0; j<n_qubits; j++)
-                {
-                    canfuse[j*n_qubits+qubit] = false;
-                    canfuse[qubit*n_qubits+j] = false;
-                }
-                circuit_out.push_back(g);
-            }
-            if (circuit_in[i].op_name == RESET) //1-qubit reset gate
-            {
-                IdxType qubit = circuit_in[i].qubit;
-                Gate g(circuit_in[i]);
-                for (IdxType j=0; j<n_qubits; j++)
-                {
-                    canfuse[j*n_qubits+qubit] = false;
-                    canfuse[qubit*n_qubits+j] = false;
-                }
-                circuit_out.push_back(g);
-            }
-            if (circuit_in[i].op_name == MA) //all-qubit measure gate
-            {
-                Gate g(circuit_in[i]);
-                for (IdxType j=0; j<n_qubits; j++)
-                    for (IdxType k=0; k<n_qubits; k++)
-                        canfuse[j*n_qubits+k] = false;
-                circuit_out.push_back(g);
-            }
-            //*/
-        }
-        //clean
-        delete[] table;
-        delete[] canfuse;
-    }
-    //This function is to fuse C2 gates in a circuit
-    void gate_fusion_1q(const vector<Gate>& circuit_in, vector<Gate>& circuit_out)
-    {
-        //prepare
-        IdxType* table = new IdxType[n_qubits];
-        bool* canfuse = new bool[n_qubits];
-        for (IdxType i=0; i<n_qubits; i++) table[i] = -1;
-        for (IdxType i=0; i<n_qubits; i++) canfuse[i] = false;
-        circuit_out.clear();
-        //parse
-        for (IdxType i=0; i<circuit_in.size(); i++)
-        {
-            if (circuit_in[i].op_name == C2) //1-qubit gate
-            {
-                IdxType qubit = circuit_in[i].qubit;
-                if (canfuse[qubit] == false) //cannot fuse
-                {
-                    Gate g(circuit_in[i]);
-                    circuit_out.push_back(g);
-                    canfuse[qubit] = true;
-                    table[qubit] = circuit_out.size()-1; //point to this gate for later fusion
-                }
-                else //able to fuse
-                {
-                    //start to fuse circuit_in[i] and circuit_out[table[qubit]]
-                    const Gate& g0 = circuit_in[i];
-                    Gate& g1 = circuit_out[table[qubit]];
-
-                    ValType res_real[16] = {0};
-                    ValType res_imag[16] = {0};
-                    for (int m=0; m<4; m++)
-                        for (int n=0; n<4; n++)
-                            for (int k=0; k<4; k++)
-                            {
-                                res_real[m*4+n] += g0.gm_real[m*4+k] * g1.gm_real[k*4+n] - 
-                                                   g0.gm_imag[m*4+k] * g1.gm_imag[k*4+n];
-                                res_imag[m*4+n] += g0.gm_real[m*4+k] * g1.gm_imag[k*4+n] +
-                                                   g0.gm_imag[m*4+k] * g1.gm_real[k*4+n];
-                            }
-                    memcpy(g1.gm_real, res_real, 16*sizeof(ValType));
-                    memcpy(g1.gm_imag, res_imag, 16*sizeof(ValType));
-                }
-            }
-            if (circuit_in[i].op_name == C4) //2-qubit gate
-            {
-                canfuse[circuit_in[i].qubit] = false;
-                canfuse[circuit_in[i].ctrl] = false;
-                Gate g(circuit_in[i]);
-                circuit_out.push_back(g);
-            }
-            if (circuit_in[i].op_name == M) //1-qubit measure gate
-            {
-                canfuse[circuit_in[i].qubit] = false;
-                Gate g(circuit_in[i]);
-                circuit_out.push_back(g);
-            }
-            if (circuit_in[i].op_name == RESET) //1-qubit reset gate
-            {
-                canfuse[circuit_in[i].qubit] = false;
-                Gate g(circuit_in[i]);
-                circuit_out.push_back(g);
-            }
-            if (circuit_in[i].op_name == MA) //all-qubit measure gate
-            {
-                Gate g(circuit_in[i]);
-                circuit_out.push_back(g);
-                for (IdxType q=0; q<n_qubits; q++) canfuse[q] = false;
-            }
-        }
-        //clean
-        delete[] table;
-        delete[] canfuse;
-    }
     Gate* upload()
     {
 #ifdef DISABLE_GATE_FUSION
@@ -393,20 +120,23 @@ public:
         //====================== Fuse ========================
         vector<Gate> tmp_circuit;
         tmp_circuit.clear();
-        gate_fusion_1q(circuit, tmp_circuit);
-        gate_fusion_2q(tmp_circuit, fused_circuit);
-
-        //gate_fusion_2q(circuit, fused_circuit);
+        gate_fusion_1q(circuit, tmp_circuit, n_qubits);
+        gate_fusion_2q(tmp_circuit, fused_circuit, n_qubits);
 
         this->n_gates = fused_circuit.size();
         SAFE_FREE_GPU(circuit_gpu);
         SAFE_ALOC_GPU(circuit_gpu, n_gates*sizeof(Gate));
         cudaSafeCall(cudaMemcpy(circuit_gpu, fused_circuit.data(), n_gates*sizeof(Gate), cudaMemcpyHostToDevice));
-        //tmp_circuit.clear();
         //====================================================
 #endif
-
         return circuit_gpu;
+    }
+    std::string circuitToString()
+    {
+        stringstream ss;
+        for (IdxType t=0; t<n_gates; t++)
+            ss << circuit[t].gateToString();
+        return ss.str();
     }
 public:
     // number of logical qubits in the circuit
@@ -430,8 +160,12 @@ public:
 class Simulation
 {
 public:
-    Simulation() : 
+    Simulation(IdxType _n_qubits=N_QUBIT_SLOT) : 
         comm_global(MPI_COMM_WORLD),
+        n_qubits(_n_qubits),
+        dim((IdxType)1<<(2*n_qubits)), 
+        half_dim((IdxType)1<<(2*n_qubits-1)),
+        sv_size(dim*(IdxType)sizeof(ValType)),
         n_gates(0), 
         gpu_mem(0),
         sim_gpu(NULL),
@@ -454,12 +188,16 @@ public:
         //initialization
         device_name = DEVICE_CONFIG_NAME;
         device_config = readConfigFile(DEVICE_CONFIG_PATH, device_name);
-        n_qubits = device_config["num_qubits"];
+        IdxType device_qubits = device_config["num_qubits"];
+        if (device_qubits < n_qubits)
+        {
+            string msg = "Error: Circuit uses " + to_string(n_qubits) + " qubits, more than " 
+                + to_string(device_qubits) + "qubits in the device!!\n"; 
+            throw std::logic_error(msg.c_str());
+        }
         if (n_qubits > N_QUBIT_SLOT) 
-            throw std::invalid_argument("Requesting more qubits than available slots!");
-        dim = ((IdxType)1<<(2*n_qubits)); 
-        half_dim = ((IdxType)1<<(2*n_qubits-1));
-        sv_size = (dim*(IdxType)sizeof(ValType));
+            throw std::invalid_argument("Requesting more qubits than threshold!");
+
         //always be 0 since 1-MPI maps to 1-GPU
         cudaSafeCall(cudaSetDevice(0));
         gpu_scale = floor(log((double)n_gpus+0.5)/log(2.0));
@@ -483,8 +221,8 @@ public:
         //NVSHMEM GPU memory allocation
         sv_real = (ValType*)nvshmem_malloc(sv_size_per_gpu);
         sv_imag = (ValType*)nvshmem_malloc(sv_size_per_gpu);
-        m_real = (ValType*)nvshmem_malloc(sv_size_per_gpu+1);
-        m_imag = (ValType*)nvshmem_malloc(sv_size_per_gpu+1);
+        m_real = (ValType*)nvshmem_malloc(sv_size_per_gpu);
+        m_imag = (ValType*)nvshmem_malloc(sv_size_per_gpu);
         cudaCheckError(); 
         gpu_mem += sv_size_per_gpu*4;
         //Initialize Circuit 
@@ -497,17 +235,12 @@ public:
                     cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu, sv_size_per_gpu, 
                     cudaMemcpyHostToDevice));
-        cudaSafeCall(cudaMemset(m_real, 0, sv_size_per_gpu+1));
-        cudaSafeCall(cudaMemset(m_imag, 0, sv_size_per_gpu+1));
+        cudaSafeCall(cudaMemset(m_real, 0, sv_size_per_gpu));
+        cudaSafeCall(cudaMemset(m_imag, 0, sv_size_per_gpu));
         SAFE_ALOC_GPU(sim_gpu, sizeof(Simulation));
-        //Use time as random seed
 
-        //IdxType seed = time(0); 
-        //rng.seed(1657327996);
-        //rng.seed(16573279);
+        //Use time as random seed
         rng.seed(time(0));
-        //printf("Seed is %lld\n",seed);
-        //rng.seed(1657421151);
     }
     ~Simulation()
     {
@@ -527,7 +260,9 @@ public:
         //Release for GPU side
         SAFE_FREE_GPU(sim_gpu);
         SAFE_FREE_GPU(randoms_gpu);
-        SAFE_FREE_GPU(results_gpu);
+        //SAFE_FREE_GPU(results_gpu);
+        nvshmem_free(results_gpu);
+        //nvshmem_finalize();
     }
     void AllocateQubit()
     {
@@ -625,8 +360,12 @@ public:
         SAFE_FREE_HOST(results);
         SAFE_ALOC_HOST(results, sizeof(IdxType));
         memset(results, 0, sizeof(IdxType));
-        SAFE_FREE_GPU(results_gpu);
-        SAFE_ALOC_GPU(results_gpu, sizeof(IdxType));
+        //SAFE_FREE_GPU(results_gpu);
+        //SAFE_ALOC_GPU(results_gpu, sizeof(IdxType));
+
+        nvshmem_free(results_gpu);
+        results_gpu = (IdxType*)nvshmem_malloc(sizeof(IdxType));
+
         cudaSafeCall(cudaMemset(results_gpu, 0, sizeof(IdxType)));
         ValType rand = uni_dist(rng);
         Gate* G = new Gate(OP::M,qubit,-1,rand);
@@ -637,9 +376,13 @@ public:
         SAFE_FREE_HOST(results);
         SAFE_ALOC_HOST(results, sizeof(IdxType)*repetition);
         memset(results, 0, sizeof(IdxType)*repetition);
-        SAFE_FREE_GPU(results_gpu);
-        SAFE_ALOC_GPU(results_gpu, sizeof(IdxType)*repetition);
+        //SAFE_FREE_GPU(results_gpu);
+        //SAFE_ALOC_GPU(results_gpu, sizeof(IdxType)*repetition);
+
+        nvshmem_free(results_gpu);
+        results_gpu = (IdxType*)nvshmem_malloc(sizeof(IdxType)*repetition);
         cudaSafeCall(cudaMemset(results_gpu, 0, sizeof(IdxType)*repetition));
+
 
         SAFE_FREE_HOST(randoms);
         SAFE_ALOC_HOST(randoms, sizeof(ValType)*repetition);
@@ -669,8 +412,8 @@ public:
                     sv_size_per_gpu, cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu, 
                     sv_size_per_gpu, cudaMemcpyHostToDevice));
-        cudaSafeCall(cudaMemset(m_real, 0, sv_size_per_gpu+1));
-        cudaSafeCall(cudaMemset(m_imag, 0, sv_size_per_gpu+1));
+        cudaSafeCall(cudaMemset(m_real, 0, sv_size_per_gpu));
+        cudaSafeCall(cudaMemset(m_imag, 0, sv_size_per_gpu));
         reset_circuit();
     }
     void reset_circuit()
@@ -692,6 +435,11 @@ public:
     {
         srand(seed);
     }
+    void clear_circuit()
+    {
+        circuit_handle->clear();
+    }
+ 
     void update(const IdxType _n_qubits, const IdxType _n_gates)
     {
         //assert(_n_qubits <= (N_QUBIT_SLOT/2));
@@ -891,7 +639,7 @@ public:
 
 #define PGAS_P(arr,i,val) nvshmem_double_p(&(arr)[(i)&((sim->m_gpu)-1)], (val), ((i)>>(sim->lg2_m_gpu)) )
 #define PGAS_G(arr,i) nvshmem_double_g(&(arr)[(i)&((sim->m_gpu)-1)], ((i)>>(sim->lg2_m_gpu)) )
-#define BARRIER if(threadIdx.x==0 && blockIdx.x==0) nvshmem_barrier_all(); grid.sync();
+#define BARR if(threadIdx.x==0 && blockIdx.x==0) nvshmem_barrier_all(); grid.sync();
 
 //============== Check Trace (debug purpose) ================
 __device__ __inline__ void CHECK_TRACE(const Simulation* sim, ValType* sv_real, ValType* sv_imag, IdxType t)
@@ -907,7 +655,7 @@ __device__ __inline__ void CHECK_TRACE(const Simulation* sim, ValType* sv_real, 
         }
         printf("%s: Trace is: %lf\n", OP_NAMES_NVGPU[sim->circuit_handle_gpu[t].op_name], trace);
     }
-    BARRIER;
+    BARR;
 }
 
 __global__ void simulation_kernel(Simulation* sim)
@@ -1023,7 +771,7 @@ __device__ __inline__ void C2_GATE(const Simulation* sim, ValType* sv_real, ValT
         PGAS_P(sv_imag, pos2, sv_imag_pos2); 
         PGAS_P(sv_imag, pos3, sv_imag_pos3); 
     }
-    //BARRIER;
+    //BARR;
 }
 
 
@@ -1137,7 +885,7 @@ __device__ __inline__ void C2V1_GATE(const Simulation* sim, ValType* sv_real, Va
         grid.sync();
         if (tid == 0) nvshmem_double_put(sv_real, sv_real_remote, per_pe_num, pair_gpu);
         if (tid == 0) nvshmem_double_put(sv_imag, sv_imag_remote, per_pe_num, pair_gpu);
-        //BARRIER;
+        //BARR;
     }
 }
 
@@ -1274,7 +1022,7 @@ __device__ __inline__ void C4_GATE(const Simulation* sim, ValType* sv_real, ValT
             PGAS_P(sv_imag, term+SV16IDX(j), res_imag);
         }
     }
-    //BARRIER;
+    //BARR;
 }
 
 //============== Unified 4-qubit Gate with comm optimization ================
@@ -1310,10 +1058,6 @@ __device__ __inline__ void C4V1_GATE(const Simulation* sim, ValType* sv_real, Va
     {
         assert(r < sim->lg2_m_gpu);
         const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x; 
-        const int laneid = (threadIdx.x & 31);
-        const int warpid = (tid >> 5);
-        const int wid = (threadIdx.x >> 5);
-        const int nwarps = ((blockDim.x * gridDim.x)>>5);
         const IdxType per_pe_num = ((sim->dim)>>(sim->gpu_scale));
         const IdxType per_pe_work = ((sim->dim)>>(sim->gpu_scale+3));
 
@@ -1609,7 +1353,7 @@ __device__ __inline__ void C4TCV1_GATE(const Simulation* sim, ValType* sv_real, 
         PGAS_P(sv_real, term3, c_frag_real_dn.x[1]);
         PGAS_P(sv_imag, term3, c_frag_imag_dn.x[1]);
     }
-    //BARRIER;
+    //BARR;
 }
 
 //============== Unified 4-qubit Gate with TC V2 ================
@@ -1738,7 +1482,7 @@ __device__ __inline__ void C4TCV2_GATE(const Simulation* sim, ValType* sv_real, 
         PGAS_P(sv_real, term3, c_frag_real.x[1]);
         PGAS_P(sv_imag, term3, c_frag_imag.x[1]);
     }
-    //BARRIER;
+    //BARR;
 }
 
 //============== Unified 4-qubit Gate with TC ================
@@ -2010,7 +1754,7 @@ __device__ __inline__ void C4TCV3_GATE(const Simulation* sim, ValType* sv_real, 
         grid.sync();
         if (tid == 0) nvshmem_double_put(sv_real, sv_real_remote, per_pe_num, pair_gpu);
         if (tid == 0) nvshmem_double_put(sv_imag, sv_imag_remote, per_pe_num, pair_gpu);
-        //BARRIER;
+        //BARR;
     }
 }
 
@@ -2025,9 +1769,7 @@ __device__ __inline__ void M_GATE(const Simulation* sim, ValType* sv_real, ValTy
     grid_group grid = this_grid();
     assert(sim-> n_qubits < sim->lg2_m_gpu); 
     const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
-    const IdxType per_pe_work_dm = ((sim->dim)>>(sim->gpu_scale));
     ValType * m_real = sim->m_real;
-    ValType * m_imag = sim->m_imag;
     IdxType mask = ((IdxType)1<<qubit);
 
     if (sim->i_gpu == 0)
@@ -2045,7 +1787,7 @@ __device__ __inline__ void M_GATE(const Simulation* sim, ValType* sv_real, ValTy
             grid.sync();
         }
     }
-    BARRIER;
+    BARR;
     if (tid==0 && sim->i_gpu!=0) m_real[0] = PGAS_G(m_real,0);
     grid.sync();
     ValType prob_of_one = m_real[0];
@@ -2061,9 +1803,9 @@ __device__ __inline__ void M_GATE(const Simulation* sim, ValType* sv_real, ValTy
             gm_real[0] = 1.0/(1.0-prob_of_one);
         }
     }
-    BARRIER;
+    BARR;
     C2V1_GATE(sim, sv_real, sv_imag, gm_real, gm_imag, qubit, qubit+sim->n_qubits);
-    BARRIER;
+    BARR;
     if (tid==0) sim->results_gpu[0] = (rand<=prob_of_one?1:0);
 }
 //*/
@@ -2091,7 +1833,7 @@ __device__ __inline__ void Normalization(const Simulation* sim, ValType* sv_real
             grid.sync();
         }
     }
-    BARRIER;
+    BARR;
     if (tid==0 && sim->i_gpu!=0) m_real[0] = PGAS_G(m_real,0);
     grid.sync();
     ValType purity = m_real[0];
@@ -2137,7 +1879,7 @@ __device__ __inline__ void M_GATE(const Simulation* sim, ValType* sv_real, ValTy
             grid.sync();
         }
     }
-    BARRIER;
+    BARR;
     if (tid==0 && sim->i_gpu!=0)
     { 
         m_real[0] = PGAS_G(m_real,0);
@@ -2213,10 +1955,7 @@ __device__ __inline__ void MA_GATE(const Simulation* sim, ValType* sv_real, ValT
     const IdxType n_size = (IdxType)1<<(sim->n_qubits);
     const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
     ValType * m_real = sim->m_real;
-    ValType * m_imag = sim->m_imag;
-
-    BARRIER;
-
+    BARR;
     if (sim->i_gpu == 0)
     {    
         for (IdxType i=tid; i<n_size; i+=blockDim.x*gridDim.x)
@@ -2233,10 +1972,9 @@ __device__ __inline__ void MA_GATE(const Simulation* sim, ValType* sv_real, ValT
         }
         if (tid == 0)
         {
-            m_real[n_size] = m_real[n_size-1];
+            ValType purity = fabs(m_real[n_size-1]);
             m_real[n_size-1] = 0;
-            ValType purity = fabs(m_real[n_size]);
-            if ( abs(purity - 1.0) > ERROR_BAR )
+            if ( fabs(purity - 1.0) > ERROR_BAR )
                 printf("MA: Purity Check fails with %lf\n", purity);
         }
         grid.sync();
@@ -2253,100 +1991,22 @@ __device__ __inline__ void MA_GATE(const Simulation* sim, ValType* sv_real, ValT
         }
         grid.sync();
 
-        for (IdxType i=0; i<repetition; i++)
+        for (IdxType j=tid; j<n_size; j+=blockDim.x*gridDim.x)
         {
-            ValType r = sim->randoms_gpu[i];
-            for (IdxType j=tid; j<n_size; j+=blockDim.x*gridDim.x)
+            ValType lower = m_real[j];
+            ValType upper = (j+1==n_size)? 1:m_real[j+1];
+            for (IdxType i=0; i<repetition; i++)
             {
-                if (m_real[j]<=r && r<m_real[j+1]) PGAS_P(m_imag, i, j);
+                ValType r = sim->randoms_gpu[i];
+                if (lower<=r && r<upper) sim->results_gpu[i] = j;
             }
-            grid.sync();
         }
     }
-    BARRIER;
-    for (IdxType i=tid; i<repetition; i+=blockDim.x*gridDim.x)
-    {
-        sim->results_gpu[i] = PGAS_G(m_imag, i);
-    }
-    BARRIER;
+    BARR;
+    if (sim->i_gpu != 0 && tid == 0) 
+        nvshmem_longlong_get(sim->results_gpu, sim->results_gpu, repetition, 0);
+    BARR;
 }
-
-
-/*
-__device__ __inline__ void MA_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
-        const IdxType repetition)
-{
-    grid_group grid = this_grid();
-    assert(sim-> n_qubits < sim->lg2_m_gpu); //ensure the diagonal can be fit into GPU-0's part of m_real
-    const IdxType n_size = (IdxType)1<<(sim->n_qubits);
-    const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
-    ValType * m_real = sim->m_real;
-    ValType * m_imag = sim->m_imag;
-
-    BARRIER;
-
-    if (sim->i_gpu == 0)
-    {    
-        for (IdxType i=tid; i<n_size; i+=blockDim.x*gridDim.x)
-        {
-            ValType val = abs(PGAS_G(sv_real, (i<<(sim->n_qubits))+i));
-            PGAS_P(m_real, i, val);
-        }
-        grid.sync();
-
-        //Parallel prefix sum
-        for (IdxType d=0; d<(sim->n_qubits); d++)
-        {
-            IdxType step = (IdxType)1<<(d+1);
-            for (IdxType k=tid*step; k<n_size; k+=step*blockDim.x*gridDim.x)
-            {
-                ValType val = PGAS_G(m_real, k+(1<<d)-1) + PGAS_G(m_real, k+(1<<(d+1))-1);
-                PGAS_P(m_real, k+(1<<(d+1))-1, val);
-            }
-            grid.sync();
-        }
-        if (tid == 0)
-        {
-            PGAS_P(m_real, n_size, PGAS_G(m_real, n_size-1));
-            PGAS_P(m_real, n_size-1, 0);
-            ValType purity = fabs(PGAS_G(m_real, n_size));
-            if ( abs(purity - 1.0) > ERROR_BAR )
-                printf("MA: Purity Check fails with %lf\n", purity);
-        }
-        grid.sync();
-        for (IdxType d=(sim->n_qubits)-1; d>=0; d--)
-        {
-            IdxType step = (IdxType)1<<(d+1);
-            for (IdxType k=tid*step; k<n_size-1; k+=step*blockDim.x*gridDim.x)
-            {
-                ValType tmp = PGAS_G(m_real, k+((IdxType)1<<d)-1);
-                PGAS_P(m_real, k+((IdxType)1<<d)-1, PGAS_G(m_real, k+((IdxType)1<<(d+1))-1));
-                PGAS_P(m_real, k+((IdxType)1<<(d+1))-1, tmp+PGAS_G(m_real, k+((IdxType)1<<(d+1))-1)); 
-
-            }
-            grid.sync();
-        }
-        grid.sync();
-
-        for (IdxType i=0; i<repetition; i++)
-        {
-            ValType r = sim->randoms_gpu[i];
-            for (IdxType j=tid; j<n_size; j+=blockDim.x*gridDim.x)
-            {
-                if (PGAS_G(m_real,j)<=r && r<PGAS_G(m_real,j+1)) PGAS_P(m_imag, i, j);
-            }
-            grid.sync();
-        }
-    }
-    BARRIER;
-    for (IdxType i=tid; i<repetition; i+=blockDim.x*gridDim.x)
-    {
-        sim->results_gpu[i] = PGAS_G(m_imag, i);
-    }
-    BARRIER;
-}
-*/
-
 
 __device__ __inline__ void RESET_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
         const IdxType qubit)
@@ -2379,25 +2039,43 @@ __device__ __inline__ void RESET_GATE(const Simulation* sim, ValType* sv_real, V
             grid.sync();
         }
     }
-    BARRIER;
+    BARR;
     if (tid==0 && sim->i_gpu!=0) m_real[0] = PGAS_G(m_real,0);
     grid.sync();
     ValType prob_of_one = m_real[0];
-    ValType factor = 1.0/(1.0-prob_of_one);
-    for (IdxType i=tid; i<per_pe_work_dm; i+=blockDim.x*gridDim.x)
+
+    if (prob_of_one < 1.0) //still possible to normalize
     {
-        if ( (i & mask) == 0)
+        ValType factor = 1.0/(1.0-prob_of_one);
+        for (IdxType i=tid; i<per_pe_work_dm; i+=blockDim.x*gridDim.x)
         {
-            sv_real[i] *= factor;
-            sv_imag[i] *= factor;
-        }
-        else
-        {
-            sv_real[i] = 0;
-            sv_imag[i] = 0;
+            if ( (i & mask) == 0)
+            {
+                sv_real[i] *= factor;
+                sv_imag[i] *= factor;
+            }
+            else
+            {
+                sv_real[i] = 0;
+                sv_imag[i] = 0;
+            }
         }
     }
-    BARRIER;
+    else
+    {
+        for (IdxType i=tid; i<per_pe_work_dm; i+=blockDim.x*gridDim.x)
+        {
+            if ( (i & mask) == 0)
+            {
+                IdxType dual_i = i^mask;
+                sv_real[i] = sv_real[dual_i];
+                sv_imag[i] = sv_imag[dual_i];
+                sv_real[dual_i] = 0;
+                sv_imag[dual_i] = 0;
+            }
+        }
+    }
+    BARR;
 }
 
 
@@ -2406,10 +2084,8 @@ __device__ __inline__ void Purity_Check(const Simulation* sim, const IdxType t, 
     grid_group grid = this_grid();
     assert(sim-> n_qubits < sim->lg2_m_gpu); //ensure the diagonal can be fit into GPU-0's part of m_real
     const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
-    const IdxType per_pe_work_dm = ((sim->dim)>>(sim->gpu_scale));
     ValType * m_real = sim->m_real;
-
-    BARRIER;
+    BARR;
 
     if (sim->i_gpu == 0)
     {
@@ -2435,7 +2111,7 @@ __device__ __inline__ void Purity_Check(const Simulation* sim, const IdxType t, 
         }
 
     }
-    BARRIER;
+    BARR;
 }
 
 
@@ -2474,13 +2150,13 @@ __device__ void Gate::exe_op(Simulation* sim, ValType* sv_real, ValType* sv_imag
         if (((ctrl+sim->n_qubits)>=sim->lg2_m_gpu) && ((qubit+sim->n_qubits)>=sim->lg2_m_gpu))
         {
             SWAP_GATE(sim, sv_real, sv_imag, 0, ctrl+(sim->n_qubits));
-            BARRIER;
+            BARR;
 #ifdef ENABLE_TENSOR_CORES
             C4TCV3_GATE(sim, sv_real, sv_imag, gm_real, gm_imag, ctrl, qubit, 0, qubit+(sim->n_qubits));
 #else
             C4V1_GATE(sim, sv_real, sv_imag, gm_real, gm_imag, ctrl, qubit, 0, qubit+(sim->n_qubits));
 #endif
-            BARRIER;
+            BARR;
             SWAP_GATE(sim, sv_real, sv_imag, 0, ctrl+(sim->n_qubits));
         }
         else

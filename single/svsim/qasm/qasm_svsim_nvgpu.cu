@@ -24,7 +24,7 @@ int main(int argc, char **argv)
 
         IdxType n_qubits = parser.num_qubits();
         Simulation sim(n_qubits);
-        map<string, int>* res = parser.execute(sim, n_shots);
+        map<string, IdxType>* res = parser.execute(sim, n_shots);
         //if (sim.i_gpu==0) printf("\n -------- qasm_svsim ---------\n");
         if (sim.i_gpu==0) print_counts(res, n_shots);
         fflush(stdout);

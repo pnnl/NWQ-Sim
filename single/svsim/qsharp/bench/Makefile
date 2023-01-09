@@ -2,7 +2,7 @@ include ../../../shared.mk
 
 all: TeleportationSample_nvgpu Qrng_nvgpu Grover_nvgpu
 
-common: ../../src/dmsim_nvgpu_sin.cuh ../../src/config.h ../qsharp_wrapper.cu
+common: ../../src/svsim_nvgpu_sin.cuh ../../src/config.h ../qsharp_wrapper.cu
 
 Grover_nvgpu: Grover_driver.cc Grover.ll $(common)
 	$(QIRCC) $(QIRCC_FLAGS) -I$(QIR_BRIDGE_PUBLIC) -o Grover.o -c Grover.ll

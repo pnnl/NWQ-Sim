@@ -45,7 +45,7 @@
 /* Default number of repetitions */
 #define DEFAULT_REPETITIONS 1
 /* Print out per kernel execution trace */
-#define PRINT_KERNEL_TRACE
+/*#define PRINT_KERNEL_TRACE*/
 /* Print out gate trace */
 /*#define PRINT_GATE_TRACE */
 /* Print out qubit allocation, release and reset trace */
@@ -60,7 +60,7 @@
 /* Perform GPU error check */
 #define GPU_ERROR_CHECK
 /* Number of qubit slots. Depends on memory capacity */
-#define N_QUBIT_SLOT 32
+#define N_QUBIT_SLOT 10
 /* Number of threads per thread block for NVGPU */
 #define THREADS_CTA_NVGPU 256 
 /* Number of threads per thread block for AMDGPU */
@@ -75,9 +75,9 @@
 /*#define ENABLE_TENSOR_CORES*/
 /* NISQ device to be simulated */
 /*#define DEVICE_CONFIG_NAME "ibmq_guadalupeConfig"*/
-#define DEVICE_CONFIG_NAME "dummy_ibmq11"
+#define DEVICE_CONFIG_NAME "dummy_ibmq30"
 /* NISQ deivce config file path */
-#define DEVICE_CONFIG_PATH "/global/homes/a/angli/sc22/NWQ-Sim/device/"
+#define DEVICE_CONFIG_PATH "/global/u2/a/angli/test/nwqsim/cluster/dmsim/device/"
 
 /***********************************************
  * Constant configuration:

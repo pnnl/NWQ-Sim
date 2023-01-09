@@ -12,8 +12,8 @@
 // Single GPU SV-Sim simulation runtime using NVIDIA GPU backend.
 // ---------------------------------------------------------------------------
 
-#ifndef SVSIM_NVGPU_MPI_CUH
-#define SVSIM_NVGPU_MPI_CUH
+#ifndef SVSIM_NVGPU_SIN_CUH
+#define SVSIM_NVGPU_SIN_CUH
 #include <assert.h>
 #include <random>
 #include <complex.h>
@@ -979,7 +979,7 @@ public:
 
 #define LOCAL_G(arr,i) arr[(i)]
 #define LOCAL_P(arr,i,val) arr[(i)] = val;
-#define BARRIER grid.sync();
+#define BARR grid.sync();
 
 //============== Check Trace (debug purpose) ================
 __device__ __inline__ void CHECK_TRACE(const Simulation* sim, ValType* sv_real, ValType* sv_imag, IdxType t)
@@ -995,7 +995,7 @@ __device__ __inline__ void CHECK_TRACE(const Simulation* sim, ValType* sv_real, 
         }
         printf("%s: Trace is: %lf\n", OP_NAMES_NVGPU[sim->circuit_handle_gpu[t].op_name], trace);
     }
-    BARRIER;
+    BARR;
 }
 
 __global__ void simulation_kernel(Simulation* sim)
@@ -1147,7 +1147,7 @@ __device__ __inline__ void C2_GATE(const Simulation* sim, ValType* sv_real, ValT
         LOCAL_P(sv_imag, pos2, sv_imag_pos2); 
         LOCAL_P(sv_imag, pos3, sv_imag_pos3); 
     }
-    //BARRIER;
+    //BARR;
 }
 
 __device__ __inline__ void M_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag, 
@@ -1163,7 +1163,7 @@ __device__ __inline__ void M_GATE(const Simulation* sim, ValType* sv_real, ValTy
         if ( (i & mask) == 0) m_real[i] = 0;
         else m_real[i] = sv_real[i]*sv_real[i] + sv_imag[i]*sv_imag[i];
     }
-    BARRIER;
+    BARR;
 
     //Parallel reduction
     for (IdxType k=((IdxType)1<<(sim->n_qubits-1)); k>0; k>>=1)
@@ -1172,7 +1172,7 @@ __device__ __inline__ void M_GATE(const Simulation* sim, ValType* sv_real, ValTy
         {
             m_real[i] += m_real[i+k];
         }
-        BARRIER;
+        BARR;
     }
     ValType prob_of_one = m_real[0];
     grid.sync();
@@ -1212,7 +1212,7 @@ __device__ __inline__ void M_GATE(const Simulation* sim, ValType* sv_real, ValTy
         }
     }
     if (tid==0) sim->results_gpu[0] = (rand<=prob_of_one?1:0);
-    BARRIER;
+    BARR;
 }
 
 __device__ __inline__ void MA_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
@@ -1227,7 +1227,7 @@ __device__ __inline__ void MA_GATE(const Simulation* sim, ValType* sv_real, ValT
     {
         m_real[i] = sv_real[i]*sv_real[i] + sv_imag[i]*sv_imag[i];
     }
-    BARRIER;
+    BARR;
 
     //Parallel prefix sum
     for (IdxType d=0; d<(sim->n_qubits); d++)
@@ -1237,7 +1237,7 @@ __device__ __inline__ void MA_GATE(const Simulation* sim, ValType* sv_real, ValT
         {
             m_real[(k+((IdxType)1<<(d+1))-1)] += LOCAL_G(m_real, k+((IdxType)1<<d)-1);
         }
-        BARRIER;
+        BARR;
     }
 
     if (tid == 0)
@@ -1251,7 +1251,7 @@ __device__ __inline__ void MA_GATE(const Simulation* sim, ValType* sv_real, ValT
 
     }
 
-    BARRIER;
+    BARR;
 
     for (IdxType d=(sim->n_qubits)-1; d>=0; d--)
     {
@@ -1263,7 +1263,7 @@ __device__ __inline__ void MA_GATE(const Simulation* sim, ValType* sv_real, ValT
             LOCAL_P(m_real, k+((IdxType)1<<d)-1, tmp2);
             m_real[(k+((IdxType)1<<(d+1))-1)] = tmp + tmp2;
         }
-        BARRIER;
+        BARR;
     }
 
     for (IdxType j=tid; j<n_size; j+=blockDim.x*gridDim.x)
@@ -1276,7 +1276,7 @@ __device__ __inline__ void MA_GATE(const Simulation* sim, ValType* sv_real, ValT
             if (lower<=r && r<upper) sim->results_gpu[i] = j; 
         }
     }
-    BARRIER;
+    BARR;
 }
 
 
@@ -1290,30 +1290,20 @@ __device__ __inline__ void RESET_GATE(const Simulation* sim, ValType* sv_real, V
 
     for (IdxType i=tid; i<sim->dim; i+=blockDim.x*gridDim.x)
     {
-        if ( (i & mask) == 0) 
-        {
-            LOCAL_P(m_real,i,0.);
-        }
-        else
-        {
-            ValType val_real = LOCAL_G(sv_real,i);
-            ValType val_imag = LOCAL_G(sv_imag,i);
-            LOCAL_P(m_real, i, (val_real*val_real)+(val_imag*val_imag));
-        }
+        if ( (i & mask) == 0) m_real[i] = 0;
+        else m_real[i] = sv_real[i]*sv_real[i] + sv_imag[i]*sv_imag[i];
     }
-    BARRIER;
+    BARR;
     for (IdxType k=((IdxType)1<<(sim->n_qubits-1)); k>0; k>>=1)
     {
         for (IdxType i=tid; i<k; i+=blockDim.x*gridDim.x) 
         {
-            ValType a = LOCAL_G(m_real, i);
-            ValType b = LOCAL_G(m_real, i+k);
-            LOCAL_P(m_real,i,a+b);
+            m_real[i] += m_real[i+k];
         }
-        grid.sync();
+        BARR;
     }
-    BARRIER;
-
+    
+    BARR;
     ValType prob_of_one = m_real[0];
     grid.sync();
 
@@ -1324,30 +1314,56 @@ __device__ __inline__ void RESET_GATE(const Simulation* sim, ValType* sv_real, V
         {
             if ( (i & mask) == 0)
             {
-                ValType a = LOCAL_G(sv_real,i);
-                LOCAL_P(sv_real,i,a*factor);
-                ValType b = LOCAL_G(sv_imag,i);
-                LOCAL_P(sv_imag,i,b*factor);
+                sv_real[i] *= factor;
+                sv_imag[i] *= factor;
+                m_real[i] = sv_real[i]*sv_real[i] + sv_imag[i]*sv_imag[i];
             }
             else
             {
-                LOCAL_P(sv_real,i,0.);
-                LOCAL_P(sv_imag,i,0.);
+                sv_real[i] = 0;
+                sv_imag[i] = 0;
+                m_real[i] = 0;
             }
         }
-
+        BARR;
+        for (IdxType k=((IdxType)1<<(sim->n_qubits-1)); k>0; k>>=1)
+        {
+            for (IdxType i=tid; i<k; i+=blockDim.x*gridDim.x) 
+            {
+                m_real[i] += m_real[i+k];
+            }
+            BARR;
+        }
+        ValType norm = m_real[0];
+        grid.sync();
+        if ( abs(norm-1.0) > 0)
+        {
+            ValType factor = 1.0/sqrt(norm);
+            for (IdxType i=tid; i<sim->dim; i+=blockDim.x*gridDim.x)
+            {
+                sv_real[i] *= factor;
+                sv_imag[i] *= factor;
+            }
+        }
     }
-    else
+    //becuase qubit=0 probability is 0, we can't simply normalize
+    else 
     {
         for (IdxType i=tid; i<sim->dim; i+=blockDim.x*gridDim.x)
         {
-            LOCAL_P(sv_real,i,0.);
-            LOCAL_P(sv_imag,i,0.);
+            if ( (i & mask) == 0)
+            {
+                IdxType dual_i = i^mask;
+                sv_real[i] = sv_real[dual_i];
+                sv_imag[i] = sv_imag[dual_i];
+                sv_real[dual_i] = 0;
+                sv_imag[dual_i] = 0;
+            }
         }
-        grid.sync();
-        if (tid==0) LOCAL_P(sv_real, 0, 1.0); //set to zero state
     }
-    BARRIER;
+    BARR;
+
+
 }
 
 __device__ __inline__ void Purity_Check(const Simulation* sim, const IdxType t, ValType* sv_real, ValType* sv_imag)
@@ -1357,37 +1373,31 @@ __device__ __inline__ void Purity_Check(const Simulation* sim, const IdxType t, 
     const IdxType per_pe_work = (sim->dim);
     ValType * m_real = sim->m_real;
 
-    for (IdxType i=tid; i<per_pe_work; i+=blockDim.x*gridDim.x)
+    for (IdxType i=tid; i<sim->dim; i+=blockDim.x*gridDim.x)
     {
-        ValType val_real = LOCAL_G(sv_real,i);
-        ValType val_imag = LOCAL_G(sv_imag,i);
-        LOCAL_P(m_real,i, (val_real*val_real)+(val_imag*val_imag));
+        m_real[i] = sv_real[i]*sv_real[i] + sv_imag[i]*sv_imag[i];
     }
-    BARRIER;
+    BARR;
 
-    if (sim->i_gpu == 0)
+    for (IdxType k=((IdxType)1<<(sim->n_qubits-1)); k>0; k>>=1)
     {
-        for (IdxType k=((IdxType)1<<(sim->n_qubits-1)); k>0; k>>=1)
+        for (IdxType i=tid; i<k; i+=blockDim.x*gridDim.x) 
         {
-            for (IdxType i=tid; i<k; i+=blockDim.x*gridDim.x) 
-            {
-                ValType a = LOCAL_G(m_real, i);
-                ValType b = LOCAL_G(m_real, i+k);
-                LOCAL_P(m_real,i,a+b);
-            }
-            grid.sync();
+            m_real[i] += m_real[i+k];
         }
-        if (threadIdx.x==0 && blockIdx.x==0)
+        grid.sync();
+    }
+    BARR;
+    if (threadIdx.x==0 && blockIdx.x==0)
+    {
+        ValType purity = m_real[0];
+        if (abs(purity-1.0) > ERROR_BAR)
         {
-            ValType purity = m_real[0];
-            if (abs(purity-1.0) > ERROR_BAR)
-            {
-                Gate* g = &sim->circuit_handle_gpu[t];
-                printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld,theta:%lf) with %lf\n",t,OP_NAMES_NVGPU[g->op_name],g->ctrl,g->qubit,g->theta,purity);
-            }
+            Gate* g = &sim->circuit_handle_gpu[t];
+            printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld,theta:%lf) with %lf\n",t,OP_NAMES_NVGPU[g->op_name],g->ctrl,g->qubit,g->theta,purity);
         }
     }
-    BARRIER;
+    BARR;
 }
 
 

@@ -11,6 +11,7 @@
 #include <cassert> 
 #include <iostream> 
 #include <memory> 
+#include <mpi.h>
 #include "QirRuntimeApi_I.hpp" 
 #include "QirContext.hpp"
 //#include "config.h"
@@ -20,8 +21,10 @@ extern "C" Microsoft::Quantum::IRuntimeDriver* GetSVSim();
 
 int main(int argc, char *argv[])
 {
+    MPI_Init(&argc, &argv);
     Microsoft::Quantum::IRuntimeDriver* svsim = GetSVSim();
     Microsoft::Quantum::InitializeQirContext(svsim, false);
     Microsoft__Quantum__Samples__Teleportation__RunProgram();
+    MPI_Finalize();
     return 0;
 }

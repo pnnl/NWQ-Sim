@@ -23,6 +23,7 @@ extern "C" Microsoft::Quantum::IRuntimeDriver* GetSVSim();
 
 int main(int argc, char *argv[])
 {
+    MPI_Init(&argc, &argv);
     if (argc != 3)
     {
         printf("./Grover nQubits idxMarked\n");
@@ -33,5 +34,6 @@ int main(int argc, char *argv[])
     Microsoft::Quantum::IRuntimeDriver* svsim = GetSVSim();
     Microsoft::Quantum::InitializeQirContext(svsim, false);
     Microsoft__Quantum__Samples__SearchForMarkedInput(nQubits, idxMarked);
+    MPI_Finalize();
     return 0;
 }
