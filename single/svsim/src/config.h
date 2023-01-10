@@ -56,7 +56,7 @@
 /*#define PRINT_SIM_TRACE */
 /* Perform purity check per gate. Useful for debugging. 
  * It breaks when the purity is far from 1. */
-#define PURITY_CHECK
+/*#define PURITY_CHECK*/
 /* Perform GPU error check */
 #define GPU_ERROR_CHECK
 /* Number of qubit slots. Depends on memory capacity */
@@ -70,7 +70,7 @@
 /* Disable noise injection for functional validation */
 #define DISABLE_NOISE
 /* Disable gate fusion */
-#define DISABLE_GATE_FUSION
+/*#define DISABLE_GATE_FUSION*/
 /* Enable the double-precision Tensor Core in Ampere GPUs */
 
 /***********************************************

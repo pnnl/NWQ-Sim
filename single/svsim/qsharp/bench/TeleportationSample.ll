@@ -42,7 +42,7 @@ header__1:                                        ; preds = %exiting__1, %entry
   br i1 %0, label %body__1, label %exit__1
 
 body__1:                                          ; preds = %header__1
-  %sent = call i1 @Microsoft__Quantum__Random__DrawRandomBool__body(double 0.000000e-00)
+  %sent = call i1 @Microsoft__Quantum__Random__DrawRandomBool__body(double 5.000000e-01)
   %received = call i1 @Microsoft__Quantum__Samples__Teleportation__TeleportClassicalMessage__body(i1 %sent)
   %1 = call %String* @__quantum__rt__string_create(i8* getelementptr inbounds ([7 x i8], [7 x i8]* @0, i32 0, i32 0))
   %2 = call %String* @__quantum__rt__int_to_string(i64 %idxRun)
