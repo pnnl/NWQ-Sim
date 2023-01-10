@@ -2,83 +2,38 @@
 #define QASM_PARSER
 
 #include <algorithm>
-#include <stdlib.h>
+#include <cmath>
+#include <iostream>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <cstring>
 #include <vector>
-#include <fstream>
-#include <iostream>
-#include <regex>
-#include <bits/stdc++.h>
-#include <map>
 
 /********** UPDATE THE INCLUDE PATH FOR LOCAL HEADER FILES HERE ************/
 #include "../src/util.h"
-#include "../src/svsim_nvgpu_mpi.cuh"
 #include "parser_util.hpp"
+#include "lexer.hpp"
+
+#ifdef USE_NVGPU
+#include "../src/svsim_nvgpu_mpi.cuh"
+#elif defined USE_AMDGPU
+
+#else //CPU
+
+#ifdef USE_OMP
+#include "../src/svsim_cpu_omp.hpp"
+#else
+#include "../src/svsim_cpu_mpi.hpp"
+#endif
+
+#endif
+
 /***************************************************************************/
 
 using namespace std;
 using namespace NWQSim;
-
-const IdxType UN_DEF = -1;
-
-string DEFAULT_GATES[] = {
-    "U", "U3", "U2", "U1", "X", "Y", "Z", "H",
-    "S", "SDG", "T", "TDG", "SX",
-    "RX", "RY", "RZ",
-    "CZ", "CX", "CY", "CH",
-    "CCX", "CRX", "CRY", "CRZ", "CU1", "CU3",
-    "RESET", "SWAP", "CSWAP",
-    "ID", "RI", "P", "CS", "CSDG", "CT", "CTDG", "CSX", "CP",
-    "RZZ", "RXX", "RYY"};
-
-const string REG("REG");
-const string GATE("GATE");
-const string IF("IF");
-const string MEASURE("MEASURE");
-
-struct gate
-{
-    // Common gate fields
-    string name;
-    vector<ValType> params;
-    vector<IdxType> qubits;
-
-    // Fields used for measurement operations
-    string creg_name;
-    IdxType creg_index;
-    bool final_measurements;
-
-    // Fields used for if operations
-    IdxType if_offset;
-    IdxType if_creg_val;
-};
-
-struct custom_gate
-{
-    string name;
-    vector<string> params;
-    vector<string> args;
-
-    vector<string> ops;
-};
-
-struct qreg
-{
-    string name;
-    IdxType width;
-    IdxType offset;
-};
-
-struct creg
-{
-    string name;
-    IdxType width;
-    vector<IdxType> qubit_indices;
-
-    IdxType val = 0;
-};
+using namespace lexertk;
 
 class qasm_parser
 {
@@ -87,549 +42,596 @@ private:
     map<string, qreg> list_qregs;
     map<string, creg> list_cregs;
 
-    vector<custom_gate> list_defined_gates;
+    map<string, defined_gate> list_defined_gates;
     vector<gate> *list_gates = NULL;
     vector<gate> *list_conditional_gates = NULL;
     vector<gate> list_buffered_measure;
 
-    IdxType _n_qubits = 0;
     IdxType global_qubit_offset = 0;
 
-    string fileline;
+    vector<token> cur_inst;
 
-    string outRegsFileName = "temp_files/regs_class.txt";
-    ofstream outRegsFile;
+    bool contains_if = false;
+    bool measure_all = true;
+    bool skip_if = false;
 
-    string outGateFileName = "temp_files/gate_class.txt";
-    ofstream outGateFile;
+    /* Lexer Object */
+    generator gen;
+    helper::symbol_replacer sr;
 
-    IdxType prior_if_index = UN_DEF;
+    /* File Loading Util */
+    ifstream qasmFile;
+    string line;
+    stringstream ss;
 
-    bool contains_IF = false;
+    /* Helper Functions */
+    void load_instruction();
+    void parse_gate_defination();
 
-    /* Local Helper Functions */
-    void parse_reg();
-    void parse_gate_defination(ifstream *file);
-    void parse_gate(string gateline);
-
-    void parse_native_gate(vector<string> op_prefix, string qubit);
-    void parse_custom_gate(vector<string> op_prefix, string args);
+    void parse_gate(vector<token> &inst, vector<gate> *gates);
+    void parse_native_gate(vector<token> &inst, vector<gate> *gates);
+    void parse_defined_gate(vector<token> &inst, vector<gate> *gates);
 
     void classify_measurements();
+    void execute_gate(Simulation &sim, gate gate);
+    IdxType *sub_execute(Simulation &sim, IdxType repetition);
 
-    IdxType *sub_execute(Simulation &sim, IdxType repetition = DEFAULT_REPETITIONS);
-    map<string, int> *convert_dictionary(map<IdxType, int> dict);
-    string convert_outcome(IdxType original_out);
-    map<string, int> *to_binary_dictionary(IdxType num_qubits, map<IdxType, int> counts);
-
-    void print_cregs();
+    void dump_defined_gates();
+    void dump_cur_inst();
+    void dump_gates();
 
 public:
-    qasm_parser(const char *file);
+    qasm_parser(const char *filename);
     IdxType num_qubits();
-    map<string, int> *execute(Simulation &sim, IdxType repetition = DEFAULT_REPETITIONS, bool measure_all = false, bool repeat_per_shot = false);
-
+    map<string, IdxType> *execute(Simulation &sim, IdxType repetition = DEFAULT_REPETITIONS);
     ~qasm_parser();
 };
 
-string replace_pi(string s)
+qasm_parser::qasm_parser(const char *filename)
 {
-    vector<int> start_indices;
-    vector<int> end_indices;
-    for (int i = 0; i < s.size() - 1;)
-    {
-        if (s.substr(i, 2) == "PI")
-        {
-            bool nested_braket = false;
-            bool visited_comma = false;
-
-            int start_i, end_i;
-
-            if (i > 0 && s[i - 1] == '(')
-            {
-                start_i = i - 1;
-                for (int j = i; j < s.size(); j++)
-                    if (s[j] == ',')
-                        visited_comma = true;
-                    else if (s[j] == ')' && !visited_comma)
-                    {
-                        end_i = j;
-                        nested_braket = true;
-                        break;
-                    }
-            }
-            else if (i < s.size() - 2 && s[i + 2] == ')')
-            {
-                end_i = i + 2;
-                for (int j = i; j > 0; j--)
-                    if (s[j] == ',')
-                        visited_comma = true;
-                    else if (s[j] == '(' && !visited_comma)
-                    {
-                        start_i = j;
-                        nested_braket = true;
-                        break;
-                    }
-            }
-            if (nested_braket)
-            {
-                start_indices.push_back(start_i);
-                end_indices.push_back(end_i);
-            }
-
-            i += 2;
-        }
-        else
-            i++;
-    }
-
-    for (int i = start_indices.size() - 1; i >= 0; i--)
-    {
-        int start_i = start_indices[i];
-        int end_i = end_indices[i];
-
-        if (s[end_i + 1] == ' ')
-            continue;
-
-        // cout << "Origianl " << s << endl;
-        s.replace(start_i, end_i - start_i + 1, to_string(get_param_value(s.substr(start_i + 1, end_i - start_i - 1))));
-        // cout << "Updated " << s << endl;
-    }
-    return s;
-}
-
-string cleanup_str(string s)
-{
-    // s.erase(remove_if(s.begin(), s.end(), invalid_char), s.end());
-
-    // Remove '\r' from string
-    s.erase(remove(s.begin(), s.end(), '\r'), s.end());
-
-    // Remove leading and tailing spaces
-    s = regex_replace(s, std::regex("^ +| +$|( ) +"), "$1");
-
-    transform(s.begin(), s.end(), s.begin(), ::toupper);
-
-    return replace_pi(s);
-}
-
-qasm_parser::qasm_parser(const char *file)
-{
-    list_gates = new vector<gate>;
-    ifstream qasmFile(file);
+    qasmFile.open(filename);
     if (!qasmFile)
+        throw runtime_error(string("Could not open qasm file at:") + filename);
+
+    sr.add_replace("pi", "pi", token::e_pi);
+    sr.add_replace("sin", "sin", token::e_func);
+    sr.add_replace("cos", "cos", token::e_func);
+
+    list_gates = new vector<gate>;
+    list_conditional_gates = new vector<gate>;
+
+    while (!qasmFile.eof())
     {
-        printf("Can not open %s\n", file);
-        exit(-1);
-    }
+        load_instruction();
 
-    outRegsFile = ofstream(outRegsFileName);
-    outGateFile.open(outGateFileName);
-
-    outRegsFile << "QUBIT ALLOCATION\n";
-
-    IdxType index = 0;
-
-    while (getline(qasmFile, fileline))
-    {
-        fileline = cleanup_str(fileline);
-
-        if (fileline.size() > 1)
+        // dump_cur_inst();
+        if (cur_inst.size() > 0)
         {
-            if (fileline.substr(0, 4) == GATE)
+            if (cur_inst[INST_NAME].value == OPENQASM)
+            // parse OpenQASM version
             {
-                parse_gate_defination(&qasmFile);
+                // cout << "Executing with OpenQASM " << cur_inst[INST_QASM_VERSION].value << endl;
+            }
+            else if (cur_inst[INST_NAME].value == QREG)
+            // parse qubit registers
+            {
+                qreg qreg;
+                qreg.name = cur_inst[INST_REG_NAME].value;
+                qreg.width = stoi(cur_inst[INST_REG_WIDTH].value);
+                qreg.offset = global_qubit_offset;
+
+                global_qubit_offset += qreg.width;
+
+                list_qregs.insert({qreg.name, qreg});
+
+                if (global_qubit_offset > 63)
+                    skip_if = true;
+            }
+            else if (cur_inst[INST_NAME].value == CREG)
+            // parse classical registers
+            {
+                creg creg;
+
+                creg.name = cur_inst[INST_REG_NAME].value;
+                creg.width = stoi(cur_inst[INST_REG_WIDTH].value);
+
+                creg.qubit_indices.insert(creg.qubit_indices.end(), creg.width, UN_DEF);
+
+                list_cregs.insert({creg.name, creg});
+            }
+            else if (cur_inst[INST_NAME].value == GATE)
+            // parse custom gate definations
+            {
+                parse_gate_defination();
+            }
+            else if (cur_inst[INST_NAME].value == IF)
+            // parse if statement
+            {
+                if (!skip_if)
+                {
+                    gate cur_gate;
+                    cur_gate.name = IF;
+                    cur_gate.creg_name = cur_inst[INST_IF_CREG].value;
+                    cur_gate.if_creg_val = stoll(cur_inst[INST_IF_VAL].value);
+                    cur_gate.conditional_inst = new vector<gate>;
+
+                    auto c_inst = slices(cur_inst, INST_IF_INST_START, cur_inst.size() - 1);
+                    parse_gate(c_inst, cur_gate.conditional_inst);
+
+                    list_gates->push_back(cur_gate);
+
+                    contains_if = true;
+                }
             }
             else
+            // parse quantum gates
             {
-                fileline.erase(remove(fileline.begin(), fileline.end(), ';'), fileline.end());
-
-                if (fileline.substr(1, 3) == REG)
-                {
-                    parse_reg();
-                }
-                else
-                {
-                    parse_gate(fileline);
-                }
-            }
-
-            if (prior_if_index != UN_DEF)
-            {
-                list_gates->at(prior_if_index).if_offset = list_gates->size() - prior_if_index;
-                prior_if_index = UN_DEF;
+                parse_gate(cur_inst, list_gates);
             }
         }
-
-        index++;
     }
-
-    qasmFile.close();
-    outRegsFile.close();
-
     classify_measurements();
+
+    // dump_defined_gates();
+    // dump_gates();
 }
 
-void qasm_parser::parse_reg()
+void qasm_parser::load_instruction()
 {
+    bool has_eof = false, has_lcurly = false, has_rcurly = false;
 
-    vector<string> reg_fields = split(split(fileline, ' ')[1], '[');
+    cur_inst.clear();
 
-    string reg_name = reg_fields[0];
-    string reg_witdth_str = regex_replace(reg_fields[1], std::regex(" +$"), "");
-    reg_witdth_str.pop_back(); // remove ]
-    IdxType reg_width = stoi(reg_witdth_str);
+    getline(qasmFile, line);
+    transform(line.begin(), line.end(), line.begin(), ::toupper);
 
-    if (fileline.at(0) == 'Q')
+    if (!gen.process(line))
+        return;
+
+    if (gen.size() > 0)
     {
-        qreg qreg;
+        sr.process(gen);
 
-        qreg.name = reg_name;
-        qreg.width = reg_width;
-        qreg.offset = global_qubit_offset;
-
-        global_qubit_offset += qreg.width;
-        _n_qubits += qreg.width;
-
-        list_qregs.insert({qreg.name, qreg});
-
-        outRegsFile << qreg.name << "\n"
-                    << "NUM: " << qreg.width << " OFFSET: " << qreg.offset << "\n";
-    }
-    else
-    {
-        creg creg;
-        creg.name = reg_name;
-        creg.width = reg_width;
-
-        creg.qubit_indices.insert(creg.qubit_indices.end(), creg.width, UN_DEF);
-
-        list_cregs.insert({creg.name, creg});
-
-        outRegsFile << creg.name << "\n"
-                    << "Classical NUM: " << creg.width << "\n";
-    }
-}
-
-void qasm_parser::parse_gate_defination(ifstream *file)
-{
-    // Initialize gate object
-    custom_gate cur_gate;
-
-    stringstream ss;
-
-    ss << fileline;
-
-    if (fileline.find('}') == string::npos)
-    {
-        while (getline(*file, fileline))
+        for (IdxType i = 0; i < gen.size(); i++)
         {
-            fileline = cleanup_str(fileline);
+            cur_inst.push_back(gen[i]);
 
-            ss << fileline;
-
-            if (fileline.find('}') != string::npos)
+            switch (gen[i].type)
             {
+            case token::e_eof:
+                has_eof = true;
+                break;
+            case token::e_lcrlbracket:
+                has_lcurly = true;
+                break;
+            case token::e_rcrlbracket:
+                has_rcurly = true;
+                break;
+            default:
                 break;
             }
         }
-    }
-    string gate_def = ss.str();
 
-    vector<string> gate_fields = split(gate_def, '{');
-
-    gate_fields[1].erase(remove(gate_fields[1].begin(), gate_fields[1].end(), '}'), gate_fields[1].end()); // remove }
-    vector<string> gate_ops = split(gate_fields[1], ';');
-
-    // Spilit gate defination into name, parameter, and args
-    vector<string> header_fields = split(gate_fields[0], ' ');
-    vector<string> name_paramters = split(header_fields[1], '(');
-    cur_gate.name = name_paramters[0];
-
-    if (name_paramters.size() > 1)
-    {
-        name_paramters[1].pop_back();
-        cur_gate.params = split(name_paramters[1], ',');
-    }
-
-    cur_gate.args = split(header_fields[2], ',');
-
-    for (string op : gate_ops)
-    {
-        op = std::regex_replace(op, std::regex("^ +"), "");
-        if (op.size() > 0)
+        ss.str(string());
+        if (has_rcurly || (has_eof && !has_lcurly))
         {
-            //cout << op << endl;
-            cur_gate.ops.push_back(op);
         }
-    }
-
-    list_defined_gates.push_back(cur_gate);
-
-    outGateFile << "CUSTOME GATE DEF:\n";
-    outGateFile << cur_gate.name << "\nPARAMS:\n";
-    for (string s : cur_gate.params)
-
-        outGateFile << s << " ";
-
-    outGateFile << "\n\nArgs:\n";
-    for (string s : cur_gate.args)
-        outGateFile << s << " ";
-    outGateFile << "\n\nOps:\n";
-    for (string s : cur_gate.ops)
-        outGateFile << s << endl;
-    outGateFile << "-------------------\n\n";
-}
-
-void qasm_parser::parse_gate(string gateline)
-{
-    vector<string> op_fields = split(gateline, ' ');
-
-    if (op_fields.size() > 1)
-    {
-        vector<string> op_prefix = split(op_fields[0], '(');
-
-        if (find(begin(DEFAULT_GATES), end(DEFAULT_GATES), op_prefix[0]) != end(DEFAULT_GATES))
+        else if (has_lcurly)
         {
-            // Native Gate
-            parse_native_gate(op_prefix, op_fields[1]);
-        }
-        else if (op_prefix[0] == IF)
-        {
-            contains_IF = true;
-
-            op_prefix[1].pop_back(); // remove )
-
-            gate gate;
-            gate.name = IF;
-
-            vector<string> creg_condition = split(op_prefix[1], '=');
-
-            gate.creg_name = creg_condition[0];
-            gate.if_creg_val = stoi(creg_condition[2]);
-
-            prior_if_index = list_gates->size();
-            list_gates->push_back(gate);
-
-            stringstream ss;
-            for (IdxType i = 1; i < op_fields.size(); i++)
-                ss << op_fields[i] << " ";
-
-            parse_gate(ss.str());
-        }
-        else if (op_prefix[0] == MEASURE)
-        {
-            vector<string> qreg_name_fields = split(op_fields[1], '[');
-            vector<string> creg_name_fields = split(op_fields[3], '[');
-
-            qreg cur_qreg = list_qregs.at(qreg_name_fields[0]);
-
-            if (qreg_name_fields.size() > 1)
-            // indexed measurements
+            while (ss.str().find('}') == string::npos)
             {
-                gate gate;
-                gate.name = MEASURE;
-
-                gate.qubits.push_back(cur_qreg.offset + stoi(split(qreg_name_fields[1], ']')[0]));
-
-                gate.creg_name = creg_name_fields[0];
-                gate.creg_index = stoi(split(creg_name_fields[1], ']')[0]);
-
-                list_gates->push_back(gate);
+                getline(qasmFile, line);
+                ss << line;
             }
-            else
-            // unindexed measurements
+        }
+        else
+        {
+            while (ss.str().find(';') == string::npos)
             {
-                for (IdxType i = 0; i < cur_qreg.width; i++)
+                getline(qasmFile, line);
+                ss << line;
+            }
+            if (ss.str().find('{') != string::npos)
+            {
+                while (ss.str().find('}') == string::npos)
                 {
-
-                    gate gate;
-                    gate.name = MEASURE;
-
-                    gate.qubits.push_back(cur_qreg.offset + i);
-
-                    gate.creg_name = creg_name_fields[0];
-                    gate.creg_index = i;
-
-                    list_gates->push_back(gate);
+                    getline(qasmFile, line);
+                    ss << line;
                 }
             }
         }
-        else
+        line = ss.str();
+        transform(line.begin(), line.end(), line.begin(), ::toupper);
+        ss.str(string());
+
+        gen.process(line);
+        sr.process(gen);
+
+        for (IdxType i = 0; i < gen.size(); i++)
         {
-            parse_custom_gate(op_prefix, op_fields[1]);
+            cur_inst.push_back(gen[i]);
         }
     }
 }
 
-void qasm_parser::parse_native_gate(vector<string> op_prefix, string qubit)
+void qasm_parser::dump_cur_inst()
 {
-    vector<vector<string>> regs;
-
-    vector<string> given_regs = split(qubit, ',');
-
-    int op_count = 0;
-
-    for (int i = 0; i < given_regs.size(); i++)
+    for (size_t i = 0; i < cur_inst.size(); ++i)
     {
-        vector<string> reg_strs;
+        printf("%s ", cur_inst[i].value.c_str());
+    }
+    cout << endl;
+}
 
-        vector<string> reg_name_fields = split(given_regs[i], '[');
+void qasm_parser::parse_gate_defination()
+{
+    defined_gate defined_gate;
+    defined_gate.name = cur_inst[INST_GATE_NAME].value;
 
-        qreg cur_qreg = list_qregs.at(reg_name_fields[0]);
-
-        if (reg_name_fields.size() > 1)
+    IdxType lcurly_pos = -1;
+    for (IdxType i = 0; i < cur_inst.size(); i++)
+        if (cur_inst[i].type == token::e_lcrlbracket)
         {
-            IdxType reg_index = stoi(split(reg_name_fields[1], ']')[0]);
+            lcurly_pos = i;
+            break;
+        }
 
-            reg_strs.push_back(to_string(cur_qreg.offset + reg_index));
+    inst_indicies gate_indices = get_indices(cur_inst, 1, lcurly_pos);
+    if (gate_indices.param_start != -1)
+    {
+        for (auto p : slices(cur_inst, gate_indices.param_start, gate_indices.param_end))
+        {
+            if (p.type == token::e_comma)
+                continue;
+            else if (p.type == token::e_symbol)
+                defined_gate.params.push_back(p.value);
+            else
+                cout << "INVALID PARAM FOR GATE DEFINATION " << p.value << endl;
+        }
+    }
+
+    for (auto q : slices(cur_inst, gate_indices.qubit_start, gate_indices.qubit_end))
+    {
+        if (q.type == token::e_comma)
+            continue;
+        else if (q.type == token::e_symbol)
+            defined_gate.qubits.push_back(q.value);
+        else
+            cout << "INVALID PARAM FOR GATE DEFINATION " << q.value << endl;
+    }
+
+    IdxType cur_start = lcurly_pos + 1;
+
+    for (IdxType i = lcurly_pos + 1; i < cur_inst.size(); i++)
+        if (cur_inst[i].type == token::e_eof)
+        {
+            defined_gate.instructions.push_back(slices(cur_inst, cur_start, i + 1));
+            cur_start = i + 1;
+        }
+    list_defined_gates.insert({defined_gate.name, defined_gate});
+}
+
+void qasm_parser::parse_gate(vector<token> &inst, vector<gate> *gates)
+{
+    if (inst[INST_NAME].value == MEASURE)
+    {
+        if (inst.size() == 12)
+        {
+            gate cur_gate;
+            cur_gate.name = MEASURE;
+            cur_gate.measured_qubit_index = list_qregs.at(inst[INST_MEASURE_QREG_NAME].value).offset + stoll(inst[INST_MEASURE_QREG_BIT].value);
+            cur_gate.creg_name = inst[INST_MEASURE_CREG_NAME].value;
+            cur_gate.creg_index = stoll(inst[INST_MEASURE_CREG_BIT].value);
+            gates->push_back(cur_gate);
         }
         else
         {
-            for (int j = 0; j < cur_qreg.width; j++)
+            qreg qreg = list_qregs.at(inst[INST_MEASURE_QREG_NAME].value);
+
+            for (IdxType i = 0; i < qreg.width; i++)
             {
-                reg_strs.push_back(to_string(cur_qreg.offset + j));
+                gate cur_gate;
+                cur_gate.name = MEASURE;
+                cur_gate.measured_qubit_index = qreg.offset + i;
+                cur_gate.creg_name = inst[4].value;
+                cur_gate.creg_index = i;
+                gates->push_back(cur_gate);
             }
         }
-        op_count = reg_strs.size() > op_count ? reg_strs.size() : op_count;
-
-        regs.push_back(reg_strs);
     }
-
-    for (int i = 0; i < op_count; i++)
+    else
     {
+        auto it = list_defined_gates.find(inst[INST_NAME].value);
 
+        if (it != list_defined_gates.end())
+            parse_defined_gate(inst, gates);
+        else if (find(begin(DEFAULT_GATES), end(DEFAULT_GATES), inst[INST_NAME].value) != end(DEFAULT_GATES))
+            parse_native_gate(inst, gates);
+        else if (inst[INST_NAME].value != BARRIER)
+        {
+            cout << "Undefined instruction: ";
+            for (auto t : inst)
+                cout << t.value << " ";
+            cout << endl;
+        }
+    }
+}
+
+void qasm_parser::parse_native_gate(vector<token> &inst, vector<gate> *gates)
+{
+    inst_indicies indices = get_indices(inst, 0, inst.size());
+
+    auto params = get_params(inst, indices.param_start, indices.param_end);
+    auto qubits = get_qubits(inst, indices.qubit_start, indices.qubit_end, list_qregs);
+
+    for (IdxType i = 0; i < qubits.first; i++)
+    {
         gate gate;
-        gate.name = op_prefix[0];
+        gate.name = inst[INST_NAME].value;
 
-        for (int j = 0; j < regs.size(); j++)
-            if (regs[j].size() == 1)
-                gate.qubits.push_back(stoi(regs[j][0]));
+        for (auto p : params)
+            gate.params.push_back(p);
+
+        for (IdxType j = 0; j < qubits.second.size(); j++)
+        {
+            if (qubits.second[j].size() == 1)
+                gate.qubits.push_back(qubits.second[j][0]);
             else
-                gate.qubits.push_back(stoi(regs[j][i]));
-
-        if (op_prefix.size() > 1)
-        {
-            op_prefix[1].pop_back(); // remove )
-            vector<string> params_str = split(op_prefix[1], ',');
-            for (string s : params_str)
-            {
-                gate.params.push_back(get_param_value(s));
-            }
+                gate.qubits.push_back(qubits.second[j][i]);
         }
-        list_gates->push_back(gate);
+        gates->push_back(gate);
     }
 }
 
-void qasm_parser::parse_custom_gate(vector<string> op_prefix, string args)
+IdxType find_index(vector<string> &vec, string target)
 {
-    for (custom_gate gate : list_defined_gates)
+    for (IdxType i = 0; i < vec.size(); i++)
+        if (vec[i] == target)
+            return i;
+
+    return -1;
+}
+
+void dump_inst(vector<token> &inst)
+{
+    for (size_t i = 0; i < inst.size(); ++i)
     {
-        if (gate.name == op_prefix[0])
+        printf("%s ", inst[i].value.c_str());
+    }
+    cout << endl;
+}
+
+void qasm_parser::parse_defined_gate(vector<token> &inst, vector<gate> *gates)
+{
+    auto gate_def = list_defined_gates.at(inst[INST_NAME].value);
+
+    auto indices = get_indices(inst, 0, inst.size());
+
+    auto params = get_params(inst, indices.param_start, indices.param_end);
+    auto qubits = get_qubits(inst, indices.qubit_start, indices.qubit_end, list_qregs);
+
+    for (IdxType i = 0; i < qubits.first; i++)
+    {
+        vector<IdxType> cur_qubits;
+
+        for (IdxType j = 0; j < qubits.second.size(); j++)
+            if (qubits.second[j].size() == 1)
+                cur_qubits.push_back(qubits.second[j][0]);
+            else
+                cur_qubits.push_back(qubits.second[j][i]);
+
+        for (auto sub_inst : gate_def.instructions)
         {
-            vector<string> param_vals;
-            vector<string> arg_vals;
+            vector<token> dup_inst(sub_inst);
 
-            if (op_prefix.size() > 1)
+            for (auto &t : dup_inst)
             {
-                op_prefix[1].pop_back(); // remove )
-                param_vals = split(op_prefix[1], ',');
-            }
+                IdxType param_idx = find_index(gate_def.params, t.value);
+                IdxType qubit_idx = find_index(gate_def.qubits, t.value);
 
-            arg_vals = split(args, ',');
+                if (param_idx != -1 && qubit_idx != -1)
+                    throw runtime_error("Can't use same symbol for both parameter and qubits");
 
-            for (string s : gate.ops)
-            {
-
-                stringstream new_op;
-
-                vector<string> opParam_args = split(s, ' ');
-                vector<string> op_params = split(opParam_args[0], '(');
-
-                new_op << op_params[0];
-
-                // update parameter values
-                if (op_params.size() > 1)
+                if (param_idx != -1)
                 {
-                    new_op << "(";
-
-                    op_params[1].erase(remove(op_params[1].begin(), op_params[1].end(), ')'), op_params[1].end()); // remove ')'
-
-                    vector<string> origional_params = split(op_params[1], ',');
-
-                    bool append_comma = false;
-
-                    for (string param : origional_params)
-                    {
-                        if (append_comma)
-                            new_op << ",";
-
-                        IdxType param_index = get_index(gate.params, param);
-
-                        if (param_index == -1)
-                            new_op << param;
-                        else
-                            new_op << param_vals[param_index];
-                        append_comma = true;
-                    }
-
-                    new_op << ")";
+                    t.type = token::e_number;
+                    t.value = to_string(params[param_idx]);
                 }
-
-                new_op << " ";
-
-                vector<string> origional_args = split(opParam_args[1], ',');
-
-                bool append_comma = false;
-                for (string arg : origional_args)
+                else if (qubit_idx != -1)
                 {
-                    if (append_comma)
-                        new_op << ",";
-
-                    IdxType arg_index = get_index(gate.args, arg);
-
-                    if (arg_index == -1)
-                        new_op << arg;
-                    else
-                        new_op << arg_vals[arg_index];
-
-                    append_comma = true;
+                    t.type = token::e_number;
+                    t.value = to_string(cur_qubits[qubit_idx]);
                 }
-
-                parse_gate(new_op.str());
             }
-            return;
+            parse_gate(dup_inst, gates);
         }
     }
 }
+
+void qasm_parser::dump_defined_gates()
+{
+    for (auto const &[gatename, gate] : list_defined_gates)
+    {
+        cout << gatename << endl
+             << "Params " << gate.params.size() << ":";
+
+        for (auto p : gate.params)
+            cout << p << " ";
+        cout << endl
+             << "Qubits " << gate.qubits.size() << ":";
+
+        for (auto q : gate.qubits)
+            cout << q << " ";
+        cout << endl
+             << "Insts:\n";
+
+        for (auto vec : gate.instructions)
+        {
+            for (auto t : vec)
+                cout << t.value << " ";
+            cout << endl;
+        }
+        cout << endl;
+    }
+}
+
+void print_gate(gate gate, bool indent = false)
+{
+    if (indent)
+        cout << "\t";
+    if (gate.name == MEASURE)
+    {
+        cout << "M " << gate.measured_qubit_index << " -> " << gate.creg_name << "[" << gate.creg_index << "];\n";
+    }
+    else
+    {
+        cout << gate.name << " ";
+
+        if (gate.params.size() > 0)
+        {
+            cout << "\b(";
+            for (auto p : gate.params)
+                cout << p << ",";
+            cout << "\b) ";
+        }
+
+        for (auto q : gate.qubits)
+            cout << q << ",";
+
+        cout << "\b;\n";
+    }
+}
+
+void qasm_parser::dump_gates()
+{
+    for (auto gate : *list_gates)
+    {
+        if (gate.name == IF)
+        {
+            cout << gate.name << " " << gate.creg_name << " == " << gate.if_creg_val << ":\n";
+
+            for (auto c_gate : *gate.conditional_inst)
+            {
+                print_gate(c_gate, true);
+            }
+        }
+        else
+        {
+            print_gate(gate);
+        }
+    }
+}
+
+IdxType qasm_parser::num_qubits() { return global_qubit_offset; }
 
 void qasm_parser::classify_measurements()
 {
     bool final_measurements = true;
 
     for (IdxType i = list_gates->size() - 1; i >= 0; i--)
-    {
         if (list_gates->at(i).name == MEASURE)
         {
             list_gates->at(i).final_measurements = final_measurements;
+
+            if (final_measurements)
+                measure_all = false;
+        }
+        else
+            final_measurements = false;
+}
+
+map<string, IdxType> *qasm_parser::execute(Simulation &sim, IdxType repetition)
+{
+    IdxType *results;
+
+    if (contains_if)
+    {
+        IdxType results_arr[repetition];
+
+        results = results_arr;
+
+        for (IdxType i = 0; i < repetition; i++)
+        {
+            IdxType *sub_result = sub_execute(sim, 1);
+            results[i] = sub_result[0];
+        }
+    }
+    else
+    {
+        results = sub_execute(sim, repetition);
+    }
+
+    map<IdxType, IdxType> result_dict;
+
+    for (IdxType i = 0; i < repetition; i++)
+    {
+        if (result_dict.find(results[i]) != result_dict.end())
+            result_dict[results[i]] += 1;
+        else
+            result_dict.insert({results[i], 1});
+    }
+
+    if (measure_all)
+        return to_binary_dictionary(global_qubit_offset, result_dict);
+    else
+        return convert_dictionary(result_dict, list_cregs);
+}
+
+IdxType *qasm_parser::sub_execute(Simulation &sim, IdxType repetition)
+{
+    sim.clear_circuit();
+
+    for (auto gate : *list_gates)
+    {
+        if (gate.name == IF)
+        {
+            creg creg = list_cregs.at(gate.creg_name);
+
+            if (creg.val == gate.if_creg_val)
+            {
+                for (auto c_gate : *gate.conditional_inst)
+                    execute_gate(sim, c_gate);
+            }
         }
         else
         {
-            final_measurements = false;
+            execute_gate(sim, gate);
         }
     }
+
+    return sim.measure_all(repetition);
 }
 
-void append_gate(Simulation &sim, string gate_name, vector<IdxType> qubits, vector<ValType> params)
+void qasm_parser::execute_gate(Simulation &sim, gate gate)
 {
-    if (gate_name == "U")
+    auto gate_name = gate.name;
+    auto params = gate.params;
+    auto qubits = gate.qubits;
+
+    if (gate.name == MEASURE)
+    {
+        if (!gate.final_measurements)
+        {
+            // Measure and update creg value for intermediate measurements
+            IdxType result = sim.measure(gate.measured_qubit_index);
+
+            list_cregs.at(gate.creg_name).val = modifyBit(list_cregs.at(gate.creg_name).val, gate.creg_index, result);
+            list_cregs.at(gate.creg_name).qubit_indices[gate.creg_index] = UN_DEF;
+        }
+        else
+        {
+            // Update creg qubit indices for final measurements
+            list_cregs.at(gate.creg_name).qubit_indices[gate.creg_index] = gate.measured_qubit_index;
+        }
+    }
+    else if (gate_name == "U")
         sim.U(params[0], params[1], params[2], qubits[0]);
     else if (gate_name == "U1")
-        sim.U(0, 0, params[0], qubits[0]);
+        sim.U1(params[0], qubits[0]); // sim.U1(0, 0, params[0], qubits[0]);
     else if (gate_name == "U2")
-        sim.U(PI / 2, params[0], params[1], qubits[0]);
+        sim.U2(params[0], params[1], qubits[0]); // sim.U2(pi / 2, params[0], params[1], qubits[0]);
     else if (gate_name == "U3")
-        sim.U(params[0], params[1], params[2], qubits[0]);
+        sim.U3(params[0], params[1], params[2], qubits[0]);
     else if (gate_name == "X")
         sim.X(qubits[0]);
     else if (gate_name == "Y")
@@ -680,10 +682,12 @@ void append_gate(Simulation &sim, string gate_name, vector<IdxType> qubits, vect
         sim.SWAP(qubits[0], qubits[1]);
     else if (gate_name == "SX")
         sim.SX(qubits[0]);
+
     else if (gate_name == "RI")
         sim.RI(params[0], qubits[0]);
     else if (gate_name == "P")
         sim.P(params[0], qubits[0]);
+
     else if (gate_name == "CS")
         sim.CS(qubits[0], qubits[1]);
     else if (gate_name == "CSDG")
@@ -701,195 +705,22 @@ void append_gate(Simulation &sim, string gate_name, vector<IdxType> qubits, vect
     else if (gate_name == "ID")
         sim.ID(qubits[0]);
     else if (gate_name == "RXX")
-        sim.RXX(params[0],qubits[0], qubits[1]);
+        sim.RXX(params[0], qubits[0], qubits[1]);
     else if (gate_name == "RYY")
-        sim.RYY(params[0],qubits[0], qubits[1]);
+        sim.RYY(params[0], qubits[0], qubits[1]);
     else if (gate_name == "RZZ")
-        sim.RZZ(params[0],qubits[0], qubits[1]);
+        sim.RZZ(params[0], qubits[0], qubits[1]);
     else
         throw logic_error("Undefined gate is called!");
-}
-
-IdxType qasm_parser::num_qubits() { return _n_qubits; }
-
-IdxType modifyBit(IdxType n, IdxType p, IdxType b)
-{
-    IdxType mask = 1 << p;
-    return ((n & ~mask) | (b << p));
-}
-
-map<string, int> *qasm_parser::execute(Simulation &sim, IdxType repetition, bool measure_all, bool repeat_per_shot)
-{
-    IdxType *results;
-
-    if (repeat_per_shot || contains_IF)
-    {
-        IdxType results_arr[repetition];
-
-        results = results_arr;
-
-        for (IdxType i = 0; i < repetition; i++)
-        {
-            IdxType *sub_result = sub_execute(sim, 1);
-            results[i] = sub_result[0];
-        }
-    }
-    else
-    {
-        results = sub_execute(sim, repetition);
-    }
-
-    map<IdxType, int> result_dict;
-
-    for (int i = 0; i < repetition; i++)
-        if (result_dict.count(results[i]))
-            result_dict[results[i]] = result_dict.at(results[i]) + 1;
-        else
-            result_dict[results[i]] = 1;
-
-    if (measure_all)
-    {
-        return to_binary_dictionary(_n_qubits, result_dict);
-    }
-    else
-    {
-        return convert_dictionary(result_dict);
-    }
-}
-
-IdxType *qasm_parser::sub_execute(Simulation &sim, IdxType repetition)
-{
-    sim.clear_circuit();
-
-    for (IdxType i = 0; i < list_gates->size();)
-    {
-        gate gate = list_gates->at(i);
-
-        if (gate.name == IF)
-        {
-            creg creg = list_cregs.at(gate.creg_name);
-
-            if (creg.val != gate.if_creg_val)
-            {
-                i += gate.if_offset;
-            }
-            else
-            {
-                i++;
-            }
-        }
-        else
-        {
-            if (gate.name == MEASURE)
-            {
-
-                if (!gate.final_measurements)
-                {
-                    // Measure and update creg value for intermediate measurements
-                    IdxType result = sim.measure(gate.qubits[0]);
-
-                    list_cregs.at(gate.creg_name).val = modifyBit(list_cregs.at(gate.creg_name).val, gate.creg_index, result);
-                    list_cregs.at(gate.creg_name).qubit_indices[gate.creg_index] = UN_DEF;
-                }
-                else
-                {
-                    // Update creg qubit indices for final measurements
-                    list_cregs.at(gate.creg_name).qubit_indices[gate.creg_index] = gate.qubits[0];
-                }
-            }
-            else
-            {
-                append_gate(sim, gate.name, gate.qubits, gate.params);
-            }
-
-            i++;
-        }
-    }
-
-    return sim.measure_all(repetition);
-}
-
-map<string, int> *qasm_parser::convert_dictionary(map<IdxType, int> dict)
-{
-    map<string, int> *converted_counts = new map<string, int>;
-
-    for (auto const &[key, val] : dict)
-    {
-        string converted_key = convert_outcome(key);
-
-        if (converted_key.size() > 0)
-        {
-            if (converted_counts->count(converted_key))
-                converted_counts->at(converted_key) += val;
-            else
-                converted_counts->insert({converted_key, val});
-        }
-    }
-    return converted_counts;
-}
-
-void qasm_parser::print_cregs()
-{
-    for (auto const &[key, val] : list_cregs)
-    {
-        cout << key << " width: " << val.width;
-        for (IdxType n : val.qubit_indices)
-            cout << n << " ";
-        cout << endl
-             << endl;
-    }
-}
-
-string qasm_parser::convert_outcome(IdxType original_out)
-{
-    stringstream ss;
-
-    IdxType cur_index = 0;
-    for (auto const &[key, val] : list_cregs)
-    {
-        if (cur_index != 0)
-            ss << " ";
-
-        vector<IdxType> creg_qubit_indices = val.qubit_indices;
-
-        for (IdxType i = creg_qubit_indices.size() - 1; i >= 0; i--)
-        {
-            IdxType index = creg_qubit_indices[i];
-
-            if (index == UN_DEF)
-            {
-                ss << 0;
-            }
-            else
-                ss << ((original_out >> index) & 1);
-        }
-
-        cur_index++;
-    }
-    return ss.str();
-}
-
-map<string, int> *qasm_parser::to_binary_dictionary(IdxType num_qubits, map<IdxType, int> counts)
-{
-    map<string, int> *binary_counts = new map<string, int>;
-
-    stringstream ss;
-    for (auto const &[key, val] : counts)
-    {
-        ss.str(string());
-        for (int i = num_qubits - 1; i >= 0; i--)
-        {
-            ss << ((key >> i) & 1);
-        }
-        binary_counts->insert({ss.str(), val});
-    }
-    return binary_counts;
 }
 
 qasm_parser::~qasm_parser()
 {
     if (list_gates != NULL)
     {
+        for (auto gate : *list_gates)
+            if (gate.name == IF)
+                delete gate.conditional_inst;
         delete list_gates;
     }
 }

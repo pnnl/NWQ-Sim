@@ -38,7 +38,7 @@ int main(int argc, char **argv)
         qasm_parser parser(filename);
 
         Simulation sim(parser.num_qubits());
-        map<string, int> *counts = parser.execute(sim, total_shots);
+        map<string, IdxType> *counts = parser.execute(sim, total_shots);
 
         print_counts(counts, total_shots);
     }
@@ -46,7 +46,6 @@ int main(int argc, char **argv)
     if (cmdOptionExists(argv, argv + argc, "-t"))
     {
         int benchmark_index = stoi(getCmdOption(argv, argv + argc, "-t"));
-        int num_qubits = 2 + benchmark_index / 4;
         stringstream ss;
         ss << "../../../data/benchmarks/results/" << benchmark_index << "_result.txt";
         ifstream resultFile(ss.str().c_str());
@@ -56,13 +55,14 @@ int main(int argc, char **argv)
             return -1;
         }
         ss.str(string());
-        ss << "../../../data/benchmarks/circuits/" << benchmark_index << "_n" << num_qubits << ".qasm";
+        ss << "../../../data/benchmarks/circuits/" << benchmark_index << ".qasm";
 
-        Simulation sim(num_qubits);
         qasm_parser parser(ss.str().c_str());
-        map<string, int> *svsim_counts = parser.execute(sim, total_shots, true);
-        map<string, double> ref_probs;
-        map<string, double> svsim_probs;
+        int num_qubits = parser.num_qubits();
+        Simulation sim(num_qubits);
+        map<string, IdxType> *svsim_counts = parser.execute(sim, total_shots);
+        map<string, ValType> ref_probs;
+        map<string, ValType> svsim_probs;
         string line;
         double ref_norm = 0, svsim_norm = 0;
         while (getline(resultFile, line))
@@ -98,38 +98,25 @@ int main(int argc, char **argv)
         bool passed = true;
         for (int benchmark_index = 16; benchmark_index < 20; benchmark_index++)
         {
-            int num_qubits = 2 + benchmark_index / 4;
-
             int total_shots = 16384;
-
             stringstream ss;
-
             ss << "../../../data/benchmarks/results/" << benchmark_index << "_result.txt";
-
             ifstream resultFile(ss.str().c_str());
             if (!resultFile)
             {
                 printf("%s \n", "Could not open result file\n");
                 return -1;
             }
-
             ss.str(string());
-
-            ss << "../../../data/benchmarks/circuits/" << benchmark_index << "_n" << num_qubits << ".qasm";
-
-            Simulation sim(num_qubits);
-
+            ss << "../../../data/benchmarks/circuits/" << benchmark_index << ".qasm";
             qasm_parser parser(ss.str().c_str());
-
-            map<string, int> *svsim_counts = parser.execute(sim, total_shots, true);
-
-            map<string, double> ref_probs;
-            map<string, double> svsim_probs;
-
+            int num_qubits = parser.num_qubits();
+            Simulation sim(num_qubits);
+            map<string, IdxType> *svsim_counts = parser.execute(sim, total_shots);
+            map<string, ValType> ref_probs;
+            map<string, ValType> svsim_probs;
             string line;
-
             double ref_norm = 0, svsim_norm = 0;
-
             while (getline(resultFile, line))
             {
                 vector<string> ref_result = split(line, ' ');
