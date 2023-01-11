@@ -45,7 +45,7 @@
 /* Default number of repetitions */
 #define DEFAULT_REPETITIONS 1
 /* Print out per kernel execution trace */
-/*#define PRINT_KERNEL_TRACE*/
+#define PRINT_KERNEL_TRACE
 /* Print out gate trace */
 /*#define PRINT_GATE_TRACE */
 /* Print out qubit allocation, release and reset trace */
@@ -77,7 +77,10 @@
 /*#define DEVICE_CONFIG_NAME "ibmq_guadalupeConfig"*/
 #define DEVICE_CONFIG_NAME "dummy_ibmq30"
 /* NISQ deivce config file path */
-#define DEVICE_CONFIG_PATH "/global/u2/a/angli/test/nwqsim/cluster/dmsim/device/"
+//Perlmutter
+#define DEVICE_CONFIG_PATH "/global/u2/a/angli/test/nwqsim/data/device/"
+//Summit
+/*#define DEVICE_CONFIG_PATH "/ccs/home/angli/repo/NWQ-Sim/data/device/"*/
 
 /***********************************************
  * Constant configuration:

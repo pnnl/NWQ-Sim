@@ -77,7 +77,11 @@
 /*#define DEVICE_CONFIG_NAME "ibmq_guadalupeConfig"*/
 #define DEVICE_CONFIG_NAME "dummy_ibmq30"
 /* NISQ deivce config file path */
-#define DEVICE_CONFIG_PATH "/global/u2/a/angli/test/nwqsim/cluster/dmsim/device/"
+//Perlmutter
+#define DEVICE_CONFIG_PATH "/global/u2/a/angli/test/nwqsim/data/device/"
+//Summit
+/*#define DEVICE_CONFIG_PATH "/ccs/home/angli/repo/NWQ-Sim/data/device/"*/
+
 
 /***********************************************
  * Constant configuration:

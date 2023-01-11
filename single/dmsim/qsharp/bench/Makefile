@@ -17,7 +17,7 @@ TeleportationSample_nvgpu: TeleportationSample_driver.cc TeleportationSample.ll 
 Qrng_nvgpu: Qrng_driver.cc Qrng.ll ../../src/dmsim_nvgpu_sin.cuh ../../src/config.h ../qsharp_wrapper.cu
 	$(QIRCC) $(QIRCC_FLAGS) -I$(QIR_BRIDGE_PUBLIC) -o Qrng.o -c Qrng.ll
 	$(CC) $(QIRCC_FLAGS) -I$(QIR_BRIDGE_PUBLIC) $(SCALE) -D USE_NVGPU -o Qrng_driver.o -c Qrng_driver.cc
-	$(NVCC) -ccbin CC $(NVCC_FLAGS) $(QIR_BRIDGE_FLAGS) $(NVCC_LIBS) -D USE_NVGPU ../qsharp_wrapper.cu Qrng.o Qrng_driver.o -o $@
+	$(NVCC) -ccbin $(CC) $(NVCC_FLAGS) $(QIR_BRIDGE_FLAGS) $(NVCC_LIBS) -D USE_NVGPU ../qsharp_wrapper.cu Qrng.o Qrng_driver.o -o $@
 
 clean:
 	rm *.o Grover_nvgpu TeleportationSample_nvgpu Qrng_nvgpu
