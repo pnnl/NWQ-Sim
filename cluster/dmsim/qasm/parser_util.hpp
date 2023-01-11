@@ -345,11 +345,11 @@ int get_index(vector<string> vec, string target)
 void print_counts(map<string, IdxType> *counts, IdxType repetition)
 {
     assert(counts != NULL);
-    printf("\n===============  Measurement (tests=%d) ================\n", repetition);
+    printf("\n===============  Measurement (tests=%lld) ================\n", repetition);
 
     for (auto const &[key, val] : *counts)
     {
-        printf("\"%s\" : %d\n", key.c_str(), val);
+        printf("\"%s\" : %lld\n", key.c_str(), val);
         //printf("\"%s\" : %lf\n", key.c_str(), double(val)/double(repetition));
     }
 }
