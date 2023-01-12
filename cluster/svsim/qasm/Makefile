@@ -10,5 +10,5 @@ qasm_svsim_cpu: qasm_svsim_cpu.cpp qasm_parser.hpp ../src/svsim_cpu_mpi.hpp ../s
 	$(CC) $(CC_FLAGS) $(CC_LIBS) $(SCALE) -D USE_CPU qasm_svsim_cpu.cpp -o $@
 
 clean:
-	rm qasm_svsim_nvgpu
+	rm qasm_svsim_nvgpu qasm_svsim_cpu
 

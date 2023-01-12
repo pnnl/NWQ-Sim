@@ -17,6 +17,7 @@ double pass_threshold = 0.98;
 
 int main(int argc, char **argv)
 {
+    MPI_Init(&argc, &argv);
     IdxType total_shots = 16384;
     if (cmdOptionExists(argv, argv + argc, "-shots"))
     {
@@ -149,5 +150,6 @@ int main(int argc, char **argv)
         }
         if (passed) cout << "TEST PASSED!" << endl;
     }
+	MPI_Finalize();
     return 0;
 }
