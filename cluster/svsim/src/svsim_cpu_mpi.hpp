@@ -168,7 +168,6 @@ public:
         int size;
         MPI_Comm_size(MPI_COMM_WORLD, &size);
         n_cpus = (IdxType)size;
-        
         cpu_scale = floor(log((double)n_cpus+0.5)/log(2.0));
         lg2_m_cpu = n_qubits-cpu_scale;
         m_cpu = ((IdxType)1<<(lg2_m_cpu));
@@ -1104,8 +1103,8 @@ void C1V2_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
             MPI_Send(sv_real_remote, per_pe_work, MPI_DOUBLE, pair_cpu, 2, MPI_COMM_WORLD);
             MPI_Send(sv_imag_remote, per_pe_work, MPI_DOUBLE, pair_cpu, 3, MPI_COMM_WORLD);
         }
-        //BARR;
     }
+    //BARR;
 }
 
 //============== Local 2-qubit Gate  ================
@@ -1378,6 +1377,7 @@ void MA_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
         if ( fabs(purity - 1.0) > ERROR_BAR )
             printf("MA: Purity Check fails with %lf\n", purity);
     }
+
     BARR;
     m_real[0] = (partial - reduce); //per-node incremental val
     for (IdxType i=1; i<sim->m_cpu; i++)
@@ -1393,7 +1393,7 @@ void MA_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
             ValType lower = LOCAL_G(m_real,j);
             ValType upper = 0;
             if (j+1 == n_size) upper = 1.0; //last element
-            else upper = (local_j+1==sim->m_cpu)?partial:m_real[j+1]; //last element per node
+            else upper = (local_j+1==sim->m_cpu)?partial:m_real[local_j+1]; //last element per node
             
             for (IdxType i=0; i<repetition; i++)
             {
@@ -1539,12 +1539,17 @@ void SWAP_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
 void Purity_Check(const Simulation* sim, const IdxType t, ValType* sv_real, ValType* sv_imag)
 {
     ValType trace = 0;
-    for (IdxType i=0; i<(sim->sv_size_per_cpu); i++)
+    ValType purity = 0;
+    for (IdxType i=0; i<(sim->m_cpu); i++)
         trace += (sv_real[i]*sv_real[i]) + (sv_imag[i]*sv_imag[i]);
     BARR;
-    MPI_Reduce(&trace, &trace, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-    if (sim->i_cpu == 0)
-        printf("%s: Trace is: %lf\n", OP_NAMES[sim->circuit_handle_cpu[t].op_name], trace);
+    MPI_Reduce(&trace, &purity, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    if (sim->i_cpu==0 && abs(purity-1.0) > ERROR_BAR)
+    {
+        Gate* g = &sim->circuit_handle_cpu[t];
+        printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld,theta:%lf) with %lf\n",t,OP_NAMES[g->op_name],g->ctrl,g->qubit,g->theta,purity);
+    }
+
 }
 
 
