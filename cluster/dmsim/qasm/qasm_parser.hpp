@@ -12,9 +12,15 @@
 
 /********** UPDATE THE INCLUDE PATH FOR LOCAL HEADER FILES HERE ************/
 #include "../src/util.h"
-#include "../src/dmsim_nvgpu_mpi.cuh"
 #include "parser_util.hpp"
 #include "lexer.hpp"
+
+#ifdef USE_NVGPU
+#include "../src/dmsim_nvgpu_mpi.cuh"
+#elif defined USE_AMDGPU
+#else //CPU
+#include "../src/dmsim_cpu_mpi.hpp"
+#endif
 /***************************************************************************/
 
 using namespace std;

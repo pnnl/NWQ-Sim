@@ -283,7 +283,7 @@ const char *OP_NAMES[] = {
     "C2",
     "C4"
 };
-/*#ifdef USE_NVGPU*/
+#ifdef USE_NVGPU
 //Name of the gate for tracing on GPU side
 const __device__ char *OP_NAMES_NVGPU[] = {
     //Basic
@@ -327,6 +327,7 @@ const __device__ char *OP_NAMES_NVGPU[] = {
     "C2",
     "C4"
 };
+#endif
 
 class Simulation;
 
@@ -365,7 +366,12 @@ public:
         }
     }
     //applying the embedded gate operation on GPU side
+#ifdef USE_NVGPU
     __device__ void exe_op(Simulation* sim, ValType* sv_real, ValType* sv_imag);
+#else
+    void exe_op(Simulation* sim, ValType* sv_real, ValType* sv_imag);
+#endif
+ 
     //for dumping the gate
     string gateToString()
     {

@@ -1047,8 +1047,6 @@ void C1_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
     } 
 }
 
-/** This is a less optimized version. Half of the Nodes stay idle for better communication efficiency. Use this version only when bidirectional NVSHMEM communicaiton is not well-supported.
-*/
 void C1V2_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag, 
         const ValType* gm_real, const ValType* gm_imag, const IdxType qubit)
 {
@@ -1430,7 +1428,7 @@ void RESET_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
     if (prob_of_one < 1.0) //still possible to normalize
     {
         ValType factor = 1.0/sqrt(1.0-prob_of_one);
-        for (IdxType i=i; i<sim->m_cpu; i++)
+        for (IdxType i=0; i<sim->m_cpu; i++)
         {
             IdxType idx = (sim->i_cpu)*per_pe_work+i;
             if ( (idx & mask) == 0)
@@ -1447,15 +1445,45 @@ void RESET_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
     }
     else
     {
-        for (IdxType i=0; i<sim->m_cpu; i++)
+        if ((qubit+sim->n_qubits)>=sim->lg2_m_cpu) //remote qubit, need switch
         {
-            if ( (i & mask) == 0)
+            IdxType pair_cpu = (sim->i_cpu)^((IdxType)1<<(qubit-(sim->lg2_m_cpu)));
+            assert(pair_cpu != sim->i_cpu);
+            ValType* sv_real_remote = sim->m_real;
+            ValType* sv_imag_remote = sim->m_imag;
+
+            if (sim->i_cpu>pair_cpu) 
             {
-                IdxType dual_i = i^mask;
-                sv_real[i] = sv_real[dual_i];
-                sv_imag[i] = sv_imag[dual_i];
-                sv_real[dual_i] = 0;
-                sv_imag[dual_i] = 0;
+                MPI_Send(sv_real, per_pe_work, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD);
+                MPI_Send(sv_imag, per_pe_work, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD);
+                MPI_Recv(sv_real_remote, per_pe_work, MPI_DOUBLE, pair_cpu, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                MPI_Recv(sv_imag_remote, per_pe_work, MPI_DOUBLE, pair_cpu, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            }
+            else
+            {
+                MPI_Recv(sv_real_remote, per_pe_work, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE); 
+                MPI_Recv(sv_imag_remote, per_pe_work, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); 
+
+                MPI_Send(sv_real, per_pe_work, MPI_DOUBLE, pair_cpu, 2, MPI_COMM_WORLD);
+                MPI_Send(sv_imag, per_pe_work, MPI_DOUBLE, pair_cpu, 3, MPI_COMM_WORLD);
+            }
+            BARR;
+            memcpy(sv_real, sv_real_remote, per_pe_work*sizeof(ValType);
+            memcpy(sv_imag, sv_imag_remote, per_pe_work*sizeof(ValType);
+
+        }
+        else //local (ensuring dual_i is local)
+        {
+            for (IdxType i=0; i<per_pe_work; i++)
+            {
+                if ( (i & mask) == 0)
+                {
+                    IdxType dual_i = i^mask;
+                    sv_real[i] = sv_real[dual_i];
+                    sv_imag[i] = sv_imag[dual_i];
+                    sv_real[dual_i] = 0;
+                    sv_imag[dual_i] = 0;
+                }
             }
         }
     }
@@ -1502,7 +1530,6 @@ void SWAP_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
         MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE); 
         MPI_Recv(sv_imag_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); 
 
-
         for (IdxType i=(sim->i_cpu)*per_pe_work; i<(sim->i_cpu+1)*per_pe_work; i++)
         {
             ValType el_real[4];
@@ -1538,6 +1565,7 @@ void SWAP_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
 
 void Purity_Check(const Simulation* sim, const IdxType t, ValType* sv_real, ValType* sv_imag)
 {
+    BARR;
     ValType trace = 0;
     ValType purity = 0;
     for (IdxType i=0; i<(sim->m_cpu); i++)
