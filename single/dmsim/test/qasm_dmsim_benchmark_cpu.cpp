@@ -39,7 +39,7 @@ int main(int argc, char **argv)
     {
         int benchmark_index = stoi(getCmdOption(argv, argv + argc, "-t"));
         stringstream ss;
-        ss << "../../../data/benchmarks/results/" << benchmark_index << "_result.txt";
+        ss << "../../../data/benchmarks_basis/results/" << benchmark_index << "_result.txt";
         ifstream resultFile(ss.str().c_str());
         if (!resultFile)
         {
@@ -47,7 +47,7 @@ int main(int argc, char **argv)
             return -1;
         }
         ss.str(string());
-        ss << "../../../data/benchmarks/circuits/" << benchmark_index << ".qasm";
+        ss << "../../../data/benchmarks_basis/circuits/" << benchmark_index << ".qasm";
         qasm_parser parser(ss.str().c_str());
 
         IdxType num_qubits = parser.num_qubits();
@@ -90,7 +90,7 @@ int main(int argc, char **argv)
             int total_shots = 32768;
             //int total_shots = 65536;
             stringstream ss;
-            ss << "../../../data/benchmarks/results/" << benchmark_index << "_result.txt";
+            ss << "../../../data/benchmarks_basis/results/" << benchmark_index << "_result.txt";
             ifstream resultFile(ss.str().c_str());
             if (!resultFile)
             {
@@ -99,7 +99,7 @@ int main(int argc, char **argv)
             }
 
             ss.str(string());
-            ss << "../../../data/benchmarks/circuits/" << benchmark_index << ".qasm";
+            ss << "../../../data/benchmarks_basis/circuits/" << benchmark_index << ".qasm";
             qasm_parser parser(ss.str().c_str());
 
             IdxType num_qubits = parser.num_qubits();
@@ -143,7 +143,7 @@ int main(int argc, char **argv)
 
             if (fidelity < pass_threshold)
             {
-                cout << "Benchmark " << benchmark_index << " Failed!" << endl;
+                cout << "Benchmark " << benchmark_index << " Failed!" << endl << flush;
                 passed = false;
             }
         }

@@ -666,7 +666,7 @@ void M_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag, ValType* 
     ValType prob_of_one = 0;
     for (IdxType i=0; i<((IdxType)1<<(sim->n_qubits)); i++)
     {
-        if ((i&mask)!=0) prob_of_one += fabs(sv_real[i]);
+        if ((i&mask)!=0) prob_of_one += fabs(sv_real[(i<<(sim->n_qubits))+i]);
     }
     if (rand <= prob_of_one) gm_real[15] = 1.0/prob_of_one;
     else gm_real[0] = 1.0/(1.0-prob_of_one);
@@ -683,7 +683,7 @@ void MA_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
     const IdxType n_size = (IdxType)1<<(sim->n_qubits);
     m_real[0] = 0;
     for (IdxType i=1; i<=(n_size); i++)
-        m_real[i] = m_real[i-1] + fabs(sv_real[i-1]);
+        m_real[i] = m_real[i-1] + fabs(sv_real[((i-1)<<(sim->n_qubits))+i-1]);
     ValType purity = fabs(m_real[n_size]);
 
     if ( fabs(purity - 1.0) > ERROR_BAR )
@@ -729,7 +729,7 @@ void RESET_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
     ValType prob_of_one = 0;
     for (IdxType i=0; i<((IdxType)1<<(sim->n_qubits)); i++)
     {
-        if ((i&mask)!=0) prob_of_one += fabs(sv_real[i]);
+        if ((i&mask)!=0) prob_of_one += fabs(sv_real[(i<<(sim->n_qubits))+i]);
     }
     assert(prob_of_one <= 1.0);
     
@@ -771,7 +771,7 @@ void Purity_Check(const Simulation* sim, const IdxType t, ValType* sv_real, ValT
 {
     ValType purity = 0; 
     for (IdxType i=0; i<(((IdxType)1<<(sim->n_qubits))); i++)
-        purity += fabs(sv_real[i]);
+        purity += fabs(sv_real[(i<<(sim->n_qubits))+i]);
     if ( fabs(purity - 1.0) > ERROR_BAR )
     {
         Gate* g = &sim->circuit_handle_cpu[t];

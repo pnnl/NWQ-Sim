@@ -78,9 +78,9 @@
 #define DEVICE_CONFIG_NAME "dummy_ibmq30"
 /* NISQ deivce config file path */
 //Perlmutter
-#define DEVICE_CONFIG_PATH "/global/u2/a/angli/test/nwqsim/data/device/"
+/*#define DEVICE_CONFIG_PATH "/global/u2/a/angli/test/nwqsim/data/device/"*/
 //Summit
-/*#define DEVICE_CONFIG_PATH "/ccs/home/angli/repo/NWQ-Sim/data/device/"*/
+#define DEVICE_CONFIG_PATH "/ccs/home/angli/repo/NWQ-Sim/data/device/"
 
 
 /***********************************************
