@@ -22,8 +22,6 @@
 #include <mpi.h>
 #include <string>
 #include <iostream>
-#include <cuda.h>
-#include <mma.h>
 #include "config.h"
 #include "gate.h"
 
