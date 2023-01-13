@@ -22,8 +22,6 @@
 #include <mpi.h>
 #include <string>
 #include <iostream>
-#include <cuda.h>
-#include <mma.h>
 #include "config.h"
 #include "gate.h"
 
@@ -1468,8 +1466,8 @@ void RESET_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
                 MPI_Send(sv_imag, per_pe_work, MPI_DOUBLE, pair_cpu, 3, MPI_COMM_WORLD);
             }
             BARR;
-            memcpy(sv_real, sv_real_remote, per_pe_work*sizeof(ValType);
-            memcpy(sv_imag, sv_imag_remote, per_pe_work*sizeof(ValType);
+            memcpy(sv_real, sv_real_remote, per_pe_work*sizeof(ValType));
+            memcpy(sv_imag, sv_imag_remote, per_pe_work*sizeof(ValType));
 
         }
         else //local (ensuring dual_i is local)
