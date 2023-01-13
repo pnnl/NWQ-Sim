@@ -182,6 +182,7 @@ public:
         SAFE_FREE_HOST(sv_imag);
         SAFE_FREE_HOST(randoms);
         SAFE_FREE_HOST(results);
+        SAFE_FREE_HOST(m_real);
 #ifdef PRINT_SIM_TRACE
         printf("SVSim_cpu is finalized!\n\n");
 #endif
@@ -960,67 +961,11 @@ void CHECK_TRACE(const Simulation* sim, ValType* sv_real, ValType* sv_imag, IdxT
     printf("%s: Trace is: %lf\n", OP_NAMES[sim->circuit_handle_cpu[t].op_name], trace);
 }
 
-//Load 1st qubit coefficient
-#define LOAD_Q0 \
-    const ValType el0_real=GET(sv_real,pos0);\
-    const ValType el0_imag=GET(sv_imag,pos0);\
-    const ValType el1_real=GET(sv_real,pos1);\
-    const ValType el1_imag=GET(sv_imag,pos1);
-//Save 1st qubit coefficient
-#define STORE_Q0 \
-    PUT(sv_real,pos0,sv_real_pos0);\
-    PUT(sv_imag,pos0,sv_imag_pos0);\
-    PUT(sv_real,pos1,sv_real_pos1);\
-    PUT(sv_imag,pos1,sv_imag_pos1);
-//Load 2nd qubit coefficient
-#define LOAD_Q1 \
-    const ValType el2_real=GET(sv_real,pos2);\
-    const ValType el2_imag=GET(sv_imag,pos2);\
-    const ValType el3_real=GET(sv_real,pos3);\
-    const ValType el3_imag=GET(sv_imag,pos3);
-//Save 2nd qubit coefficient
-#define STORE_Q1 \
-    PUT(sv_real,pos2,sv_real_pos2);\
-    PUT(sv_imag,pos2,sv_imag_pos2);\
-    PUT(sv_real,pos3,sv_real_pos3);\
-    PUT(sv_imag,pos3,sv_imag_pos3);
-//Define MG-BSP machine operation header (Optimized version)
-#define OP_HEAD \
-    for (IdxType i=0; i<(sim->half_dim);i++){ \
-        IdxType outer = (i >> qubit); \
-        IdxType inner = (i & (((IdxType)1<<qubit)-1)); \
-        IdxType offset = (outer << (qubit+1)); \
-        IdxType pos0 = offset + inner; \
-        IdxType pos1 = pos0 + ((IdxType)1<<qubit); 
-//Define operation header for 2-qubit
-#define OP_HEAD_2Q \
-    const IdxType q0dim = ((IdxType)1<<max(ctrl,qubit));\
-    const IdxType q1dim = ((IdxType)1<<min(ctrl,qubit));\
-    assert (ctrl != qubit);\
-    const IdxType outer_factor=((sim->dim)+q0dim+q0dim-1)>>(max(ctrl,qubit)+1);\
-    const IdxType mider_factor=(q0dim+q1dim+q1dim-1)>>(min(ctrl,qubit)+1);\
-    const IdxType inner_factor = q1dim;\
-    const IdxType qubit1_dim = ((IdxType)1<<ctrl);\
-    const IdxType qubit2_dim = ((IdxType)1<<qubit);\
-    for (IdxType i=0; i<outer_factor*mider_factor*inner_factor; i++){ \
-        IdxType outer = ((i/inner_factor)/(mider_factor))*(q0dim+q0dim);\
-        IdxType mider = ((i/inner_factor)%(mider_factor))*(q1dim+q1dim);\
-        IdxType inner = i%inner_factor;\
-        IdxType pos0 = outer+mider+inner;\
-        IdxType pos1 = outer+mider+inner+qubit2_dim;\
-        IdxType pos2 = outer+mider+inner+qubit1_dim;\
-        IdxType pos3 = outer+mider+inner+q0dim+q1dim;
-
-//Define operation tail
-#define OP_TAIL  } 
-
 //For C2 and C4 gates
 #define DIV2E(x,y) ((x)>>(y))
 #define MOD2E(x,y) ((x)&(((IdxType)1<<(y))-(IdxType)1)) 
 #define EXP2E(x) ((IdxType)1<<(x))
 #define SV16IDX(x) ( ((x>>3)&1)*EXP2E(qubit0) + ((x>>2)&1)*EXP2E(qubit1) + ((x>>1)&1)*EXP2E(qubit2) + ((x&1)*EXP2E(qubit3)) )
-
-
 
 //============== C1 Gate ================
 //Arbitrary 1-qubit gate
