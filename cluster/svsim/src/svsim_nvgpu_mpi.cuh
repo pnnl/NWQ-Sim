@@ -972,7 +972,7 @@ public:
             printf("\n============== SV-Sim ===============\n");
             printf("nqubits:%lld, ngates:%lld, sim_gates:%lld, ngpus:%lld, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_gpu:%.3lf MB\n",
                     n_qubits, input_gates, n_gates, n_gpus, avg_sim_time, 0., 
-                    avg_sim_time, gpu_mem/1024/1024, gpu_mem/1024/1024);
+                    avg_sim_time, gpu_mem/1024/1024*n_gpus, gpu_mem/1024/1024);
             printf("=====================================\n");
             SAFE_FREE_HOST(sim_times);
         }
@@ -1645,6 +1645,94 @@ __device__ __inline__ void MA_GATE(const Simulation* sim, ValType* sv_real, ValT
     BARR;
 }
 
+__device__ __inline__ void MAV1_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag,
+        const IdxType repetition)
+{
+    grid_group grid = this_grid();
+    const IdxType n_size = (IdxType)1<<(sim->n_qubits);
+    const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
+    ValType * m_real = sim->m_real;
+    ValType * m_imag = sim->m_imag;
+    for (IdxType i=tid; i<sim->m_gpu; i+=blockDim.x*gridDim.x)
+    {
+        m_real[i] = sv_real[i]*sv_real[i] + sv_imag[i]*sv_imag[i];
+    }
+    grid.sync();
+
+    //local parallel prefix sum
+    for (IdxType d=0; d<(sim->lg2_m_gpu); d++)
+    {
+        IdxType step = (IdxType)1<<(d+1);
+        for (IdxType k=tid*step; k<sim->m_gpu; k+=step*blockDim.x*gridDim.x)
+        {
+            m_real[(k+((IdxType)1<<(d+1))-1)] += m_real[k+((IdxType)1<<d)-1];
+        }
+        grid.sync();
+    }
+    if (tid == 0)
+    {
+        m_imag[0] = m_real[sim->m_gpu-1]; //local sum
+        m_real[sim->m_gpu-1] = 0;
+    }
+    grid.sync();
+    for (IdxType d=(sim->lg2_m_gpu)-1; d>=0; d--)
+    {
+        IdxType step = (IdxType)1<<(d+1);
+        for (IdxType k=tid*step; k<sim->m_gpu-1; k+=step*blockDim.x*gridDim.x)
+        {
+            ValType tmp = m_real[k+((IdxType)1<<d)-1];
+            ValType tmp2 = m_real[(k+((IdxType)1<<(d+1))-1)];
+            m_real[k+((IdxType)1<<d)-1] = tmp2;
+            m_real[(k+((IdxType)1<<(d+1))-1)] = tmp + tmp2;
+        }
+        grid.sync();
+    }
+    BARR;
+
+    if (sim->i_gpu == 0 && tid == 0) //first GPU
+    {
+        ValType partial = 0;
+        for (IdxType g=0; g<sim->n_gpus; g++)
+        {
+            nvshmem_double_p(&m_imag[1], partial, g);
+            ValType inc = nvshmem_double_g(&m_imag[0], g);
+            partial += inc;
+        }
+        ValType purity = fabs(partial);
+        if ( fabs(purity - 1.0) > ERROR_BAR )
+            printf("MA: Purity Check fails with %lf\n", purity);
+    }
+
+    BARR;
+    for (IdxType i=tid; i<sim->m_gpu; i+=blockDim.x*gridDim.x)
+    {
+        m_real[i] += m_imag[1];
+    }
+
+    BARR;
+    for (IdxType j=tid; j<n_size; j+=blockDim.x*gridDim.x)
+    {
+        IdxType local_gpu = j>>(sim->lg2_m_gpu);
+        if (local_gpu == sim->i_gpu)
+        {
+            ValType lower = LOCAL_G(m_real,j);
+            ValType upper = (j+1==n_size)? 1:PGAS_G(m_real,j+1);
+            for (IdxType i=0; i<repetition; i++)
+            {
+                ValType r = sim->randoms_gpu[i];
+                if (lower<=r && r<upper) 
+                    nvshmem_longlong_p(&sim->results_gpu[i], j, 0);
+            }
+        }
+    }
+    BARR;
+    if (sim->i_gpu != 0 && tid == 0) 
+        nvshmem_longlong_get(sim->results_gpu, sim->results_gpu, repetition, 0);
+    BARR;
+}
+
+
+
 
 __device__ __inline__ void RESET_GATE(const Simulation* sim, ValType* sv_real, ValType* sv_imag, 
         const IdxType qubit)
@@ -1705,16 +1793,35 @@ __device__ __inline__ void RESET_GATE(const Simulation* sim, ValType* sv_real, V
     }
     else
     {
-        for (IdxType i=tid; i<sim->m_gpu; i+=blockDim.x*gridDim.x)
+        if ((qubit+sim->n_qubits)>=sim->lg2_m_gpu) //remote qubit, need switch
         {
-            if ( (i & mask) == 0)
+            IdxType pair_gpu = (sim->i_gpu)^((IdxType)1<<(qubit-(sim->lg2_m_gpu)));
+            assert(pair_gpu != sim->i_gpu);
+            ValType* sv_real_remote = sim->m_real;
+            ValType* sv_imag_remote = sim->m_imag;
+            if (tid == 0) nvshmem_double_get(sv_real_remote, sv_real, per_pe_work, pair_gpu );
+            if (tid == 0) nvshmem_double_get(sv_imag_remote, sv_imag, per_pe_work, pair_gpu );
+            BARR;
+            for (IdxType i=tid; i<sim->m_gpu; i+=blockDim.x*gridDim.x)
             {
-                IdxType dual_i = i^mask;
-                sv_real[i] = sv_real[dual_i];
-                sv_imag[i] = sv_imag[dual_i];
-                sv_real[dual_i] = 0;
-                sv_imag[dual_i] = 0;
+                sv_real[i] = sv_real_remote[i];
+                sv_imag[i] = sv_imag_remote[i];
             }
+        }
+        else
+        {
+            for (IdxType i=tid; i<sim->m_gpu; i+=blockDim.x*gridDim.x)
+            {
+                if ( (i & mask) == 0)
+                {
+                    IdxType dual_i = i^mask;
+                    sv_real[i] = sv_real[dual_i];
+                    sv_imag[i] = sv_imag[dual_i];
+                    sv_real[dual_i] = 0;
+                    sv_imag[dual_i] = 0;
+                }
+            }
+
         }
     }
     BARR;
@@ -1851,6 +1958,7 @@ __device__ void Gate::exe_op(Simulation* sim, ValType* sv_real, ValType* sv_imag
     else if (op_name == MA)
     {
         MA_GATE(sim, sv_real, sv_imag, ctrl); 
+        //MAV1_GATE(sim, sv_real, sv_imag, ctrl); 
     }
     else if (op_name == C1) 
     {

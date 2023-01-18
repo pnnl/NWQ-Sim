@@ -1,7 +1,7 @@
 include ../../shared.mk
 
-#all: qasm_svsim_benchmark_nvgpu
-all: qasm_svsim_benchmark_cpu
+all: qasm_svsim_benchmark_nvgpu
+#all: qasm_svsim_benchmark_cpu
 
 qasm_svsim_benchmark_nvgpu: qasm_svsim_benchmark_nvgpu.cu ../qasm/qasm_parser.hpp ../src/svsim_nvgpu_mpi.cuh ../src/config.h 
 	$(NVCC) -ccbin mpicxx -lnvshmem $(NVCC_FLAGS) $(NVCC_LIBS) $(SCALE) -D USE_NVGPU qasm_svsim_benchmark_nvgpu.cu -o $@

@@ -168,8 +168,8 @@ public:
         //Initialize Circuit 
         circuit_handle = new Circuit(n_qubits);
         circuit_handle_cpu = NULL;
-        SAFE_ALOC_HOST(m_real, sv_size+1);
-        memset(m_real, 0, sv_size+1);
+        SAFE_ALOC_HOST(m_real, sv_size);
+        memset(m_real, 0, sv_size);
         rng.seed(time(0));
 #ifdef PRINT_SIM_TRACE
         printf("SVSim_cpu is initialized!\n");
@@ -783,7 +783,7 @@ public:
         //Reset CPU input & output
         memset(sv_real, 0, sv_size);
         memset(sv_imag, 0, sv_size);
-        memset(m_real, 0, sv_size+1);
+        memset(m_real, 0, sv_size);
         //State Vector initial state [0..0] = 1
         sv_real[0] = 1.;
         reset_circuit();

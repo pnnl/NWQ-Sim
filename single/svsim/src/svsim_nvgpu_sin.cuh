@@ -174,8 +174,8 @@ public:
         //NVSHMEM GPU memory allocation
         SAFE_ALOC_GPU(sv_real, sv_size);
         SAFE_ALOC_GPU(sv_imag, sv_size);
-        SAFE_ALOC_GPU(m_real, sv_size+1);
-        SAFE_ALOC_GPU(m_imag, sv_size+1);
+        SAFE_ALOC_GPU(m_real, sv_size+sizeof(ValType));
+        SAFE_ALOC_GPU(m_imag, sv_size+sizeof(ValType));
         cudaCheckError(); 
         gpu_mem += sv_size*4;
         //Initialize Circuit 
@@ -186,8 +186,8 @@ public:
                     cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu, sv_size, 
                     cudaMemcpyHostToDevice));
-        cudaSafeCall(cudaMemset(m_real, 0, sv_size+1));
-        cudaSafeCall(cudaMemset(m_imag, 0, sv_size+1));
+        cudaSafeCall(cudaMemset(m_real, 0, sv_size+sizeof(ValType)));
+        cudaSafeCall(cudaMemset(m_imag, 0, sv_size+sizeof(ValType)));
         SAFE_ALOC_GPU(sim_gpu, sizeof(Simulation));
         rng.seed(time(0));
     }
@@ -815,8 +815,8 @@ public:
                     sv_size, cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu, 
                     sv_size, cudaMemcpyHostToDevice));
-        cudaSafeCall(cudaMemset(m_real, 0, sv_size+1));
-        cudaSafeCall(cudaMemset(m_imag, 0, sv_size+1));
+        cudaSafeCall(cudaMemset(m_real, 0, sv_size+sizeof(ValType)));
+        cudaSafeCall(cudaMemset(m_imag, 0, sv_size+sizeof(ValType)));
         reset_circuit();
     }
     void reset_circuit()
