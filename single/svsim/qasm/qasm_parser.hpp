@@ -19,7 +19,7 @@
 #include "../src/svsim_nvgpu_sin.cuh"
 #elif defined USE_AMDGPU
 
-#else //CPU
+#else // CPU
 
 #ifdef USE_OMP
 #include "../src/svsim_cpu_omp.hpp"
@@ -28,7 +28,6 @@
 #endif
 
 #endif
-
 /***************************************************************************/
 
 using namespace std;
@@ -579,7 +578,7 @@ map<string, IdxType> *qasm_parser::execute(Simulation &sim, IdxType repetition)
 
 IdxType *qasm_parser::sub_execute(Simulation &sim, IdxType repetition)
 {
-    sim.clear_circuit();
+    sim.reset_sim();
 
     for (auto gate : *list_gates)
     {
