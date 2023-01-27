@@ -19,6 +19,8 @@
 #include <vector>
 #include <algorithm>
 #include <string>
+#include <sstream>
+#include <fstream>
 #include <iostream>
 #include <cstdlib>
 
@@ -139,6 +141,8 @@ public:
 
 class Simulation
 {
+private:
+    vector<string> *qasm_strs;
 public:
     Simulation(IdxType _n_qubits=N_QUBIT_SLOT) : 
         n_qubits(_n_qubits),
@@ -170,6 +174,10 @@ public:
 #ifdef PRINT_SIM_TRACE
         printf("SVSim_cpu is initialized!\n");
 #endif
+
+#ifdef DUMP_QASM
+        qasm_strs = new vector<string>;
+#endif
     }
 
     ~Simulation()
@@ -186,6 +194,10 @@ public:
 #ifdef PRINT_SIM_TRACE
         printf("SVSim_cpu is finalized!\n\n");
 #endif
+        // Release QASM strings
+#ifdef DUMP_QASM
+        delete qasm_strs;
+#endif
     }
     void AllocateQubit()
     {
@@ -195,6 +207,52 @@ public:
     {
         circuit_handle->ReleaseQubit();
     }
+
+    // =============================== Generate QASM Strings ===================================
+    void push_qasmstr(string op, IdxType ctr, IdxType target, IdxType num_params = 0, ValType param0 = 0, ValType param1 = 0, ValType param2 = 0, ValType param3 = 0)
+    {   
+        stringstream ss;
+
+        if (op == "measure")
+        {
+            ss << "measure q[" << target << "] -> c[" << target << "];";
+            qasm_strs->push_back(ss.str());
+        }
+        else if (op == "measure_all")
+            for (IdxType q_i = 0; q_i < n_qubits; q_i++)
+            {
+                ss << "measure q[" << q_i << "] -> c[" << q_i << "];";
+                qasm_strs->push_back(ss.str());
+                ss.str(string());
+            }
+        else
+        {
+            ss << op;
+            if (num_params > 0)
+            {
+                ss << "(" << param0;
+
+                if (num_params > 1)
+                    ss << "," << param1;
+
+                if (num_params > 2)
+                    ss << "," << param2;
+
+                if (num_params > 3)
+                    ss << "," << param3;
+                ss << ") ";
+            }
+            else
+                ss << " ";
+
+            if (ctr != -1)
+                ss << "q[" << ctr << "],";
+
+            ss << "q[" << target << "];";
+            qasm_strs->push_back(ss.str());
+        }
+    }
+
     // =============================== Standard Gates ===================================
     void X(IdxType qubit)
     {
@@ -207,6 +265,10 @@ public:
         ValType gm_imag[4] = {0,0,0,0};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("x", -1, qubit);
+#endif
     }
     void Y(IdxType qubit)
     {
@@ -219,6 +281,10 @@ public:
         ValType gm_imag[4] = {0,-1,1,0};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("y", -1, qubit);
+#endif
     }
     void Z(IdxType qubit)
     {
@@ -231,6 +297,10 @@ public:
         ValType gm_imag[4] = {0,0,0,0};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("z", -1, qubit);
+#endif
     }
     void H(IdxType qubit)
     {
@@ -243,6 +313,10 @@ public:
         ValType gm_imag[4] = {0,0,0,0};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("h", -1, qubit);
+#endif
     }
     void S(IdxType qubit)
     {
@@ -255,6 +329,10 @@ public:
         ValType gm_imag[4] = {0,0,0,1};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("s", -1, qubit);
+#endif
     }
     void SDG(IdxType qubit)
     {
@@ -267,6 +345,10 @@ public:
         ValType gm_imag[4] = {0,0,0,-1};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("sdg", -1, qubit);
+#endif
     }
     void T(IdxType qubit)
     {
@@ -279,6 +361,10 @@ public:
         ValType gm_imag[4] = {0,0,0,S2I};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("t", -1, qubit);
+#endif
     }
     void TDG(IdxType qubit)
     {
@@ -291,6 +377,10 @@ public:
         ValType gm_imag[4] = {0,0,0,-S2I};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("tdg", -1, qubit);
+#endif
     }
     void RI(ValType theta, IdxType qubit)
     {
@@ -303,6 +393,10 @@ public:
         ValType gm_imag[4] = {sin(theta),0,0,sin(theta)};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+    
+#ifdef DUMP_QASM
+        push_qasmstr("ri", -1, qubit, 1, theta);
+#endif
     }
     void RX(ValType theta, IdxType qubit)
     {
@@ -315,6 +409,10 @@ public:
         ValType gm_imag[4] = {0,-sin(HALF*theta),-sin(HALF*theta),0};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("rx", -1, qubit, 1, theta);
+#endif
     }
     void RY(ValType theta, IdxType qubit)
     {
@@ -327,6 +425,10 @@ public:
         ValType gm_imag[4] = {0};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("ry", -1, qubit, 1, theta);
+#endif
     }
     void RZ(ValType theta, IdxType qubit)
     {
@@ -339,6 +441,10 @@ public:
         ValType gm_imag[4] = {-sin(HALF*theta),0,0,sin(HALF*theta)};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("rz", -1, qubit, 1, theta);
+#endif
     }
     void SX(IdxType qubit)
     {
@@ -351,6 +457,10 @@ public:
         ValType gm_imag[4] = {HALF,-HALF,-HALF,HALF};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("sx", -1, qubit);
+#endif
     }
     void P(ValType theta, IdxType qubit)
     {
@@ -363,6 +473,10 @@ public:
         ValType gm_imag[4] = {0,0,0,sin(theta)};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("p", -1, qubit, 1, theta);
+#endif
     }
     void U(ValType theta, ValType phi, ValType lam, IdxType qubit)
     {
@@ -381,6 +495,10 @@ public:
                                sin(lam+phi)*cos(HALF*theta)};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("u", -1, qubit, 3, theta, phi, lam);
+#endif
     }
     void CX(IdxType ctrl, IdxType qubit)
     {
@@ -398,6 +516,10 @@ public:
         ValType gm_imag[16] = {0};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("cx", ctrl, qubit);
+#endif
     }
     void CY(IdxType ctrl, IdxType qubit)
     {
@@ -418,6 +540,10 @@ public:
                                0,0,1,0};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("cy", ctrl, qubit);
+#endif
     }
     void CZ(IdxType ctrl, IdxType qubit)
     {
@@ -435,6 +561,10 @@ public:
         ValType gm_imag[16] = {0};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("cz", ctrl, qubit);
+#endif
     }
     void CH(IdxType ctrl, IdxType qubit)
     {
@@ -452,6 +582,10 @@ public:
         ValType gm_imag[16] = {0};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("ch", ctrl, qubit);
+#endif
     }
     void CS(IdxType ctrl, IdxType qubit)
     {
@@ -472,6 +606,10 @@ public:
                                0,0,0,1};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("cs", ctrl, qubit);
+#endif
     }
     void CSDG(IdxType ctrl, IdxType qubit)
     {
@@ -492,6 +630,10 @@ public:
                                0,0,0,-1};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("csdg", ctrl, qubit);
+#endif
     }
     void CT(IdxType ctrl, IdxType qubit)
     {
@@ -512,6 +654,10 @@ public:
                                0,0,0,S2I};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("ct", ctrl, qubit);
+#endif
     }
     void CTDG(IdxType ctrl, IdxType qubit)
     {
@@ -532,6 +678,10 @@ public:
                                0,0,0,-S2I};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("ctdg", ctrl, qubit);
+#endif
     }
     void CRX(ValType theta, IdxType ctrl, IdxType qubit)
     {
@@ -552,6 +702,10 @@ public:
                                0,0,-sin(HALF*theta),0};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("crx", ctrl, qubit, 1, theta);
+#endif
     }
     void CRY(ValType theta, IdxType ctrl, IdxType qubit)
     {
@@ -569,6 +723,10 @@ public:
         ValType gm_imag[16] = {0};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("cry", ctrl, qubit, 1, theta);
+#endif
     }
     void CRZ(ValType theta, IdxType ctrl, IdxType qubit)
     {
@@ -589,6 +747,10 @@ public:
                                0,0,0,sin(HALF*theta)};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("crz", ctrl, qubit, 1, theta);
+#endif
     }
     void CSX(IdxType ctrl, IdxType qubit)
     {
@@ -609,6 +771,10 @@ public:
                                0,0,-HALF,HALF};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("csx", ctrl, qubit);
+#endif
     }
     void CP(ValType theta, IdxType ctrl, IdxType qubit)
     {
@@ -629,6 +795,10 @@ public:
                                0,0,0,sin(theta)};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("cp", ctrl, qubit, 1, theta);
+#endif
     }
     void CU(ValType theta, ValType phi, ValType lam, ValType gamma,
             IdxType ctrl, IdxType qubit)
@@ -650,6 +820,10 @@ public:
                                0,0,sin(gamma+phi)*sin(HALF*theta),sin(gamma+phi+lam)*cos(HALF*theta)};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("cu", ctrl, qubit, 4, theta, phi, lam, gamma);
+#endif
     }
     void ID(IdxType qubit)
     {
@@ -662,6 +836,10 @@ public:
         ValType gm_imag[4] = {0,0,0,0};
         G->set_gm(gm_real, gm_imag, 2);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("id", -1, qubit);
+#endif
     }
     void SWAP(IdxType ctrl, IdxType qubit)
     {
@@ -682,6 +860,10 @@ public:
                                0,0,0,0};
         G->set_gm(gm_real, gm_imag, 4);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("swap", ctrl, qubit);
+#endif
     }
     void M(IdxType qubit) //default is pauli-Z
     {
@@ -691,6 +873,10 @@ public:
         ValType rand = uni_dist(rng);
         Gate* G = new Gate(OP::M,qubit,-1,rand);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("measure", -1, qubit);
+#endif
     }
     void MA(IdxType repetition) //default is pauli-Z
     {
@@ -703,11 +889,19 @@ public:
             randoms[i] = uni_dist(rng);
         Gate* G = new Gate(OP::MA,0,repetition,0);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("measure_all", -1, -1);
+#endif
     }
     void RESET(IdxType qubit)
     {
         Gate* G = new Gate(OP::RESET,qubit);
         circuit_handle->append(*G);
+
+#ifdef DUMP_QASM
+        push_qasmstr("reset", -1, qubit);
+#endif
     }
 
    // ============================== Other Gate Definition ================================
@@ -850,6 +1044,27 @@ public:
         fflush(stdout);
 #endif
         clear_circuit();
+
+#ifdef DUMP_QASM
+        ofstream outFile(DUMP_QASM);
+        if (!outFile)
+        {
+            cout << "Could not open the qasmfile to dump the gate qasm string: " << DUMP_QASM << endl;
+        }
+        else
+        {
+            outFile << "OPENQASM 2.0;" << endl
+                    << "include \"qelib1.inc\";" << endl
+                    << "qreg q[" << n_qubits << "];" << endl
+                    << "creg c[" << n_qubits << "];" << endl;
+
+            for (auto qasm_str : *qasm_strs)
+                outFile << qasm_str << endl;
+
+            outFile.close();
+        }
+        qasm_strs->clear();
+#endif
     }
     IdxType measure(IdxType qubit) 
     {

@@ -545,9 +545,7 @@ map<string, IdxType> *qasm_parser::execute(Simulation &sim, IdxType repetition)
 
     if (contains_if)
     {
-        IdxType results_arr[repetition];
-
-        results = results_arr;
+        results = new IdxType[repetition];
 
         for (IdxType i = 0; i < repetition; i++)
         {

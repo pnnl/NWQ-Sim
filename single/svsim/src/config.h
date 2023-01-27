@@ -73,6 +73,9 @@
 /*#define DISABLE_GATE_FUSION*/
 /* Enable the double-precision Tensor Core in Ampere GPUs */
 
+/* DUMP the executed gates into qasm file */
+// #define DUMP_QASM "dump_qasm.qasm"
+
 /***********************************************
  * Constant configuration:
  ***********************************************/
