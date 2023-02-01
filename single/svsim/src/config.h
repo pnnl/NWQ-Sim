@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// NWQSim: Northwest Quantum Simulation Environment 
+// NWQSim: Northwest Quantum Simulation Environment
 // ---------------------------------------------------------------------------
 // Ang Li, Senior Computer Scientist
 // Pacific Northwest National Laboratory(PNNL), U.S.
@@ -21,10 +21,10 @@
  *   * USE_AVX512: enable AVX512 vectorization
  * The default is USE_CPU.
  ***********************************************/
-//#define USE_CPU
+// #define USE_CPU
 /*#define USE_NVGPU*/
-//#define USE_AMDGPU
-//#define USE_AVX512
+// #define USE_AMDGPU
+// #define USE_AVX512
 
 /***********************************************
  * Parallel configuration:
@@ -32,8 +32,8 @@
  *    * USE_MPI: use multi-nodes
  * The default is to use a single device.
  ***********************************************/
-//#define USE_OMP
-//#define USE_MPI
+// #define USE_OMP
+// #define USE_MPI
 
 /***********************************************
  * Runtime configuration:
@@ -54,7 +54,7 @@
 /*#define PRINT_CIRCUIT_TRACE */
 /* Print out simulation trace: reset, run, initialize*/
 /*#define PRINT_SIM_TRACE */
-/* Perform purity check per gate. Useful for debugging. 
+/* Perform purity check per gate. Useful for debugging.
  * It breaks when the purity is far from 1. */
 /*#define PURITY_CHECK*/
 /* Perform GPU error check */
@@ -62,9 +62,9 @@
 /* Number of qubit slots. Depends on memory capacity */
 #define N_QUBIT_SLOT 13
 /* Number of threads per thread block for NVGPU */
-#define THREADS_CTA_NVGPU 256 
+#define THREADS_CTA_NVGPU 256
 /* Number of threads per thread block for AMDGPU */
-#define THREADS_CTA_AMDGPU 256 
+#define THREADS_CTA_AMDGPU 256
 /* Error bar for purity check and other error check */
 #define ERROR_BAR (1e-3)
 /* Disable noise injection for functional validation */
@@ -73,26 +73,24 @@
 /*#define DISABLE_GATE_FUSION*/
 /* Enable the double-precision Tensor Core in Ampere GPUs */
 
-/* DUMP the executed gates into qasm file */
-// #define DUMP_QASM "dump_qasm.qasm"
-
 /***********************************************
  * Constant configuration:
  ***********************************************/
 /* Constant value of PI */
 #define PI 3.14159265358979323846
 /* Constant value of sqrt(2) */
-#define S2I 0.70710678118654752440 
+#define S2I 0.70710678118654752440
 /* Constant value of 0.5 */
 #define HALF 0.5
 
 /***********************************************
  * Data type configuration:
  ***********************************************/
-namespace NWQSim {
-/* Basic data type for indices */
-using IdxType = long long int;
-/* Basic data type for value */
-using ValType = double;
-}; //namespace NWQSim
+namespace NWQSim
+{
+    /* Basic data type for indices */
+    using IdxType = long long int;
+    /* Basic data type for value */
+    using ValType = double;
+}; // namespace NWQSim
 #endif
