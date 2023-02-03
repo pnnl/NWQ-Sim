@@ -18,7 +18,7 @@
 #ifdef USE_NVGPU
 #include "../src/dmsim_nvgpu_mpi.cuh"
 #elif defined USE_AMDGPU
-#else //CPU
+#else // CPU
 #include "../src/dmsim_cpu_mpi.hpp"
 #endif
 /***************************************************************************/
@@ -538,9 +538,7 @@ map<string, IdxType> *qasm_parser::execute(Simulation &sim, IdxType repetition)
 
     if (contains_if)
     {
-        IdxType results_arr[repetition];
-
-        results = results_arr;
+        results = new IdxType[repetition];
 
         for (IdxType i = 0; i < repetition; i++)
         {
@@ -571,7 +569,7 @@ map<string, IdxType> *qasm_parser::execute(Simulation &sim, IdxType repetition)
 
 IdxType *qasm_parser::sub_execute(Simulation &sim, IdxType repetition)
 {
-    sim.clear_circuit();
+    sim.reset_sim();
 
     for (auto gate : *list_gates)
     {
@@ -628,8 +626,6 @@ void qasm_parser::execute_gate(Simulation &sim, gate gate)
         sim.ID(qubits[0]);
     else
         throw logic_error("Undefined gate is called!");
-
-
 }
 
 qasm_parser::~qasm_parser()
