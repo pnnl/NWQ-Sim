@@ -10,6 +10,10 @@
 #include <cstring>
 #include <vector>
 
+#ifdef USE_AMDGPU
+#include <hip/hip_runtime.h>
+#endif
+
 /********** UPDATE THE INCLUDE PATH FOR LOCAL HEADER FILES HERE ************/
 #include "../src/util.h"
 #include "parser_util.hpp"
@@ -18,7 +22,7 @@
 #ifdef USE_NVGPU
 #include "../src/svsim_nvgpu_sin.cuh"
 #elif defined USE_AMDGPU
-
+#include "../src/svsim_amdgpu_sin.hpp"
 #else // CPU
 
 #ifdef USE_OMP
