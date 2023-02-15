@@ -14,16 +14,16 @@ MESSAGE(STATUS "CMake version: ${CMAKE_VERSION}")
 CMAKE_MINIMUM_REQUIRED(VERSION 3.11...3.18)
 
 
-SET(PYTHON_EXECUTABLE "/global/homes/a/angli/.conda/envs/py38/bin/python")
-SET(PYTHON_INCLUDE_DIRS "/global/homes/a/angli/.conda/envs/py38/include")
+SET(PYTHON_EXECUTABLE "/ccs/home/angli/miniconda3/envs/py38/bin/python")
+SET(PYTHON_INCLUDE_DIRS "/ccs/home/angli/miniconda3/envs/py38/include")
 
 
 OPTION(USE_PYTHON "Build Python Frontend" ON)
 
 # Define backend
 OPTION(USE_CPU "Use CPU backend" OFF)
-OPTION(USE_NVGPU "Use NVIDIA GPU backend" ON)
-OPTION(USE_AMDGPU "Use AMD GPU backend" OFF)
+OPTION(USE_NVGPU "Use NVIDIA GPU backend" OFF)
+OPTION(USE_AMDGPU "Use AMD GPU backend" ON)
 
 # Define OMP
 OPTION(USE_OPENMP "Use OpenMP for scale-up" OFF)
@@ -32,7 +32,17 @@ OPTION(USE_OPENMP "Use OpenMP for scale-up" OFF)
 OPTION(USE_AVX512 "Accelerated by AVX512 on CPU backend" OFF)
 
 
-project(SVSim VERSION 2.4 LANGUAGES CXX CUDA)
+IF(USE_AMDGPU)
+    set(CMAKE_C_COMPILER "amdclang")
+    set(CMAKE_CXX_COMPILER "hipcc")
+ENDIF()
+
+
+IF (USE_NVGPU)
+    project(SVSim VERSION 2.4 LANGUAGES CXX CUDA)
+ELSE()
+    project(SVSim VERSION 2.4 LANGUAGES CXX)
+ENDIF()
 
 # Set default build type to Release
 IF(NOT CMAKE_BUILD_TYPE)
@@ -100,6 +110,13 @@ IF(USE_NVGPU)
     SET(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3 -gencode arch=compute_${CUDA_ARCH_BIN},code=sm_${CUDA_ARCH_BIN} -rdc=true -allow-unsupported-compiler --compiler-options -fPIC")
 ENDIF()
 
+# AMD GPU Backend
+IF(USE_AMDGPU)
+    ADD_DEFINITIONS(-DUSE_AMDGPU)
+    FIND_PACKAGE(HIP REQUIRED)
+ENDIF()
+
+
 IF(USE_PYTHON)
     IF(USE_NVGPU)
         ADD_LIBRARY("svsim" SHARED "svsim_python.cu")
@@ -109,9 +126,6 @@ IF(USE_PYTHON)
         INCLUDE_DIRECTORIES("../src")
         INCLUDE_DIRECTORIES(${PYTHON_INCLUDE_DIRS})
         INCLUDE_DIRECTORIES(${CUDA_INCLUDES})
-
-        INCLUDE_DIRECTORIES("/global/homes/a/angli/.conda/envs/py38/lib/python3.8/site-packages/mpi4py/include")
-
         TARGET_LINK_LIBRARIES("svsim" "${CMAKE_EXE_LINKER_FLAGS}")
         TARGET_LINK_LIBRARIES("svsim" ${PYTHON_LIBRARIES})
         TARGET_LINK_LIBRARIES("svsim" ${CUDA_LIBRARIES})
@@ -119,5 +133,21 @@ IF(USE_PYTHON)
         TARGET_LINK_LIBRARIES("svsim" "-lgcc -L/opt/cray/pe/gcc/11.2.0/snos/lib64/")
         TARGET_LINK_LIBRARIES("svsim" "-lnvc -lnvcpumath -lnvhpcatm -L/opt/nvidia/hpc_sdk/Linux_x86_64/22.7/compilers/lib")
     ENDIF()
+
+    IF(USE_CPU)
+        ADD_LIBRARY("svsim" SHARED "svsim_python.cpp")
+        SET_TARGET_PROPERTIES("svsim" PROPERTIES SUFFIX ".so")
+        INCLUDE_DIRECTORIES("../src")
+        INCLUDE_DIRECTORIES(${PYTHON_INCLUDE_DIRS})
+        INCLUDE_DIRECTORIES(${CUDA_INCLUDES})
+    ENDIF()
+    IF(USE_AMDGPU)
+        ADD_LIBRARY("svsim" SHARED "svsim_python.cpp")
+        SET_TARGET_PROPERTIES("svsim" PROPERTIES SUFFIX ".so")
+        INCLUDE_DIRECTORIES("../src")
+        INCLUDE_DIRECTORIES(${PYTHON_INCLUDE_DIRS})
+        INCLUDE_DIRECTORIES(${CUDA_INCLUDES})
+    ENDIF()
+
 ENDIF()
 

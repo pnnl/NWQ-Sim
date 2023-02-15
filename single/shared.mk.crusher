@@ -2,7 +2,7 @@
 # This is for OLCF Crusher
 
 ###################### AMD GPU Configuration #######################
-HIPCC = /sw/summit/cuda/11.4.0/bin/nvcc
+HIPCC = /opt/rocm-5.1.0/bin/hipcc
 HIPCC_FLAGS = -O3 -std=c++17 
 HIPCC_LIBS = -lm 
 #######################################################################

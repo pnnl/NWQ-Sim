@@ -6,8 +6,6 @@
 # BSD Lincese.
 # Created 04/19/2021.
 # ----------------------------------------------------------------------
-
-import numpy as np
 from qiskit import QuantumCircuit
 from qiskit import execute, Aer
 from qiskit_nwqsim_provider import NWQSimProvider
