@@ -27,7 +27,7 @@
 #include "config.h"
 #include "gate.h"
 #include "device_noise.hpp"
-
+#include "metric.hpp"
 #ifndef DISABLE_GATE_FUSION
 #include "fusion.h"
 #endif
@@ -98,6 +98,7 @@ namespace NWQSim
 
         Gate *upload()
         {
+            circuit_metrics(circuit, n_qubits);
 #ifdef DISABLE_GATE_FUSION
             //====================== No Fuse =====================
             SAFE_FREE_HOST(circuit_cpu);
