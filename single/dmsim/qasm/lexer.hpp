@@ -1192,6 +1192,7 @@ namespace lexertk
 
         class commutative_inserter : public token_inserter
         {
+            using token_inserter::insert;
         public:
             commutative_inserter()
                 : lexertk::token_inserter(2)
@@ -1326,6 +1327,7 @@ namespace lexertk
 
         class bracket_checker : public token_scanner
         {
+            using token_scanner::operator();
         public:
             bracket_checker()
                 : token_scanner(1),
@@ -1463,6 +1465,7 @@ namespace lexertk
 
         class sequence_validator : public token_scanner
         {
+            using token_scanner::operator();
         private:
             typedef std::pair<lexertk::token::token_type, lexertk::token::token_type> token_pair_t;
             typedef std::set<token_pair_t> set_t;
