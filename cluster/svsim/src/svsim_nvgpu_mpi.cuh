@@ -31,7 +31,7 @@
 #include <mma.h>
 #include "config.h"
 #include "gate.h"
-
+#include "metric.hpp"
 #ifndef DISABLE_GATE_FUSION
 #include "fusion.h"
 #endif
@@ -99,6 +99,7 @@ public:
 
     Gate* upload()
     {
+        circuit_metrics(circuit, n_qubits);
 #ifdef DISABLE_GATE_FUSION
         //====================== No Fuse =====================
         SAFE_FREE_GPU(circuit_gpu);
