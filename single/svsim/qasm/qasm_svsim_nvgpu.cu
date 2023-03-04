@@ -14,7 +14,7 @@ using namespace NWQSim;
 int main(int argc, char **argv)
 {
     const char *filepath;
-    IdxType n_shots = 1024;
+    IdxType n_shots = 10;
 
     // get file name
     if (cmdOptionExists(argv, argv + argc, "-q"))

@@ -99,7 +99,9 @@ public:
 
     Gate* upload()
     {
+#ifdef PRINT_CIRCUIT_METRICS
         circuit_metrics(circuit, n_qubits);
+#endif
 #ifdef DISABLE_GATE_FUSION
         //====================== No Fuse =====================
         SAFE_FREE_GPU(circuit_gpu);

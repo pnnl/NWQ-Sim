@@ -54,6 +54,8 @@
 /*#define PRINT_CIRCUIT_TRACE */
 /* Print out simulation trace: reset, run, initialize*/
 /*#define PRINT_SIM_TRACE */
+/* Print out circuit metrics*/
+/*#define PRINT_CIRCUIT_METRICS */
 /* Perform purity check per gate. Useful for debugging.
  * It breaks when the purity is far from 1. */
 /*#define PURITY_CHECK*/
