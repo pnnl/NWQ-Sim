@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <memory>
 
 namespace NWQSim
 {
@@ -31,7 +32,7 @@ namespace NWQSim
         // number of qubits
         IdxType n_qubits = 0;
         // user input gate sequence
-        std::vector<Gate> *gates;
+        std::shared_ptr<std::vector<std::shared_ptr<Gate>>> gates;
 
     public:
         Circuit();
