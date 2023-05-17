@@ -31,7 +31,7 @@ namespace NWQSim
         // number of qubits
         IdxType n_qubits = 0;
         // user input gate sequence
-        std::vector<Gate *> *gates;
+        std::vector<Gate> *gates;
 
     public:
         Circuit();
