@@ -1,17 +1,3 @@
-// ---------------------------------------------------------------------------
-// NWQsim: Northwest Quantum Circuit Simulation Environment
-// ---------------------------------------------------------------------------
-// Ang Li, Senior Computer Scientist
-// Pacific Northwest National Laboratory(PNNL), U.S.
-// Homepage: http://www.angliphd.com
-// GitHub repo: http://www.github.com/pnnl/NWQ-Sim
-// PNNL-IPID: 32166, ECCN: EAR99, IR: PNNL-SA-161181
-// BSD Lincese.
-// ---------------------------------------------------------------------------
-// File:
-
-// ---------------------------------------------------------------------------
-
 #ifndef CIRCUIT
 #define CIRCUIT
 
@@ -31,10 +17,12 @@ namespace NWQSim
     private:
         // number of qubits
         IdxType n_qubits = 0;
-        // user input gate sequence
+     
+    public:
+       // user input gate sequence
         std::shared_ptr<std::vector<std::shared_ptr<Gate>>> gates;
 
-    public:
+        
         Circuit();
         ~Circuit();
 
