@@ -8,7 +8,7 @@
 // PNNL-IPID: 32166, ECCN: EAR99, IR: PNNL-SA-161181
 // BSD Lincese.
 // ---------------------------------------------------------------------------
-// File: gate.hpp
+// File: hpp
 // DMSim Overall gate definition.
 // ---------------------------------------------------------------------------
 #ifndef GATE
@@ -117,7 +117,7 @@ namespace NWQSim
          ******************************************/
         P,
         /******************************************
-         * Unitary gate.
+         * Unitary
          * U(a,b,c) = [cos(a/2)        -e^(ic)*sin(a/2)]
          *          = [e^(ib)*sin(a/2) e^(i(b+c))*cos(a/2)]
          ******************************************/
@@ -256,7 +256,7 @@ namespace NWQSim
     };
 
     // Name of the gate for tracing purpose
-    const char *OP_NAMES[] = {
+    const char *const OP_NAMES[] = {
         // Basic
         "X",
         "Y",
@@ -301,80 +301,62 @@ namespace NWQSim
         "C1",
         "C2",
         "C4"};
-
-#ifdef USE_GPU
-    // Name of the gate for tracing on GPU side
-    const __device__ char *OP_NAMES_NVGPU[] = {
-        // Basic
-        "X",
-        "Y",
-        "Z",
-        "H",
-        "S",
-        "SDG",
-        "T",
-        "TDG",
-        "RI",
-        "RX",
-        "RY",
-        "RZ",
-        "SX",
-        "P",
-        "U",
-        // Controlled
-        "CX",
-        "CY",
-        "CZ",
-        "CH",
-        "CS",
-        "CSDG",
-        "CT",
-        "CTDG",
-        "CRI",
-        "CRX",
-        "CRY",
-        "CRZ",
-        "CSX",
-        "CP",
-        "CU",
-        // Other
-        "ID",
-        "SWAP",
-        "M",
-        "MA",
-        "RESET",
-        "C1",
-        "C2",
-        "C4"};
-#endif
     /***********************************************
      * Gate Definition
      ***********************************************/
     class Gate
     {
     public:
-        Gate(enum OP _op_name, IdxType _qubit, IdxType _ctrl = -1, ValType _theta = 0) : op_name(_op_name), qubit(_qubit), ctrl(_ctrl), theta(_theta) {}
-        Gate(const Gate &g) : op_name(g.op_name), qubit(g.qubit), ctrl(g.ctrl), theta(g.theta) {}
+        Gate(enum OP _op_name, IdxType _qubit, IdxType _ctrl = -1, ValType _theta = 0, ValType _phi = 0, ValType _lam = 0) : op_name(_op_name), qubit(_qubit), ctrl(_ctrl), theta(_theta), phi(_phi), lam(_lam) {}
+        Gate(const Gate &g) : op_name(g.op_name), qubit(g.qubit), ctrl(g.ctrl), theta(g.theta), phi(g.phi), lam(g.lam) {}
         ~Gate() {}
 
         // set gm
         void set_gm(ValType *real, ValType *imag, IdxType dim) {}
 
-        // #ifdef USE_GPU
-        //     // applying the embedded gate operation on GPU side
-        //     __device__ void exe_op(Simulation *sim, ValType *sv_real, ValType *sv_imag);
-        // #else
-        //     void exe_op(Simulation *sim, ValType *sv_real, ValType *sv_imag)
-        //     {
-        //     }
-        // #endif
-
         // for dumping the gate
         std::string gateToString()
         {
             std::stringstream ss;
-            // ss << OP_NAMES[op_name] << "(qubit:" << qubit << ", ctrl:" << ctrl << ", theta:"
-            //    << theta << ");" << std::endl;
+            ss << OP_NAMES[op_name];
+            if (theta != 0.0 || phi != 0.0 || lam != 0.0)
+            {
+                ss << "(";
+                if (theta != 0.0)
+                {
+                    ss << theta << ",";
+                }
+                if (phi != 0.0)
+                {
+                    ss << phi << ",";
+                }
+                if (lam != 0.0)
+                {
+                    ss << lam;
+                }
+                // Remove trailing comma if exists
+                std::string parameters = ss.str();
+                if (parameters.back() == ',')
+                {
+                    parameters.pop_back();
+                }
+                ss.str(""); // Clear the stringstream
+                ss.clear();
+                ss << parameters << ") ";
+            }
+            else
+            {
+                ss << " ";
+            }
+            if (ctrl >= 0)
+            {
+                ss << ctrl << "," << qubit;
+            }
+            else
+            {
+                ss << qubit;
+            }
+            // ss << std::endl;
             return ss.str();
         }
 
@@ -383,6 +365,8 @@ namespace NWQSim
         IdxType qubit;
         IdxType ctrl;
         ValType theta;
+        ValType phi;
+        ValType lam;
 
         // 4-qubit gate parameters (after fusion)
         ValType gm_real[16];

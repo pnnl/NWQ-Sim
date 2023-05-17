@@ -19,7 +19,6 @@ namespace NWQSim
     using IdxType = long long int;
     /* Basic data type for value */
     using ValType = double;
-
 } // namespace NWQSim
 
-#endif // _UTIL_HPP_
+#endif // UTIL

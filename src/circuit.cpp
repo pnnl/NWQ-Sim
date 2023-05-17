@@ -50,7 +50,7 @@ namespace NWQSim
         // Implementation of circuitToString function
         std::stringstream ss;
         for (auto gate : *Circuit::gates)
-            ss << gate.gateToString();
+            ss << gate.gateToString() << std::endl;
         return ss.str();
     }
 
@@ -244,7 +244,7 @@ namespace NWQSim
         /** U = [cos(theta/2), -e^(i*lam)sin(theta/2)]
                 [e^(i*phi)sin(theta/2), e^(i*(phi+lam))cos(theta/2)]
         */
-        Gate *G = new Gate(OP::U, qubit, -1, theta);
+        Gate *G = new Gate(OP::U, qubit, -1, theta, phi, lam);
         ValType gm_real[4] = {cos(HALF * theta),
                               -cos(lam) * sin(HALF * theta),
                               cos(phi) * sin(HALF * theta),
@@ -541,7 +541,7 @@ namespace NWQSim
                     [0 0 e^(i*gamma)cos(theta/2), -e^(i*(gamma+lam))sin(theta/2)]
                     [0 0 e^(i*(gamma+phi))sin(theta/2), e^(i*(gamma+phi+lam))cos(theta/2)]
         */
-        Gate *G = new Gate(OP::CU, qubit, ctrl, theta);
+        Gate *G = new Gate(OP::CU, qubit, ctrl, theta, phi, lam);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, cos(gamma) * cos(HALF * theta), -cos(gamma + lam) * sin(HALF * theta),
@@ -667,7 +667,7 @@ namespace NWQSim
                     [0 1 0 0]
                     [0 0 0 1]
         */
-        Gate *G = new Gate(OP::SWAP, ctrl, qubit);
+        Gate *G = new Gate(OP::SWAP, qubit, ctrl);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 0, 1, 0,
                                0, 1, 0, 0,
