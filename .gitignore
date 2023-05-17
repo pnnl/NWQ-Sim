@@ -1,0 +1,61 @@
+# .gitignore
+
+# Ignore compiled files
+*.o
+*.so
+*.dylib
+
+# Ignore executables
+*.exe
+*.out
+
+# Ignore build directories
+/build/
+/debug/
+/release/
+
+# Ignore temporary files created by macOS
+.DS_Store
+
+# Ignore Python temporary files
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Ignore files related to Python virtual environments
+/venv/
+/.venv/
+/env/
+/.env/
+/bin/
+/include/
+/lib/
+/lib64/
+/share/
+/pyvenv.cfg
+
+# Ignore Visual Studio Code settings
+.vscode/
+
+# Ignore CMake generated files
+CMakeFiles/
+CMakeCache.txt
+*.cmake
+Makefile
+
+# Ignore other IDE and editor files
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sdf
+*.opensdf
+*.opendb
+
+# Ignore CLion files
+.idea/
+*.iml
