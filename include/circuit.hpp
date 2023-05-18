@@ -17,17 +17,19 @@ namespace NWQSim
     private:
         // number of qubits
         IdxType n_qubits = 0;
-     
-    public:
-       // user input gate sequence
-        std::shared_ptr<std::vector<std::shared_ptr<Gate>>> gates;
 
-        
+    public:
+        // user input gate sequence
+        std::shared_ptr<std::vector<Gate>> gates;
+
         Circuit();
         ~Circuit();
 
         IdxType num_qubits();
         IdxType num_gates();
+
+        std::vector<Gate> get_gates();
+        void set_gates(std::vector<Gate> new_gates);
 
         void clear();
         void reset();

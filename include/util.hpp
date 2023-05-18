@@ -13,6 +13,9 @@
 
 #define DEFAULT_REPETITIONS 1024
 
+/* Error bar for purity check and other error check */
+#define ERROR_BAR (1e-3)
+
 namespace NWQSim
 {
     /* Basic data type for indices */

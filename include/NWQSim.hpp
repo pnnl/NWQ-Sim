@@ -30,21 +30,18 @@ namespace NWQSim
         Simulation(IdxType _n_qubits);
         ~Simulation();
 
-        void AllocateQubit();
-        void ReleaseQubit();
+        virtual void AllocateQubit();
+        virtual void ReleaseQubit();
 
-        void reset_sim();
-        IdxType get_n_qubits();
+        virtual void reset_sim();
+        virtual IdxType get_n_qubits();
 
-        void set_seed(IdxType seed);
+        virtual void set_seed(IdxType seed);
 
-        void update(const IdxType _n_qubits, const IdxType _n_gates);
+        virtual void sim(Circuit &circuit);
 
-        void sim(Circuit circuit);
-
-    private:
-        IdxType measure(IdxType qubit);
-        IdxType *measure_all(IdxType repetition = DEFAULT_REPETITIONS);
+        virtual IdxType measure(IdxType qubit);
+        virtual IdxType *measure_all(IdxType repetition = DEFAULT_REPETITIONS);
     };
 
 } // namespace NWQSim

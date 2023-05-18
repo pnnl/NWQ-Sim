@@ -307,8 +307,8 @@ namespace NWQSim
     class Gate
     {
     public:
-        Gate(enum OP _op_name, IdxType _qubit, IdxType _ctrl = -1, ValType _theta = 0, ValType _phi = 0, ValType _lam = 0) : op_name(_op_name), qubit(_qubit), ctrl(_ctrl), theta(_theta), phi(_phi), lam(_lam) {}
-        Gate(const Gate &g) : op_name(g.op_name), qubit(g.qubit), ctrl(g.ctrl), theta(g.theta), phi(g.phi), lam(g.lam) {}
+        Gate(enum OP _op_name, IdxType _qubit, IdxType _ctrl = -1, IdxType n_qubits = 1, ValType _theta = 0, ValType _phi = 0, ValType _lam = 0) : op_name(_op_name), qubit(_qubit), ctrl(_ctrl), theta(_theta), phi(_phi), lam(_lam) {}
+        Gate(const Gate &g) : op_name(g.op_name), qubit(g.qubit), ctrl(g.ctrl), n_qubits(g.n_qubits), theta(g.theta), phi(g.phi), lam(g.lam) {}
         ~Gate() {}
 
         // set gm
@@ -367,6 +367,8 @@ namespace NWQSim
         ValType theta;
         ValType phi;
         ValType lam;
+
+        IdxType n_qubits;
 
         // 4-qubit gate parameters (after fusion)
         ValType gm_real[16];

@@ -13,7 +13,7 @@ namespace NWQSim
     Circuit::Circuit()
     {
         // Implementation of constructor
-        Circuit::gates = std::make_shared<std::vector<std::shared_ptr<Gate>>>();
+        Circuit::gates = std::make_shared<std::vector<Gate>>();
     }
 
     Circuit::~Circuit()
@@ -29,6 +29,16 @@ namespace NWQSim
     IdxType Circuit::num_gates()
     {
         return Circuit::gates->size();
+    }
+
+    std::vector<Gate> Circuit::get_gates()
+    {
+        return *Circuit::gates;
+    }
+
+    void Circuit::set_gates(std::vector<Gate> new_gates)
+    {
+        Circuit::gates = std::make_shared<std::vector<Gate>>(new_gates);
     }
 
     void Circuit::clear()
@@ -49,7 +59,7 @@ namespace NWQSim
         // Implementation of circuitToString function
         std::stringstream ss;
         for (auto gate : *Circuit::gates)
-            ss << gate->gateToString() << std::endl;
+            ss << gate.gateToString() << std::endl;
         return ss.str();
     }
 
@@ -60,11 +70,11 @@ namespace NWQSim
         /** X = [0 1]
                 [1 0]
          */
-        Gate *G = new Gate(OP::X, qubit);
+        Gate G(OP::X, qubit);
         ValType gm_real[4] = {0, 1, 1, 0};
         ValType gm_imag[4] = {0, 0, 0, 0};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -74,11 +84,11 @@ namespace NWQSim
         /** Y = [0 -i]
                 [i  0]
          */
-        Gate *G = new Gate(OP::Y, qubit);
+        Gate G(OP::Y, qubit);
         ValType gm_real[4] = {0, 0, 0, 0};
         ValType gm_imag[4] = {0, -1, 1, 0};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -88,11 +98,11 @@ namespace NWQSim
         /** Z = [1  0]
                 [0 -1]
          */
-        Gate *G = new Gate(OP::Z, qubit);
+        Gate G(OP::Z, qubit);
         ValType gm_real[4] = {1, 0, 0, -1};
         ValType gm_imag[4] = {0, 0, 0, 0};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -102,11 +112,11 @@ namespace NWQSim
         /** H = 1/sqrt(2) * [1  1]
                             [1 -1]
          */
-        Gate *G = new Gate(OP::H, qubit);
+        Gate G(OP::H, qubit);
         ValType gm_real[4] = {S2I, S2I, S2I, -S2I};
         ValType gm_imag[4] = {0, 0, 0, 0};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -116,11 +126,11 @@ namespace NWQSim
         /** S = [1 0]
                 [0 i]
         */
-        Gate *G = new Gate(OP::S, qubit);
+        Gate G(OP::S, qubit);
         ValType gm_real[4] = {1, 0, 0, 0};
         ValType gm_imag[4] = {0, 0, 0, 1};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -130,11 +140,11 @@ namespace NWQSim
         /** SDG = [1  0]
                   [0 -i]
         */
-        Gate *G = new Gate(OP::SDG, qubit);
+        Gate G(OP::SDG, qubit);
         ValType gm_real[4] = {1, 0, 0, 0};
         ValType gm_imag[4] = {0, 0, 0, -1};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -144,11 +154,11 @@ namespace NWQSim
         /** T = [1 0]
                 [0 s2i+s2i*i]
         */
-        Gate *G = new Gate(OP::T, qubit);
+        Gate G(OP::T, qubit);
         ValType gm_real[4] = {1, 0, 0, S2I};
         ValType gm_imag[4] = {0, 0, 0, S2I};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -158,11 +168,11 @@ namespace NWQSim
         /** TDG = [1 0]
                   [0 s2i-s2i*i]
         */
-        Gate *G = new Gate(OP::TDG, qubit);
+        Gate G(OP::TDG, qubit);
         ValType gm_real[4] = {1, 0, 0, S2I};
         ValType gm_imag[4] = {0, 0, 0, -S2I};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -172,11 +182,11 @@ namespace NWQSim
         /** RI = [e^(ia) 0] = [cos(a)+i*sin(a) 0]
                  [0 e^(ia)]   [0 cos(a)+i*sin(a)]
         */
-        Gate *G = new Gate(OP::RI, qubit, -1, theta);
+        Gate G(OP::RI, qubit, -1, 1, theta);
         ValType gm_real[4] = {cos(theta), 0, 0, cos(theta)};
         ValType gm_imag[4] = {sin(theta), 0, 0, sin(theta)};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -186,11 +196,11 @@ namespace NWQSim
         /** RX = [cos(a/2) -i*sin(a/2)]
                  [-i*sin(a/2) cos(a/2)]
         */
-        Gate *G = new Gate(OP::RX, qubit, -1, theta);
+        Gate G(OP::RX, qubit, -1, 1, theta);
         ValType gm_real[4] = {cos(HALF * theta), 0, 0, cos(HALF * theta)};
         ValType gm_imag[4] = {0, -sin(HALF * theta), -sin(HALF * theta), 0};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -200,11 +210,11 @@ namespace NWQSim
         /** RY = [cos(a/2) -sin(a/2)]
                  [sin(a/2)  cos(a/2)]
         */
-        Gate *G = new Gate(OP::RY, qubit, -1, theta);
+        Gate G(OP::RY, qubit, -1, 1, theta);
         ValType gm_real[4] = {cos(HALF * theta), -sin(HALF * theta), sin(HALF * theta), cos(HALF * theta)};
         ValType gm_imag[4] = {0};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -214,11 +224,11 @@ namespace NWQSim
         /** RZ = [cos(a/2)-i*sin(a/2)  0]
                  [0  cos(a/2)+i*sin(a/2)]
         */
-        Gate *G = new Gate(OP::RZ, qubit, -1, theta);
+        Gate G(OP::RZ, qubit, -1, 1, theta);
         ValType gm_real[4] = {cos(HALF * theta), 0, 0, cos(HALF * theta)};
         ValType gm_imag[4] = {-sin(HALF * theta), 0, 0, sin(HALF * theta)};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -229,11 +239,11 @@ namespace NWQSim
         /** P = [1, 0     ]  = [1,0]
                 [0, e^(ia)]    [0,cos(a)+i*sin(a)]
         */
-        Gate *G = new Gate(OP::P, qubit, -1, theta);
+        Gate G(OP::P, qubit, -1, 1, theta);
         ValType gm_real[4] = {1, 0, 0, cos(theta)};
         ValType gm_imag[4] = {0, 0, 0, sin(theta)};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -243,7 +253,7 @@ namespace NWQSim
         /** U = [cos(theta/2), -e^(i*lam)sin(theta/2)]
                 [e^(i*phi)sin(theta/2), e^(i*(phi+lam))cos(theta/2)]
         */
-        Gate *G = new Gate(OP::U, qubit, -1, theta, phi, lam);
+        Gate G(OP::U, qubit, -1, 1, theta, phi, lam);
         ValType gm_real[4] = {cos(HALF * theta),
                               -cos(lam) * sin(HALF * theta),
                               cos(phi) * sin(HALF * theta),
@@ -252,8 +262,8 @@ namespace NWQSim
                               -sin(lam) * sin(HALF * theta),
                               sin(phi) * sin(HALF * theta),
                               sin(lam + phi) * cos(HALF * theta)};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -265,14 +275,14 @@ namespace NWQSim
                     [0 0 0 1]
                     [0 0 1 0]
         */
-        Gate *G = new Gate(OP::CX, qubit, ctrl);
+        Gate G(OP::CX, qubit, ctrl, 2);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, 0, 1,
                                0, 0, 1, 0};
         ValType gm_imag[16] = {0};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit, ctrl), Circuit::n_qubits);
     }
@@ -284,7 +294,7 @@ namespace NWQSim
                     [0 0 0 -i]
                     [0 0 i 0]
         */
-        Gate *G = new Gate(OP::CY, qubit, ctrl);
+        Gate G(OP::CY, qubit, ctrl, 2);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, 0, 0,
@@ -293,8 +303,8 @@ namespace NWQSim
                                0, 0, 0, 0,
                                0, 0, 0, -1,
                                0, 0, 1, 0};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit, ctrl), Circuit::n_qubits);
     }
@@ -306,14 +316,14 @@ namespace NWQSim
                     [0 0 1 0]
                     [0 0 0 -1]
         */
-        Gate *G = new Gate(OP::CZ, qubit, ctrl);
+        Gate G(OP::CZ, qubit, ctrl, 2);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, 1, 0,
                                0, 0, 0, -1};
         ValType gm_imag[16] = {0};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit, ctrl), Circuit::n_qubits);
     }
@@ -325,14 +335,14 @@ namespace NWQSim
                     [0 0 s2i s2i]
                     [0 0 s2i -s2i]
         */
-        Gate *G = new Gate(OP::CH, qubit, ctrl);
+        Gate G(OP::CH, qubit, ctrl, 2);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, S2I, S2I,
                                0, 0, S2I, -S2I};
         ValType gm_imag[16] = {0};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit, ctrl), Circuit::n_qubits);
     }
@@ -344,7 +354,7 @@ namespace NWQSim
                     [0 0 1 0]
                     [0 0 0 i]
         */
-        Gate *G = new Gate(OP::CS, qubit, ctrl);
+        Gate G(OP::CS, qubit, ctrl, 2);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, 1, 0,
@@ -353,8 +363,8 @@ namespace NWQSim
                                0, 0, 0, 0,
                                0, 0, 0, 0,
                                0, 0, 0, 1};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit, ctrl), Circuit::n_qubits);
     }
@@ -366,7 +376,7 @@ namespace NWQSim
                     [0 0 1 0]
                     [0 0 0 -i]
         */
-        Gate *G = new Gate(OP::CSDG, qubit, ctrl);
+        Gate G(OP::CSDG, qubit, ctrl, 2);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, 1, 0,
@@ -375,8 +385,8 @@ namespace NWQSim
                                0, 0, 0, 0,
                                0, 0, 0, 0,
                                0, 0, 0, -1};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit, ctrl), Circuit::n_qubits);
     }
@@ -388,7 +398,7 @@ namespace NWQSim
                     [0 0 1 0]
                     [0 0 0 s2i+si2*i]
         */
-        Gate *G = new Gate(OP::CT, qubit, ctrl);
+        Gate G(OP::CT, qubit, ctrl, 2);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, 1, 0,
@@ -397,8 +407,8 @@ namespace NWQSim
                                0, 0, 0, 0,
                                0, 0, 0, 0,
                                0, 0, 0, S2I};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit, ctrl), Circuit::n_qubits);
     }
@@ -410,7 +420,7 @@ namespace NWQSim
                     [0 0 1 0]
                     [0 0 0 s2i-si2*i]
         */
-        Gate *G = new Gate(OP::CTDG, qubit, ctrl);
+        Gate G(OP::CTDG, qubit, ctrl, 2);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, 1, 0,
@@ -419,8 +429,8 @@ namespace NWQSim
                                0, 0, 0, 0,
                                0, 0, 0, 0,
                                0, 0, 0, -S2I};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit, ctrl), Circuit::n_qubits);
     }
@@ -432,7 +442,7 @@ namespace NWQSim
                     [0 0 cos(a/2) -i*sin(a/2)]
                     [0 0 -i*sin(a/2) cos(a/2)]
         */
-        Gate *G = new Gate(OP::CRX, qubit, ctrl, theta);
+        Gate G(OP::CRX, qubit, ctrl, 2, theta);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, cos(HALF * theta), 0,
@@ -441,8 +451,8 @@ namespace NWQSim
                                0, 0, 0, 0,
                                0, 0, 0, -sin(HALF * theta),
                                0, 0, -sin(HALF * theta), 0};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit, ctrl), Circuit::n_qubits);
     }
@@ -454,14 +464,14 @@ namespace NWQSim
                     [0 0 cos(a/2) -sin(a/2)]
                     [0 0 sin(a/2)  cos(a/2)]
         */
-        Gate *G = new Gate(OP::CRY, qubit, ctrl, theta);
+        Gate G(OP::CRY, qubit, ctrl, 2, theta);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, cos(HALF * theta), -sin(HALF * theta),
                                0, 0, sin(HALF * theta), cos(HALF * theta)};
         ValType gm_imag[16] = {0};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit, ctrl), Circuit::n_qubits);
     }
@@ -473,7 +483,7 @@ namespace NWQSim
                     [0 0 cos(a/2)-i*sin(a/2)  0]
                     [0 0 0  cos(a/2)+i*sin(a/2)]
         */
-        Gate *G = new Gate(OP::CRZ, qubit, ctrl, theta);
+        Gate G(OP::CRZ, qubit, ctrl, 2, theta);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, cos(HALF * theta), 0,
@@ -482,8 +492,8 @@ namespace NWQSim
                                0, 0, 0, 0,
                                0, 0, -sin(HALF * theta), 0,
                                0, 0, 0, sin(HALF * theta)};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit, ctrl), Circuit::n_qubits);
     }
@@ -495,7 +505,7 @@ namespace NWQSim
                     [0 0 (1+i)/2 (1-i)/2]
                     [0 0 (1-i)/2 (1+i)/2]
         */
-        Gate *G = new Gate(OP::CSX, qubit, ctrl);
+        Gate G(OP::CSX, qubit, ctrl, 2);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, HALF, HALF,
@@ -504,8 +514,8 @@ namespace NWQSim
                                0, 0, 0, 0,
                                0, 0, HALF, -HALF,
                                0, 0, -HALF, HALF};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit, ctrl), Circuit::n_qubits);
     }
@@ -517,7 +527,7 @@ namespace NWQSim
                     [0 0 1 0]
                     [0 0 0 cos(a)+i*sin(a)]
         */
-        Gate *G = new Gate(OP::CP, qubit, ctrl, theta);
+        Gate G(OP::CP, qubit, ctrl, 2, theta);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, 1, 0,
@@ -526,8 +536,8 @@ namespace NWQSim
                                0, 0, 0, 0,
                                0, 0, 0, 0,
                                0, 0, 0, sin(theta)};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit, ctrl), Circuit::n_qubits);
     }
@@ -540,7 +550,7 @@ namespace NWQSim
                     [0 0 e^(i*gamma)cos(theta/2), -e^(i*(gamma+lam))sin(theta/2)]
                     [0 0 e^(i*(gamma+phi))sin(theta/2), e^(i*(gamma+phi+lam))cos(theta/2)]
         */
-        Gate *G = new Gate(OP::CU, qubit, ctrl, theta, phi, lam);
+        Gate G(OP::CU, qubit, ctrl, 2, theta, phi, lam);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 1, 0, 0,
                                0, 0, cos(gamma) * cos(HALF * theta), -cos(gamma + lam) * sin(HALF * theta),
@@ -549,8 +559,8 @@ namespace NWQSim
                                0, 0, 0, 0,
                                0, 0, sin(gamma) * cos(HALF * theta), -sin(gamma + lam) * sin(HALF * theta),
                                0, 0, sin(gamma + phi) * sin(HALF * theta), sin(gamma + phi + lam) * cos(HALF * theta)};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit, ctrl), Circuit::n_qubits);
     }
@@ -562,7 +572,7 @@ namespace NWQSim
                     [0               -i*sin(theta/2) cos(theta/2)    0]
                     [-i*sin(theta/2) 0               0               cos(theta/2)]
         */
-        Gate *G = new Gate(OP::RXX, qubit0, qubit1, theta);
+        Gate G(OP::RXX, qubit0, qubit1, 2, theta);
         ValType gm_real[16] = {cos(HALF * theta), 0, 0, 0,
                                0, cos(HALF * theta), 0, 0,
                                0, 0, cos(HALF * theta), 0,
@@ -573,8 +583,8 @@ namespace NWQSim
                                0, -sin(HALF * theta), 0, 0,
                                -sin(HALF * theta), 0, 0, 0};
 
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit0, qubit1), Circuit::n_qubits);
     }
@@ -586,7 +596,7 @@ namespace NWQSim
                     [0               -i*sin(theta/2) cos(theta/2)    0]
                     [i*sin(theta/2) 0               0               cos(theta/2)]
         */
-        Gate *G = new Gate(OP::RYY, qubit0, qubit1, theta);
+        Gate G(OP::RYY, qubit0, qubit1, 2, theta);
         ValType gm_real[16] = {cos(HALF * theta), 0, 0, 0,
                                0, cos(HALF * theta), 0, 0,
                                0, 0, cos(HALF * theta), 0,
@@ -597,8 +607,8 @@ namespace NWQSim
                                0, -sin(HALF * theta), 0, 0,
                                sin(HALF * theta), 0, 0, 0};
 
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit0, qubit1), Circuit::n_qubits);
     }
@@ -610,7 +620,7 @@ namespace NWQSim
          *          [0                 0               e^(i theta/2)  0]
          *          [0                 0               0               e^(-i theta/2)]
          */
-        Gate *G = new Gate(OP::RZZ, qubit0, qubit1, theta);
+        Gate G(OP::RZZ, qubit0, qubit1, 2, theta);
 
         ValType gm_real[16] = {cos(-HALF * theta), 0, 0, 0,
                                0, cos(HALF * theta), 0, 0,
@@ -622,8 +632,8 @@ namespace NWQSim
                                0, 0, sin(HALF * theta), 0,
                                0, 0, 0, sin(-HALF * theta)};
 
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(qubit0, qubit1), Circuit::n_qubits);
     }
@@ -634,11 +644,11 @@ namespace NWQSim
         /** SX = 1/2 [1+i 1-i]
                      [1-i 1+i]
         */
-        Gate *G = new Gate(OP::SX, qubit);
+        Gate G(OP::SX, qubit);
         ValType gm_real[4] = {HALF, HALF, HALF, HALF};
         ValType gm_imag[4] = {HALF, -HALF, -HALF, HALF};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -649,11 +659,11 @@ namespace NWQSim
         /** ID  = [1 0]
                   [0 1]
         */
-        Gate *G = new Gate(OP::ID, qubit);
+        Gate G(OP::ID, qubit);
         ValType gm_real[4] = {1, 0, 0, 1};
         ValType gm_imag[4] = {0, 0, 0, 0};
-        G->set_gm(gm_real, gm_imag, 2);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 2);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
@@ -666,7 +676,7 @@ namespace NWQSim
                     [0 1 0 0]
                     [0 0 0 1]
         */
-        Gate *G = new Gate(OP::SWAP, qubit, ctrl);
+        Gate G(OP::SWAP, qubit, ctrl, 2);
         ValType gm_real[16] = {1, 0, 0, 0,
                                0, 0, 1, 0,
                                0, 1, 0, 0,
@@ -675,26 +685,26 @@ namespace NWQSim
                                0, 0, 0, 0,
                                0, 0, 0, 0,
                                0, 0, 0, 0};
-        G->set_gm(gm_real, gm_imag, 4);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        G.set_gm(gm_real, gm_imag, 4);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(std::max(ctrl, qubit), Circuit::n_qubits);
     }
 
     void Circuit::M(IdxType qubit) // default is pauli-Z
     {
-        Gate *G = new Gate(OP::M, qubit, -1, 0);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        Gate G(OP::M, qubit);
+        Circuit::gates->push_back(G);
     }
     void Circuit::MA(IdxType repetition) // default is pauli-Z
     {
-        Gate *G = new Gate(OP::MA, 0, repetition, 0);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        Gate G(OP::MA, repetition);
+        Circuit::gates->push_back(G);
     }
     void Circuit::RESET(IdxType qubit)
     {
-        Gate *G = new Gate(OP::RESET, qubit);
-        Circuit::gates->push_back(std::shared_ptr<Gate>(G));
+        Gate G(OP::RESET, qubit);
+        Circuit::gates->push_back(G);
 
         Circuit::n_qubits = std::max(qubit, Circuit::n_qubits);
     }
