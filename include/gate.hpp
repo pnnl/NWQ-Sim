@@ -25,7 +25,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-
+#include <cstring>
 namespace NWQSim
 {
 
@@ -307,12 +307,43 @@ namespace NWQSim
     class Gate
     {
     public:
-        Gate(enum OP _op_name, IdxType _qubit, IdxType _ctrl = -1, IdxType n_qubits = 1, ValType _theta = 0, ValType _phi = 0, ValType _lam = 0) : op_name(_op_name), qubit(_qubit), ctrl(_ctrl), theta(_theta), phi(_phi), lam(_lam) {}
-        Gate(const Gate &g) : op_name(g.op_name), qubit(g.qubit), ctrl(g.ctrl), n_qubits(g.n_qubits), theta(g.theta), phi(g.phi), lam(g.lam) {}
+        Gate(enum OP _op_name,
+             IdxType _qubit,
+             IdxType _ctrl = -1,
+             IdxType _n_qubits = 1,
+             ValType _theta = 0,
+             ValType _phi = 0, ValType _lam = 0) : op_name(_op_name),
+                                                   qubit(_qubit),
+                                                   ctrl(_ctrl),
+                                                   n_qubits(_n_qubits),
+                                                   theta(_theta),
+                                                   phi(_phi),
+                                                   lam(_lam)
+        {
+            memset(gm_real, 0, sizeof(ValType) * 16);
+            memset(gm_imag, 0, sizeof(ValType) * 16);
+        }
+        Gate(const Gate &g) : op_name(g.op_name),
+                              qubit(g.qubit),
+                              ctrl(g.ctrl),
+                              n_qubits(g.n_qubits),
+                              theta(g.theta),
+                              phi(g.phi),
+                              lam(g.lam)
+        {
+            memcpy(gm_real, g.gm_real, 16 * sizeof(ValType));
+            memcpy(gm_imag, g.gm_imag, 16 * sizeof(ValType));
+        }
         ~Gate() {}
 
         // set gm
-        void set_gm(ValType *real, ValType *imag, IdxType dim) {}
+        void set_gm(ValType *real, ValType *imag, IdxType dim)
+        {
+            if (!(dim == 2 || dim == 4))
+                throw std::logic_error("Dim should be 2 (1-qubit gate) or 4 (2-qubit gate)!");
+            memcpy(gm_real, real, dim * dim * sizeof(ValType));
+            memcpy(gm_imag, imag, dim * dim * sizeof(ValType));
+        }
 
         // for dumping the gate
         std::string gateToString()

@@ -1,5 +1,10 @@
-#include "../../include/NWQSim.hpp"
+#ifndef SVSIM_CPU_HPP
+#define SVSIM_CPU_HPP
+
+// #include "../../include/NWQSim.hpp"
 #include "../../include/util.hpp"
+#include "../../include/gate.hpp"
+#include "../../include/circuit.hpp"
 #include "../cpu_util.hpp"
 
 #include <random>
@@ -9,7 +14,7 @@
 
 namespace NWQSim
 {
-    class SVSIM_CPU : public Simulation
+    class SVSIM_CPU
     {
     public:
         // n_qubits is the number of qubits
@@ -33,11 +38,8 @@ namespace NWQSim
 
         // CPU memory usage
         ValType cpu_mem;
-        // cricuit
-        Circuit *circuit_handle;
-        Gate *circuit_handle_cpu;
 
-        SVSIM_CPU(IdxType _n_qubits) : Simulation(_n_qubits)
+        SVSIM_CPU(IdxType _n_qubits)
         {
             n_qubits = _n_qubits;
             dim = (IdxType)1 << (n_qubits);
@@ -63,9 +65,6 @@ namespace NWQSim
 
         ~SVSIM_CPU()
         {
-            // Release circuit
-            if (circuit_handle != NULL)
-                delete circuit_handle;
             // Release for CPU side
             SAFE_FREE_HOST(sv_real);
             SAFE_FREE_HOST(sv_imag);
@@ -77,18 +76,18 @@ namespace NWQSim
 #endif
         }
 
-        void AllocateQubit() override
+        void AllocateQubit()
         {
             n_qubits++;
         }
 
-        void ReleaseQubit() override
+        void ReleaseQubit()
         {
             n_qubits--;
         }
 
         // =============================== End of Gate Define ===================================
-        void reset_sim() override
+        void reset_sim()
         {
             // Reset CPU input & output
             memset(sv_real, 0, sv_size);
@@ -98,21 +97,22 @@ namespace NWQSim
             sv_real[0] = 1.;
         }
 
-        IdxType get_n_qubits() override
+        IdxType get_n_qubits()
         {
             return n_qubits;
         }
 
-        void set_seed(IdxType seed) override
+        void set_seed(IdxType seed)
         {
             rng.seed(seed);
         }
 
-        void simulation_kernel(std::vector<Gate> gates)
+        void simulation_kernel(std::shared_ptr<std::vector<Gate>> gates)
         {
             //=========================================
-            for (auto g : gates)
+            for (auto g : *gates)
             {
+
                 if (g.n_qubits == 1)
                 {
                     C1_GATE(g.gm_real, g.gm_imag, g.qubit);
@@ -162,10 +162,10 @@ namespace NWQSim
             }
         }
 
-        void sim(Circuit &circuit) override
+        void sim(Circuit &circuit)
         {
-            auto gates = circuit.get_gates();
-            IdxType n_gates = gates.size();
+            auto gates = circuit.gates;
+            IdxType n_gates = gates->size();
 
 #ifdef PRINT_SIM_TRACE
             double sim_time;
@@ -194,7 +194,7 @@ namespace NWQSim
             //=========================================
         }
 
-        IdxType measure(IdxType qubit) override
+        IdxType measure(IdxType qubit)
         {
             SAFE_FREE_HOST(results);
             SAFE_ALOC_HOST(results, sizeof(IdxType));
@@ -205,7 +205,7 @@ namespace NWQSim
             return results[0];
         }
 
-        IdxType *measure_all(IdxType repetition = DEFAULT_REPETITIONS) override
+        IdxType *measure_all(IdxType repetition = DEFAULT_REPETITIONS)
         {
             SAFE_FREE_HOST(results);
             SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
@@ -537,3 +537,5 @@ namespace NWQSim
     };
 
 } // namespace NWQSim
+
+#endif // SVSIM_CPU
