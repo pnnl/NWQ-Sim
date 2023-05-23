@@ -8,6 +8,7 @@
 #include <vector>
 #include <sstream>
 #include <memory>
+#include <cmath>
 
 namespace NWQSim
 {
@@ -27,7 +28,7 @@ namespace NWQSim
             // Implementation of constructor
             gates = std::make_shared<std::vector<Gate>>();
         }
-        ~Circuit();
+        ~Circuit(){};
 
         IdxType num_qubits() { return n_qubits + 1; };
         IdxType num_gates() { return gates->size(); };

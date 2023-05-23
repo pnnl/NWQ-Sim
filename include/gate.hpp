@@ -312,13 +312,14 @@ namespace NWQSim
              IdxType _ctrl = -1,
              IdxType _n_qubits = 1,
              ValType _theta = 0,
-             ValType _phi = 0, ValType _lam = 0) : op_name(_op_name),
-                                                   qubit(_qubit),
-                                                   ctrl(_ctrl),
-                                                   n_qubits(_n_qubits),
-                                                   theta(_theta),
-                                                   phi(_phi),
-                                                   lam(_lam)
+             ValType _phi = 0,
+             ValType _lam = 0) : op_name(_op_name),
+                                 qubit(_qubit),
+                                 ctrl(_ctrl),
+                                 n_qubits(_n_qubits),
+                                 theta(_theta),
+                                 phi(_phi),
+                                 lam(_lam)
         {
             memset(gm_real, 0, sizeof(ValType) * 16);
             memset(gm_imag, 0, sizeof(ValType) * 16);

@@ -6,19 +6,32 @@
 
 #include <cmath> // For M_PI
 // #include "../include/NWQSim.hpp"      // Base Class
-#include "../src/svsim/svsim_cpu.hpp" // Derived Class
-
-#include "../include/circuit.hpp" // Assuming this is the file that contains your Circuit class
+#include "../include/svsim/svsim_cpu.hpp" // Derived Class
+#include "../include/circuit.hpp"         // Assuming this is the file that contains your Circuit class
 
 using namespace NWQSim;
 
 int main()
 {
     Circuit circuit;
-    circuit.H(0);
-    circuit.H(1);
-    circuit.CX(0, 2);
-    circuit.CCX(0, 1, 2);
+
+    int n = 20;
+    for (int i = 0; i < n; i++)
+    {
+        circuit.H(i);
+    }
+    for (int i = 0; i < n - 1; i++)
+    {
+        circuit.CX(0, i + 1);
+    }
+    for (int i = 0; i < n; i++)
+    {
+        circuit.H(i);
+    }
+    for (int i = 0; i < n - 1; i++)
+    {
+        circuit.CX(0, i + 1);
+    }
 
     SVSIM_CPU sim(circuit.num_qubits());
     sim.sim(circuit);
