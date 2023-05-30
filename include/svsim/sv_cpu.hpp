@@ -1,5 +1,6 @@
-#ifndef SVSIM_CPU_HPP
-#define SVSIM_CPU_HPP
+#pragma once
+
+#include "../state.hpp"
 
 // #include "../../include/NWQSim.hpp"
 #include "../util.hpp"
@@ -8,35 +9,31 @@
 
 #include "../fusion.hpp"
 
+#include "macros.hpp"
+
 #include <random>
 #include <cstring>
 #include <algorithm>
-
-#ifdef USE_OMP
-#include "svsim_omp.hpp"
-#endif
+#include <vector>
 
 #define PRINT_SIM_TRACE
 
 namespace NWQSim
 {
-    class SVSIM_CPU
+    class SV_CPU : public QuantumState
     {
-    public:
+    protected:
         // n_qubits is the number of qubits
         IdxType n_qubits;
         IdxType sv_size;
         IdxType dim;
         IdxType half_dim;
+        IdxType n_cpu;
 
         // CPU arrays
         ValType *sv_real = NULL;
         ValType *sv_imag = NULL;
         ValType *m_real = NULL;
-        // For measurement randoms
-        ValType *randoms = NULL;
-        // For measurement result
-        IdxType *results = NULL;
 
         // Random
         std::mt19937 rng;
@@ -45,13 +42,16 @@ namespace NWQSim
         // CPU memory usage
         ValType cpu_mem;
 
-        SVSIM_CPU(IdxType _n_qubits)
+    public:
+        SV_CPU(IdxType _n_qubits) : QuantumState(_n_qubits)
         {
+            // Initialize CPU side
             n_qubits = _n_qubits;
+            sv_size = dim * (IdxType)sizeof(ValType);
             dim = (IdxType)1 << (n_qubits);
             half_dim = (IdxType)1 << (n_qubits - 1);
+            n_cpu = 1;
 
-            sv_size = dim * (IdxType)sizeof(ValType);
             // CPU side initialization
             SAFE_ALOC_HOST(sv_real, sv_size);
             SAFE_ALOC_HOST(sv_imag, sv_size);
@@ -69,20 +69,18 @@ namespace NWQSim
 #endif
         }
 
-        ~SVSIM_CPU()
+        ~SV_CPU()
         {
             // Release for CPU side
             SAFE_FREE_HOST(sv_real);
             SAFE_FREE_HOST(sv_imag);
-            SAFE_FREE_HOST(randoms);
-            SAFE_FREE_HOST(results);
             SAFE_FREE_HOST(m_real);
 #ifdef PRINT_SIM_TRACE
             printf("SVSim_cpu is finalized!\n\n");
 #endif
         }
 
-        void reset_sim()
+        void reset_sim() override
         {
             // Reset CPU input & output
             memset(sv_real, 0, sv_size);
@@ -92,171 +90,86 @@ namespace NWQSim
             sv_real[0] = 1.;
         }
 
-        void set_seed(IdxType seed)
+        void set_seed(IdxType seed) override
         {
             rng.seed(seed);
         }
 
-        void simulation_kernel(std::shared_ptr<std::vector<Gate>> gates)
+        std::vector<IdxType> sim(Circuit &circuit) override
         {
 
-            //=========================================
-            for (auto g : *gates)
-            {
-                if (g.op_name == OP::RESET)
-                {
-#ifdef USE_OMP
-                    RESET_GATE_OMP(sv_real, sv_imag, m_real,
-                                   g.qubit, n_qubits, dim, half_dim);
-#else
-                    RESET_GATE(g.qubit);
-#endif
-                }
-
-                else if (g.op_name == OP::M)
-                {
-                    SAFE_FREE_HOST(results);
-                    SAFE_ALOC_HOST(results, sizeof(IdxType));
-                    memset(results, 0, sizeof(IdxType));
-                    ValType rand = uni_dist(rng);
-
-#ifdef USE_OMP
-                    M_GATE_OMP(sv_real, sv_imag, m_real,
-                               results, g.qubit, rand, n_qubits, dim, half_dim);
-#else
-                    M_GATE(g.qubit, rand);
-#endif
-                }
-                else if (g.op_name == OP::MA)
-                {
-                    auto repetition = g.qubit;
-                    SAFE_FREE_HOST(results);
-                    SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
-                    memset(results, 0, sizeof(IdxType) * repetition);
-                    SAFE_FREE_HOST(randoms);
-                    SAFE_ALOC_HOST(randoms, sizeof(ValType) * repetition);
-                    for (IdxType i = 0; i < repetition; i++)
-                        randoms[i] = uni_dist(rng);
-#ifdef USE_OMP
-                    MA_GATE_OMP(sv_real, sv_imag, m_real,
-                                results, randoms,
-                                n_qubits, g.qubit);
-#else
-                    MA_GATE(repetition);
-#endif
-                }
-                else if (g.n_qubits == 1)
-                {
-
-#ifdef USE_OMP
-                    C1_GATE_OMP(sv_real, sv_imag,
-                                g.gm_real, g.gm_imag,
-                                g.qubit, half_dim);
-#else
-                    C1_GATE(g.gm_real, g.gm_imag, g.qubit);
-#endif
-                }
-                else if (g.n_qubits == 2)
-                {
-
-#ifdef USE_OMP
-                    C2_GATE_OMP(sv_real, sv_imag,
-                                g.gm_real, g.gm_imag,
-                                g.ctrl, g.qubit,
-                                dim);
-#else
-                    C2_GATE(g.gm_real, g.gm_imag, g.ctrl, g.qubit);
-#endif
-                }
-                else
-                {
-                    std::cout << "unrecognized gates" << std::endl;
-                }
-            }
-        }
-
-        void sim(Circuit &circuit)
-        {
             fuse_circuit(circuit);
             auto gates = circuit.gates;
             IdxType n_gates = gates->size();
             assert(circuit.num_qubits() == n_qubits);
-
-            auto ncpus = 1;
 
 #ifdef PRINT_SIM_TRACE
             double sim_time;
             cpu_timer sim_timer;
             sim_timer.start_timer();
 #endif
-#ifdef USE_OMP
-            ncpus = omp_get_max_threads();
-#pragma omp parallel num_threads(ncpus)
+
+            std::vector<IdxType> execution_results;
+            for (auto g : *gates)
             {
-#endif
-                simulation_kernel(gates);
-#ifdef USE_OMP
+
+                if (g.op_name == OP::RESET)
+                {
+                    this->RESET_GATE(g.qubit);
+                }
+                else if (g.op_name == OP::M)
+                {
+                    execution_results = this->M_GATE(g.qubit);
+                }
+                else if (g.op_name == OP::MA)
+                {
+                    execution_results = this->MA_GATE(g.qubit);
+                }
+                else if (g.n_qubits == 1)
+                {
+                    this->C1_GATE(g.gm_real, g.gm_imag, g.qubit);
+                }
+                else if (g.n_qubits == 2)
+                {
+                    this->C2_GATE(g.gm_real, g.gm_imag, g.ctrl, g.qubit);
+                }
+                else
+                {
+                    std::cout << "unrecognized gates" << std::endl;
+                }
             }
-#endif
 
 #ifdef PRINT_SIM_TRACE
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
             printf("\n============== SV-Sim ===============\n");
             printf("nqubits:%lld, ngates:%lld, ncpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_cpu:%.3lf MB\n",
-                   n_qubits, n_gates, ncpus, sim_time, 0.,
+                   n_qubits, n_gates, 1, sim_time, 0.,
                    sim_time, cpu_mem / 1024 / 1024, cpu_mem / 1024 / 1024);
             printf("=====================================\n");
             fflush(stdout);
 #endif
             //=========================================
+
+            return execution_results;
         }
 
-        IdxType *measure_all(IdxType repetition = DEFAULT_REPETITIONS)
+        std::vector<IdxType>
+        measure(IdxType qubit) override
         {
-            SAFE_FREE_HOST(results);
-            SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
-            memset(results, 0, sizeof(IdxType) * repetition);
-            SAFE_FREE_HOST(randoms);
-            SAFE_ALOC_HOST(randoms, sizeof(ValType) * repetition);
-            for (IdxType i = 0; i < repetition; i++)
-                randoms[i] = uni_dist(rng);
-
-            MA_GATE(repetition);
-            return results;
+            return this->M_GATE(qubit);
         }
 
-        IdxType measure(IdxType qubit)
+        std::vector<IdxType> measure_all(IdxType repetition = DEFAULT_REPETITIONS) override
         {
-            SAFE_FREE_HOST(results);
-            SAFE_ALOC_HOST(results, sizeof(IdxType));
-            memset(results, 0, sizeof(IdxType));
-
-            ValType rand = uni_dist(rng);
-            M_GATE(qubit, rand);
-            return results[0];
+            return this->MA_GATE(repetition);
         }
-
-        /***********************************************
-         * Key Macros
-         ***********************************************/
-#define PUT(arr, i, val) (arr[(i)] = (val))
-#define GET(arr, i) (arr[(i)])
-#define BARR  \
-    while (0) \
-    {         \
-    };
-
-// For C2 and C4 gates
-#define DIV2E(x, y) ((x) >> (y))
-#define MOD2E(x, y) ((x) & (((IdxType)1 << (y)) - (IdxType)1))
-#define EXP2E(x) ((IdxType)1 << (x))
-#define SV16IDX(x) (((x >> 3) & 1) * EXP2E(qubit0) + ((x >> 2) & 1) * EXP2E(qubit1) + ((x >> 1) & 1) * EXP2E(qubit2) + ((x & 1) * EXP2E(qubit3)))
 
         //============== C1 Gate ================
         // Arbitrary 1-qubit gate
-        void C1_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit)
+        virtual void C1_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit)
         {
+
             for (IdxType i = 0; i < half_dim; i++)
             {
                 IdxType outer = (i >> qubit);
@@ -284,8 +197,8 @@ namespace NWQSim
 
         //============== C2 Gate ================
         // Arbitrary 2-qubit gate
-        inline void C2_GATE(const ValType *gm_real, const ValType *gm_imag,
-                            const IdxType qubit0, const IdxType qubit1)
+        virtual void C2_GATE(const ValType *gm_real, const ValType *gm_imag,
+                             const IdxType qubit0, const IdxType qubit1)
         {
 
             const IdxType per_pe_work = (dim >> 2);
@@ -342,10 +255,9 @@ namespace NWQSim
 
         //============== C4 Gate ================
         // Arbitrary 4-qubit gate
-        inline void C4_GATE(ValType *sv_real, ValType *sv_imag,
-                            const ValType *gm_real, const ValType *gm_imag,
-                            const IdxType qubit0, const IdxType qubit1,
-                            const IdxType qubit2, const IdxType qubit3)
+        virtual void C4_GATE(const ValType *gm_real, const ValType *gm_imag,
+                             const IdxType qubit0, const IdxType qubit1,
+                             const IdxType qubit2, const IdxType qubit3)
         {
             assert(qubit0 != qubit1); // Non-cloning
             assert(qubit0 != qubit2); // Non-cloning
@@ -405,10 +317,13 @@ namespace NWQSim
             }
         }
 
-        void M_GATE(const IdxType qubit, const ValType rand)
+        virtual std::vector<IdxType> M_GATE(const IdxType qubit)
         {
+            std::vector<IdxType> results;
             IdxType mask = ((IdxType)1 << qubit);
             ValType prob_of_one = 0;
+
+            auto rand = uni_dist(rng);
             for (IdxType i = 0; i < ((IdxType)1 << n_qubits); i++)
             {
                 if ((i & mask) != 0)
@@ -448,12 +363,16 @@ namespace NWQSim
                     }
                 }
             }
-            results[0] = (rand < prob_of_one ? 1 : 0);
+            results.push_back(rand < prob_of_one ? 1 : 0);
+
+            return results;
         }
 
         //============== MA Gate (Measure all qubits in Pauli-Z) ================
-        inline void MA_GATE(const IdxType repetition)
+        virtual std::vector<IdxType> MA_GATE(const IdxType repetition)
         {
+            std::vector<IdxType> results;
+
             IdxType n_size = (IdxType)1 << n_qubits;
             m_real[0] = 0;
             for (IdxType i = 1; i < (((IdxType)1 << n_qubits) + 1); i++)
@@ -470,9 +389,9 @@ namespace NWQSim
                     ValType upper = (j + 1 == n_size) ? 1 : m_real[j + 1];
                     for (IdxType i = 0; i < repetition; i++)
                     {
-                        ValType r = randoms[i];
+                        ValType r = uni_dist(rng);
                         if (lower <= r && r < upper)
-                            results[i] = j;
+                            results.push_back(j);
                     }
                 }
             }
@@ -483,7 +402,7 @@ namespace NWQSim
                     IdxType lo = 0;
                     IdxType hi = ((IdxType)1 << n_qubits);
                     IdxType mid;
-                    ValType r = randoms[i];
+                    ValType r = uni_dist(rng);
                     while (hi - lo > 1)
                     {
                         mid = lo + (hi - lo) / 2;
@@ -492,13 +411,14 @@ namespace NWQSim
                         else
                             hi = mid;
                     }
-                    results[i] = lo;
+                    results.push_back(lo);
                 }
             }
+            return results;
         }
 
         //============== Reset ================
-        inline void RESET_GATE(const IdxType qubit)
+        virtual void RESET_GATE(const IdxType qubit)
         {
             IdxType mask = ((IdxType)1 << qubit);
             ValType prob_of_one = 0;
@@ -556,5 +476,3 @@ namespace NWQSim
     };
 
 } // namespace NWQSim
-
-#endif // SVSIM_CPU

@@ -5,6 +5,10 @@ project(MyPackage VERSION 1.0.0 DESCRIPTION "My C++ package" LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+# Set the default GCC compilers for C and C++
+set(CMAKE_C_COMPILER gcc-11)
+set(CMAKE_CXX_COMPILER g++-11)
+
 include(CheckCXXSourceCompiles)
 
 # set(CMAKE_REQUIRED_FLAGS "-mavx512f")
@@ -30,6 +34,7 @@ if(OpenMP_FOUND)
 else()
     message(STATUS "OpenMP not found")
 endif()
+
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -m64 -O3 -Wall")
 
