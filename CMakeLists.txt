@@ -5,8 +5,6 @@ project(MyPackage VERSION 1.0.0 DESCRIPTION "My C++ package" LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-set(CMAKE_BUILD_TYPE Debug)
-
 include(CheckCXXSourceCompiles)
 
 # set(CMAKE_REQUIRED_FLAGS "-mavx512f")
@@ -21,6 +19,15 @@ include(CheckCXXSourceCompiles)
 #     add_definitions(-DUSE_AVX512)
 # endif()
 
+# Find MPI
+find_package(MPI)
+
+if(MPI_FOUND)
+    message(STATUS "MPI found")
+else()
+    message(STATUS "MPI not found")
+endif()
+
 # Check if OpenMP is supported
 find_package(OpenMP)
 
@@ -28,7 +35,6 @@ if(OpenMP_FOUND)
     message(STATUS "OpenMP found")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-    add_definitions(-DUSE_OMP)
 else()
     message(STATUS "OpenMP not found")
 endif()
@@ -36,9 +42,9 @@ endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -m64 -O3 -Wall")
 
+
 # Include directories
 include_directories(include)
 
 # Subdirectories
-# add_subdirectory(examples)
-add_subdirectory(tests)
+add_subdirectory(examples)

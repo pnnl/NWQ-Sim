@@ -57,12 +57,13 @@ namespace NWQSim
             SAFE_FREE_HOST(sv_real);
             SAFE_FREE_HOST(sv_imag);
             SAFE_FREE_HOST(m_real);
+            SAFE_FREE_HOST(results);
 #ifdef PRINT_SIM_TRACE
             printf("SVSim_cpu is finalized!\n\n");
 #endif
         }
 
-        void reset_sim() override
+        void reset_state() override
         {
             // Reset CPU input & output
             memset(sv_real, 0, sv_size);
@@ -77,7 +78,7 @@ namespace NWQSim
             rng.seed(seed);
         }
 
-        std::vector<IdxType> sim(Circuit *circuit) override
+        void sim(Circuit *circuit) override
         {
 
             fuse_circuit(circuit);
@@ -90,8 +91,7 @@ namespace NWQSim
             cpu_timer sim_timer;
             sim_timer.start_timer();
 #endif
-
-            auto execution_results = simulation_kernel(gates);
+            simulation_kernel(gates);
 
 #ifdef PRINT_SIM_TRACE
             sim_timer.stop_timer();
@@ -104,19 +104,23 @@ namespace NWQSim
             fflush(stdout);
 #endif
             //=========================================
-
-            return execution_results;
         }
 
-        std::vector<IdxType>
-        measure(IdxType qubit) override
+        IdxType *get_results() override
         {
-            return M_GATE(qubit);
+            return results;
         }
 
-        std::vector<IdxType> measure_all(IdxType repetition = DEFAULT_REPETITIONS) override
+        IdxType measure(IdxType qubit) override
         {
-            return MA_GATE(repetition);
+            M_GATE(qubit);
+            return results[0];
+        }
+
+        IdxType *measure_all(IdxType repetition = DEFAULT_REPETITIONS) override
+        {
+            MA_GATE(repetition);
+            return results;
         }
 
     protected:
@@ -128,9 +132,11 @@ namespace NWQSim
         IdxType n_cpu;
 
         // CPU arrays
-        ValType *sv_real = NULL;
-        ValType *sv_imag = NULL;
-        ValType *m_real = NULL;
+        ValType *sv_real;
+        ValType *sv_imag;
+        ValType *m_real;
+
+        IdxType *results = NULL;
 
         // Random
         std::mt19937 rng;
@@ -139,9 +145,8 @@ namespace NWQSim
         // CPU memory usage
         ValType cpu_mem;
 
-        virtual std::vector<IdxType> simulation_kernel(std::shared_ptr<std::vector<NWQSim::Gate>> gates)
+        virtual void simulation_kernel(std::shared_ptr<std::vector<NWQSim::Gate>> gates)
         {
-            std::vector<IdxType> execution_results;
             for (auto g : *gates)
             {
 
@@ -151,11 +156,11 @@ namespace NWQSim
                 }
                 else if (g.op_name == OP::M)
                 {
-                    execution_results = M_GATE(g.qubit);
+                    M_GATE(g.qubit);
                 }
                 else if (g.op_name == OP::MA)
                 {
-                    execution_results = MA_GATE(g.qubit);
+                    MA_GATE(g.qubit);
                 }
                 else if (g.n_qubits == 1)
                 {
@@ -167,10 +172,11 @@ namespace NWQSim
                 }
                 else
                 {
-                    std::cout << "unrecognized gates" << std::endl;
+                    std::cout << "Unrecognized gates" << std::endl
+                              << g.gateToString() << std::endl;
+                    std::logic_error("Invalid gate type");
                 }
             }
-            return execution_results;
         }
 
         //============== C1 Gate ================
@@ -308,12 +314,12 @@ namespace NWQSim
                     GET(sv_imag, term + SV16IDX(10)), GET(sv_imag, term + SV16IDX(11)),
                     GET(sv_imag, term + SV16IDX(12)), GET(sv_imag, term + SV16IDX(13)),
                     GET(sv_imag, term + SV16IDX(14)), GET(sv_imag, term + SV16IDX(15))};
-#pragma unroll
+                // #pragma unroll
                 for (unsigned j = 0; j < 16; j++)
                 {
                     ValType res_real = 0;
                     ValType res_imag = 0;
-#pragma unroll
+                    // #pragma unroll
                     for (unsigned k = 0; k < 16; k++)
                     {
                         res_real += (el_real[k] * gm_real[j * 16 + k]) - (el_imag[k] * gm_imag[j * 16 + k]);
@@ -325,9 +331,12 @@ namespace NWQSim
             }
         }
 
-        virtual std::vector<IdxType> M_GATE(const IdxType qubit)
+        virtual void M_GATE(const IdxType qubit)
         {
-            std::vector<IdxType> results;
+            SAFE_FREE_HOST(results);
+            SAFE_ALOC_HOST(results, sizeof(IdxType));
+            memset(results, 0, sizeof(IdxType));
+
             IdxType mask = ((IdxType)1 << qubit);
             ValType prob_of_one = 0;
 
@@ -371,15 +380,15 @@ namespace NWQSim
                     }
                 }
             }
-            results.push_back(rand < prob_of_one ? 1 : 0);
-
-            return results;
+            results[0] = rand < prob_of_one ? 1 : 0;
         }
 
         //============== MA Gate (Measure all qubits in Pauli-Z) ================
-        virtual std::vector<IdxType> MA_GATE(const IdxType repetition)
+        virtual void MA_GATE(const IdxType repetition)
         {
-            std::vector<IdxType> results;
+            SAFE_FREE_HOST(results);
+            SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
+            memset(results, 0, sizeof(IdxType) * repetition);
 
             IdxType n_size = (IdxType)1 << n_qubits;
             m_real[0] = 0;
@@ -399,7 +408,7 @@ namespace NWQSim
                     {
                         ValType r = uni_dist(rng);
                         if (lower <= r && r < upper)
-                            results.push_back(j);
+                            results[i] = j;
                     }
                 }
             }
@@ -419,10 +428,9 @@ namespace NWQSim
                         else
                             hi = mid;
                     }
-                    results.push_back(lo);
+                    results[i] = lo;
                 }
             }
-            return results;
         }
 
         //============== Reset ================

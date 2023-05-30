@@ -23,9 +23,8 @@ namespace NWQSim
         ~SV_OMP() {} // virtual destructor
 
     protected:
-        std::vector<IdxType> simulation_kernel(std::shared_ptr<std::vector<NWQSim::Gate>> gates) override
+        void simulation_kernel(std::shared_ptr<std::vector<NWQSim::Gate>> gates) override
         {
-            std::vector<IdxType> execution_results;
 #pragma omp parallel
             {
                 for (auto g : *gates)
@@ -36,11 +35,11 @@ namespace NWQSim
                     }
                     else if (g.op_name == OP::M)
                     {
-                        execution_results = M_GATE(g.qubit);
+                        M_GATE(g.qubit);
                     }
                     else if (g.op_name == OP::MA)
                     {
-                        execution_results = MA_GATE(g.qubit);
+                        MA_GATE(g.qubit);
                     }
                     else if (g.n_qubits == 1)
                     {
@@ -52,11 +51,15 @@ namespace NWQSim
                     }
                     else
                     {
-                        std::cout << "unrecognized gates" << std::endl;
+                        if (omp_get_thread_num() == 0)
+                        {
+                            std::cout << "Unrecognized gates" << std::endl
+                                      << g.gateToString() << std::endl;
+                            std::logic_error("Invalid gate type");
+                        }
                     }
                 }
             }
-            return execution_results;
         }
         //============== C1 Gate ================
         // Arbitrary 1-qubit gate
@@ -205,12 +208,12 @@ namespace NWQSim
                     GET(sv_imag, term + SV16IDX(10)), GET(sv_imag, term + SV16IDX(11)),
                     GET(sv_imag, term + SV16IDX(12)), GET(sv_imag, term + SV16IDX(13)),
                     GET(sv_imag, term + SV16IDX(14)), GET(sv_imag, term + SV16IDX(15))};
-#pragma unroll
+                // #pragma unroll
                 for (unsigned j = 0; j < 16; j++)
                 {
                     ValType res_real = 0;
                     ValType res_imag = 0;
-#pragma unroll
+                    // #pragma unroll
                     for (unsigned k = 0; k < 16; k++)
                     {
                         res_real += (el_real[k] * gm_real[j * 16 + k]) - (el_imag[k] * gm_imag[j * 16 + k]);
@@ -224,9 +227,11 @@ namespace NWQSim
             BARR;
         }
 
-        std::vector<IdxType> M_GATE(const IdxType qubit) override
+        void M_GATE(const IdxType qubit) override
         {
-            std::vector<IdxType> results;
+            SAFE_FREE_HOST(results);
+            SAFE_ALOC_HOST(results, sizeof(IdxType));
+            memset(results, 0, sizeof(IdxType));
 
             auto rand = uni_dist(rng);
             IdxType mask = ((IdxType)1 << qubit);
@@ -289,14 +294,15 @@ namespace NWQSim
                 }
             }
             BARR;
-            results.push_back(rand < prob_of_one ? 1 : 0);
-            return results;
+            results[0] = rand < prob_of_one ? 1 : 0;
         }
 
         //============== MA Gate (Measure all qubits in Pauli-Z) ================
-        std::vector<IdxType> MA_GATE(const IdxType repetition) override
+        void MA_GATE(const IdxType repetition) override
         {
-            IdxType *results = new IdxType[repetition];
+            SAFE_FREE_HOST(results);
+            SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
+            memset(results, 0, sizeof(IdxType) * repetition);
 
             IdxType n_size = (IdxType)1 << n_qubits;
 #pragma omp for schedule(auto)
@@ -366,13 +372,6 @@ namespace NWQSim
                 }
             }
             BARR;
-            std::vector<IdxType> vectorFromPointer(results, results + repetition);
-
-            // Now you have a vector containing the elements from the pointer array
-
-            delete[] results; // Don't forget to free the memory allocated with `new`
-
-            return vectorFromPointer;
         }
 
         //============== Reset ================

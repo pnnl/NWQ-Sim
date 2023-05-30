@@ -42,9 +42,22 @@ namespace NWQSim
     {         \
     };
 
+#define BARR_MPI MPI_Barrier(MPI_COMM_WORLD);
+
+/***********************************************
+ * Bitwise Macros
+ ***********************************************/
+
 // For C2 and C4 gates
 #define DIV2E(x, y) ((x) >> (y))
 #define MOD2E(x, y) ((x) & (((IdxType)1 << (y)) - (IdxType)1))
 #define EXP2E(x) ((IdxType)1 << (x))
+
+#define SV4IDX(x) (((x >> 1) & 1) * EXP2E(qubit0) + ((x & 1) * EXP2E(qubit1)))
 #define SV16IDX(x) (((x >> 3) & 1) * EXP2E(qubit0) + ((x >> 2) & 1) * EXP2E(qubit1) + ((x >> 1) & 1) * EXP2E(qubit2) + ((x & 1) * EXP2E(qubit3)))
+
+// FOR MPI
+#define LOCAL_G(arr, i) arr[(i) & (m_cpu - 1)]
+#define LOCAL_P(arr, i, val) arr[(i) & (m_cpu - 1)] = val;
+
 } // namespace NWQSim

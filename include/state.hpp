@@ -13,12 +13,13 @@ namespace NWQSim
         QuantumState(IdxType _n_qubits) {} // constructor
         virtual ~QuantumState() {}         // virtual destructor
 
-        virtual void reset_sim() = 0;
+        virtual void reset_state() = 0;
         virtual void set_seed(IdxType seed) = 0;
 
-        virtual std::vector<IdxType> sim(Circuit *circuit) = 0;
-        virtual std::vector<IdxType> measure(IdxType qubit) = 0;
-        virtual std::vector<IdxType> measure_all(IdxType repetition) = 0;
+        virtual void sim(Circuit *circuit) = 0;
+        virtual IdxType *get_results() = 0;
+        virtual IdxType measure(IdxType qubit) = 0;
+        virtual IdxType *measure_all(IdxType repetition) = 0;
     };
 
 } // namespace NWQSim
