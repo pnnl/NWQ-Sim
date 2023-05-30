@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../util.hpp"
+#include "../macros.hpp"
 
-#include "macros.hpp"
 #include "sv_cpu.hpp"
 
 #include <omp.h>
@@ -14,23 +14,56 @@ namespace NWQSim
     class SV_OMP : public SV_CPU
     {
 
-        std::vector<std::mt19937> rngs;
-
+    public:
         SV_OMP(IdxType _n_qubits) : SV_CPU(_n_qubits)
         {
             n_cpu = omp_get_max_threads();
-
-            rngs = std::vector<std::mt19937>(n_cpu);
         } // constructor
 
         ~SV_OMP() {} // virtual destructor
 
+    protected:
+        std::vector<IdxType> simulation_kernel(std::shared_ptr<std::vector<NWQSim::Gate>> gates) override
+        {
+            std::vector<IdxType> execution_results;
+#pragma omp parallel
+            {
+                for (auto g : *gates)
+                {
+                    if (g.op_name == OP::RESET)
+                    {
+                        RESET_GATE(g.qubit);
+                    }
+                    else if (g.op_name == OP::M)
+                    {
+                        execution_results = M_GATE(g.qubit);
+                    }
+                    else if (g.op_name == OP::MA)
+                    {
+                        execution_results = MA_GATE(g.qubit);
+                    }
+                    else if (g.n_qubits == 1)
+                    {
+                        C1_GATE(g.gm_real, g.gm_imag, g.qubit);
+                    }
+                    else if (g.n_qubits == 2)
+                    {
+                        C2_GATE(g.gm_real, g.gm_imag, g.ctrl, g.qubit);
+                    }
+                    else
+                    {
+                        std::cout << "unrecognized gates" << std::endl;
+                    }
+                }
+            }
+            return execution_results;
+        }
         //============== C1 Gate ================
         // Arbitrary 1-qubit gate
-
         void C1_GATE(const ValType *gm_real, const ValType *gm_imag,
                      const IdxType qubit) override
         {
+
 #pragma omp for schedule(auto)
             for (IdxType i = 0; i < half_dim; i++)
             {
@@ -300,16 +333,13 @@ namespace NWQSim
             if (repetition < n_size)
             {
 #pragma omp for schedule(auto)
-                int thread_id = omp_get_thread_num();
-                std::mt19937 &rng_local = rngs[thread_id]; // Get the local RNG for the current thread
-
                 for (IdxType j = 0; j < n_size; j++)
                 {
                     ValType lower = m_real[j];
                     ValType upper = (j + 1 == n_size) ? 1 : m_real[j + 1];
                     for (IdxType i = 0; i < repetition; i++)
                     {
-                        ValType r = uni_dist(rng_local);
+                        ValType r = uni_dist(rng);
                         if (lower <= r && r < upper)
                             results[i] = j;
                     }
@@ -318,15 +348,12 @@ namespace NWQSim
             else
             {
 #pragma omp for schedule(auto)
-                int thread_id = omp_get_thread_num();
-                std::mt19937 &rng_local = rngs[thread_id]; // Get the local RNG for the current thread
-
                 for (IdxType i = 0; i < repetition; i++)
                 {
                     IdxType lo = 0;
                     IdxType hi = ((IdxType)1 << n_qubits);
                     IdxType mid;
-                    ValType r = uni_dist(rng_local);
+                    ValType r = uni_dist(rng);
                     while (hi - lo > 1)
                     {
                         mid = lo + (hi - lo) / 2;

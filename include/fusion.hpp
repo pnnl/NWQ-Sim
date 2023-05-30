@@ -495,10 +495,10 @@ namespace NWQSim
         reverse(circuit_out.begin(), circuit_out.end());
     }
 
-    void fuse_circuit(Circuit &circuit)
+    void fuse_circuit(Circuit *circuit)
     {
-        std::vector<Gate> gates = circuit.get_gates();
-        IdxType n_qubits = circuit.num_qubits();
+        std::vector<Gate> gates = circuit->get_gates();
+        IdxType n_qubits = circuit->num_qubits();
 
         //====================== Fuse ========================
         std::vector<Gate> tmp1_circuit;
@@ -507,14 +507,11 @@ namespace NWQSim
         std::vector<Gate> fused_circuit;
 
         gate_fusion_1q(gates, tmp1_circuit, n_qubits);
-
         gate_fusion_2q_absorb_1q_forward(tmp1_circuit, tmp2_circuit, n_qubits);
-
         gate_fusion_2q_absorb_1q_backward(tmp2_circuit, tmp3_circuit, n_qubits);
-
         gate_fusion_2q(tmp3_circuit, fused_circuit, n_qubits);
 
-        circuit.set_gates(fused_circuit);
+        circuit->set_gates(fused_circuit);
     }
 
 } // end of NWQSim

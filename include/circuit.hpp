@@ -17,20 +17,20 @@ namespace NWQSim
 
     private:
         // number of qubits
-        IdxType n_qubits = 0;
+        IdxType n_qubits;
 
     public:
         // user input gate sequence
         std::shared_ptr<std::vector<Gate>> gates;
 
-        Circuit()
+        Circuit(IdxType _n_qubits) : n_qubits(_n_qubits)
         {
             // Implementation of constructor
             gates = std::make_shared<std::vector<Gate>>();
         }
         ~Circuit(){};
 
-        IdxType num_qubits() { return n_qubits + 1; };
+        IdxType num_qubits() { return n_qubits; };
         IdxType num_gates() { return gates->size(); };
 
         std::vector<Gate> get_gates()
@@ -46,16 +46,16 @@ namespace NWQSim
         {
             // Implementation of clear function
             gates->clear();
-            n_qubits = 0;
+            // n_qubits = 0;
         }
         void reset()
         {
             // Implementation of reset function
             clear();
         }
-        std::string circuitToString()
+        std::string to_string()
         {
-            // Implementation of circuitToString function
+            // Implementation of to_string function
             std::stringstream ss;
             for (auto gate : *gates)
                 ss << gate.gateToString() << std::endl;
@@ -76,7 +76,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
         void Y(IdxType qubit)
         {
@@ -90,7 +90,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
         void Z(IdxType qubit)
         {
@@ -104,7 +104,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
         void H(IdxType qubit)
         {
@@ -118,7 +118,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
         void S(IdxType qubit)
         {
@@ -132,7 +132,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
         void SDG(IdxType qubit)
         {
@@ -146,7 +146,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
         void T(IdxType qubit)
         {
@@ -160,7 +160,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
         void TDG(IdxType qubit)
         {
@@ -174,7 +174,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
         void RI(ValType theta, IdxType qubit)
         {
@@ -188,7 +188,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
         void RX(ValType theta, IdxType qubit)
         {
@@ -202,7 +202,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
         void RY(ValType theta, IdxType qubit)
         {
@@ -216,7 +216,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
         void RZ(ValType theta, IdxType qubit)
         {
@@ -230,7 +230,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
 
         void P(ValType theta, IdxType qubit)
@@ -245,7 +245,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
         void U(ValType theta, ValType phi, ValType lam, IdxType qubit)
         {
@@ -265,7 +265,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
         void CX(IdxType ctrl, IdxType qubit)
         {
@@ -284,7 +284,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
         }
         void CY(IdxType ctrl, IdxType qubit)
         {
@@ -306,7 +306,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
         }
         void CZ(IdxType ctrl, IdxType qubit)
         {
@@ -325,7 +325,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
         }
         void CH(IdxType ctrl, IdxType qubit)
         {
@@ -344,7 +344,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
         }
         void CS(IdxType ctrl, IdxType qubit)
         {
@@ -366,7 +366,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
         }
         void CSDG(IdxType ctrl, IdxType qubit)
         {
@@ -388,7 +388,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
         }
         void CT(IdxType ctrl, IdxType qubit)
         {
@@ -410,7 +410,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
         }
         void CTDG(IdxType ctrl, IdxType qubit)
         {
@@ -432,7 +432,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
         }
         void CRX(ValType theta, IdxType ctrl, IdxType qubit)
         {
@@ -454,7 +454,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
         }
         void CRY(ValType theta, IdxType ctrl, IdxType qubit)
         {
@@ -473,7 +473,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
         }
         void CRZ(ValType theta, IdxType ctrl, IdxType qubit)
         {
@@ -495,7 +495,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
         }
         void CSX(IdxType ctrl, IdxType qubit)
         {
@@ -517,7 +517,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
         }
         void CP(ValType theta, IdxType ctrl, IdxType qubit)
         {
@@ -539,7 +539,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
         }
         void CU(ValType theta, ValType phi, ValType lam, ValType gamma,
                 IdxType ctrl, IdxType qubit)
@@ -562,7 +562,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
         }
         void RXX(ValType theta, IdxType qubit0, IdxType qubit1)
         {
@@ -586,7 +586,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit0, qubit1), n_qubits);
+            // n_qubits = std::max(std::max(qubit0, qubit1), n_qubits);
         }
         void RYY(ValType theta, IdxType qubit0, IdxType qubit1)
         {
@@ -610,7 +610,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit0, qubit1), n_qubits);
+            // n_qubits = std::max(std::max(qubit0, qubit1), n_qubits);
         }
         void RZZ(ValType theta, IdxType qubit0, IdxType qubit1)
         {
@@ -635,7 +635,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(qubit0, qubit1), n_qubits);
+            // n_qubits = std::max(std::max(qubit0, qubit1), n_qubits);
         }
 
         void SX(IdxType qubit)
@@ -650,7 +650,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
 
         void ID(IdxType qubit)
@@ -665,7 +665,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 2);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
 
         void SWAP(IdxType ctrl, IdxType qubit)
@@ -688,7 +688,7 @@ namespace NWQSim
             G->set_gm(gm_real, gm_imag, 4);
             gates->push_back(*G);
 
-            n_qubits = std::max(std::max(ctrl, qubit), n_qubits);
+            // n_qubits = std::max(std::max(ctrl, qubit), n_qubits);
         }
 
         void M(IdxType qubit) // default is pauli-Z
@@ -706,7 +706,7 @@ namespace NWQSim
             Gate *G = new Gate(OP::RESET, qubit);
             gates->push_back(*G);
 
-            n_qubits = std::max(qubit, n_qubits);
+            // n_qubits = std::max(qubit, n_qubits);
         }
 
         // ============================== Other Gate Definition ================================

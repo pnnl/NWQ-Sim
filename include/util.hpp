@@ -27,33 +27,6 @@ namespace NWQSim
     /* Basic data type for value */
     using ValType = double;
 
-/***********************************************
- * Memory allocation and free
- ***********************************************/
-// CPU allocation
-#define SAFE_ALOC_HOST(X, Y) (*(void **)(&(X))) = (void *)malloc(Y);
-// CPU free
-#define SAFE_FREE_HOST(X) \
-    if ((X) != NULL)      \
-    {                     \
-        free((X));        \
-        (X) = NULL;       \
-    }
-
-//==================================== Common =======================================
-/***********************************************
- * Error Checking:
- ***********************************************/
-// Checking null pointer
-#define CHECK_NULL_POINTER(X) __checkNullPointer(__FILE__, __LINE__, (void **)&(X))
-    inline void __checkNullPointer(const char *file, const int line, void **ptr)
-    {
-        if ((*ptr) == NULL)
-        {
-            fprintf(stderr, "Error: NULL pointer at %s:%i.\n", file, line);
-            exit(-1);
-        }
-    }
     /***********************************************
      * CPU Timer based on Linux sys/time.h
      ***********************************************/

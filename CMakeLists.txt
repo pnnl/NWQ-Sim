@@ -5,9 +5,7 @@ project(MyPackage VERSION 1.0.0 DESCRIPTION "My C++ package" LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# Set the default GCC compilers for C and C++
-set(CMAKE_C_COMPILER gcc-11)
-set(CMAKE_CXX_COMPILER g++-11)
+set(CMAKE_BUILD_TYPE Debug)
 
 include(CheckCXXSourceCompiles)
 

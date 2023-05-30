@@ -8,8 +8,7 @@
 #include "../circuit.hpp"
 
 #include "../fusion.hpp"
-
-#include "macros.hpp"
+#include "../macros.hpp"
 
 #include <random>
 #include <cstring>
@@ -22,34 +21,16 @@ namespace NWQSim
 {
     class SV_CPU : public QuantumState
     {
-    protected:
-        // n_qubits is the number of qubits
-        IdxType n_qubits;
-        IdxType sv_size;
-        IdxType dim;
-        IdxType half_dim;
-        IdxType n_cpu;
-
-        // CPU arrays
-        ValType *sv_real = NULL;
-        ValType *sv_imag = NULL;
-        ValType *m_real = NULL;
-
-        // Random
-        std::mt19937 rng;
-        std::uniform_real_distribution<ValType> uni_dist;
-
-        // CPU memory usage
-        ValType cpu_mem;
 
     public:
         SV_CPU(IdxType _n_qubits) : QuantumState(_n_qubits)
         {
             // Initialize CPU side
             n_qubits = _n_qubits;
-            sv_size = dim * (IdxType)sizeof(ValType);
+
             dim = (IdxType)1 << (n_qubits);
             half_dim = (IdxType)1 << (n_qubits - 1);
+            sv_size = dim * (IdxType)sizeof(ValType);
             n_cpu = 1;
 
             // CPU side initialization
@@ -57,6 +38,7 @@ namespace NWQSim
             SAFE_ALOC_HOST(sv_imag, sv_size);
             memset(sv_real, 0, sv_size);
             memset(sv_imag, 0, sv_size);
+
             // State-vector initial state [0..0] = 1
             sv_real[0] = 1.;
             cpu_mem += sv_size * 4;
@@ -95,13 +77,13 @@ namespace NWQSim
             rng.seed(seed);
         }
 
-        std::vector<IdxType> sim(Circuit &circuit) override
+        std::vector<IdxType> sim(Circuit *circuit) override
         {
 
             fuse_circuit(circuit);
-            auto gates = circuit.gates;
+            auto gates = circuit->gates;
             IdxType n_gates = gates->size();
-            assert(circuit.num_qubits() == n_qubits);
+            assert(circuit->num_qubits() == n_qubits);
 
 #ifdef PRINT_SIM_TRACE
             double sim_time;
@@ -109,42 +91,14 @@ namespace NWQSim
             sim_timer.start_timer();
 #endif
 
-            std::vector<IdxType> execution_results;
-            for (auto g : *gates)
-            {
-
-                if (g.op_name == OP::RESET)
-                {
-                    this->RESET_GATE(g.qubit);
-                }
-                else if (g.op_name == OP::M)
-                {
-                    execution_results = this->M_GATE(g.qubit);
-                }
-                else if (g.op_name == OP::MA)
-                {
-                    execution_results = this->MA_GATE(g.qubit);
-                }
-                else if (g.n_qubits == 1)
-                {
-                    this->C1_GATE(g.gm_real, g.gm_imag, g.qubit);
-                }
-                else if (g.n_qubits == 2)
-                {
-                    this->C2_GATE(g.gm_real, g.gm_imag, g.ctrl, g.qubit);
-                }
-                else
-                {
-                    std::cout << "unrecognized gates" << std::endl;
-                }
-            }
+            auto execution_results = simulation_kernel(gates);
 
 #ifdef PRINT_SIM_TRACE
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
             printf("\n============== SV-Sim ===============\n");
-            printf("nqubits:%lld, ngates:%lld, ncpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_cpu:%.3lf MB\n",
-                   n_qubits, n_gates, 1, sim_time, 0.,
+            printf("nqubits:%lld, ngates:%lld, ncpus:%lld, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_cpu:%.3lf MB\n",
+                   n_qubits, n_gates, n_cpu, sim_time, 0.,
                    sim_time, cpu_mem / 1024 / 1024, cpu_mem / 1024 / 1024);
             printf("=====================================\n");
             fflush(stdout);
@@ -157,12 +111,66 @@ namespace NWQSim
         std::vector<IdxType>
         measure(IdxType qubit) override
         {
-            return this->M_GATE(qubit);
+            return M_GATE(qubit);
         }
 
         std::vector<IdxType> measure_all(IdxType repetition = DEFAULT_REPETITIONS) override
         {
-            return this->MA_GATE(repetition);
+            return MA_GATE(repetition);
+        }
+
+    protected:
+        // n_qubits is the number of qubits
+        IdxType n_qubits;
+        IdxType sv_size;
+        IdxType dim;
+        IdxType half_dim;
+        IdxType n_cpu;
+
+        // CPU arrays
+        ValType *sv_real = NULL;
+        ValType *sv_imag = NULL;
+        ValType *m_real = NULL;
+
+        // Random
+        std::mt19937 rng;
+        std::uniform_real_distribution<ValType> uni_dist;
+
+        // CPU memory usage
+        ValType cpu_mem;
+
+        virtual std::vector<IdxType> simulation_kernel(std::shared_ptr<std::vector<NWQSim::Gate>> gates)
+        {
+            std::vector<IdxType> execution_results;
+            for (auto g : *gates)
+            {
+
+                if (g.op_name == OP::RESET)
+                {
+                    RESET_GATE(g.qubit);
+                }
+                else if (g.op_name == OP::M)
+                {
+                    execution_results = M_GATE(g.qubit);
+                }
+                else if (g.op_name == OP::MA)
+                {
+                    execution_results = MA_GATE(g.qubit);
+                }
+                else if (g.n_qubits == 1)
+                {
+                    C1_GATE(g.gm_real, g.gm_imag, g.qubit);
+                }
+                else if (g.n_qubits == 2)
+                {
+                    C2_GATE(g.gm_real, g.gm_imag, g.ctrl, g.qubit);
+                }
+                else
+                {
+                    std::cout << "unrecognized gates" << std::endl;
+                }
+            }
+            return execution_results;
         }
 
         //============== C1 Gate ================
