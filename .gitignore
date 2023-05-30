@@ -32,7 +32,6 @@ __pycache__/
 /env/
 /.env/
 /bin/
-/include/
 /lib/
 /lib64/
 /share/
