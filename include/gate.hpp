@@ -396,11 +396,10 @@ namespace NWQSim
         enum OP op_name;
         IdxType qubit;
         IdxType ctrl;
+        IdxType n_qubits;
         ValType theta;
         ValType phi;
         ValType lam;
-
-        IdxType n_qubits;
 
         // 4-qubit gate parameters (after fusion)
         ValType gm_real[16];

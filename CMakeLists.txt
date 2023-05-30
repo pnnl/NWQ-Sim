@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 include(CheckCXXSourceCompiles)
 
-
 # set(CMAKE_REQUIRED_FLAGS "-mavx512f")
 # check_cxx_source_compiles("
 #     #include <immintrin.h>
@@ -31,6 +30,8 @@ if(OpenMP_FOUND)
 else()
     message(STATUS "OpenMP not found")
 endif()
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -m64 -O3 -Wall")
 
 # Include directories
 include_directories(include)
