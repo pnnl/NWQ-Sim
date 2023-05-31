@@ -1,20 +1,15 @@
 cmake_minimum_required(VERSION 3.15)  # Set your version here
-project(MyPackage VERSION 1.0.0 DESCRIPTION "My C++ package" LANGUAGES CXX)
+project(MyPackage VERSION 1.0.0 DESCRIPTION "My C++ package" LANGUAGES CXX CUDA)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-include(CheckCXXSourceCompiles)
 
-# Add the debug flag and set the appropriate compiler flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -m64 -O3 -Wall")
 
-# Add the linker flag for GDB debugging
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -g")
-# Specify the GDB debugger as the default debugger for CMake
-set(CMAKE_CXX_DEBUGGER gdb)
 
+# include(CheckCXXSourceCompiles)
 # set(CMAKE_REQUIRED_FLAGS "-mavx512f")
 # check_cxx_source_compiles("
 #     #include <immintrin.h>
@@ -47,8 +42,19 @@ else()
     message(STATUS "OpenMP not found")
 endif()
 
+# Find CUDA package
+find_package(CUDA)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -m64 -O3 -Wall")
+if(CUDA_FOUND)
+    message(STATUS "CUDA found")
+
+    message(STATUS "CUDA Include Directories: ${CUDA_INCLUDE_DIRS}")
+    message(STATUS "CUDA Libraries: ${CUDA_LIBRARIES}")
+    # Set CUDA architecture for Ampere architecture
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -rdc=true --compiler-options -fPIC -O3 -m64")
+else()
+    message(STATUS "CUDA not found")
+endif()
 
 
 # Include directories
