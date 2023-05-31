@@ -20,6 +20,8 @@ namespace NWQSim
         virtual IdxType *get_results() = 0;
         virtual IdxType measure(IdxType qubit) = 0;
         virtual IdxType *measure_all(IdxType repetition) = 0;
+
+        virtual void print_res_sv() = 0;
     };
 
 } // namespace NWQSim

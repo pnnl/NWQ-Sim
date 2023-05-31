@@ -7,6 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 include(CheckCXXSourceCompiles)
 
+# Add the debug flag and set the appropriate compiler flags
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+
+# Add the linker flag for GDB debugging
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -g")
+# Specify the GDB debugger as the default debugger for CMake
+set(CMAKE_CXX_DEBUGGER gdb)
+
 # set(CMAKE_REQUIRED_FLAGS "-mavx512f")
 # check_cxx_source_compiles("
 #     #include <immintrin.h>
@@ -48,3 +56,4 @@ include_directories(include)
 
 # Subdirectories
 add_subdirectory(examples)
+add_subdirectory(qasm)

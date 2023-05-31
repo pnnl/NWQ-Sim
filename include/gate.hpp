@@ -11,8 +11,7 @@
 // File: hpp
 // DMSim Overall gate definition.
 // ---------------------------------------------------------------------------
-#ifndef GATE
-#define GATE
+#pragma once
 
 // #include <iostream>
 // #include <sstream>
@@ -406,4 +405,3 @@ namespace NWQSim
         ValType gm_imag[16];
     }; // end of Gate definition
 }
-#endif

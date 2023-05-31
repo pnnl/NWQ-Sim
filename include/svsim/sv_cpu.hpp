@@ -7,7 +7,7 @@
 #include "../gate.hpp"
 #include "../circuit.hpp"
 
-#include "../fusion.hpp"
+#include "../circuit_pass/fusion.hpp"
 #include "../macros.hpp"
 
 #include <random>
@@ -121,6 +121,19 @@ namespace NWQSim
         {
             MA_GATE(repetition);
             return results;
+        }
+
+        void print_res_sv()
+        {
+            IdxType num = ((IdxType)1 << n_qubits);
+            printf("----- SVSim ------\n");
+            for (IdxType i = 0; i < num; i++)
+            {
+                printf("(%.3lf,%.3lfj) ", sv_real[i], sv_imag[i]);
+                if ((i + 1) % 8 == 0)
+                    printf("\n");
+            }
+            printf("\n");
         }
 
     protected:

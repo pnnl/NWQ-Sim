@@ -1,5 +1,4 @@
-#ifndef UTIL
-#define UTIL
+#pragma once
 
 #include <assert.h>
 #include <iostream>
@@ -94,5 +93,3 @@ namespace NWQSim
         return (ValType)std::rand() / (ValType)RAND_MAX;
     }
 } // namespace NWQSim
-
-#endif // UTIL

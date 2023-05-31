@@ -1,5 +1,4 @@
-#ifndef CIRCUIT
-#define CIRCUIT
+#pragma once
 
 #include "util.hpp"
 #include "gate.hpp"
@@ -32,6 +31,8 @@ namespace NWQSim
 
         IdxType num_qubits() { return n_qubits; };
         IdxType num_gates() { return gates->size(); };
+
+        bool is_empty() { return gates->empty(); };
 
         std::vector<Gate> get_gates()
         {
@@ -750,5 +751,3 @@ namespace NWQSim
     };
 
 } // namespace NWQSim
-
-#endif // CIRCUIT
