@@ -20,7 +20,8 @@ namespace NWQSim
 
     public:
         // user input gate sequence
-        std::shared_ptr<std::vector<Gate>> gates;
+        std::shared_ptr<std::vector<Gate>>
+            gates;
 
         Circuit(IdxType _n_qubits) : n_qubits(_n_qubits)
         {

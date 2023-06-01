@@ -16,6 +16,17 @@
 #define LOCAL_P_NVGPU(arr, i, val) arr[(i)] = val;
 #define BARR_NVGPU grid.sync();
 
+// CLUSTER BASED
+#define PGAS_P(arr, i, val) nvshmem_double_p(&(arr)[(i) & ((m_gpu) - 1)], (val), ((i) >> (lg2_m_gpu)))
+#define PGAS_G(arr, i) nvshmem_double_g(&(arr)[(i) & ((m_gpu) - 1)], ((i) >> (lg2_m_gpu)))
+#define BARR_NVSHMEM                         \
+    if (threadIdx.x == 0 && blockIdx.x == 0) \
+        nvshmem_barrier_all();               \
+    grid.sync();
+
+#define LOCAL_G_NVGPU_MPI(arr, i) arr[(i) & (m_gpu - 1)]
+#define LOCAL_P_NVGPU_MPI(arr, i, val) arr[(i) & (m_gpu - 1)] = val;
+
 /***********************************************
  * Error Checking:
  ***********************************************/

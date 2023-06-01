@@ -58,3 +58,6 @@ Makefile
 # Ignore CLion files
 .idea/
 *.iml
+
+# Ignore executables
+nwq_qasm_nvgpu_mpi

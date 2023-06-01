@@ -313,14 +313,14 @@ namespace NWQSim
              ValType _theta = 0,
              ValType _phi = 0,
              ValType _lam = 0,
-             IdxType _repetation = 0) : op_name(_op_name),
+             IdxType _repetition = 0) : op_name(_op_name),
                                         qubit(_qubit),
                                         ctrl(_ctrl),
                                         n_qubits(_n_qubits),
                                         theta(_theta),
                                         phi(_phi),
                                         lam(_lam),
-                                        repetation(_repetation)
+                                        repetition(_repetition)
         {
             memset(gm_real, 0, sizeof(ValType) * 16);
             memset(gm_imag, 0, sizeof(ValType) * 16);
@@ -332,7 +332,7 @@ namespace NWQSim
                               theta(g.theta),
                               phi(g.phi),
                               lam(g.lam),
-                              repetation(g.repetation)
+                              repetition(g.repetition)
         {
             memcpy(gm_real, g.gm_real, 16 * sizeof(ValType));
             memcpy(gm_imag, g.gm_imag, 16 * sizeof(ValType));
@@ -402,7 +402,7 @@ namespace NWQSim
         ValType theta;
         ValType phi;
         ValType lam;
-        IdxType repetation;
+        IdxType repetition;
 
         // 4-qubit gate parameters (after fusion)
         ValType gm_real[16];

@@ -24,11 +24,10 @@ namespace NWQSim
 {
     using namespace cooperative_groups;
     using namespace std;
-    using namespace nvcuda;
 
     // Simulation kernel runtime
     class SV_NVGPU;
-    __global__ void simulation_kernel(SV_NVGPU *sv_gpu, IdxType n_gates);
+    __global__ void simulation_kernel_nvgpu(SV_NVGPU *sv_gpu, IdxType n_gates);
 
     class SV_NVGPU : public QuantumState
     {
@@ -69,6 +68,8 @@ namespace NWQSim
                                     cudaMemcpyHostToDevice));
             cudaSafeCall(cudaMemset(m_real, 0, sv_size + sizeof(ValType)));
             cudaSafeCall(cudaMemset(m_imag, 0, sv_size + sizeof(ValType)));
+
+            rng.seed(time(0));
         }
 
         ~SV_NVGPU()
@@ -139,14 +140,14 @@ namespace NWQSim
             unsigned smem_size = 0 * sizeof(ValType);
             int numBlocksPerSm;
             cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
-                                                                       simulation_kernel, THREADS_CTA_NVGPU, smem_size));
+                                                                       simulation_kernel_nvgpu, THREADS_CTA_NVGPU, smem_size));
             gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
             void *args[] = {&sv_gpu, &n_gates};
             cudaSafeCall(cudaDeviceSynchronize());
 #ifdef PRINT_SIM_TRACE
             sim_timer.start_timer();
 #endif
-            cudaLaunchCooperativeKernel((void *)simulation_kernel, gridDim,
+            cudaLaunchCooperativeKernel((void *)simulation_kernel_nvgpu, gridDim,
                                         THREADS_CTA_NVGPU, args, smem_size);
             cudaSafeCall(cudaDeviceSynchronize());
 #ifdef PRINT_SIM_TRACE
@@ -264,7 +265,7 @@ namespace NWQSim
                 if (g.op_name == OP::M)
                     n_slots++;
                 else if (g.op_name == OP::MA)
-                    n_slots += g.repetation;
+                    n_slots += g.repetition;
             }
 
             // Prepare randoms and results memory
@@ -598,9 +599,11 @@ namespace NWQSim
         }
     };
 
-    __global__ void simulation_kernel(SV_NVGPU *sv_gpu, IdxType n_gates)
+    __global__ void simulation_kernel_nvgpu(SV_NVGPU *sv_gpu, IdxType n_gates)
     {
         IdxType cur_index = 0;
+        grid_group grid = this_grid();
+
         for (IdxType t = 0; t < n_gates; t++)
         {
             auto op_name = (sv_gpu->gates_gpu)[t].op_name;
@@ -611,8 +614,7 @@ namespace NWQSim
             auto gm_real = (sv_gpu->gates_gpu)[t].gm_real;
             auto gm_imag = (sv_gpu->gates_gpu)[t].gm_imag;
 
-            auto repetation = (sv_gpu->gates_gpu)[t].repetation;
-            grid_group grid = this_grid();
+            auto repetition = (sv_gpu->gates_gpu)[t].repetition;
 
             if (op_name == OP::RESET)
             {
@@ -625,8 +627,8 @@ namespace NWQSim
             }
             else if (op_name == OP::MA)
             {
-                sv_gpu->MA_GATE(repetation, cur_index);
-                cur_index += repetation;
+                sv_gpu->MA_GATE(repetition, cur_index);
+                cur_index += repetition;
             }
             else if (n_qubits == 1)
             {
