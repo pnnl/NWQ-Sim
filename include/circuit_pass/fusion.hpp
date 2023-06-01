@@ -18,9 +18,9 @@
 #include <vector>
 #include <cstring>
 #include <algorithm>
-#include "gate.hpp"
-#include "circuit.hpp"
-#include "util.hpp"
+#include "../gate.hpp"
+#include "../circuit.hpp"
+#include "../util.hpp"
 
 namespace NWQSim
 {

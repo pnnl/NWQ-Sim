@@ -590,12 +590,13 @@ IdxType *qasm_parser::sub_execute(QuantumState *state, IdxType repetition)
 
     if (!circuit->is_empty())
     {
+        circuit->MA(repetition);
         state->sim(circuit);
     }
 
     delete circuit;
 
-    return state->measure_all(repetition);
+    return state->get_results();
 }
 
 void qasm_parser::execute_gate(QuantumState *state, Circuit *circuit, qasm_gate gate)

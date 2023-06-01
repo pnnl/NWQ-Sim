@@ -169,6 +169,8 @@ QuantumState *get_state(IdxType num_qubits, Backend backend)
 #ifdef MPI_ENABLED
         return new SV_MPI(num_qubits);
 #endif
+    default:
+        return NULL;
     }
     return NULL;
 }
