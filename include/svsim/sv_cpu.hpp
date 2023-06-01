@@ -123,7 +123,7 @@ namespace NWQSim
             return results;
         }
 
-        void print_res_sv()
+        void print_res_sv() override
         {
             IdxType num = ((IdxType)1 << n_qubits);
             printf("----- SVSim ------\n");
@@ -173,7 +173,7 @@ namespace NWQSim
                 }
                 else if (g.op_name == OP::MA)
                 {
-                    MA_GATE(g.qubit);
+                    MA_GATE(g.repetation);
                 }
                 else if (g.n_qubits == 1)
                 {

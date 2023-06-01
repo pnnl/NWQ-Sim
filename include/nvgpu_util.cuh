@@ -1,11 +1,21 @@
-#ifndef NVGPU_UTIL_HPP
-#define NVGPU_UTIL_HPP
+#pragma once
 #include <stdio.h>
 #include <sys/time.h>
 #include <assert.h>
 #include <iostream>
 
-//==================================== NVGPU =======================================
+/***********************************************
+ * NVGPU specific attributes
+ ***********************************************/
+#define THREADS_CTA_NVGPU 256
+
+/***********************************************
+ * Macros for NVGPU
+ ***********************************************/
+#define LOCAL_G_NVGPU(arr, i) arr[(i)]
+#define LOCAL_P_NVGPU(arr, i, val) arr[(i)] = val;
+#define BARR_NVGPU grid.sync();
+
 /***********************************************
  * Error Checking:
  ***********************************************/
@@ -62,11 +72,11 @@ inline void __cudaCheckError(const char *file, const int line)
  * Memory allocation and free
  ***********************************************/
 // CPU host allocation with pinned memory
-#define SAFE_ALOC_HOST(X, Y) cudaSafeCall(cudaMallocHost((void **)&(X), (Y)));
+#define SAFE_ALOC_HOST_CUDA(X, Y) cudaSafeCall(cudaMallocHost((void **)&(X), (Y)));
 // GPU device allocation
 #define SAFE_ALOC_GPU(X, Y) cudaSafeCall(cudaMalloc((void **)&(X), (Y)));
 // CPU host free for pinned memory
-#define SAFE_FREE_HOST(X)                \
+#define SAFE_FREE_HOST_CUDA(X)           \
     if ((X) != NULL)                     \
     {                                    \
         cudaSafeCall(cudaFreeHost((X))); \
@@ -106,4 +116,3 @@ typedef struct GPU_Timer
     cudaEvent_t start;
     cudaEvent_t stop;
 } gpu_timer;
-#endif

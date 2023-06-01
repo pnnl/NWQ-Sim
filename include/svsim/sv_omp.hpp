@@ -39,7 +39,7 @@ namespace NWQSim
                     }
                     else if (g.op_name == OP::MA)
                     {
-                        MA_GATE(g.qubit);
+                        MA_GATE(g.repetation);
                     }
                     else if (g.n_qubits == 1)
                     {

@@ -171,7 +171,7 @@ namespace NWQSim
             return results;
         }
 
-        void print_res_sv()
+        void print_res_sv() override
         {
             ValType *sv_diag_real = NULL;
             ValType *sv_diag_imag = NULL;
@@ -260,7 +260,7 @@ namespace NWQSim
                 }
                 else if (g.op_name == OP::MA)
                 {
-                    MA_GATE(g.qubit);
+                    MA_GATE(g.repetation);
                 }
                 else if (g.n_qubits == 1)
                 {
@@ -385,7 +385,7 @@ namespace NWQSim
             assert(qubit0 != qubit1); // Non-cloning
             const IdxType q0dim = ((IdxType)1 << std::max(qubit0, qubit1));
             const IdxType q1dim = ((IdxType)1 << std::min(qubit0, qubit1));
-            const IdxType outer_factor = ((dim) + q0dim + q0dim - 1) >> (std::max(qubit0, qubit1) + 1);
+            // const IdxType outer_factor = ((dim) + q0dim + q0dim - 1) >> (std::max(qubit0, qubit1) + 1);
             const IdxType mider_factor = (q0dim + q1dim + q1dim - 1) >> (std::min(qubit0, qubit1) + 1);
             const IdxType inner_factor = q1dim;
             const IdxType qubit0_dim = ((IdxType)1 << qubit0);
@@ -500,10 +500,10 @@ namespace NWQSim
                             el_real[2] = LOCAL_G(sv_real, term + SV4IDX(2));
                             el_imag[2] = LOCAL_G(sv_imag, term + SV4IDX(2));
                         }
-#pragma unroll
+                        // #pragma unroll
                         for (unsigned j = 0; j < 4; j++)
                         {
-#pragma unroll
+                            // #pragma unroll
                             for (unsigned k = 0; k < 4; k++)
                             {
                                 res_real[j] += (el_real[k] * gm_real[j * 4 + k]) - (el_imag[k] * gm_imag[j * 4 + k]);
@@ -544,7 +544,7 @@ namespace NWQSim
             auto rand = uni_dist(rng);
 
             const IdxType per_pe_work = ((dim) >> (cpu_scale));
-            ValType *m_real = this->m_real;
+            // ValType *m_real = this->m_real;
             IdxType mask = ((IdxType)1 << qubit);
 
             ValType sum = 0;

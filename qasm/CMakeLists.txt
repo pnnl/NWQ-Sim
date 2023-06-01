@@ -17,14 +17,6 @@ if(MPI_FOUND)
 endif()
 
 if (CUDA_FOUND)
-# Add the CUDA runtime library
-
-    add_executable(cuda_test cuda_test.cu)
-    add_library(CUDA::cudart_static STATIC IMPORTED)
-    set_target_properties(CUDA::cudart_static PROPERTIES IMPORTED_LOCATION /opt/nvidia/hpc_sdk/Linux_x86_64/22.7/cuda/11.7/lib64/libcudart_static.a)
-    
-    set_property(TARGET cuda_test PROPERTY CUDA_ARCHITECTURES 80)
-    target_link_libraries(cuda_test PRIVATE CUDA::cudart_static)
-
-    # target_link_libraries(cuda_test PRIVATE CUDA::cudart_static)
+    add_executable(nwq_qasm_nvgpu nwq_qasm_nvgpu.cu)
+    # target_link_libraries(cuda_test ${CUDA_LIBRARIES})
 endif()

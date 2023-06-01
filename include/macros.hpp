@@ -33,7 +33,7 @@ namespace NWQSim
     }
 
 /***********************************************
- * Key Macros
+ * Key Macros CPU
  ***********************************************/
 #define PUT(arr, i, val) (arr[(i)] = (val))
 #define GET(arr, i) (arr[(i)])

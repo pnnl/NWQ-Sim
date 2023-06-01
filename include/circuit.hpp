@@ -699,7 +699,7 @@ namespace NWQSim
         }
         void MA(IdxType repetition) // default is pauli-Z
         {
-            Gate *G = new Gate(OP::MA, repetition);
+            Gate *G = new Gate(OP::MA, -1, -1, 1, 0, 0, 0, repetition);
             gates->push_back(*G);
         }
         void RESET(IdxType qubit)
