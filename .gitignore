@@ -44,7 +44,7 @@ __pycache__/
 CMakeFiles/
 CMakeCache.txt
 *.cmake
-Makefile
+# Makefile
 
 # Ignore other IDE and editor files
 *.sln

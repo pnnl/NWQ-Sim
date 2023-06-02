@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <iostream>
 #include <sys/time.h>
+#include <vector>
 
 /***********************************************
  * Constant configuration:
@@ -25,6 +26,19 @@ namespace NWQSim
     using IdxType = long long int;
     /* Basic data type for value */
     using ValType = double;
+
+    bool hasEvenParity(unsigned long long x, const std::vector<size_t> &in_qubitIndices)
+    {
+        size_t count = 0;
+        for (const auto &bitIdx : in_qubitIndices)
+        {
+            if (x & (1ULL << bitIdx))
+            {
+                count++;
+            }
+        }
+        return (count % 2) == 0;
+    };
 
     /***********************************************
      * CPU Timer based on Linux sys/time.h

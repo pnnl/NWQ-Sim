@@ -171,6 +171,12 @@ namespace NWQSim
             return results;
         }
 
+        ValType get_exp_z(const std::vector<size_t> &in_bits) override
+        {
+
+            return 0;
+        }
+
         void print_res_sv() override
         {
             ValType *sv_diag_real = NULL;

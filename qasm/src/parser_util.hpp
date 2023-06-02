@@ -291,6 +291,20 @@ map<string, IdxType> *to_binary_dictionary(IdxType num_qubits, map<IdxType, IdxT
     return binary_counts;
 }
 
+map<string, IdxType> *outcome_to_dict(IdxType *results, IdxType num_qubits, IdxType repetition)
+{
+    map<IdxType, IdxType> result_dict;
+
+    for (IdxType i = 0; i < repetition; i++)
+    {
+        if (result_dict.find(results[i]) != result_dict.end())
+            result_dict[results[i]] += 1;
+        else
+            result_dict.insert({results[i], 1});
+    }
+    return to_binary_dictionary(num_qubits, result_dict);
+}
+
 /**************UTILITY FUNCTION DEFINIATIONS********************/
 
 /**

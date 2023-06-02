@@ -22,9 +22,25 @@ namespace NWQSim
 
         ~SV_OMP() {} // virtual destructor
 
+        ValType get_exp_z(const std::vector<size_t> &in_bits) override
+        {
+            double result = 0.0;
+
+// OpenMP directive for parallelizing the loop
+#pragma omp parallel for reduction(+ : result)
+            for (unsigned long long i = 0; i < dim; ++i)
+            {
+                result += (hasEvenParity(i, in_bits) ? 1.0 : -1.0) *
+                          (sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i]);
+            }
+
+            return result;
+        }
+
     protected:
         void simulation_kernel(std::shared_ptr<std::vector<NWQSim::Gate>> gates) override
         {
+            std::cout << "started omp" << std::endl;
 #pragma omp parallel
             {
                 for (auto g : *gates)
@@ -336,41 +352,41 @@ namespace NWQSim
                 BARR;
             }
 
-            if (repetition < n_size)
-            {
+//             if (repetition < n_size)
+//             {
+// #pragma omp for schedule(auto)
+//                 for (IdxType j = 0; j < n_size; j++)
+//                 {
+//                     ValType lower = m_real[j];
+//                     ValType upper = (j + 1 == n_size) ? 1 : m_real[j + 1];
+//                     for (IdxType i = 0; i < repetition; i++)
+//                     {
+//                         ValType r = uni_dist(rng);
+//                         if (lower <= r && r < upper)
+//                             results[i] = j;
+//                     }
+//                 }
+//             }
+//             else
+//             {
 #pragma omp for schedule(auto)
-                for (IdxType j = 0; j < n_size; j++)
-                {
-                    ValType lower = m_real[j];
-                    ValType upper = (j + 1 == n_size) ? 1 : m_real[j + 1];
-                    for (IdxType i = 0; i < repetition; i++)
-                    {
-                        ValType r = uni_dist(rng);
-                        if (lower <= r && r < upper)
-                            results[i] = j;
-                    }
-                }
-            }
-            else
+            for (IdxType i = 0; i < repetition; i++)
             {
-#pragma omp for schedule(auto)
-                for (IdxType i = 0; i < repetition; i++)
+                IdxType lo = 0;
+                IdxType hi = ((IdxType)1 << n_qubits);
+                IdxType mid;
+                ValType r = uni_dist(rng);
+                while (hi - lo > 1)
                 {
-                    IdxType lo = 0;
-                    IdxType hi = ((IdxType)1 << n_qubits);
-                    IdxType mid;
-                    ValType r = uni_dist(rng);
-                    while (hi - lo > 1)
-                    {
-                        mid = lo + (hi - lo) / 2;
-                        if (r >= m_real[mid])
-                            lo = mid;
-                        else
-                            hi = mid;
-                    }
-                    results[i] = lo;
+                    mid = lo + (hi - lo) / 2;
+                    if (r >= m_real[mid])
+                        lo = mid;
+                    else
+                        hi = mid;
                 }
+                results[i] = lo;
             }
+            // }
             BARR;
         }
 

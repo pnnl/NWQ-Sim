@@ -191,6 +191,12 @@ namespace NWQSim
             return results;
         }
 
+        ValType get_exp_z(const std::vector<size_t> &in_bits) override
+        {
+
+            return 0;
+        }
+
         void print_res_sv() override
         {
             cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, sv_size, cudaMemcpyDeviceToHost));

@@ -103,9 +103,17 @@ int main(int argc, char **argv)
         QuantumState *state = get_state(parser.num_qubits(), backend);
         map<string, IdxType> *counts = parser.execute(state, total_shots);
 
+        std::vector<size_t> in_bits(parser.num_qubits());
+        for (size_t i = 0; i < parser.num_qubits(); ++i)
+        {
+            in_bits[i] = i;
+        }
+
         if (backend != MPI || rank == 0)
         {
             print_counts(counts, total_shots);
+
+            std::cout << "exp-val-z: " << state->get_exp_z(in_bits) << std::endl;
         }
 
         delete state;

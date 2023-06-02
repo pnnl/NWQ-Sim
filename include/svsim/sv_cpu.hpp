@@ -85,14 +85,15 @@ namespace NWQSim
             auto gates = circuit->gates;
             IdxType n_gates = gates->size();
             assert(circuit->num_qubits() == n_qubits);
-
+            std::cout << "SVSim_cpu is running! 1" << std::endl;
 #ifdef PRINT_SIM_TRACE
             double sim_time;
             cpu_timer sim_timer;
             sim_timer.start_timer();
 #endif
+            std::cout << "SVSim_cpu is running! 2" << std::endl;
             simulation_kernel(gates);
-
+            std::cout << "SVSim_cpu is running! 3" << std::endl;
 #ifdef PRINT_SIM_TRACE
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
@@ -121,6 +122,19 @@ namespace NWQSim
         {
             MA_GATE(repetition);
             return results;
+        }
+
+        virtual ValType get_exp_z(const std::vector<size_t> &in_bits) override
+        {
+            double result = 0.0;
+
+            for (unsigned long long i = 0; i < dim; ++i)
+            {
+                result += (hasEvenParity(i, in_bits) ? 1.0 : -1.0) *
+                          (sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i]);
+            }
+
+            return result;
         }
 
         void print_res_sv() override
@@ -162,7 +176,6 @@ namespace NWQSim
         {
             for (auto g : *gates)
             {
-
                 if (g.op_name == OP::RESET)
                 {
                     RESET_GATE(g.qubit);
@@ -411,39 +424,39 @@ namespace NWQSim
             if (abs(purity - 1.0) > ERROR_BAR)
                 printf("MA: Purity Check fails with %lf\n", purity);
 
-            if (repetition < n_size)
+            // if (repetition < n_size)
+            // {
+            //     for (IdxType j = 0; j < n_size; j++)
+            //     {
+            //         ValType lower = m_real[j];
+            //         ValType upper = (j + 1 == n_size) ? 1 : m_real[j + 1];
+            //         for (IdxType i = 0; i < repetition; i++)
+            //         {
+            //             ValType r = uni_dist(rng);
+            //             if (lower <= r && r < upper)
+            //                 results[i] = j;
+            //         }
+            //     }
+            // }
+            // else
+            // {
+            for (IdxType i = 0; i < repetition; i++)
             {
-                for (IdxType j = 0; j < n_size; j++)
+                IdxType lo = 0;
+                IdxType hi = ((IdxType)1 << n_qubits);
+                IdxType mid;
+                ValType r = uni_dist(rng);
+                while (hi - lo > 1)
                 {
-                    ValType lower = m_real[j];
-                    ValType upper = (j + 1 == n_size) ? 1 : m_real[j + 1];
-                    for (IdxType i = 0; i < repetition; i++)
-                    {
-                        ValType r = uni_dist(rng);
-                        if (lower <= r && r < upper)
-                            results[i] = j;
-                    }
+                    mid = lo + (hi - lo) / 2;
+                    if (r >= m_real[mid])
+                        lo = mid;
+                    else
+                        hi = mid;
                 }
+                results[i] = lo;
             }
-            else
-            {
-                for (IdxType i = 0; i < repetition; i++)
-                {
-                    IdxType lo = 0;
-                    IdxType hi = ((IdxType)1 << n_qubits);
-                    IdxType mid;
-                    ValType r = uni_dist(rng);
-                    while (hi - lo > 1)
-                    {
-                        mid = lo + (hi - lo) / 2;
-                        if (r >= m_real[mid])
-                            lo = mid;
-                        else
-                            hi = mid;
-                    }
-                    results[i] = lo;
-                }
-            }
+            // }
         }
 
         //============== Reset ================

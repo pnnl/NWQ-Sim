@@ -21,6 +21,8 @@ namespace NWQSim
         virtual IdxType measure(IdxType qubit) = 0;
         virtual IdxType *measure_all(IdxType repetition) = 0;
 
+        virtual ValType get_exp_z(const std::vector<size_t> &in_bits) = 0;
+
         virtual void print_res_sv() = 0;
     };
 
