@@ -222,6 +222,13 @@ namespace NWQSim
             return results;
         }
 
+	ValType get_exp_z(const std::vector<size_t> &in_bits) override
+        {
+            double result = 0.0;
+
+
+            return result;
+        }
         IdxType measure(IdxType qubit) override
         {
             Circuit *circuit = new Circuit(n_qubits);

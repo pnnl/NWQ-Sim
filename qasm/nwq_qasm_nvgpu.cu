@@ -21,6 +21,7 @@ using namespace NWQSim;
 ValType pass_threshold = 0.99;
 
 ValType run_brnchmark(IdxType index, IdxType total_shots, bool is_basis);
+Circuit *get_bv_circuit(IdxType n_qubits, IdxType shots);
 
 int main(int argc, char **argv)
 {
@@ -52,6 +53,24 @@ int main(int argc, char **argv)
         delete state;
         delete counts;
     }
+    
+    if (cmdOptionExists(argv, argv + argc, "--bv"))
+    {
+        const char *bv_qubit_str = getCmdOption(argv, argv + argc, "--bv");
+        IdxType bv_qubits = stoi(bv_qubit_str);
+        Circuit *circuit = get_bv_circuit(bv_qubits, total_shots);
+
+        QuantumState *state = new SV_NVGPU(bv_qubits);
+        state->sim(circuit);
+        auto results = state->get_results();
+        auto counts = outcome_to_dict(results, bv_qubits, total_shots);
+
+        print_counts(counts, total_shots);
+
+        delete state;
+        delete counts;
+        delete circuit;
+    }
 
     if (cmdOptionExists(argv, argv + argc, "-t"))
     {
@@ -81,6 +100,39 @@ int main(int argc, char **argv)
     }
 
     return 0;
+}
+Circuit *get_bv_circuit(IdxType n_qubits, IdxType shots)
+{
+    Circuit *circuit = new Circuit(n_qubits);
+    n_qubits--;
+
+    // Create an additional qubit for storing the output
+    int output_qubit = n_qubits;
+
+    // Apply a Hadamard gate to all qubits
+    for (int i = 0; i <= n_qubits; i++)
+    {
+        circuit->H(i);
+    }
+
+    // Apply a Pauli-X gate to the output qubit
+    circuit->X(output_qubit);
+
+    // Apply CX gate for each qubit
+    for (int i = 0; i < n_qubits; i++)
+    {
+        circuit->CX(i, output_qubit);
+    }
+
+    // Apply a Hadamard gate to all qubits except the last one
+    for (int i = 0; i < n_qubits; i++)
+    {
+        circuit->H(i);
+    }
+
+    // Measure all qubits
+    circuit->MA(shots);
+    return circuit;
 }
 
 ValType run_brnchmark(IdxType index, IdxType total_shots, bool is_basis)

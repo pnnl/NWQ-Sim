@@ -39,6 +39,7 @@ enum Backend
 
 ValType run_brnchmark(IdxType index, IdxType total_shots, Backend backend, bool is_basis, int rank, bool print = false);
 QuantumState *get_state(IdxType num_qubits, Backend backend);
+Circuit *get_bv_circuit(IdxType n_qubits, IdxType shots);
 
 int main(int argc, char **argv)
 {
@@ -119,6 +120,23 @@ int main(int argc, char **argv)
         delete state;
         delete counts;
     }
+    if (cmdOptionExists(argv, argv + argc, "--bv"))
+    {
+        const char *bv_qubit_str = getCmdOption(argv, argv + argc, "--bv");
+        IdxType bv_qubits = stoi(bv_qubit_str);
+        Circuit *circuit = get_bv_circuit(bv_qubits, total_shots);
+
+        QuantumState *state = get_state(bv_qubits, backend); //new SV_NVGPU(bv_qubits);
+        state->sim(circuit);
+        auto results = state->get_results();
+        auto counts = outcome_to_dict(results, bv_qubits, total_shots);
+
+        print_counts(counts, total_shots);
+
+        delete state;
+        delete counts;
+        delete circuit;
+    }
 
     if (cmdOptionExists(argv, argv + argc, "-t"))
     {
@@ -161,6 +179,44 @@ int main(int argc, char **argv)
 
 #endif
     return 0;
+}
+Circuit *get_bv_circuit(IdxType n_qubits, IdxType shots)
+{
+    Circuit *circuit = new Circuit(n_qubits);
+
+    // Apply a Hadamard gate to all qubits
+    for (int i = 0; i < n_qubits - 1; i++)
+    {
+        circuit->H(i);
+    }
+
+    // Apply a Pauli-X gate to the output qubit
+    circuit->X(n_qubits - 1);
+    circuit->H(n_qubits - 1);
+
+    // Apply CX gate for each qubit
+    for (int i = 0; i < n_qubits - 1; i++)
+    {
+        circuit->CX(i, n_qubits - 1);
+    }
+
+    // Apply a Hadamard gate to all qubits except the last one
+    for (int i = 0; i < n_qubits - 1; i++)
+    {
+        circuit->H(i);
+    }
+
+    for (int i = 0; i < n_qubits - 1; i++) 
+    {
+    //	circuit->M(i);
+    }
+
+    // Measure all qubits
+    circuit->MA(shots);
+    
+    std::cout << circuit->to_string() << std::endl;
+    return circuit;
+
 }
 
 QuantumState *get_state(IdxType num_qubits, Backend backend)
