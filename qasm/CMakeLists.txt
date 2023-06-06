@@ -1,7 +1,10 @@
+set(SOURCE_FILE "nwq_qasm.cpp")
+
 add_executable(nwq_qasm nwq_qasm.cpp)
+target_compile_features(nwq_qasm PRIVATE cxx_std_17)
 
 # Link against OpenMP if available
-if(OpenMP_CXX_FOUND)
+if(TARGET OpenMP::OpenMP_CXX)
     target_link_libraries(nwq_qasm PUBLIC OpenMP::OpenMP_CXX)
     target_compile_definitions(nwq_qasm PUBLIC OMP_ENABLED)
 endif()
@@ -12,19 +15,19 @@ if(TARGET MPI::MPI_CXX)
     target_compile_definitions(nwq_qasm PUBLIC MPI_ENABLED)
 endif()
 
-# Only attempt to create CUDA executable if CUDA was found
+# If CUDA Toolkit is available, set the CUDA standard and definitions
 if(CUDAToolkit_FOUND)
-    add_executable(nwq_qasm_nvgpu nwq_qasm_nvgpu.cu)
-    target_link_libraries(nwq_qasm_nvgpu CUDA::cudart CUDA::cuda_driver)
+    enable_language(CUDA)
+    set_source_files_properties(${SOURCE_FILE} PROPERTIES LANGUAGE CUDA)
+
+    target_compile_features(nwq_qasm PRIVATE cuda_std_17)
+    # target_link_libraries(nwq_qasm PUBLIC CUDA::cudart)
+    target_compile_definitions(nwq_qasm PUBLIC CUDA_ENABLED)
 endif()
 
-
-if(CUDAToolkit_FOUND AND TARGET MPI::MPI_CXX)
-
-    add_executable(nwq_qasm_nvgpu_mpi nwq_qasm_nvgpu_mpi.cu)
-
-    set_target_properties(nwq_qasm_nvgpu_mpi PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-                    
-    # link libraries
-    target_link_libraries(nwq_qasm_nvgpu_mpi PUBLIC nvshmem MPI::MPI_CXX)
+# If NVSHMEM is available, link against it and set the definitions
+if(NVSHMEM_FOUND AND TARGET nvshmem::nvshmem)
+    set_target_properties(nwq_qasm PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+    target_link_libraries(nwq_qasm PUBLIC nvshmem::nvshmem)
+    target_compile_definitions(nwq_qasm PUBLIC CUDA_MPI_ENABLED)
 endif()
