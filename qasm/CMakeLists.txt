@@ -18,23 +18,13 @@ if(CUDAToolkit_FOUND)
     target_link_libraries(nwq_qasm_nvgpu CUDA::cudart CUDA::cuda_driver)
 endif()
 
+
 if(CUDAToolkit_FOUND AND TARGET MPI::MPI_CXX)
+
     add_executable(nwq_qasm_nvgpu_mpi nwq_qasm_nvgpu_mpi.cu)
 
-    target_compile_options(nwq_qasm_nvgpu_mpi PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:
-        -O3 -arch=sm_80 -m64 -allow-unsupported-compiler -std=c++17 -rdc=true --compiler-options -fPIC -ccbin mpicxx>)
-
-    # include directories
-    include_directories("/global/homes/m/mengwang/nvshmem/include")
-
-    # link directories
-    link_directories("/global/homes/m/mengwang/nvshmem/lib"
-                    "/opt/nvidia/hpc_sdk/Linux_x86_64/22.7/cuda/11.7/lib64"
-                    "/opt/cray/libfabric/1.15.2.0/lib64"
-                    "/opt/nvidia/hpc_sdk/Linux_x86_64/22.7/cuda/11.7/lib64/stubs")
-
+    set_target_properties(nwq_qasm_nvgpu_mpi PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+                    
     # link libraries
-    target_link_libraries(nwq_qasm_nvgpu_mpi PUBLIC m cuda fabric nvidia nvshmem)
+    target_link_libraries(nwq_qasm_nvgpu_mpi PUBLIC nvshmem MPI::MPI_CXX)
 endif()
-
