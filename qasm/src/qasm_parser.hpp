@@ -59,8 +59,8 @@ private:
 
     void classify_measurements();
 
-    void execute_gate(QuantumState *state, Circuit *circuit, qasm_gate gate);
-    IdxType *sub_execute(QuantumState *state, IdxType repetition);
+    void execute_gate(shared_ptr<QuantumState> state, Circuit *circuit, qasm_gate gate);
+    IdxType *sub_execute(shared_ptr<QuantumState> state, IdxType repetition);
 
     void dump_defined_gates();
     void dump_cur_inst();
@@ -69,7 +69,7 @@ private:
 public:
     qasm_parser(const char *filename);
     IdxType num_qubits();
-    map<string, IdxType> *execute(QuantumState *state, IdxType repetition = DEFAULT_REPETITIONS);
+    map<string, IdxType> *execute(shared_ptr<QuantumState> state, IdxType repetition = DEFAULT_REPETITIONS);
     ~qasm_parser();
 };
 
@@ -529,7 +529,7 @@ void qasm_parser::classify_measurements()
             final_measurements = false;
 }
 
-map<string, IdxType> *qasm_parser::execute(QuantumState *state, IdxType repetition)
+map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, IdxType repetition)
 {
     IdxType *results;
 
@@ -564,7 +564,7 @@ map<string, IdxType> *qasm_parser::execute(QuantumState *state, IdxType repetiti
         return convert_dictionary(result_dict, list_cregs);
 }
 
-IdxType *qasm_parser::sub_execute(QuantumState *state, IdxType repetition)
+IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, IdxType repetition)
 {
     state->reset_state();
 
@@ -599,7 +599,7 @@ IdxType *qasm_parser::sub_execute(QuantumState *state, IdxType repetition)
     return state->get_results();
 }
 
-void qasm_parser::execute_gate(QuantumState *state, Circuit *circuit, qasm_gate gate)
+void qasm_parser::execute_gate(shared_ptr<QuantumState> state, Circuit *circuit, qasm_gate gate)
 {
     auto gate_name = gate.name;
     auto params = gate.params;

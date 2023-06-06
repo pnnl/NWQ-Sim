@@ -1,70 +1,85 @@
-#include "backendManager.hpp"
-
 #include <memory>
 #include <string>
+#include <algorithm>
+#include <cctype>
 
+/********** UPDATE THE INCLUDE PATH FOR LOCAL HEADER FILE HERE ************/
+#include "src/qasm_parser.hpp"
+#include "src/parser_util.hpp"
+#include "src/backendManager.hpp"
+/**************************************************************************/
+
+/********** LOAD THE SIMULATION BACKEND ************/
 #include "state.hpp"
 #include "util.hpp"
+/**************************************************************************/
+
+using namespace NWQSim;
+ValType pass_threshold = 0.99;
 
 int main(int argc, char **argv)
 {
-    if (argc != 2)
+    IdxType total_shots = 16384;
+    // bool run_with_basis = false;
+    std::string backend_name = "CPU";
+
+    if (cmdOptionExists(argv, argv + argc, "-shots"))
     {
-        std::cout << "Usage: " << argv[0] << " [backend]\n";
-        return 1;
+        const char *shots_str = getCmdOption(argv, argv + argc, "--shots");
+        total_shots = stoi(shots_str);
     }
 
-    std::string backendName(argv[1]);
-    BackendType backendType = BackendType::CPU;
+    // if (cmdOptionExists(argv, argv + argc, "-basis"))
+    // {
+    //     run_with_basis = true;
+    // }
 
-    if (backendName == "CPU")
+    if (cmdOptionExists(argv, argv + argc, "-backend"))
     {
-        backendType = BackendType::CPU;
+        backend_name = std::string(getCmdOption(argv, argv + argc, "-backend"));
     }
-    else if (backendName == "OpenMP")
-    {
-        backendType = BackendType::OpenMP;
-    }
-    else if (backendName == "MPI")
-    {
-        backendType = BackendType::MPI;
-    }
-    else if (backendName == "NVGPU")
-    {
-        backendType = BackendType::NVGPU;
-    }
-    else if (backendName == "NVGPU_MPI")
-    {
-        backendType = BackendType::NVGPU_MPI;
-    }
-    else
-    {
-        std::cerr << "Invalid backend name\n";
-        return 1;
-    }
+
+    std::transform(backend_name.begin(), backend_name.end(), backend_name.begin(),
+                   [](unsigned char c)
+                   { return std::toupper(c); });
 
 // If MPI or NVSHMEM backend, initialize MPI
 #ifdef MPI_ENABLED
-    if (backendType == BackendType::MPI || backendType == BackendType::NVGPU_MPI)
+    if (backend_name == "MPI" || backend_name == "NVGPU_MPI")
     {
         MPI_Init(&argc, &argv);
     }
 #endif
 
-    // Create the backend
-    std::unique_ptr<NWQSim::QuantumState> backend = BackendManager::createBackend(backendType, 10);
-    if (!backend)
+    if (cmdOptionExists(argv, argv + argc, "-q"))
     {
-        std::cerr << "Failed to create backend\n";
-        return 1;
-    }
+        const char *filename = getCmdOption(argv, argv + argc, "-q");
 
-    // Use the backend...
-    BackendManager::safePrint("Created backend: %s\n", backendName.c_str());
+        qasm_parser parser(filename);
+
+        // Create the backend
+        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend_name, parser.num_qubits());
+        if (!state)
+        {
+            std::cerr << "Failed to create backend\n";
+            return 1;
+        }
+        map<string, IdxType> *counts = parser.execute(state, total_shots);
+
+        std::vector<size_t> in_bits(parser.num_qubits());
+        for (size_t i = 0; i < parser.num_qubits(); ++i)
+        {
+            in_bits[i] = i;
+        }
+
+        BackendManager::safe_print("exp-val-z: %f\n", state->get_exp_z(in_bits));
+
+        delete counts;
+    }
 
 // Finalize MPI if necessary
 #ifdef MPI_ENABLED
-    if (backendType == BackendType::MPI || backendType == BackendType::NVGPU_MPI)
+    if (backend_name == "MPI" || backend_name == "NVGPU_MPI")
     {
         MPI_Finalize();
     }

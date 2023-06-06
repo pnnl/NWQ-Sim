@@ -85,15 +85,12 @@ namespace NWQSim
             auto gates = circuit->gates;
             IdxType n_gates = gates->size();
             assert(circuit->num_qubits() == n_qubits);
-            std::cout << "SVSim_cpu is running! 1" << std::endl;
 #ifdef PRINT_SIM_TRACE
             double sim_time;
             cpu_timer sim_timer;
             sim_timer.start_timer();
 #endif
-            std::cout << "SVSim_cpu is running! 2" << std::endl;
             simulation_kernel(gates);
-            std::cout << "SVSim_cpu is running! 3" << std::endl;
 #ifdef PRINT_SIM_TRACE
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
@@ -174,6 +171,7 @@ namespace NWQSim
 
         virtual void simulation_kernel(std::shared_ptr<std::vector<NWQSim::Gate>> gates)
         {
+            std::cout << "SVSim CPU simulation kernel" << std::endl;
             for (auto g : *gates)
             {
                 if (g.op_name == OP::RESET)
@@ -416,7 +414,7 @@ namespace NWQSim
             SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
             memset(results, 0, sizeof(IdxType) * repetition);
 
-            IdxType n_size = (IdxType)1 << n_qubits;
+            // IdxType n_size = (IdxType)1 << n_qubits;
             m_real[0] = 0;
             for (IdxType i = 1; i < (((IdxType)1 << n_qubits) + 1); i++)
                 m_real[i] = m_real[i - 1] + ((sv_real[i - 1] * sv_real[i - 1]) + (sv_imag[i - 1] * sv_imag[i - 1]));

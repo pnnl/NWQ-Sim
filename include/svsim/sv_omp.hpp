@@ -40,7 +40,6 @@ namespace NWQSim
     protected:
         void simulation_kernel(std::shared_ptr<std::vector<NWQSim::Gate>> gates) override
         {
-            std::cout << "started omp" << std::endl;
 #pragma omp parallel
             {
                 for (auto g : *gates)
@@ -82,7 +81,7 @@ namespace NWQSim
         void C1_GATE(const ValType *gm_real, const ValType *gm_imag,
                      const IdxType qubit) override
         {
-
+            std::cout << "C1_GATE" << std::endl;
 #pragma omp for schedule(auto)
             for (IdxType i = 0; i < half_dim; i++)
             {
