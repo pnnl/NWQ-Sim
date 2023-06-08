@@ -41,8 +41,8 @@ namespace NWQSim
             sv_size = dim * (IdxType)sizeof(ValType);
 
             // always be 0 since 1-MPI maps to 1-GPU
-            i_gpu = 0;
-            cudaSafeCall(cudaSetDevice(i_gpu));
+            i_proc = 0;
+            cudaSafeCall(cudaSetDevice(i_proc));
 
             // CPU side initialization
             SAFE_ALOC_HOST_CUDA(sv_real_cpu, sv_size);
@@ -197,6 +197,12 @@ namespace NWQSim
             return 0;
         }
 
+        ValType get_exp_z() override
+        {
+
+            return 0;
+        }
+
         void print_res_sv() override
         {
             cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, sv_size, cudaMemcpyDeviceToHost));
@@ -216,8 +222,7 @@ namespace NWQSim
     public:
         // n_qubits is the number of qubits
         IdxType n_qubits;
-        // which gpu
-        IdxType i_gpu;
+
         IdxType sv_size;
 
         IdxType dim;

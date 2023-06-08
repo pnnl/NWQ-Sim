@@ -37,6 +37,21 @@ namespace NWQSim
             return result;
         }
 
+        ValType get_exp_z() override
+        {
+            double result = 0.0;
+
+            // OpenMP directive for parallelizing the loop
+#pragma omp parallel for reduction(+ : result)
+            for (unsigned long long i = 0; i < dim; ++i)
+            {
+                bool parity = __builtin_parity(i);
+                result += (parity ? -1.0 : 1.0) * (sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i]);
+            }
+
+            return result;
+        }
+
     protected:
         void simulation_kernel(std::shared_ptr<std::vector<NWQSim::Gate>> gates) override
         {
@@ -81,7 +96,6 @@ namespace NWQSim
         void C1_GATE(const ValType *gm_real, const ValType *gm_imag,
                      const IdxType qubit) override
         {
-            std::cout << "C1_GATE" << std::endl;
 #pragma omp for schedule(auto)
             for (IdxType i = 0; i < half_dim; i++)
             {

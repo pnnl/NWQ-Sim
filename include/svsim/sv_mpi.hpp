@@ -37,7 +37,7 @@ namespace NWQSim
             MPI_Comm_size(MPI_COMM_WORLD, &size);
             comm_global = MPI_COMM_WORLD;
 
-            i_cpu = (IdxType)rank;
+            i_proc = (IdxType)rank;
             n_cpus = (IdxType)size;
 
             cpu_scale = floor(log((double)n_cpus + 0.5) / log(2.0));
@@ -65,14 +65,14 @@ namespace NWQSim
             memset(m_imag, 0, sv_size_per_cpu);
 
             // State-vector initial state [0..0] = 1
-            if (i_cpu == 0)
+            if (i_proc == 0)
                 sv_real[0] = 1.;
             cpu_mem = sv_size_per_cpu * 4;
 
             rng.seed(time(0));
 
 #ifdef PRINT_SIM_TRACE
-            if (i_cpu == 0)
+            if (i_proc == 0)
                 printf("SVSIM MPI is initialized!\n");
 #endif
         }
@@ -97,7 +97,7 @@ namespace NWQSim
             memset(m_real, 0, sv_size_per_cpu);
             memset(m_imag, 0, sv_size_per_cpu);
             // State Vector initial state [0..0] = 1
-            if (i_cpu == 0)
+            if (i_proc == 0)
                 sv_real[0] = 1.;
         }
 
@@ -117,7 +117,7 @@ namespace NWQSim
             double *sim_times;
             double sim_time;
             cpu_timer sim_timer;
-            if (i_cpu == 0)
+            if (i_proc == 0)
             {
                 SAFE_ALOC_HOST(sim_times, sizeof(double) * n_cpus);
                 memset(sim_times, 0, sizeof(double) * n_cpus);
@@ -134,8 +134,8 @@ namespace NWQSim
 
             MPI_Barrier(MPI_COMM_WORLD);
             MPI_Gather(&sim_time, 1, MPI_DOUBLE,
-                       &sim_times[i_cpu], 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-            if (i_cpu == 0)
+                       &sim_times[i_proc], 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+            if (i_proc == 0)
             {
                 double avg_sim_time = 0;
                 for (unsigned d = 0; d < n_cpus; d++)
@@ -171,29 +171,75 @@ namespace NWQSim
             return results;
         }
 
+        // This function calculates the expectation value for specified qubits in the MPI environment
         ValType get_exp_z(const std::vector<size_t> &in_bits) override
         {
+            // Determine the start and end index for this node
+            IdxType offset = (dim / n_cpus) * i_proc;
 
-            return 0;
+            // Calculate the expectation value for this node
+            double local_result = 0.0;
+            for (IdxType i = 0; i < m_cpu; ++i)
+            {
+                local_result += (hasEvenParity(i + offset, in_bits) ? 1.0 : -1.0) *
+                                (sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i]);
+            }
+
+            // Gather the results from all nodes at the root
+            double result = 0.0;
+
+            // printf("%ld out of %ld: local_result: %lf\n", i_proc, n_cpus, local_result);
+            printf("Sub m_cpu: %ld dim: %ld n_cpus: %ld iproc: %ld local_result: %lf\n", m_cpu, dim, n_cpus, i_proc, local_result);
+
+            MPI_Reduce(&local_result, &result, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+            // Return the final result
+            return result;
+        }
+
+        // This function calculates the expectation value for all qubits in the MPI environment
+        ValType get_exp_z() override
+        {
+
+            // Determine the start and end index for this node
+            IdxType offset = (dim / n_cpus) * i_proc;
+
+            // Calculate the expectation value for this node
+            double local_result = 0.0;
+            for (IdxType i = 0; i < m_cpu; ++i)
+            {
+                bool parity = __builtin_parity(i + offset);
+                local_result += (parity ? -1.0 : 1.0) * (sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i]);
+            }
+
+            // Gather the results from all nodes at the root
+            double result = 0.0;
+
+            printf("All m_cpu: %ld dim: %ld n_cpus: %ld iproc: %ld local_result: %lf\n", m_cpu, dim, n_cpus, i_proc, local_result);
+
+            MPI_Reduce(&local_result, &result, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+            // Return the final result
+            return result;
         }
 
         void print_res_sv() override
         {
             ValType *sv_diag_real = NULL;
             ValType *sv_diag_imag = NULL;
-            if (i_cpu == 0)
+            if (i_proc == 0)
                 SAFE_ALOC_HOST(sv_diag_real, dim * sizeof(ValType));
-            if (i_cpu == 0)
+            if (i_proc == 0)
                 SAFE_ALOC_HOST(sv_diag_imag, dim * sizeof(ValType));
 
             MPI_Barrier(MPI_COMM_WORLD);
             MPI_Gather(sv_real, m_cpu, MPI_DOUBLE,
-                       &sv_diag_real[i_cpu * m_cpu], m_cpu, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+                       &sv_diag_real[i_proc * m_cpu], m_cpu, MPI_DOUBLE, 0, MPI_COMM_WORLD);
             MPI_Gather(sv_imag, m_cpu, MPI_DOUBLE,
-                       &sv_diag_imag[i_cpu * m_cpu], m_cpu, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+                       &sv_diag_imag[i_proc * m_cpu], m_cpu, MPI_DOUBLE, 0, MPI_COMM_WORLD);
             MPI_Barrier(MPI_COMM_WORLD);
 
-            if (i_cpu == 0)
+            if (i_proc == 0)
             {
                 IdxType num = ((IdxType)1 << n_qubits);
                 printf("----- SVSim ------\n");
@@ -218,7 +264,6 @@ namespace NWQSim
         IdxType half_dim;
 
         // MPI variables
-        IdxType i_cpu;
         MPI_Comm comm_global;
         ValType cpu_mem;
         IdxType cpu_scale;
@@ -289,7 +334,7 @@ namespace NWQSim
                 }
                 else
                 {
-                    if (i_cpu == 0)
+                    if (i_proc == 0)
                     {
                         {
                             std::cout << "Unrecognized gates" << std::endl
@@ -311,7 +356,7 @@ namespace NWQSim
         void C1_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit)
         {
             const IdxType per_pe_work = ((half_dim) >> (cpu_scale));
-            for (IdxType i = (i_cpu)*per_pe_work; i < (i_cpu + 1) * per_pe_work; i++)
+            for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
             {
                 IdxType outer = (i >> qubit);
                 IdxType inner = (i & (((IdxType)1 << qubit) - 1));
@@ -342,10 +387,10 @@ namespace NWQSim
             }
             else
             {
-                IdxType pair_cpu = (i_cpu) ^ ((IdxType)1 << (qubit - (lg2_m_cpu)));
-                assert(pair_cpu != i_cpu);
+                IdxType pair_cpu = (i_proc) ^ ((IdxType)1 << (qubit - (lg2_m_cpu)));
+                assert(pair_cpu != i_proc);
                 // these nodes send their sv to the pairs
-                if (i_cpu > pair_cpu)
+                if (i_proc > pair_cpu)
                 {
                     // Send own partial statevector to remote nodes
                     MPI_Send(sv_real, per_pe_work, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD);
@@ -397,7 +442,7 @@ namespace NWQSim
             const IdxType qubit0_dim = ((IdxType)1 << qubit0);
             const IdxType qubit1_dim = ((IdxType)1 << qubit1);
 
-            for (IdxType i = (i_cpu)*per_pe_work; i < (i_cpu + 1) * per_pe_work; i++)
+            for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
             {
                 IdxType outer = ((i / inner_factor) / (mider_factor)) * (q0dim + q0dim);
                 IdxType mider = ((i / inner_factor) % (mider_factor)) * (q1dim + q1dim);
@@ -459,10 +504,10 @@ namespace NWQSim
                 const IdxType q = std::max(qubit0, qubit1);
 
                 // load data from pair node
-                IdxType pair_cpu = (i_cpu) ^ ((IdxType)1 << (q - (lg2_m_cpu)));
-                assert(pair_cpu != i_cpu);
+                IdxType pair_cpu = (i_proc) ^ ((IdxType)1 << (q - (lg2_m_cpu)));
+                assert(pair_cpu != i_proc);
 
-                if (i_cpu > pair_cpu)
+                if (i_proc > pair_cpu)
                 {
                     // Send own partial statevector to remote nodes
                     MPI_Send(sv_real, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD);
@@ -477,7 +522,7 @@ namespace NWQSim
                     ValType *sv_imag_remote = m_imag;
                     MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     MPI_Recv(sv_imag_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    for (IdxType i = (i_cpu)*per_pe_work; i < (i_cpu + 1) * per_pe_work; i++)
+                    for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
                     {
                         ValType el_real[4];
                         ValType el_imag[4];
@@ -557,7 +602,7 @@ namespace NWQSim
             ValType prob_of_one = 0;
             for (IdxType i = 0; i < m_cpu; i++)
             {
-                IdxType idx = (i_cpu)*per_pe_work + i;
+                IdxType idx = (i_proc)*per_pe_work + i;
                 if ((idx & mask) != 0)
                     sum += sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
             }
@@ -569,7 +614,7 @@ namespace NWQSim
                 ValType factor = 1. / sqrt(prob_of_one);
                 for (IdxType i = 0; i < m_cpu; i++)
                 {
-                    IdxType idx = (i_cpu)*per_pe_work + i;
+                    IdxType idx = (i_proc)*per_pe_work + i;
                     if ((idx & mask) == 0)
                     {
                         sv_real[i] = 0;
@@ -587,7 +632,7 @@ namespace NWQSim
                 ValType factor = 1. / sqrt(1. - prob_of_one);
                 for (IdxType i = 0; i < m_cpu; i++)
                 {
-                    IdxType idx = (i_cpu)*per_pe_work + i;
+                    IdxType idx = (i_proc)*per_pe_work + i;
                     if ((idx & mask) == 0)
                     {
                         sv_real[i] *= factor;
@@ -629,7 +674,7 @@ namespace NWQSim
             BARR_MPI;
             MPI_Scan(&reduce, &partial, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-            if (i_cpu == (n_cpus - 1)) // last node
+            if (i_proc == (n_cpus - 1)) // last node
             {
                 ValType purity = fabs(partial);
                 if (fabs(purity - 1.0) > ERROR_BAR)
@@ -646,7 +691,7 @@ namespace NWQSim
             {
                 IdxType local_cpu = j >> (lg2_m_cpu);
                 IdxType local_j = j & (m_cpu - 1);
-                if (local_cpu == i_cpu)
+                if (local_cpu == i_proc)
                 {
                     ValType lower = LOCAL_G(m_real, j);
                     ValType upper = 0;
@@ -679,7 +724,7 @@ namespace NWQSim
             ValType prob_of_one = 0;
             for (IdxType i = 0; i < m_cpu; i++)
             {
-                IdxType idx = (i_cpu)*per_pe_work + i;
+                IdxType idx = (i_proc)*per_pe_work + i;
                 if ((idx & mask) != 0)
                     m_real[i] = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
             }
@@ -691,7 +736,7 @@ namespace NWQSim
                 ValType factor = 1.0 / sqrt(1.0 - prob_of_one);
                 for (IdxType i = 0; i < m_cpu; i++)
                 {
-                    IdxType idx = (i_cpu)*per_pe_work + i;
+                    IdxType idx = (i_proc)*per_pe_work + i;
                     if ((idx & mask) == 0)
                     {
                         sv_real[i] *= factor;
@@ -708,12 +753,12 @@ namespace NWQSim
             {
                 if ((qubit + n_qubits) >= lg2_m_cpu) // remote qubit, need switch
                 {
-                    IdxType pair_cpu = (i_cpu) ^ ((IdxType)1 << (qubit - (lg2_m_cpu)));
-                    assert(pair_cpu != i_cpu);
+                    IdxType pair_cpu = (i_proc) ^ ((IdxType)1 << (qubit - (lg2_m_cpu)));
+                    assert(pair_cpu != i_proc);
                     ValType *sv_real_remote = m_real;
                     ValType *sv_imag_remote = m_imag;
 
-                    if (i_cpu > pair_cpu)
+                    if (i_proc > pair_cpu)
                     {
                         MPI_Send(sv_real, per_pe_work, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD);
                         MPI_Send(sv_imag, per_pe_work, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD);
@@ -770,10 +815,10 @@ namespace NWQSim
             const IdxType q = std::max(qubit0, qubit1);
 
             // load data from pair node
-            IdxType pair_cpu = (i_cpu) ^ ((IdxType)1 << (q - (lg2_m_cpu)));
-            assert(pair_cpu != i_cpu);
+            IdxType pair_cpu = (i_proc) ^ ((IdxType)1 << (q - (lg2_m_cpu)));
+            assert(pair_cpu != i_proc);
 
-            if (i_cpu > pair_cpu)
+            if (i_proc > pair_cpu)
             {
                 // Send own partial statevector to remote nodes
                 MPI_Send(sv_real, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD);
@@ -789,7 +834,7 @@ namespace NWQSim
                 MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 MPI_Recv(sv_imag_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-                for (IdxType i = (i_cpu)*per_pe_work; i < (i_cpu + 1) * per_pe_work; i++)
+                for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
                 {
                     ValType el_real[4];
                     ValType el_imag[4];

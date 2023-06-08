@@ -66,13 +66,27 @@ int main(int argc, char **argv)
         }
         map<string, IdxType> *counts = parser.execute(state, total_shots);
 
-        std::vector<size_t> in_bits(parser.num_qubits());
+        std::vector<size_t> in_bits;
+
+        for (int i = 0; i < parser.num_qubits(); ++i)
+        {
+            in_bits.push_back(i);
+        }
+
+        ValType exp_val_z = state->get_exp_z(in_bits);
+        ValType exp_val_z_all = state->get_exp_z();
         for (size_t i = 0; i < parser.num_qubits(); ++i)
         {
             in_bits[i] = i;
         }
 
-        BackendManager::safe_print("exp-val-z: %f\n", state->get_exp_z(in_bits));
+        if (state->i_proc == 0)
+        {
+            // print_counts(counts, total_shots);
+            // fflush(stdout);
+            printf("exp-val-z: %f\n", exp_val_z);
+            printf("exp-val-z all: %f\n", exp_val_z_all);
+        }
 
         delete counts;
     }

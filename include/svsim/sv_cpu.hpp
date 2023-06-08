@@ -134,6 +134,19 @@ namespace NWQSim
             return result;
         }
 
+        virtual ValType get_exp_z() override
+        {
+            double result = 0.0;
+
+            for (unsigned long long i = 0; i < dim; ++i)
+            {
+                bool parity = __builtin_parity(i);
+                result += (parity ? -1.0 : 1.0) * (sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i]);
+            }
+
+            return result;
+        }
+
         void print_res_sv() override
         {
             IdxType num = ((IdxType)1 << n_qubits);
@@ -171,7 +184,6 @@ namespace NWQSim
 
         virtual void simulation_kernel(std::shared_ptr<std::vector<NWQSim::Gate>> gates)
         {
-            std::cout << "SVSim CPU simulation kernel" << std::endl;
             for (auto g : *gates)
             {
                 if (g.op_name == OP::RESET)

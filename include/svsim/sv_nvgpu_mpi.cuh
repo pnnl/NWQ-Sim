@@ -53,7 +53,7 @@ namespace NWQSim
             attr.mpi_comm = &comm;
             nvshmemx_init_attr(NVSHMEMX_INIT_WITH_MPI_COMM, &attr);
             n_gpus = nvshmem_n_pes();
-            i_gpu = nvshmem_my_pe();
+            i_proc = nvshmem_my_pe();
             // always be 0 since 1-MPI maps to 1-GPU
             cudaSafeCall(cudaSetDevice(0));
 
@@ -74,7 +74,7 @@ namespace NWQSim
             memset(sv_real_cpu, 0, sv_size_per_gpu);
             memset(sv_imag_cpu, 0, sv_size_per_gpu);
             // State-vector initial state [0..0] = 1
-            if (i_gpu == 0)
+            if (i_proc == 0)
                 sv_real_cpu[0] = 1.;
             // NVSHMEM GPU memory allocation
             sv_real = (ValType *)nvshmem_malloc(sv_size_per_gpu);
@@ -123,7 +123,7 @@ namespace NWQSim
             memset(sv_real_cpu, 0, sv_size_per_gpu);
             memset(sv_imag_cpu, 0, sv_size_per_gpu);
             // State Vector initial state [0..0] = 1
-            if (i_gpu == 0)
+            if (i_proc == 0)
                 sv_real_cpu[0] = 1.;
             // GPU side initialization
             cudaSafeCall(cudaMemcpy(sv_real, sv_real_cpu,
@@ -157,7 +157,7 @@ namespace NWQSim
             double *sim_times;
             double sim_time;
             gpu_timer sim_timer;
-            if (i_gpu == 0)
+            if (i_proc == 0)
             {
                 SAFE_ALOC_HOST_CUDA(sim_times, sizeof(double) * n_gpus);
                 memset(sim_times, 0, sizeof(double) * n_gpus);
@@ -197,8 +197,8 @@ namespace NWQSim
 #ifdef PRINT_SIM_TRACE
             MPI_Barrier(MPI_COMM_WORLD);
             MPI_Gather(&sim_time, 1, MPI_DOUBLE,
-                       &sim_times[i_gpu], 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-            if (i_gpu == 0)
+                       &sim_times[i_proc], 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+            if (i_proc == 0)
             {
                 double avg_sim_time = 0;
                 for (unsigned d = 0; d < n_gpus; d++)
@@ -222,13 +222,19 @@ namespace NWQSim
             return results;
         }
 
-	ValType get_exp_z(const std::vector<size_t> &in_bits) override
+        ValType get_exp_z(const std::vector<size_t> &in_bits) override
         {
             double result = 0.0;
 
-
             return result;
         }
+
+        ValType get_exp_z() override
+        {
+
+            return 0;
+        }
+
         IdxType measure(IdxType qubit) override
         {
             Circuit *circuit = new Circuit(n_qubits);
@@ -254,19 +260,19 @@ namespace NWQSim
 
             ValType *sv_diag_real = NULL;
             ValType *sv_diag_imag = NULL;
-            if (i_gpu == 0)
+            if (i_proc == 0)
                 SAFE_ALOC_HOST_CUDA(sv_diag_real, dim * sizeof(ValType));
-            if (i_gpu == 0)
+            if (i_proc == 0)
                 SAFE_ALOC_HOST_CUDA(sv_diag_imag, dim * sizeof(ValType));
 
             MPI_Barrier(MPI_COMM_WORLD);
             MPI_Gather(sv_real_cpu, m_gpu, MPI_DOUBLE,
-                       &sv_diag_real[i_gpu * m_gpu], m_gpu, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+                       &sv_diag_real[i_proc * m_gpu], m_gpu, MPI_DOUBLE, 0, MPI_COMM_WORLD);
             MPI_Gather(sv_imag_cpu, m_gpu, MPI_DOUBLE,
-                       &sv_diag_imag[i_gpu * m_gpu], m_gpu, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+                       &sv_diag_imag[i_proc * m_gpu], m_gpu, MPI_DOUBLE, 0, MPI_COMM_WORLD);
             MPI_Barrier(MPI_COMM_WORLD);
 
-            if (i_gpu == 0)
+            if (i_proc == 0)
             {
                 IdxType num = ((IdxType)1 << n_qubits);
                 printf("----- SVSim ------\n");
@@ -285,8 +291,7 @@ namespace NWQSim
     public:
         // n_qubits is the number of qubits
         IdxType n_qubits;
-        // which gpu
-        IdxType i_gpu;
+
         IdxType gpu_scale;
         IdxType n_gpus;
         IdxType lg2_m_gpu;
@@ -379,7 +384,7 @@ namespace NWQSim
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType per_pe_work = ((half_dim) >> (gpu_scale));
 
-            for (IdxType i = (i_gpu)*per_pe_work + tid; i < (i_gpu + 1) * per_pe_work; i += blockDim.x * gridDim.x)
+            for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work; i += blockDim.x * gridDim.x)
             {
                 IdxType outer = (i >> qubit);
                 IdxType inner = (i & (((IdxType)1 << qubit) - 1));
@@ -417,8 +422,8 @@ namespace NWQSim
             }
             else
             {
-                IdxType pair_gpu = (i_gpu) ^ ((IdxType)1 << (qubit - (lg2_m_gpu)));
-                IdxType flag = (i_gpu < pair_gpu) ? 0 : 1;
+                IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (qubit - (lg2_m_gpu)));
+                IdxType flag = (i_proc < pair_gpu) ? 0 : 1;
                 ValType *sv_real_pos0 = NULL;
                 ValType *sv_imag_pos0 = NULL;
                 ValType *sv_real_pos1 = NULL;
@@ -493,8 +498,8 @@ namespace NWQSim
             }
             else
             {
-                IdxType pair_gpu = (i_gpu) ^ ((IdxType)1 << (qubit - (lg2_m_gpu)));
-                if (i_gpu > pair_gpu)
+                IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (qubit - (lg2_m_gpu)));
+                if (i_proc > pair_gpu)
                     return;
                 ValType *sv_real_remote = m_real;
                 ValType *sv_imag_remote = m_imag;
@@ -544,7 +549,7 @@ namespace NWQSim
             const IdxType qubit0_dim = ((IdxType)1 << qubit0);
             const IdxType qubit1_dim = ((IdxType)1 << qubit1);
 
-            for (IdxType i = (i_gpu)*per_pe_work + tid; i < (i_gpu + 1) * per_pe_work;
+            for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
                  i += blockDim.x * gridDim.x)
             {
                 IdxType outer = ((i / inner_factor) / (mider_factor)) * (q0dim + q0dim);
@@ -614,8 +619,8 @@ namespace NWQSim
                 const IdxType q = max(qubit0, qubit1);
 
                 // load data from pair GPU
-                IdxType pair_gpu = (i_gpu) ^ ((IdxType)1 << (q - (lg2_m_gpu)));
-                if (i_gpu > pair_gpu)
+                IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (q - (lg2_m_gpu)));
+                if (i_proc > pair_gpu)
                     return;
 
                 ValType *sv_real_remote = m_real;
@@ -627,7 +632,7 @@ namespace NWQSim
                     nvshmem_double_get(sv_imag_remote, sv_imag, per_pe_num, pair_gpu);
                 grid.sync();
 
-                for (IdxType i = (i_gpu)*per_pe_work + tid; i < (i_gpu + 1) * per_pe_work;
+                for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
                      i += blockDim.x * gridDim.x)
                 {
                     ValType el_real[4];
@@ -708,7 +713,7 @@ namespace NWQSim
 
             for (IdxType i = tid; i < m_gpu; i += blockDim.x * gridDim.x)
             {
-                IdxType idx = (i_gpu)*per_pe_work + i;
+                IdxType idx = (i_proc)*per_pe_work + i;
                 if ((idx & mask) == 0)
                     m_real[i] = 0;
                 else
@@ -722,7 +727,7 @@ namespace NWQSim
                 for (IdxType i = tid; i < k; i += blockDim.x * gridDim.x)
                 {
                     IdxType local_gpu = i >> (lg2_m_gpu);
-                    if (local_gpu == i_gpu)
+                    if (local_gpu == i_proc)
                     {
                         IdxType local_idx = i & (m_gpu - 1);
                         m_real[local_idx] += PGAS_G(m_real, i + k);
@@ -731,7 +736,7 @@ namespace NWQSim
                 BARR_NVSHMEM;
             }
 
-            if (tid == 0 && i_gpu != 0)
+            if (tid == 0 && i_proc != 0)
                 m_real[0] = PGAS_G(m_real, 0);
             grid.sync();
             ValType prob_of_one = m_real[0];
@@ -742,7 +747,7 @@ namespace NWQSim
                 ValType factor = 1. / sqrt(prob_of_one);
                 for (IdxType i = tid; i < m_gpu; i += blockDim.x * gridDim.x)
                 {
-                    IdxType idx = (i_gpu)*per_pe_work + i;
+                    IdxType idx = (i_proc)*per_pe_work + i;
                     if ((idx & mask) == 0)
                     {
                         sv_real[i] = 0;
@@ -760,7 +765,7 @@ namespace NWQSim
                 ValType factor = 1. / sqrt(1. - prob_of_one);
                 for (IdxType i = tid; i < m_gpu; i += blockDim.x * gridDim.x)
                 {
-                    IdxType idx = (i_gpu)*per_pe_work + i;
+                    IdxType idx = (i_proc)*per_pe_work + i;
                     if ((idx & mask) == 0)
                     {
                         sv_real[i] *= factor;
@@ -798,7 +803,7 @@ namespace NWQSim
                 {
                     IdxType idx = k + ((IdxType)1 << (d + 1)) - 1;
                     IdxType local_gpu = idx >> (lg2_m_gpu);
-                    if (local_gpu == i_gpu)
+                    if (local_gpu == i_proc)
                     {
                         IdxType local_idx = idx & ((m_gpu)-1);
                         m_real[local_idx] += PGAS_G(m_real, k + ((IdxType)1 << d) - 1);
@@ -807,7 +812,7 @@ namespace NWQSim
                 BARR_NVSHMEM;
             }
 
-            if (i_gpu == (n_gpus - 1) && tid == 0) // last GPU
+            if (i_proc == (n_gpus - 1) && tid == 0) // last GPU
             {
                 ValType val = LOCAL_G_NVGPU_MPI(m_real, n_size - 1);
                 LOCAL_P_NVGPU_MPI(m_real, n_size - 1, 0);
@@ -824,7 +829,7 @@ namespace NWQSim
                 {
                     IdxType idx = k + ((IdxType)1 << (d + 1)) - 1;
                     IdxType local_gpu = idx >> (lg2_m_gpu);
-                    if (local_gpu == i_gpu)
+                    if (local_gpu == i_proc)
                     {
                         IdxType local_idx = idx & ((m_gpu)-1);
                         IdxType remote_idx = k + ((IdxType)1 << d) - 1;
@@ -840,7 +845,7 @@ namespace NWQSim
             for (IdxType j = tid; j < n_size; j += blockDim.x * gridDim.x)
             {
                 IdxType local_gpu = j >> (lg2_m_gpu);
-                if (local_gpu == i_gpu)
+                if (local_gpu == i_proc)
                 {
                     ValType lower = LOCAL_G_NVGPU_MPI(m_real, j);
                     ValType upper = (j + 1 == n_size) ? 1 : PGAS_G(m_real, j + 1);
@@ -855,7 +860,7 @@ namespace NWQSim
 
             BARR_NVSHMEM;
 
-            if (i_gpu != 0 && tid == 0)
+            if (i_proc != 0 && tid == 0)
                 nvshmem_longlong_get(results_gpu, results_gpu, repetition, 0);
             BARR_NVSHMEM;
         }
@@ -903,7 +908,7 @@ namespace NWQSim
             }
             BARR_NVSHMEM;
 
-            if (i_gpu == 0 && tid == 0) // first GPU
+            if (i_proc == 0 && tid == 0) // first GPU
             {
                 ValType partial = 0;
                 for (IdxType g = 0; g < n_gpus; g++)
@@ -927,7 +932,7 @@ namespace NWQSim
             for (IdxType j = tid; j < n_size; j += blockDim.x * gridDim.x)
             {
                 IdxType local_gpu = j >> (lg2_m_gpu);
-                if (local_gpu == i_gpu)
+                if (local_gpu == i_proc)
                 {
                     ValType lower = LOCAL_G_NVGPU_MPI(m_real, j);
                     ValType upper = (j + 1 == n_size) ? 1 : PGAS_G(m_real, j + 1);
@@ -940,7 +945,7 @@ namespace NWQSim
                 }
             }
             BARR_NVSHMEM;
-            if (i_gpu != 0 && tid == 0)
+            if (i_proc != 0 && tid == 0)
                 nvshmem_longlong_get(results_gpu, results_gpu, repetition, 0);
             BARR_NVSHMEM;
         }
@@ -955,7 +960,7 @@ namespace NWQSim
 
             for (IdxType i = tid; i < m_gpu; i += blockDim.x * gridDim.x)
             {
-                IdxType idx = (i_gpu)*per_pe_work + i;
+                IdxType idx = (i_proc)*per_pe_work + i;
                 if ((idx & mask) == 0)
                     m_real[i] = 0;
                 else
@@ -969,7 +974,7 @@ namespace NWQSim
                 for (IdxType i = tid; i < k; i += blockDim.x * gridDim.x)
                 {
                     IdxType local_gpu = i >> (lg2_m_gpu);
-                    if (local_gpu == i_gpu)
+                    if (local_gpu == i_proc)
                     {
                         IdxType local_idx = i & (m_gpu - 1);
                         m_real[local_idx] += PGAS_G(m_real, i + k);
@@ -978,7 +983,7 @@ namespace NWQSim
                 BARR_NVSHMEM;
             }
 
-            if (tid == 0 && i_gpu != 0)
+            if (tid == 0 && i_proc != 0)
                 m_real[0] = PGAS_G(m_real, 0);
             grid.sync();
             ValType prob_of_one = m_real[0];
@@ -989,7 +994,7 @@ namespace NWQSim
                 ValType factor = 1.0 / sqrt(1.0 - prob_of_one);
                 for (IdxType i = tid; i < m_gpu; i += blockDim.x * gridDim.x)
                 {
-                    IdxType idx = (i_gpu)*per_pe_work + i;
+                    IdxType idx = (i_proc)*per_pe_work + i;
                     if ((idx & mask) == 0)
                     {
                         sv_real[i] *= factor;
@@ -1006,8 +1011,8 @@ namespace NWQSim
             {
                 if ((qubit + n_qubits) >= lg2_m_gpu) // remote qubit, need switch
                 {
-                    IdxType pair_gpu = (i_gpu) ^ ((IdxType)1 << (qubit - (lg2_m_gpu)));
-                    assert(pair_gpu != i_gpu);
+                    IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (qubit - (lg2_m_gpu)));
+                    assert(pair_gpu != i_proc);
                     ValType *sv_real_remote = m_real;
                     ValType *sv_imag_remote = m_imag;
                     if (tid == 0)
@@ -1062,8 +1067,8 @@ namespace NWQSim
             const IdxType q = max(qubit0, qubit1);
 
             // load data from pair GPU
-            IdxType pair_gpu = (i_gpu) ^ ((IdxType)1 << (q - (lg2_m_gpu)));
-            if (i_gpu > pair_gpu)
+            IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (q - (lg2_m_gpu)));
+            if (i_proc > pair_gpu)
                 return;
 
             ValType *sv_real_remote = m_real;
@@ -1075,7 +1080,7 @@ namespace NWQSim
                 nvshmem_double_get(sv_imag_remote, sv_imag, per_pe_num, pair_gpu);
             grid.sync();
 
-            for (IdxType i = (i_gpu)*per_pe_work + tid; i < (i_gpu + 1) * per_pe_work;
+            for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
                  i += blockDim.x * gridDim.x)
             {
                 ValType el_real[4];
@@ -1117,7 +1122,7 @@ namespace NWQSim
             const IdxType per_pe_work = ((dim) >> (gpu_scale));
             // ValType *m_real = m_real;
 
-            for (IdxType i = (i_gpu)*per_pe_work + tid; i < (i_gpu + 1) * per_pe_work; i += blockDim.x * gridDim.x)
+            for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work; i += blockDim.x * gridDim.x)
             {
                 ValType val_real = PGAS_G(sv_real, i);
                 ValType val_imag = PGAS_G(sv_imag, i);
@@ -1125,7 +1130,7 @@ namespace NWQSim
             }
             BARR_NVSHMEM;
 
-            if (i_gpu == 0)
+            if (i_proc == 0)
             {
                 for (IdxType k = ((IdxType)1 << (n_qubits - 1)); k > 0; k >>= 1)
                 {
