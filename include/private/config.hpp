@@ -39,19 +39,21 @@ namespace NWQSim::Config
         }
     }
 
-    inline void printConfig()
+    inline void printConfig(IdxType i_proc = 0)
     {
-        std::cout << "Running with the following configuration:" << std::endl;
-        std::cout << "PRINT_SIM_TRACE: " << (PRINT_SIM_TRACE ? "True" : "False") << std::endl;
+        if (i_proc == 0)
+        {
+            std::cout << "Running with the following configuration:" << std::endl;
+            std::cout << "PRINT_SIM_TRACE: " << (PRINT_SIM_TRACE ? "True" : "False") << std::endl;
 
-        std::cout << std::endl
-                  << std::endl;
+            std::cout << std::endl
+                      << std::endl;
+        }
     }
 
     inline void Load(const std::string &filename = "../default_config.json")
     {
         LoadConfigFromFile(filename, true);
-        printConfig();
     }
 
     inline void Update(const std::string &filename)

@@ -65,6 +65,7 @@ int main(int argc, char **argv)
             std::cerr << "Failed to create backend\n";
             return 1;
         }
+        state->print_config();
         map<string, IdxType> *counts = parser.execute(state, total_shots);
 
         std::vector<size_t> in_bits;
@@ -161,6 +162,7 @@ ValType run_brnchmark(std::string backend_name, IdxType index, IdxType total_sho
         std::cerr << "Failed to create backend\n";
         return 1;
     }
+    state->print_config();
     map<string, IdxType> *svsim_counts = parser.execute(state, total_shots);
 
     map<string, ValType> ref_probs;

@@ -21,6 +21,11 @@ namespace NWQSim
         }                          // constructor
         virtual ~QuantumState() {} // virtual destructor
 
+        virtual void print_config()
+        {
+            Config::printConfig(i_proc);
+        };
+
         virtual void reset_state() = 0;
         virtual void set_seed(IdxType seed) = 0;
 

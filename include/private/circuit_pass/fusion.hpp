@@ -500,7 +500,6 @@ namespace NWQSim
     {
         std::vector<SVGate> gates = GateFactory::getInstance().generateSVGates(circuit->get_gates());
 
-        return gates;
         IdxType n_qubits = circuit->num_qubits();
 
         //====================== Fuse ========================
