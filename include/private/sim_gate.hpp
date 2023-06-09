@@ -40,10 +40,10 @@ namespace NWQSim
         ValType gm_imag[16];
     };
 
-    class DMSimGate : public SimGate
+    class DMGate : public SimGate
     {
     public:
-        DMSimGate(OP _op, IdxType _qubit0, IdxType _qubit1) : SimGate(_op, _qubit0, _qubit1) {}
+        DMGate(OP _op, IdxType _qubit0, IdxType _qubit1) : SimGate(_op, _qubit0, _qubit1) {}
         // gate parameters
         ValType gm_real[256];
         ValType gm_imag[256];

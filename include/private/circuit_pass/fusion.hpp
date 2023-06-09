@@ -498,8 +498,9 @@ namespace NWQSim
 
     std::vector<SVGate> fuse_circuit(Circuit *circuit)
     {
-        std::vector<SVGate> gates = GateFactory::getInstance().generateGates(circuit->get_gates());
+        std::vector<SVGate> gates = GateFactory::getInstance().generateSVGates(circuit->get_gates());
 
+        return gates;
         IdxType n_qubits = circuit->num_qubits();
 
         //====================== Fuse ========================

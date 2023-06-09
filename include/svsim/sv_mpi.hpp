@@ -294,6 +294,10 @@ namespace NWQSim
             //=========================================
             for (auto g : gates)
             {
+                if (i_proc == 1)
+                {
+                    std::cout << "gate: " << OP_NAMES[g.op_name] << " " << g.ctrl << " " << g.qubit << std::endl;
+                }
                 // only need sync when operating on remote qubits
                 if ((g.ctrl >= lg2_m_cpu) || (g.qubit >= lg2_m_cpu))
                 {
