@@ -1,13 +1,15 @@
 #pragma once
 
-#include "../state.hpp"
-#include "../util.hpp"
-#include "../circuit.hpp"
-#include "../gate.hpp"
-#include "../macros.hpp"
-#include "../nvgpu_util.cuh"
+#include "../public/state.hpp"
+#include "../public/util.hpp"
+#include "../public/gate.hpp"
+#include "../public/circuit.hpp"
 
-#include "../circuit_pass/fusion.hpp"
+#include "../private/config.hpp"
+#include "../private/nvgpu_util.cuh"
+#include "../private/macros.hpp"
+
+#include "../private/circuit_pass/fusion.hpp"
 
 #include <assert.h>
 #include <random>
@@ -112,10 +114,10 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-#define PRINT_SIM_TRACE
 
         void sim(Circuit *circuit) override
         {
+            IdxType origional_gates = circuit->num_gates();
             fuse_circuit(circuit);
             IdxType n_measures = prepare_measure(circuit->get_gates());
             // Copy the circuit to GPU
@@ -127,11 +129,15 @@ namespace NWQSim
             // Copy the simulator instance to GPU
             cudaSafeCall(cudaMemcpy(sv_gpu, this,
                                     sizeof(SV_NVGPU), cudaMemcpyHostToDevice));
-#ifdef PRINT_SIM_TRACE
-            printf("SVSim_gpu is running! Requesting %lld qubits.\n", n_qubits);
+
             double sim_time;
             gpu_timer sim_timer;
-#endif
+
+            if (Config::PRINT_SIM_TRACE)
+            {
+                printf("SVSim_gpu is running! Requesting %lld qubits.\n", n_qubits);
+            }
+
             dim3 gridDim(1, 1, 1);
             cudaDeviceProp deviceProp;
             cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
@@ -144,27 +150,28 @@ namespace NWQSim
             gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
             void *args[] = {&sv_gpu, &n_gates};
             cudaSafeCall(cudaDeviceSynchronize());
-#ifdef PRINT_SIM_TRACE
+
             sim_timer.start_timer();
-#endif
+
             cudaLaunchCooperativeKernel((void *)simulation_kernel_nvgpu, gridDim,
                                         THREADS_CTA_NVGPU, args, smem_size);
             cudaSafeCall(cudaDeviceSynchronize());
-#ifdef PRINT_SIM_TRACE
+
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
-#endif
+
             // Copy the results back to CPU
             cudaSafeCall(cudaMemcpy(results, results_gpu, n_measures * sizeof(IdxType), cudaMemcpyDeviceToHost));
             cudaCheckError();
-#ifdef PRINT_SIM_TRACE
-            printf("\n============== SV-Sim ===============\n");
-            printf("nqubits:%lld, sim_gates:%lld, ngpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_gpu:%.3lf MB\n",
-                   n_qubits, n_gates, 1, sim_time, 0.,
-                   sim_time, gpu_mem / 1024 / 1024, gpu_mem / 1024 / 1024);
-            printf("=====================================\n");
-            fflush(stdout);
-#endif
+
+            if (Config::PRINT_SIM_TRACE)
+            {
+                printf("\n============== SV-Sim ===============\n");
+                printf("n_qubits:%lld, n_gates:%lld, sim_gates:%lld, ngpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_gpu:%.3lf MB\n",
+                       n_qubits, origional_gates, n_gates, 1, sim_time, 0.,
+                       sim_time, gpu_mem / 1024 / 1024, gpu_mem / 1024 / 1024);
+                printf("=====================================\n");
+            }
             SAFE_FREE_GPU(sv_gpu);
         }
 

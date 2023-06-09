@@ -1,7 +1,8 @@
 #pragma once
 
-#include "../util.hpp"
-#include "../macros.hpp"
+#include "../public/util.hpp"
+#include "../private/macros.hpp"
+#include "../private/sim_gate.hpp"
 
 #include "sv_cpu.hpp"
 
@@ -53,13 +54,21 @@ namespace NWQSim
         }
 
     protected:
-        void simulation_kernel(std::shared_ptr<std::vector<NWQSim::Gate>> gates) override
+        void simulation_kernel(const std::vector<SVGate> &gates) override
         {
 #pragma omp parallel
             {
-                for (auto g : *gates)
+                for (auto g : gates)
                 {
-                    if (g.op_name == OP::RESET)
+                    if (g.op_name == OP::C1)
+                    {
+                        C1_GATE(g.gm_real, g.gm_imag, g.qubit);
+                    }
+                    else if (g.op_name == OP::C2)
+                    {
+                        C2_GATE(g.gm_real, g.gm_imag, g.ctrl, g.qubit);
+                    }
+                    else if (g.op_name == OP::RESET)
                     {
                         RESET_GATE(g.qubit);
                     }
@@ -69,22 +78,14 @@ namespace NWQSim
                     }
                     else if (g.op_name == OP::MA)
                     {
-                        MA_GATE(g.repetition);
-                    }
-                    else if (g.n_qubits == 1)
-                    {
-                        C1_GATE(g.gm_real, g.gm_imag, g.qubit);
-                    }
-                    else if (g.n_qubits == 2)
-                    {
-                        C2_GATE(g.gm_real, g.gm_imag, g.ctrl, g.qubit);
+                        MA_GATE(g.qubit);
                     }
                     else
                     {
                         if (omp_get_thread_num() == 0)
                         {
                             std::cout << "Unrecognized gates" << std::endl
-                                      << g.gateToString() << std::endl;
+                                      << OP_NAMES[g.op_name] << std::endl;
                             std::logic_error("Invalid gate type");
                         }
                     }

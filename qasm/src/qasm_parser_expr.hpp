@@ -7,7 +7,7 @@
 #include <cmath>
 
 #include "lexer.hpp"
-#include "../../include/util.hpp"
+#include "public/util.hpp"
 
 using namespace std;
 using namespace lexertk;

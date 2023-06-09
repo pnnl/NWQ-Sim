@@ -1,13 +1,15 @@
 #pragma once
 
-#include "../state.hpp"
-#include "../util.hpp"
-#include "../circuit.hpp"
-#include "../gate.hpp"
-#include "../macros.hpp"
-#include "../nvgpu_util.cuh"
+#include "../public/state.hpp"
+#include "../public/util.hpp"
+#include "../public/gate.hpp"
+#include "../public/circuit.hpp"
 
-#include "../circuit_pass/fusion.hpp"
+#include "../private/config.hpp"
+#include "../private/nvgpu_util.cuh"
+#include "../private/macros.hpp"
+
+#include "../private/circuit_pass/fusion.hpp"
 
 #include <assert.h>
 #include <random>
@@ -138,10 +140,10 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-#define PRINT_SIM_TRACE
 
         void sim(Circuit *circuit) override
         {
+            IdxType origional_gates = circuit->num_gates();
             fuse_circuit(circuit);
             IdxType n_measures = prepare_measure(circuit->get_gates());
             // Copy the circuit to GPU
@@ -153,17 +155,18 @@ namespace NWQSim
             // Copy the simulator instance to GPU
             cudaSafeCall(cudaMemcpy(sv_gpu, this,
                                     sizeof(SV_NVGPU_MPI), cudaMemcpyHostToDevice));
-#ifdef PRINT_SIM_TRACE
+
             double *sim_times;
             double sim_time;
             gpu_timer sim_timer;
-            if (i_proc == 0)
+
+            if (Config::PRINT_SIM_TRACE && i_proc == 0)
             {
                 SAFE_ALOC_HOST_CUDA(sim_times, sizeof(double) * n_gpus);
                 memset(sim_times, 0, sizeof(double) * n_gpus);
                 printf("SVSim_gpu is running! Requesting %lld qubits.\n", circuit->num_qubits());
             }
-#endif
+
             dim3 gridDim(1, 1, 1);
             cudaDeviceProp deviceProp;
             cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
@@ -177,43 +180,43 @@ namespace NWQSim
             void *args[] = {&sv_gpu, &n_gates};
             cudaSafeCall(cudaDeviceSynchronize());
 
-#ifdef PRINT_KERNEL_TRACE
-            MPI_Barrier(MPI_COMM_WORLD);
+            if (Config::PRINT_SIM_TRACE)
+                MPI_Barrier(MPI_COMM_WORLD);
             sim_timer.start_timer();
-#endif
 
             NVSHMEM_CHECK(nvshmemx_collective_launch((const void *)simulation_kernel_nvgpu_mpi, gridDim,
                                                      THREADS_CTA_NVGPU, args, smem_size, 0));
             cudaSafeCall(cudaDeviceSynchronize());
 
-#ifdef PRINT_KERNEL_TRACE
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
-#endif
+
             // Copy the results back to CPU
             cudaSafeCall(cudaMemcpy(results, results_gpu, n_measures * sizeof(IdxType), cudaMemcpyDeviceToHost));
             cudaCheckError();
 
-#ifdef PRINT_SIM_TRACE
-            MPI_Barrier(MPI_COMM_WORLD);
-            MPI_Gather(&sim_time, 1, MPI_DOUBLE,
-                       &sim_times[i_proc], 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-            if (i_proc == 0)
+            if (Config::PRINT_SIM_TRACE)
             {
-                double avg_sim_time = 0;
-                for (unsigned d = 0; d < n_gpus; d++)
+                MPI_Barrier(MPI_COMM_WORLD);
+                MPI_Gather(&sim_time, 1, MPI_DOUBLE,
+                           &sim_times[i_proc], 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+                if (i_proc == 0)
                 {
-                    avg_sim_time += sim_times[d];
+                    double avg_sim_time = 0;
+                    for (unsigned d = 0; d < n_gpus; d++)
+                    {
+                        avg_sim_time += sim_times[d];
+                    }
+                    avg_sim_time /= (double)n_gpus;
+                    printf("\n============== SV-Sim ===============\n");
+                    printf("n_qubits:%lld, n_gates:%lld, sim_gates:%lld, ngpus:%lld, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_gpu:%.3lf MB\n",
+                           n_qubits, origional_gates, n_gates, n_gpus, avg_sim_time, 0.,
+                           avg_sim_time, gpu_mem / 1024 / 1024 * n_gpus, gpu_mem / 1024 / 1024);
+                    printf("=====================================\n");
+                    SAFE_FREE_HOST_CUDA(sim_times);
                 }
-                avg_sim_time /= (double)n_gpus;
-                printf("\n============== SV-Sim ===============\n");
-                printf("nqubits:%lld, sim_gates:%lld, ngpus:%lld, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_gpu:%.3lf MB\n",
-                       n_qubits, n_gates, n_gpus, avg_sim_time, 0.,
-                       avg_sim_time, gpu_mem / 1024 / 1024 * n_gpus, gpu_mem / 1024 / 1024);
-                printf("=====================================\n");
-                SAFE_FREE_HOST_CUDA(sim_times);
             }
-#endif
+
             SAFE_FREE_GPU(sv_gpu);
         }
 

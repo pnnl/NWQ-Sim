@@ -1,21 +1,21 @@
 #pragma once
 
-#include "../state.hpp"
+#include "../public/state.hpp"
 
-#include "../util.hpp"
-#include "../gate.hpp"
-#include "../circuit.hpp"
+#include "../public/util.hpp"
+#include "../public/gate.hpp"
+#include "../public/circuit.hpp"
+#include "../private/config.hpp"
 
-#include "../circuit_pass/fusion.hpp"
-#include "../macros.hpp"
+#include "../private/circuit_pass/fusion.hpp"
+#include "../private/macros.hpp"
+#include "../private/sim_gate.hpp"
 
 #include <random>
 #include <cstring>
 #include <algorithm>
 
 #include <mpi.h>
-
-#define PRINT_SIM_TRACE
 
 namespace NWQSim
 {
@@ -70,11 +70,6 @@ namespace NWQSim
             cpu_mem = sv_size_per_cpu * 4;
 
             rng.seed(time(0));
-
-#ifdef PRINT_SIM_TRACE
-            if (i_proc == 0)
-                printf("SVSIM MPI is initialized!\n");
-#endif
         }
 
         ~SV_MPI()
@@ -108,50 +103,54 @@ namespace NWQSim
 
         void sim(Circuit *circuit) override
         {
-            fuse_circuit(circuit);
-            auto gates = circuit->gates;
-            IdxType n_gates = gates->size();
+            IdxType origional_gates = circuit->num_gates();
+
+            std::vector<SVGate> gates = fuse_circuit(circuit);
+
+            IdxType n_gates = gates.size();
             assert(circuit->num_qubits() == n_qubits);
 
-#ifdef PRINT_SIM_TRACE
             double *sim_times;
             double sim_time;
             cpu_timer sim_timer;
-            if (i_proc == 0)
+
+            if (Config::PRINT_SIM_TRACE && i_proc == 0)
             {
                 SAFE_ALOC_HOST(sim_times, sizeof(double) * n_cpus);
                 memset(sim_times, 0, sizeof(double) * n_cpus);
+                MPI_Barrier(MPI_COMM_WORLD);
             }
-            MPI_Barrier(MPI_COMM_WORLD);
             sim_timer.start_timer();
-#endif
+
             // Run simulation
             simulation_kernel(gates);
 
-#ifdef PRINT_SIM_TRACE
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
 
-            MPI_Barrier(MPI_COMM_WORLD);
-            MPI_Gather(&sim_time, 1, MPI_DOUBLE,
-                       &sim_times[i_proc], 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-            if (i_proc == 0)
+            if (Config::PRINT_SIM_TRACE)
             {
-                double avg_sim_time = 0;
-                for (unsigned d = 0; d < n_cpus; d++)
+                MPI_Barrier(MPI_COMM_WORLD);
+                MPI_Gather(&sim_time, 1, MPI_DOUBLE,
+                           &sim_times[i_proc], 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+                if (i_proc == 0)
                 {
-                    avg_sim_time += sim_times[d];
+                    double avg_sim_time = 0;
+                    for (unsigned d = 0; d < n_cpus; d++)
+                    {
+                        avg_sim_time += sim_times[d];
+                    }
+                    avg_sim_time /= (double)n_cpus;
+                    printf("\n============== SV-Sim ===============\n");
+                    printf("n_qubits:%lld, n_gates:%lld, sim_gates:%lld, n_nodes:%lld, sim:%.3lf ms, mem_per_node:%.3lf MB, total_mem:%.3lf MB, \n",
+                           n_qubits, origional_gates, n_gates, n_cpus,
+                           avg_sim_time, cpu_mem / 1024 / 1024,
+                           n_cpus * cpu_mem / 1024 / 1024);
+                    printf("=====================================\n");
+                    SAFE_FREE_HOST(sim_times);
                 }
-                avg_sim_time /= (double)n_cpus;
-                printf("\n============== SV-Sim ===============\n");
-                printf("nqubits:%lld, sim_gates:%lld, n_nodes:%lld, sim:%.3lf ms, mem_per_node:%.3lf MB, total_mem:%.3lf MB, \n",
-                       n_qubits, n_gates, n_cpus,
-                       avg_sim_time, cpu_mem / 1024 / 1024,
-                       n_cpus * cpu_mem / 1024 / 1024);
-                printf("=====================================\n");
-                SAFE_FREE_HOST(sim_times);
             }
-#endif
         }
 
         IdxType *get_results() override
@@ -289,11 +288,11 @@ namespace NWQSim
         std::mt19937 rng;
         std::uniform_real_distribution<ValType> uni_dist;
 
-        void simulation_kernel(std::shared_ptr<std::vector<Gate>> gates)
+        void simulation_kernel(std::vector<SVGate> &gates)
         {
 
             //=========================================
-            for (auto g : *gates)
+            for (auto g : gates)
             {
                 // only need sync when operating on remote qubits
                 if ((g.ctrl >= lg2_m_cpu) || (g.qubit >= lg2_m_cpu))
@@ -301,23 +300,11 @@ namespace NWQSim
                     BARR_MPI;
                 }
 
-                if (g.op_name == OP::RESET)
-                {
-                    RESET_GATE(g.qubit);
-                }
-                else if (g.op_name == OP::M)
-                {
-                    M_GATE(g.qubit);
-                }
-                else if (g.op_name == OP::MA)
-                {
-                    MA_GATE(g.repetition);
-                }
-                else if (g.n_qubits == 1)
+                if (g.op_name == OP::C1)
                 {
                     C1V2_GATE(g.gm_real, g.gm_imag, g.qubit);
                 }
-                else if (g.n_qubits == 2)
+                else if (g.op_name == OP::C2)
                 {
                     if ((g.ctrl >= lg2_m_cpu) && (g.qubit >= lg2_m_cpu))
                     {
@@ -332,13 +319,25 @@ namespace NWQSim
                         C2V1_GATE(g.gm_real, g.gm_imag, g.ctrl, g.qubit);
                     }
                 }
+                else if (g.op_name == OP::RESET)
+                {
+                    RESET_GATE(g.qubit);
+                }
+                else if (g.op_name == OP::M)
+                {
+                    M_GATE(g.qubit);
+                }
+                else if (g.op_name == OP::MA)
+                {
+                    MA_GATE(g.qubit);
+                }
                 else
                 {
                     if (i_proc == 0)
                     {
                         {
                             std::cout << "Unrecognized gates" << std::endl
-                                      << g.gateToString() << std::endl;
+                                      << OP_NAMES[g.op_name] << std::endl;
                             std::logic_error("Invalid gate type");
                         }
                     }

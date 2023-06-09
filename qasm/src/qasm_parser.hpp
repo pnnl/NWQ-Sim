@@ -12,9 +12,9 @@
 #include "parser_util.hpp"
 #include "lexer.hpp"
 
-#include "../../include/util.hpp"
-#include "../../include/state.hpp"
-#include "../../include/circuit.hpp"
+#include "public/util.hpp"
+#include "public/state.hpp"
+#include "public/circuit.hpp"
 
 using namespace std;
 using namespace NWQSim;

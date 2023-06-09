@@ -2,7 +2,11 @@
 
 #include "util.hpp"
 #include "circuit.hpp"
+
+#include "../private/config.hpp"
+#include "../private/gate_factory.hpp"
 #include <vector>
+#include <string>
 
 namespace NWQSim
 {
@@ -10,8 +14,12 @@ namespace NWQSim
     class QuantumState
     {
     public:
-        QuantumState(IdxType _n_qubits) {} // constructor
-        virtual ~QuantumState() {}         // virtual destructor
+        QuantumState(IdxType _n_qubits)
+        {
+            Config::Load();
+            registerGates();
+        }                          // constructor
+        virtual ~QuantumState() {} // virtual destructor
 
         virtual void reset_state() = 0;
         virtual void set_seed(IdxType seed) = 0;
@@ -25,6 +33,11 @@ namespace NWQSim
         virtual ValType get_exp_z(const std::vector<size_t> &in_bits) = 0;
 
         virtual void print_res_sv() = 0;
+
+        void update_config(const std::string &filename)
+        {
+            Config::Update(filename);
+        }
 
         IdxType i_proc = 0; // process id
     };

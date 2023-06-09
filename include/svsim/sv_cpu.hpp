@@ -1,21 +1,20 @@
 #pragma once
 
-#include "../state.hpp"
+#include "../public/state.hpp"
 
-// #include "../../include/NWQSim.hpp"
-#include "../util.hpp"
-#include "../gate.hpp"
-#include "../circuit.hpp"
+#include "../public/util.hpp"
+#include "../public/gate.hpp"
+#include "../public/circuit.hpp"
+#include "../private/config.hpp"
 
-#include "../circuit_pass/fusion.hpp"
-#include "../macros.hpp"
+#include "../private/circuit_pass/fusion.hpp"
+#include "../private/macros.hpp"
+#include "../private/sim_gate.hpp"
 
 #include <random>
 #include <cstring>
 #include <algorithm>
 #include <vector>
-
-#define PRINT_SIM_TRACE
 
 namespace NWQSim
 {
@@ -46,9 +45,6 @@ namespace NWQSim
             SAFE_ALOC_HOST(m_real, sv_size + sizeof(ValType));
             memset(m_real, 0, sv_size + sizeof(ValType));
             rng.seed(time(0));
-#ifdef PRINT_SIM_TRACE
-            printf("SVSim_cpu is initialized!\n");
-#endif
         }
 
         ~SV_CPU()
@@ -58,9 +54,6 @@ namespace NWQSim
             SAFE_FREE_HOST(sv_imag);
             SAFE_FREE_HOST(m_real);
             SAFE_FREE_HOST(results);
-#ifdef PRINT_SIM_TRACE
-            printf("SVSim_cpu is finalized!\n\n");
-#endif
         }
 
         void reset_state() override
@@ -80,27 +73,32 @@ namespace NWQSim
 
         void sim(Circuit *circuit) override
         {
+            IdxType origional_gates = circuit->num_gates();
 
-            fuse_circuit(circuit);
-            auto gates = circuit->gates;
-            IdxType n_gates = gates->size();
+            std::vector<SVGate> gates = fuse_circuit(circuit);
+
+            IdxType n_gates = gates.size();
+
             assert(circuit->num_qubits() == n_qubits);
-#ifdef PRINT_SIM_TRACE
+
             double sim_time;
             cpu_timer sim_timer;
             sim_timer.start_timer();
-#endif
+
             simulation_kernel(gates);
-#ifdef PRINT_SIM_TRACE
+
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
-            printf("\n============== SV-Sim ===============\n");
-            printf("nqubits:%lld, ngates:%lld, ncpus:%lld, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_cpu:%.3lf MB\n",
-                   n_qubits, n_gates, n_cpu, sim_time, 0.,
-                   sim_time, cpu_mem / 1024 / 1024, cpu_mem / 1024 / 1024);
-            printf("=====================================\n");
-            fflush(stdout);
-#endif
+
+            if (Config::PRINT_SIM_TRACE)
+            {
+                printf("\n============== SV-Sim ===============\n");
+                printf("n_qubits:%lld, n_gates:%lld, sim_gates:%lld, ncpus:%lld, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_cpu:%.3lf MB\n",
+                       n_qubits, origional_gates, n_gates, n_cpu, sim_time, 0.,
+                       sim_time, cpu_mem / 1024 / 1024, cpu_mem / 1024 / 1024);
+                printf("=====================================\n");
+            }
+
             //=========================================
         }
 
@@ -182,11 +180,19 @@ namespace NWQSim
         // CPU memory usage
         ValType cpu_mem;
 
-        virtual void simulation_kernel(std::shared_ptr<std::vector<NWQSim::Gate>> gates)
+        virtual void simulation_kernel(const std::vector<SVGate> &gates)
         {
-            for (auto g : *gates)
+            for (auto g : gates)
             {
-                if (g.op_name == OP::RESET)
+                if (g.op_name == OP::C1)
+                {
+                    C1_GATE(g.gm_real, g.gm_imag, g.qubit);
+                }
+                else if (g.op_name == OP::C2)
+                {
+                    C2_GATE(g.gm_real, g.gm_imag, g.ctrl, g.qubit);
+                }
+                else if (g.op_name == OP::RESET)
                 {
                     RESET_GATE(g.qubit);
                 }
@@ -196,20 +202,12 @@ namespace NWQSim
                 }
                 else if (g.op_name == OP::MA)
                 {
-                    MA_GATE(g.repetition);
-                }
-                else if (g.n_qubits == 1)
-                {
-                    C1_GATE(g.gm_real, g.gm_imag, g.qubit);
-                }
-                else if (g.n_qubits == 2)
-                {
-                    C2_GATE(g.gm_real, g.gm_imag, g.ctrl, g.qubit);
+                    MA_GATE(g.qubit);
                 }
                 else
                 {
                     std::cout << "Unrecognized gates" << std::endl
-                              << g.gateToString() << std::endl;
+                              << OP_NAMES[g.op_name] << std::endl;
                     std::logic_error("Invalid gate type");
                 }
             }

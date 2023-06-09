@@ -1,7 +1,8 @@
 #pragma once
 
-#include "state.hpp"
-#include "util.hpp"
+#include "public/state.hpp"
+#include "public/util.hpp"
+
 #include "svsim/sv_cpu.hpp"
 
 #ifdef OMP_ENABLED

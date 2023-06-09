@@ -240,6 +240,7 @@ namespace NWQSim
          * leave other qubits unchaged.
          ******************************************/
         RESET,
+
         /************
          * C1 Gate
          ***********/
@@ -251,7 +252,8 @@ namespace NWQSim
         /************
          * C4 Gate
          ***********/
-        C4
+        C4,
+
     };
 
     // Name of the gate for tracing purpose
@@ -297,6 +299,7 @@ namespace NWQSim
         "M",
         "MA",
         "RESET",
+
         "C1",
         "C2",
         "C4"};
@@ -313,6 +316,7 @@ namespace NWQSim
              ValType _theta = 0,
              ValType _phi = 0,
              ValType _lam = 0,
+             ValType _gamma = 0,
              IdxType _repetition = 0) : op_name(_op_name),
                                         qubit(_qubit),
                                         ctrl(_ctrl),
@@ -320,11 +324,8 @@ namespace NWQSim
                                         theta(_theta),
                                         phi(_phi),
                                         lam(_lam),
-                                        repetition(_repetition)
-        {
-            memset(gm_real, 0, sizeof(ValType) * 16);
-            memset(gm_imag, 0, sizeof(ValType) * 16);
-        }
+                                        gamma(_gamma),
+                                        repetition(_repetition) {}
         Gate(const Gate &g) : op_name(g.op_name),
                               qubit(g.qubit),
                               ctrl(g.ctrl),
@@ -332,21 +333,8 @@ namespace NWQSim
                               theta(g.theta),
                               phi(g.phi),
                               lam(g.lam),
-                              repetition(g.repetition)
-        {
-            memcpy(gm_real, g.gm_real, 16 * sizeof(ValType));
-            memcpy(gm_imag, g.gm_imag, 16 * sizeof(ValType));
-        }
+                              repetition(g.repetition) {}
         ~Gate() {}
-
-        // set gm
-        void set_gm(ValType *real, ValType *imag, IdxType dim)
-        {
-            if (!(dim == 2 || dim == 4))
-                throw std::logic_error("Dim should be 2 (1-qubit gate) or 4 (2-qubit gate)!");
-            memcpy(gm_real, real, dim * dim * sizeof(ValType));
-            memcpy(gm_imag, imag, dim * dim * sizeof(ValType));
-        }
 
         // for dumping the gate
         std::string gateToString()
@@ -402,10 +390,7 @@ namespace NWQSim
         ValType theta;
         ValType phi;
         ValType lam;
+        ValType gamma;
         IdxType repetition;
-
-        // 4-qubit gate parameters (after fusion)
-        ValType gm_real[16];
-        ValType gm_imag[16];
     }; // end of Gate definition
 }
