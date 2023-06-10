@@ -4,10 +4,10 @@
 #include <map>
 #include <cmath>
 
-#include "../public/util.hpp"
-#include "../public/gate.hpp"
+#include "../../public/util.hpp"
+#include "../../public/gate.hpp"
 
-#include "sim_gate.hpp"
+#include "../sim_gate.hpp"
 
 namespace NWQSim
 {
@@ -27,73 +27,33 @@ namespace NWQSim
             gateMatrixFunctions[op] = func;
         }
 
-        SVGate getSVGate(const Gate &g)
-        {
-            auto it = gateMatrixFunctions.find(g.op_name);
-
-            SVGate sv_gate(g.op_name, g.qubit, g.ctrl);
-
-            if (it != gateMatrixFunctions.end())
-            {
-                sv_gate.op_name = it->second(g, sv_gate.gm_real, sv_gate.gm_imag);
-            }
-            else if (g.op_name == OP::MA)
-            {
-                sv_gate.qubit = g.repetition;
-            }
-            else if (!(g.op_name == OP::M || g.op_name == OP::RESET))
-            {
-                std::cout << g.op_name << std::endl;
-                throw std::runtime_error("Invalid gate operation");
-            }
-
-            return sv_gate;
-        }
-
-        std::vector<SVGate> generateSVGates(const std::vector<Gate> &gates)
+        std::vector<SVGate> getSVGates(const std::vector<Gate> &gates)
         {
             std::vector<SVGate> sim_sv_gates;
 
             for (const auto &g : gates)
             {
-                sim_sv_gates.push_back(getSVGate(g));
+                auto it = gateMatrixFunctions.find(g.op_name);
+
+                SVGate sv_gate(g.op_name, g.qubit, g.ctrl);
+
+                if (it != gateMatrixFunctions.end())
+                {
+                    sv_gate.op_name = it->second(g, sv_gate.gm_real, sv_gate.gm_imag);
+                }
+                else if (g.op_name == OP::MA)
+                {
+                    sv_gate.qubit = g.repetition;
+                }
+                else if (!(g.op_name == OP::M || g.op_name == OP::RESET))
+                {
+                    std::cout << g.op_name << std::endl;
+                    throw std::runtime_error("Invalid gate operation");
+                }
+
+                sim_sv_gates.push_back(sv_gate);
             }
             return sim_sv_gates;
-        }
-
-        DMGate getDMGate(const Gate &g)
-        {
-            auto it = gateMatrixFunctions.find(g.op_name);
-
-            DMGate dm_gate(g.op_name, g.qubit, g.ctrl);
-
-            if (it != gateMatrixFunctions.end())
-            {
-                auto new_op = it->second(g, dm_gate.gm_real, dm_gate.gm_imag);
-
-                dm_gate.op_name = new_op == OP::C1 ? OP::C2 : OP::C4;
-            }
-            else if (g.op_name == OP::MA)
-            {
-                dm_gate.qubit = g.repetition;
-            }
-            else if (!(g.op_name == OP::M || g.op_name == OP::RESET))
-            {
-                throw std::runtime_error("Invalid gate operation");
-            }
-
-            return dm_gate;
-        }
-
-        std::vector<DMGate> generateDMGates(const std::vector<Gate> &gates)
-        {
-            std::vector<DMGate> sim_dm_gates;
-
-            for (const auto &g : gates)
-            {
-                sim_dm_gates.push_back(getDMGate(g));
-            }
-            return sim_dm_gates;
         }
 
     private:

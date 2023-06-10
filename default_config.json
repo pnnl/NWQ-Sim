@@ -1,10 +1,7 @@
 {
     "PRINT_SIM_TRACE": true,
-    "logFilePath": "/var/log/myapp.log",
-    "maxRetries": 5,
-    "timeoutSeconds": 10.5,
-    "resourcePaths": [
-        "/path/to/resource1",
-        "/path/to/resource2"
-    ]
+    "ENABLE_NOISE": false,
+    "ENABLE_FUSION": false,
+    "DEVICE_CONFIG_PATH": "../data/device/",
+    "DEVICE_CONFIG_FILE": "dummy_ibmq12"
 }

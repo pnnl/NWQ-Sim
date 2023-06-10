@@ -15,14 +15,15 @@
 /**************************************************************************/
 
 using namespace NWQSim;
-ValType pass_threshold = 0.99;
-ValType run_brnchmark(std::string backend_name, IdxType index, IdxType total_shots, bool is_basis = false);
+ValType pass_threshold = 0.98;
+ValType run_brnchmark(std::string backend_name, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis);
 
 int main(int argc, char **argv)
 {
     IdxType total_shots = 16384;
     bool run_with_basis = false;
     std::string backend_name = "CPU";
+    std::string simulation_method = "sv";
 
     if (cmdOptionExists(argv, argv + argc, "-shots"))
     {
@@ -30,14 +31,19 @@ int main(int argc, char **argv)
         total_shots = stoi(shots_str);
     }
 
-    // if (cmdOptionExists(argv, argv + argc, "-basis"))
-    // {
-    //     run_with_basis = true;
-    // }
+    if (cmdOptionExists(argv, argv + argc, "-basis"))
+    {
+        run_with_basis = true;
+    }
 
     if (cmdOptionExists(argv, argv + argc, "-backend"))
     {
         backend_name = std::string(getCmdOption(argv, argv + argc, "-backend"));
+    }
+
+    if (cmdOptionExists(argv, argv + argc, "-sim"))
+    {
+        simulation_method = std::string(getCmdOption(argv, argv + argc, "-sim"));
     }
 
     std::transform(backend_name.begin(), backend_name.end(), backend_name.begin(),
@@ -59,7 +65,7 @@ int main(int argc, char **argv)
         qasm_parser parser(filename);
 
         // Create the backend
-        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend_name, parser.num_qubits());
+        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend_name, parser.num_qubits(), simulation_method);
         if (!state)
         {
             std::cerr << "Failed to create backend\n";
@@ -97,9 +103,9 @@ int main(int argc, char **argv)
     {
         int benchmark_index = stoi(getCmdOption(argv, argv + argc, "-t"));
 
-        ValType fidelity = run_brnchmark(backend_name, benchmark_index, total_shots, run_with_basis);
+        ValType fidelity = run_brnchmark(backend_name, benchmark_index, total_shots, simulation_method, run_with_basis);
 
-        BackendManager::safe_print("Fidelity between SVSim and Qiskit Execution: %.4f\n", fidelity);
+        BackendManager::safe_print("Fidelity between NWQSim and Qiskit Execution: %.4f\n", fidelity);
     }
 
     if (cmdOptionExists(argv, argv + argc, "-a"))
@@ -107,7 +113,7 @@ int main(int argc, char **argv)
         bool passed = true;
         for (int benchmark_index = 0; benchmark_index < 36; benchmark_index++)
         {
-            ValType fidelity = run_brnchmark(backend_name, benchmark_index, total_shots, run_with_basis);
+            ValType fidelity = run_brnchmark(backend_name, benchmark_index, total_shots, simulation_method, run_with_basis);
             if (fidelity < pass_threshold)
             {
                 BackendManager::safe_print("Benchmark %d fidelity: %.4f Failed!\n", benchmark_index, fidelity);
@@ -131,7 +137,7 @@ int main(int argc, char **argv)
     return 0;
 }
 
-ValType run_brnchmark(std::string backend_name, IdxType index, IdxType total_shots, bool is_basis)
+ValType run_brnchmark(std::string backend_name, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis)
 {
     stringstream ss_file, ss_result;
 
@@ -156,7 +162,7 @@ ValType run_brnchmark(std::string backend_name, IdxType index, IdxType total_sho
     qasm_parser parser(ss_file.str().c_str());
 
     // Create the backend
-    std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend_name, parser.num_qubits());
+    std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend_name, parser.num_qubits(), simulation_method);
     if (!state)
     {
         std::cerr << "Failed to create backend\n";

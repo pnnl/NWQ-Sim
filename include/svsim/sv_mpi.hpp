@@ -6,7 +6,7 @@
 #include "../public/gate.hpp"
 #include "../public/circuit.hpp"
 
-#include "../private/circuit_pass/fusion.hpp"
+#include "../circuit_pass/fusion_sv.hpp"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
 #include "../private/config.hpp"
@@ -108,7 +108,7 @@ namespace NWQSim
         {
             IdxType origional_gates = circuit->num_gates();
 
-            std::vector<SVGate> gates = fuse_circuit(circuit);
+            std::vector<SVGate> gates = fuse_circuit_sv(circuit);
 
             IdxType n_gates = gates.size();
             assert(circuit->num_qubits() == n_qubits);
@@ -222,7 +222,7 @@ namespace NWQSim
             return result;
         }
 
-        void print_res_sv() override
+        void print_res_state() override
         {
             ValType *sv_diag_real = NULL;
             ValType *sv_diag_imag = NULL;

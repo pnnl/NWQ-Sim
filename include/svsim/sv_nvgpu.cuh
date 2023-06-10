@@ -9,7 +9,7 @@
 #include "../private/nvgpu_util.cuh"
 #include "../private/macros.hpp"
 
-#include "../private/circuit_pass/fusion.hpp"
+#include "../circuit_pass/fusion_sv.hpp"
 
 #include <assert.h>
 #include <random>
@@ -118,7 +118,7 @@ namespace NWQSim
         void sim(Circuit *circuit) override
         {
             IdxType origional_gates = circuit->num_gates();
-            fuse_circuit(circuit);
+            fuse_circuit_sv(circuit);
             IdxType n_measures = prepare_measure(circuit->get_gates());
             // Copy the circuit to GPU
             IdxType n_gates = circuit->num_gates();
@@ -210,7 +210,7 @@ namespace NWQSim
             return 0;
         }
 
-        void print_res_sv() override
+        void print_res_state() override
         {
             cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, sv_size, cudaMemcpyDeviceToHost));
             cudaSafeCall(cudaMemcpy(sv_imag_cpu, sv_imag, sv_size, cudaMemcpyDeviceToHost));

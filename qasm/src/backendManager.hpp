@@ -4,6 +4,7 @@
 #include "public/util.hpp"
 
 #include "svsim/sv_cpu.hpp"
+#include "dmsim/dm_cpu.hpp"
 
 #ifdef OMP_ENABLED
 #include "svsim/sv_omp.hpp"
@@ -77,12 +78,15 @@ public:
 #endif
     }
 
-    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits)
+    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "sv")
     {
 
         if (backend == "CPU")
         {
-            return std::make_shared<NWQSim::SV_CPU>(numQubits);
+            if (simulator_method == "sv")
+                return std::make_shared<NWQSim::SV_CPU>(numQubits);
+            else
+                return std::make_shared<NWQSim::DM_CPU>(numQubits);
         }
 
 #ifdef OMP_ENABLED

@@ -7,7 +7,7 @@
 #include "../public/circuit.hpp"
 #include "../private/config.hpp"
 
-#include "../private/circuit_pass/fusion.hpp"
+#include "../circuit_pass/fusion.hpp"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
 
@@ -145,7 +145,7 @@ namespace NWQSim
             return result;
         }
 
-        void print_res_sv() override
+        void print_res_state() override
         {
             IdxType num = ((IdxType)1 << n_qubits);
             printf("----- SVSim ------\n");
