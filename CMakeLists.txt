@@ -15,6 +15,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
+set(CMAKE_C_COMPILER cc)
+set(CMAKE_CXX_COMPILER CC)
+
 # Set the nvshmem home directory
 list(APPEND CMAKE_PREFIX_PATH $ENV{HOME}/nvshmem)
 
@@ -30,6 +33,7 @@ find_package(CUDAToolkit)
 find_package(MPI)
 find_package(OpenMP)
 find_package(NVSHMEM)
+
 # Print package statuses
 message(STATUS "CUDA found: ${CUDAToolkit_FOUND}")
 message(STATUS "MPI found: ${MPI_FOUND}")

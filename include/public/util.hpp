@@ -4,6 +4,8 @@
 #include <iostream>
 #include <sys/time.h>
 #include <vector>
+#include <chrono>
+#include <iomanip>
 
 /***********************************************
  * Constant configuration:
@@ -15,11 +17,10 @@
 /* Constant value of 0.5 */
 #define HALF 0.5
 
-#define DEFAULT_REPETITIONS 1024
-
 /* Error bar for purity check and other error check */
 #define ERROR_BAR (1e-3)
 
+#define PRINT_PROGRESS_BAR
 namespace NWQSim
 {
     /* Basic data type for indices */
@@ -27,6 +28,44 @@ namespace NWQSim
     /* Basic data type for value */
     using ValType = double;
 
+    std::string formatDuration(std::chrono::seconds input_seconds)
+    {
+        using namespace std::chrono;
+        hours hrs = duration_cast<hours>(input_seconds % 24h);
+        minutes mins = duration_cast<minutes>(input_seconds % 1h);
+        seconds secs = duration_cast<seconds>(input_seconds % 1min);
+        return (hrs.count() < 10 ? "0" : "") + std::to_string(hrs.count()) + ":" +
+               (mins.count() < 10 ? "0" : "") + std::to_string(mins.count()) + ":" +
+               (secs.count() < 10 ? "0" : "") + std::to_string(secs.count());
+    }
+
+    void printProgressBar(int current, int total, std::chrono::time_point<std::chrono::steady_clock> start_time)
+    {
+        const int barWidth = 50;
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count();
+        auto estimated = (total > current && current > 0) ? elapsed * total / current : elapsed;
+        auto remaining = estimated - elapsed;
+
+        std::cout << "\033[1;34m[";
+        int pos = barWidth * current / total;
+        for (int i = 0; i < barWidth; ++i)
+        {
+            if (i < pos)
+                std::cout << "=";
+            else if (i == pos)
+                std::cout << ">";
+            else
+                std::cout << " ";
+        }
+
+        std::cout << "] "
+                  << "\033[1;32m" << int(current * 100.0 / total) << " % "
+                  << "\033[1;33mElapsed: " << formatDuration(std::chrono::seconds(elapsed))
+                  << " Estimated: " << formatDuration(std::chrono::seconds(estimated))
+                  << " Remaining: " << formatDuration(std::chrono::seconds(remaining)) << "\033[0m  \r";
+        std::cout.flush();
+    }
     bool hasEvenParity(unsigned long long x, const std::vector<size_t> &in_qubitIndices)
     {
         size_t count = 0;

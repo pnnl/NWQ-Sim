@@ -69,7 +69,7 @@ private:
 public:
     qasm_parser(const char *filename);
     IdxType num_qubits();
-    map<string, IdxType> *execute(shared_ptr<QuantumState> state, IdxType repetition = DEFAULT_REPETITIONS);
+    map<string, IdxType> *execute(shared_ptr<QuantumState> state, IdxType repetition);
     ~qasm_parser();
 };
 

@@ -113,7 +113,7 @@ namespace NWQSim
             return results[0];
         }
 
-        IdxType *measure_all(IdxType repetition = DEFAULT_REPETITIONS) override
+        IdxType *measure_all(IdxType repetition) override
         {
             MA_GATE(repetition);
             return results;
@@ -182,8 +182,17 @@ namespace NWQSim
 
         virtual void simulation_kernel(const std::vector<SVGate> &gates)
         {
-            for (auto g : gates)
+            auto start = std::chrono::steady_clock::now();
+            int n_gates = gates.size();
+            for (int i = 0; i < n_gates; i++)
             {
+
+#ifdef PRINT_PROGRESS_BAR
+
+                printProgressBar(i, n_gates, start);
+#endif
+                auto g = gates[i];
+
                 if (g.op_name == OP::C1)
                 {
                     C1_GATE(g.gm_real, g.gm_imag, g.qubit);
@@ -432,22 +441,6 @@ namespace NWQSim
             if (abs(purity - 1.0) > ERROR_BAR)
                 printf("MA: Purity Check fails with %lf\n", purity);
 
-            // if (repetition < n_size)
-            // {
-            //     for (IdxType j = 0; j < n_size; j++)
-            //     {
-            //         ValType lower = m_real[j];
-            //         ValType upper = (j + 1 == n_size) ? 1 : m_real[j + 1];
-            //         for (IdxType i = 0; i < repetition; i++)
-            //         {
-            //             ValType r = uni_dist(rng);
-            //             if (lower <= r && r < upper)
-            //                 results[i] = j;
-            //         }
-            //     }
-            // }
-            // else
-            // {
             for (IdxType i = 0; i < repetition; i++)
             {
                 IdxType lo = 0;
@@ -464,7 +457,6 @@ namespace NWQSim
                 }
                 results[i] = lo;
             }
-            // }
         }
 
         //============== Reset ================

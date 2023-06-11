@@ -69,16 +69,18 @@ namespace NWQSim::Config
     {
         if (i_proc == 0)
         {
-            std::cout << "Running with the following configuration:" << std::endl;
-            std::cout << "PRINT_SIM_TRACE: " << (PRINT_SIM_TRACE ? "True" : "False") << std::endl;
-            std::cout << "ENABLE_NOISE: " << (ENABLE_NOISE ? "True" : "False") << std::endl;
-            std::cout << "ENABLE_FUSION: " << (ENABLE_FUSION ? "True" : "False") << std::endl;
-
-            std::cout << "DEVICE_CONFIG_PATH: " << DEVICE_CONFIG_PATH << std::endl;
-            std::cout << "DEVICE_CONFIG_FILE: " << DEVICE_CONFIG_FILE << std::endl;
-
-            std::cout << std::endl
-                      << std::endl;
+            std::cout << "\033[1;34m\nRunning simulation with the following configuration:\033[0m" << std::endl;
+            std::cout << std::left << std::setw(40) << "\033[1;33mSim Trace:\033[0m"
+                      << "\033[1;32m" << (PRINT_SIM_TRACE ? "Enabled" : "Disabled") << "\033[0m" << std::endl;
+            std::cout << std::left << std::setw(40) << "\033[1;33mFusion:\033[0m"
+                      << "\033[1;32m" << (ENABLE_FUSION ? "Enabled" : "Disabled") << "\033[0m" << std::endl;
+            std::cout << std::left << std::setw(40) << "\033[1;33mNoise:\033[0m"
+                      << "\033[1;32m" << (ENABLE_NOISE ? "Enabled" : "Disabled") << "\033[0m" << std::endl;
+            std::cout << std::left << std::setw(40) << "\033[1;33mDevice Config Path:\033[0m"
+                      << "\033[1;32m" << (DEVICE_CONFIG_PATH.empty() ? "Not Set" : DEVICE_CONFIG_PATH) << "\033[0m" << std::endl;
+            std::cout << std::left << std::setw(40) << "\033[1;33mDevice Config File:\033[0m"
+                      << "\033[1;32m" << (DEVICE_CONFIG_FILE.empty() ? "Not Set" : DEVICE_CONFIG_FILE) << "\033[0m" << std::endl;
+            std::cout << std::endl;
         }
     }
 

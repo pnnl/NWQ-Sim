@@ -130,7 +130,7 @@ namespace NWQSim
             return results[0];
         }
 
-        IdxType *measure_all(IdxType repetition = DEFAULT_REPETITIONS) override
+        IdxType *measure_all(IdxType repetition) override
         {
             MA_GATE(repetition);
             return results;
@@ -202,8 +202,17 @@ namespace NWQSim
 
         virtual void simulation_kernel(const std::vector<DMGate> &gates)
         {
-            for (auto g : gates)
+            auto start = std::chrono::steady_clock::now();
+            int n_gates = gates.size();
+            for (int i = 0; i < n_gates; i++)
             {
+
+#ifdef PRINT_PROGRESS_BAR
+
+                printProgressBar(i, n_gates, start);
+#endif
+                auto g = gates[i];
+
                 if (g.op_name == OP::C2)
                 {
                     C2_GATE(g.gm_real, g.gm_imag, g.qubit, g.qubit + n_qubits);

@@ -8,8 +8,9 @@
 #include "../private/config.hpp"
 #include "../private/nvgpu_util.cuh"
 #include "../private/macros.hpp"
+#include "../private/sim_gate.hpp"
 
-#include "../circuit_pass/fusion_sv.hpp"
+#include "../circuit_pass/fusion.hpp"
 
 #include <assert.h>
 #include <random>
@@ -144,11 +145,15 @@ namespace NWQSim
         void sim(Circuit *circuit) override
         {
             IdxType origional_gates = circuit->num_gates();
-            fuse_circuit_sv(circuit);
+
             IdxType n_measures = prepare_measure(circuit->get_gates());
+
+            std::vector<SVGate> cpu_vec = fuse_circuit(circuit);
+
             // Copy the circuit to GPU
-            IdxType n_gates = circuit->num_gates();
-            copy_gates_to_gpu(circuit);
+            copy_gates_to_gpu(cpu_vec);
+
+            IdxType n_gates = cpu_vec.size();
 
             SV_NVGPU_MPI *sv_gpu;
             SAFE_ALOC_GPU(sv_gpu, sizeof(SV_NVGPU_MPI));
@@ -247,7 +252,7 @@ namespace NWQSim
             return results[0];
         }
 
-        IdxType *measure_all(IdxType repetition = DEFAULT_REPETITIONS) override
+        IdxType *measure_all(IdxType repetition) override
         {
             Circuit *circuit = new Circuit(n_qubits);
             circuit->MA(repetition);
@@ -330,14 +335,12 @@ namespace NWQSim
         MPI_Comm comm_global;
 
         // GPU-side simulator instance
-        Gate *gates_gpu = NULL;
+        SVGate *gates_gpu = NULL;
 
-        void copy_gates_to_gpu(Circuit *circuit)
+        void copy_gates_to_gpu(std::vector<SVGate> &cpu_vec)
         {
-            std::vector<Gate> cpu_vec = circuit->get_gates();
-
             // Allocate memory on CPU
-            size_t vec_size = cpu_vec.size() * sizeof(Gate);
+            size_t vec_size = cpu_vec.size() * sizeof(SVGate);
 
             // Allocate memory on GPU
             SAFE_FREE_GPU(gates_gpu);
@@ -1169,14 +1172,13 @@ namespace NWQSim
         for (IdxType t = 0; t < n_gates; t++)
         {
             OP op_name = (sv_gpu->gates_gpu)[t].op_name;
-            IdxType n_qubits = (sv_gpu->gates_gpu)[t].n_qubits;
             IdxType qubit = (sv_gpu->gates_gpu)[t].qubit;
 
             IdxType ctrl = (sv_gpu->gates_gpu)[t].ctrl;
             ValType *gm_real = (sv_gpu->gates_gpu)[t].gm_real;
             ValType *gm_imag = (sv_gpu->gates_gpu)[t].gm_imag;
 
-            IdxType repetition = (sv_gpu->gates_gpu)[t].repetition;
+            IdxType repetition = (sv_gpu->gates_gpu)[t].qubit;
 
             // only need sync when operating on remote qubits
             if ((ctrl >= lg2_m_gpu) || (qubit >= lg2_m_gpu))
@@ -1186,25 +1188,11 @@ namespace NWQSim
                     nvshmem_barrier_all();
             }
 
-            if (op_name == OP::RESET)
-            {
-                sv_gpu->RESET_GATE(qubit);
-            }
-            else if (op_name == OP::M)
-            {
-                sv_gpu->M_GATE(qubit, cur_index);
-                cur_index++;
-            }
-            else if (op_name == OP::MA)
-            {
-                sv_gpu->MA_GATE(repetition, cur_index);
-                cur_index += repetition;
-            }
-            else if (n_qubits == 1)
+            if (op_name == OP::C1)
             {
                 sv_gpu->C1V2_GATE(gm_real, gm_imag, qubit);
             }
-            else if (n_qubits == 2)
+            else if (op_name == OP::C2)
             {
                 if ((ctrl >= lg2_m_gpu) && (qubit >= lg2_m_gpu))
                 {
@@ -1218,6 +1206,20 @@ namespace NWQSim
                 {
                     sv_gpu->C2V1_GATE(gm_real, gm_imag, ctrl, qubit);
                 }
+            }
+            else if (op_name == OP::RESET)
+            {
+                sv_gpu->RESET_GATE(qubit);
+            }
+            else if (op_name == OP::M)
+            {
+                sv_gpu->M_GATE(qubit, cur_index);
+                cur_index++;
+            }
+            else if (op_name == OP::MA)
+            {
+                sv_gpu->MA_GATE(repetition, cur_index);
+                cur_index += repetition;
             }
             // only need sync when operating on remote qubits
             if ((ctrl >= lg2_m_gpu) || (qubit >= lg2_m_gpu))
