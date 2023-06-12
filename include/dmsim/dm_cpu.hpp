@@ -92,7 +92,7 @@ namespace NWQSim
         {
             IdxType origional_gates = circuit->num_gates();
 
-            std::vector<DMGate> gates = fuse_circuit_dm_v2(circuit);
+            std::vector<DMGate> gates = fuse_circuit_dm(circuit);
 
             // getDMGates(circuit->get_gates(), circuit->num_qubits());
 

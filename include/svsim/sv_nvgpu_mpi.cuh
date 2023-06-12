@@ -148,7 +148,7 @@ namespace NWQSim
 
             IdxType n_measures = prepare_measure(circuit->get_gates());
 
-            std::vector<SVGate> cpu_vec = fuse_circuit(circuit);
+            std::vector<SVGate> cpu_vec = fuse_circuit_sv(circuit);
 
             // Copy the circuit to GPU
             copy_gates_to_gpu(cpu_vec);

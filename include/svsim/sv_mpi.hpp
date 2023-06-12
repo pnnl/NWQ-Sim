@@ -108,7 +108,7 @@ namespace NWQSim
         {
             IdxType origional_gates = circuit->num_gates();
 
-            std::vector<SVGate> gates = fuse_circuit(circuit);
+            std::vector<SVGate> gates = fuse_circuit_sv(circuit);
 
             IdxType n_gates = gates.size();
             assert(circuit->num_qubits() == n_qubits);

@@ -10,7 +10,7 @@
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
 
-#include "../circuit_pass/fusion_dm.hpp"
+#include "../circuit_pass/fusion.hpp"
 
 #include <assert.h>
 #include <random>

@@ -575,7 +575,7 @@ namespace NWQSim
         return fused_circuit;
     }
 
-    std::vector<SVGate> fuse_circuit(Circuit *circuit)
+    std::vector<SVGate> fuse_circuit_sv(Circuit *circuit)
     {
         std::vector<SVGate> gates = GateFactory::getInstance().getSVGates(circuit->get_gates());
 
@@ -588,7 +588,7 @@ namespace NWQSim
         return fuse_circuit_gates(gates, n_qubits, SV);
     }
 
-    std::vector<DMGate> fuse_circuit_dm_v2(Circuit *circuit)
+    std::vector<DMGate> fuse_circuit_dm(Circuit *circuit)
     {
         std::vector<DMGate> gates = getDMGates(circuit->get_gates(), circuit->num_qubits());
 
