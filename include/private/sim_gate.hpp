@@ -6,12 +6,6 @@
 namespace NWQSim
 {
 
-    enum SIM_TYPE
-    {
-        SV,
-        DM
-    };
-
     class SimGate
     {
     public:

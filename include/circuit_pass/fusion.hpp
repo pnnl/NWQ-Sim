@@ -19,15 +19,39 @@
 #include <cstring>
 #include <algorithm>
 
-#include "../private/sim_gate.hpp"
 #include "../private/config.hpp"
 #include "../public/circuit.hpp"
 #include "../public/util.hpp"
 
+#include "../private/sim_gate.hpp"
 #include "../private/gate_factory/sv_gates.hpp"
+#include "../private/gate_factory/dm_gates.hpp"
+
+#define vec_dim_1q(sim_type) (sim_type == SV ? 2 : 4)
+#define vec_dim_2q(sim_type) (sim_type == SV ? 4 : 16)
+#define vec_length_1q(sim_type) (sim_type == SV ? 4 : 16)
+#define vec_length_2q(sim_type) (sim_type == SV ? 16 : 256)
 
 namespace NWQSim
 {
+    enum SimType
+    {
+        SV,
+        DM
+    };
+
+    enum OP get_op(IdxType n_qubits, SimType sim_type)
+    {
+        if (sim_type == SV)
+        {
+            return n_qubits == 1 ? OP::C1 : OP::C2;
+        }
+        else
+        {
+            return n_qubits == 1 ? OP::C2 : OP::C4;
+        }
+    }
+
     // This is essentially matrix multiplication
     template <typename GateType>
     void fuse_gate(const GateType &g0, const GateType &g1, GateType &g, const IdxType dim)
@@ -72,35 +96,52 @@ namespace NWQSim
 
     // This function is used for switch ctrl and qubit
     template <typename GateType>
-    void reverse_ctrl_qubit(const GateType &g0, GateType &g)
+    void reverse_ctrl_qubit(const GateType &g0, GateType &g, const SimType sim_type)
     {
-        GateType SWAP(OP::C2, -1, -1);
-        SWAP.gm_real[0] = SWAP.gm_real[6] = SWAP.gm_real[9] = SWAP.gm_real[15] = 1;
-        GateType tmp_g(OP::C2, -1, -1);
-        fuse_gate(g0, SWAP, tmp_g, 4);
-        fuse_gate(SWAP, tmp_g, g, 4);
+
+        GateType SWAP_SV(get_op(2, sim_type), -1, -1);
+        SWAP_SV.gm_real[0] = SWAP_SV.gm_real[6] = SWAP_SV.gm_real[9] = SWAP_SV.gm_real[15] = 1;
+
+        GateType SWAP(SWAP_SV);
+
+        if (sim_type == DM)
+            kron(SWAP_SV, SWAP_SV, SWAP, 4); // create SWAP superop for DM
+
+        GateType tmp_g(get_op(2, sim_type), -1, -1);
+        fuse_gate(g0, SWAP, tmp_g, vec_dim_2q(sim_type));
+        fuse_gate(SWAP, tmp_g, g, vec_dim_2q(sim_type));
     }
 
     // This is for 2-qubit gate absorbing 1-qubit gate
     template <typename GateType>
-    void expand_ctrl(const GateType &g0, GateType &g, const IdxType ctrl) // This is to krok I for the ctrl qubit position
+    void expand_ctrl(const GateType &g0, GateType &g, const IdxType ctrl, const SimType sim_type) // This is to krok I for the ctrl qubit position
     {
-        GateType gI(OP::C1, ctrl, -1);
-        gI.gm_real[0] = gI.gm_real[3] = 1; // set I
-        kron(gI, g0, g, 2);
+        GateType gI(get_op(1, sim_type), ctrl, -1);
+
+        if (sim_type == SV)
+            gI.gm_real[0] = gI.gm_real[3] = 1; // set I for SV
+        else
+            gI.gm_real[0] = gI.gm_real[5] = gI.gm_real[10] = gI.gm_real[15] = 1; // set I for DM
+
+        kron(gI, g0, g, vec_dim_1q(sim_type));
     }
 
     template <typename GateType>
-    void expand_qubit(const GateType &g0, GateType &g, const IdxType qubit)
+    void expand_qubit(const GateType &g0, GateType &g, const IdxType qubit, const SimType sim_type)
     {
-        GateType gI(OP::C1, qubit, -1);
-        gI.gm_real[0] = gI.gm_real[3] = 1; // set I
-        kron(g0, gI, g, 2);
+        GateType gI(get_op(1, sim_type), qubit, -1);
+
+        if (sim_type == SV)
+            gI.gm_real[0] = gI.gm_real[3] = 1; // set I for SV
+        else
+            gI.gm_real[0] = gI.gm_real[5] = gI.gm_real[10] = gI.gm_real[15] = 1; // set I for DM
+
+        kron(g0, gI, g, vec_dim_1q(sim_type));
     }
 
     // This function is to fuse C2 gates (allows switching ctrl/qubit, e.g., in a SWAP gate)
     template <typename GateType>
-    void gate_fusion_2q(const std::vector<GateType> &circuit_in, std::vector<GateType> &circuit_out, const IdxType n_qubits)
+    void gate_fusion_2q(const std::vector<GateType> &circuit_in, std::vector<GateType> &circuit_out, const IdxType n_qubits, const SimType sim_type)
     {
         // prepare
         IdxType *table = new IdxType[n_qubits * n_qubits];
@@ -144,7 +185,7 @@ namespace NWQSim
                 }
                 circuit_out.push_back(g);
             }
-            else if (circuit_in[i].op_name == OP::C1) // 1-qubit gate
+            else if (circuit_in[i].op_name == get_op(1, sim_type)) // 1-qubit gate
             {
                 IdxType qubit = circuit_in[i].qubit;
                 GateType g(circuit_in[i]);
@@ -155,7 +196,7 @@ namespace NWQSim
                 }
                 circuit_out.push_back(g);
             }
-            else if (circuit_in[i].op_name == OP::C2) // 2-qubit gate
+            else if (circuit_in[i].op_name == get_op(2, sim_type)) // 2-qubit gate
             {
                 IdxType qubit = circuit_in[i].qubit;
                 IdxType ctrl = circuit_in[i].ctrl;
@@ -165,7 +206,7 @@ namespace NWQSim
                 //  M = SWAP N SWAP
                 if (ctrl > qubit)
                 {
-                    reverse_ctrl_qubit(circuit_in[i], g0);
+                    reverse_ctrl_qubit(circuit_in[i], g0, sim_type);
                     g0.ctrl = circuit_in[i].qubit;
                     ctrl = circuit_in[i].qubit;
                     g0.qubit = circuit_in[i].ctrl;
@@ -188,10 +229,10 @@ namespace NWQSim
                 else // able to fuse
                 {
                     GateType &g1 = circuit_out[table[ctrl * n_qubits + qubit]];
-                    GateType final_g(OP::C2, -1, -1);
-                    fuse_gate(g0, g1, final_g, 4);
-                    memcpy(g1.gm_real, final_g.gm_real, 16 * sizeof(ValType));
-                    memcpy(g1.gm_imag, final_g.gm_imag, 16 * sizeof(ValType));
+                    GateType final_g(get_op(2, sim_type), -1, -1);
+                    fuse_gate(g0, g1, final_g, vec_dim_2q(sim_type));
+                    memcpy(g1.gm_real, final_g.gm_real, vec_length_2q(sim_type) * sizeof(ValType));
+                    memcpy(g1.gm_imag, final_g.gm_imag, vec_length_2q(sim_type) * sizeof(ValType));
                 }
             }
         }
@@ -202,7 +243,7 @@ namespace NWQSim
 
     // This function is to fuse C1 gates in a circuit
     template <typename GateType>
-    void gate_fusion_1q(const std::vector<GateType> &circuit_in, std::vector<GateType> &circuit_out, const IdxType n_qubits)
+    void gate_fusion_1q(const std::vector<GateType> &circuit_in, std::vector<GateType> &circuit_out, const IdxType n_qubits, const SimType sim_type)
     {
         // prepare
         IdxType *table = new IdxType[n_qubits];
@@ -234,7 +275,7 @@ namespace NWQSim
                 for (IdxType q = 0; q < n_qubits; q++)
                     canfuse[q] = false;
             }
-            else if (circuit_in[i].op_name == OP::C1) // 1-qubit gate
+            else if (circuit_in[i].op_name == get_op(1, sim_type)) // 1-qubit gate
             {
                 IdxType qubit = circuit_in[i].qubit;
                 if (canfuse[qubit] == false) // cannot fuse
@@ -250,22 +291,25 @@ namespace NWQSim
                     const GateType &g0 = circuit_in[i];
                     GateType &g1 = circuit_out[table[qubit]];
 
-                    ValType res_real[4] = {0};
-                    ValType res_imag[4] = {0};
-                    for (int m = 0; m < 2; m++)
-                        for (int n = 0; n < 2; n++)
-                            for (int k = 0; k < 2; k++)
+                    ValType res_real[16] = {0};
+                    ValType res_imag[16] = {0};
+
+                    IdxType dim = vec_dim_1q(sim_type);
+                    for (int m = 0; m < dim; m++)
+                        for (int n = 0; n < dim; n++)
+                            for (int k = 0; k < dim; k++)
                             {
-                                res_real[m * 2 + n] += g0.gm_real[m * 2 + k] * g1.gm_real[k * 2 + n] -
-                                                       g0.gm_imag[m * 2 + k] * g1.gm_imag[k * 2 + n];
-                                res_imag[m * 2 + n] += g0.gm_real[m * 2 + k] * g1.gm_imag[k * 2 + n] +
-                                                       g0.gm_imag[m * 2 + k] * g1.gm_real[k * 2 + n];
+                                res_real[m * dim + n] += g0.gm_real[m * dim + k] * g1.gm_real[k * dim + n] -
+                                                         g0.gm_imag[m * dim + k] * g1.gm_imag[k * dim + n];
+                                res_imag[m * dim + n] += g0.gm_real[m * dim + k] * g1.gm_imag[k * dim + n] +
+                                                         g0.gm_imag[m * dim + k] * g1.gm_real[k * dim + n];
                             }
-                    memcpy(g1.gm_real, res_real, 4 * sizeof(ValType));
-                    memcpy(g1.gm_imag, res_imag, 4 * sizeof(ValType));
+
+                    memcpy(g1.gm_real, res_real, vec_length_1q(sim_type) * sizeof(ValType));
+                    memcpy(g1.gm_imag, res_imag, vec_length_1q(sim_type) * sizeof(ValType));
                 }
             }
-            else if (circuit_in[i].op_name == OP::C2) // 2-qubit gate
+            else if (circuit_in[i].op_name == get_op(2, sim_type)) // 2-qubit gate
             {
                 canfuse[circuit_in[i].qubit] = false;
                 canfuse[circuit_in[i].ctrl] = false;
@@ -279,7 +323,7 @@ namespace NWQSim
     }
 
     template <typename GateType>
-    void gate_fusion_2q_absorb_1q_forward(const std::vector<GateType> &circuit_in, std::vector<GateType> &circuit_out, const IdxType n_qubits)
+    void gate_fusion_2q_absorb_1q_forward(const std::vector<GateType> &circuit_in, std::vector<GateType> &circuit_out, const IdxType n_qubits, const SimType sim_type)
     {
         // prepare
         IdxType *table = new IdxType[n_qubits * n_qubits];
@@ -323,7 +367,7 @@ namespace NWQSim
                 GateType g(circuit_in[i]);
                 circuit_out.push_back(g);
             }
-            else if (circuit_in[i].op_name == OP::C1) // 1-qubit gate
+            else if (circuit_in[i].op_name == get_op(1, sim_type)) // 1-qubit gate
             {
                 IdxType qubit = circuit_in[i].qubit;
                 bool fused = false;
@@ -334,13 +378,15 @@ namespace NWQSim
                     {
                         const GateType &g0 = circuit_in[i];
                         GateType &g1 = circuit_out[table[j * n_qubits + qubit]];
-                        GateType expand_g(OP::C2, -1, -1);
-                        GateType final_g(OP::C2, -1, -1);
-                        expand_ctrl(g0, expand_g, j);
+
+                        GateType expand_g(get_op(2, sim_type), -1, -1);
+                        GateType final_g(get_op(2, sim_type), -1, -1);
+
+                        expand_ctrl(g0, expand_g, j, sim_type);
                         // now ready to fuse
-                        fuse_gate(expand_g, g1, final_g, 4);
-                        memcpy(g1.gm_real, final_g.gm_real, 16 * sizeof(ValType));
-                        memcpy(g1.gm_imag, final_g.gm_imag, 16 * sizeof(ValType));
+                        fuse_gate(expand_g, g1, final_g, vec_dim_2q(sim_type));
+                        memcpy(g1.gm_real, final_g.gm_real, vec_length_2q(sim_type) * sizeof(ValType));
+                        memcpy(g1.gm_imag, final_g.gm_imag, vec_length_2q(sim_type) * sizeof(ValType));
                         fused = true;
                         break;
                     }
@@ -349,13 +395,13 @@ namespace NWQSim
                     {
                         const GateType &g0 = circuit_in[i];
                         GateType &g1 = circuit_out[table[qubit * n_qubits + j]];
-                        GateType expand_g(OP::C2, -1, -1);
-                        expand_qubit(g0, expand_g, j);
+                        GateType expand_g(get_op(2, sim_type), -1, -1);
+                        expand_qubit(g0, expand_g, j, sim_type);
                         // now ready to fuse
-                        GateType final_g(OP::C2, -1, -1);
-                        fuse_gate(expand_g, g1, final_g, 4);
-                        memcpy(g1.gm_real, final_g.gm_real, 16 * sizeof(ValType));
-                        memcpy(g1.gm_imag, final_g.gm_imag, 16 * sizeof(ValType));
+                        GateType final_g(get_op(2, sim_type), -1, -1);
+                        fuse_gate(expand_g, g1, final_g, vec_dim_2q(sim_type));
+                        memcpy(g1.gm_real, final_g.gm_real, vec_length_2q(sim_type) * sizeof(ValType));
+                        memcpy(g1.gm_imag, final_g.gm_imag, vec_length_2q(sim_type) * sizeof(ValType));
                         fused = true;
                         break;
                     }
@@ -371,7 +417,7 @@ namespace NWQSim
                     circuit_out.push_back(g);
                 }
             }
-            else if (circuit_in[i].op_name == OP::C2) // 2-qubit gate
+            else if (circuit_in[i].op_name == get_op(2, sim_type)) // 2-qubit gate
             {
                 IdxType qubit = circuit_in[i].qubit;
                 IdxType ctrl = circuit_in[i].ctrl;
@@ -394,7 +440,7 @@ namespace NWQSim
     }
 
     template <typename GateType>
-    void gate_fusion_2q_absorb_1q_backward(const std::vector<GateType> &circuit_in, std::vector<GateType> &circuit_out, const IdxType n_qubits)
+    void gate_fusion_2q_absorb_1q_backward(const std::vector<GateType> &circuit_in, std::vector<GateType> &circuit_out, const IdxType n_qubits, const SimType sim_type)
     {
         // prepare
         IdxType *table = new IdxType[n_qubits * n_qubits];
@@ -438,7 +484,7 @@ namespace NWQSim
                 GateType g(circuit_in[i]);
                 circuit_out.push_back(g);
             }
-            else if (circuit_in[i].op_name == OP::C1) // 1-qubit gate
+            else if (circuit_in[i].op_name == get_op(1, sim_type)) // 1-qubit gate
             {
                 IdxType qubit = circuit_in[i].qubit;
                 bool fused = false;
@@ -449,13 +495,15 @@ namespace NWQSim
                     {
                         const GateType &g0 = circuit_in[i];
                         GateType &g1 = circuit_out[table[j * n_qubits + qubit]];
-                        GateType expand_g(OP::C2, -1, -1);
-                        GateType final_g(OP::C2, -1, -1);
-                        expand_ctrl(g0, expand_g, j);
+                        GateType expand_g(get_op(2, sim_type), -1, -1);
+                        GateType final_g(get_op(2, sim_type), -1, -1);
+
+                        expand_ctrl(g0, expand_g, j, sim_type);
                         // now ready to fuse
-                        fuse_gate(g1, expand_g, final_g, 4);
-                        memcpy(g1.gm_real, final_g.gm_real, 16 * sizeof(ValType));
-                        memcpy(g1.gm_imag, final_g.gm_imag, 16 * sizeof(ValType));
+                        fuse_gate(g1, expand_g, final_g, vec_dim_2q(sim_type));
+                        memcpy(g1.gm_real, final_g.gm_real, vec_length_2q(sim_type) * sizeof(ValType));
+                        memcpy(g1.gm_imag, final_g.gm_imag, vec_length_2q(sim_type) * sizeof(ValType));
+
                         fused = true;
                         break;
                     }
@@ -464,13 +512,13 @@ namespace NWQSim
                     {
                         const GateType &g0 = circuit_in[i];
                         GateType &g1 = circuit_out[table[qubit * n_qubits + j]];
-                        GateType expand_g(OP::C2, -1, -1);
-                        expand_qubit(g0, expand_g, j);
+                        GateType expand_g(get_op(2, sim_type), -1, -1);
+                        expand_qubit(g0, expand_g, j, sim_type);
                         // now ready to fuse
-                        GateType final_g(OP::C2, -1, -1);
-                        fuse_gate(g1, expand_g, final_g, 4);
-                        memcpy(g1.gm_real, final_g.gm_real, 16 * sizeof(ValType));
-                        memcpy(g1.gm_imag, final_g.gm_imag, 16 * sizeof(ValType));
+                        GateType final_g(get_op(2, sim_type), -1, -1);
+                        fuse_gate(g1, expand_g, final_g, vec_dim_2q(sim_type));
+                        memcpy(g1.gm_real, final_g.gm_real, vec_length_2q(sim_type) * sizeof(ValType));
+                        memcpy(g1.gm_imag, final_g.gm_imag, vec_length_2q(sim_type) * sizeof(ValType));
                         fused = true;
                         break;
                     }
@@ -486,7 +534,7 @@ namespace NWQSim
                     circuit_out.push_back(g);
                 }
             }
-            if (circuit_in[i].op_name == OP::C2) // 2-qubit gate
+            if (circuit_in[i].op_name == get_op(2, sim_type)) // 2-qubit gate
             {
                 IdxType qubit = circuit_in[i].qubit;
                 IdxType ctrl = circuit_in[i].ctrl;
@@ -511,7 +559,7 @@ namespace NWQSim
     }
 
     template <typename GateType>
-    std::vector<GateType> fuse_circuit_gates(std::vector<GateType> gates, IdxType n_qubits)
+    std::vector<GateType> fuse_circuit_gates(std::vector<GateType> gates, IdxType n_qubits, SimType sim_type)
     {
         //====================== Fuse ========================
         std::vector<GateType> tmp1_circuit;
@@ -519,10 +567,10 @@ namespace NWQSim
         std::vector<GateType> tmp3_circuit;
         std::vector<GateType> fused_circuit;
 
-        gate_fusion_1q(gates, tmp1_circuit, n_qubits);
-        gate_fusion_2q_absorb_1q_forward(tmp1_circuit, tmp2_circuit, n_qubits);
-        gate_fusion_2q_absorb_1q_backward(tmp2_circuit, tmp3_circuit, n_qubits);
-        gate_fusion_2q(tmp3_circuit, fused_circuit, n_qubits);
+        gate_fusion_1q(gates, tmp1_circuit, n_qubits, sim_type);
+        gate_fusion_2q_absorb_1q_forward(tmp1_circuit, tmp2_circuit, n_qubits, sim_type);
+        gate_fusion_2q_absorb_1q_backward(tmp2_circuit, tmp3_circuit, n_qubits, sim_type);
+        gate_fusion_2q(tmp3_circuit, fused_circuit, n_qubits, sim_type);
 
         return fused_circuit;
     }
@@ -537,7 +585,26 @@ namespace NWQSim
         }
         IdxType n_qubits = circuit->num_qubits();
 
-        return fuse_circuit_gates(gates, n_qubits);
+        return fuse_circuit_gates(gates, n_qubits, SV);
+    }
+
+    std::vector<DMGate> fuse_circuit_dm_v2(Circuit *circuit)
+    {
+        std::vector<DMGate> gates = getDMGates(circuit->get_gates(), circuit->num_qubits());
+
+        if (!Config::ENABLE_FUSION)
+        {
+            return gates;
+        }
+        IdxType n_qubits = circuit->num_qubits();
+
+        std::vector<DMGate> tmp1_circuit;
+        std::vector<DMGate> fused_circuit;
+
+        gate_fusion_1q(gates, tmp1_circuit, n_qubits, DM);
+        gate_fusion_2q(tmp1_circuit, fused_circuit, n_qubits, DM);
+
+        return fused_circuit;
     }
 
 } // end of NWQSim
