@@ -18,6 +18,7 @@
 #include <vector>
 #include <cstring>
 #include <algorithm>
+
 #include "../private/sim_gate.hpp"
 #include "../private/config.hpp"
 #include "../public/circuit.hpp"

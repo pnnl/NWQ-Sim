@@ -7,7 +7,7 @@
 #include "../public/circuit.hpp"
 #include "../private/config.hpp"
 
-// #include "../circuit_pass/fusion.hpp"
+#include "../circuit_pass/fusion_dm.hpp"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
 
@@ -92,7 +92,9 @@ namespace NWQSim
         {
             IdxType origional_gates = circuit->num_gates();
 
-            std::vector<DMGate> gates = getDMGates(circuit->get_gates(), circuit->num_qubits());
+            std::vector<DMGate> gates = fuse_circuit_dm(circuit);
+
+            // getDMGates(circuit->get_gates(), circuit->num_qubits());
 
             IdxType n_gates = gates.size();
 

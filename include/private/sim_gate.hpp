@@ -35,6 +35,13 @@ namespace NWQSim
             memset(gm_real, 0, sizeof(ValType) * 16);
             memset(gm_imag, 0, sizeof(ValType) * 16);
         }
+
+        SVGate(const SVGate &gate) : SimGate(gate.op_name, gate.qubit, gate.ctrl)
+        {
+            memcpy(gm_real, gate.gm_real, sizeof(ValType) * 16);
+            memcpy(gm_imag, gate.gm_imag, sizeof(ValType) * 16);
+        }
+
         // gate parameters
         ValType gm_real[16];
         ValType gm_imag[16];
@@ -43,7 +50,17 @@ namespace NWQSim
     class DMGate : public SimGate
     {
     public:
-        DMGate(OP _op, IdxType _qubit0, IdxType _qubit1) : SimGate(_op, _qubit0, _qubit1) {}
+        DMGate(OP _op, IdxType _qubit0, IdxType _qubit1) : SimGate(_op, _qubit0, _qubit1)
+        {
+            memset(gm_real, 0, sizeof(ValType) * 256);
+            memset(gm_imag, 0, sizeof(ValType) * 256);
+        }
+
+        DMGate(const DMGate &gate) : SimGate(gate.op_name, gate.qubit, gate.ctrl)
+        {
+            memcpy(gm_real, gate.gm_real, sizeof(ValType) * 256);
+            memcpy(gm_imag, gate.gm_imag, sizeof(ValType) * 256);
+        }
 
         void set_gm(std::complex<ValType> *gm, IdxType dim)
         {
