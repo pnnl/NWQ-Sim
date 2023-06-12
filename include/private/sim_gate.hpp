@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../public/util.hpp"
-#include "../public/gate.hpp"
+#include "../util.hpp"
+#include "../gate.hpp"
 #include <complex>
 namespace NWQSim
 {

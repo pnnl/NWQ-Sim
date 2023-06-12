@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../public/state.hpp"
-#include "../public/util.hpp"
-#include "../public/gate.hpp"
-#include "../public/circuit.hpp"
+#include "../state.hpp"
+#include "../util.hpp"
+#include "../gate.hpp"
+#include "../circuit.hpp"
 
 #include "../private/config.hpp"
 #include "../private/nvgpu_util.cuh"
@@ -142,7 +142,7 @@ namespace NWQSim
             rng.seed(seed);
         }
 
-        void sim(Circuit *circuit) override
+        void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
             IdxType origional_gates = circuit->num_gates();
 
@@ -245,19 +245,17 @@ namespace NWQSim
 
         IdxType measure(IdxType qubit) override
         {
-            Circuit *circuit = new Circuit(n_qubits);
+            std::shared_ptr<NWQSim::Circuit> circuit = std::make_shared<Circuit>(n_qubits);
             circuit->M(qubit);
             sim(circuit);
-            delete circuit;
             return results[0];
         }
 
         IdxType *measure_all(IdxType repetition) override
         {
-            Circuit *circuit = new Circuit(n_qubits);
+            std::shared_ptr<NWQSim::Circuit> circuit = std::make_shared<Circuit>(n_qubits);
             circuit->MA(repetition);
             sim(circuit);
-            delete circuit;
             return results;
         }
 

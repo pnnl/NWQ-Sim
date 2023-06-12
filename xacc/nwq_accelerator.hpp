@@ -3,11 +3,8 @@
 #include "xacc.hpp"
 #include <string>
 
-namespace NWQSim
-{
-    // Forward declare
-    class NWQBackend;
-}
+#include "../include/state.hpp"
+#include "../include/circuit.hpp"
 
 namespace xacc
 {
@@ -43,11 +40,11 @@ namespace xacc
                                      compositeInstructions) override;
 
         private:
-            std::shared_ptr<NWQSim::NWQBackend> get_backend();
-
             int m_shots = 8192;
             std::string backend_name = "cpu";   //  cpu_omp
             std::string simulation_type = "sv"; // sv or dm
+
+            std::shared_ptr<NWQSim::QuantumState> m_state;
         };
 
     }

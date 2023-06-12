@@ -1,10 +1,11 @@
 
 #include <cassert>
 
-#include "nwq_accelerator.hpp"
-#include "nwq_api.hpp"
-
 #include "AllGateVisitor.hpp"
+
+#include "nwq_accelerator.hpp"
+#include "../include/state.hpp"
+#include "../include/backendManager.hpp"
 
 namespace xacc
 {
@@ -12,114 +13,106 @@ namespace xacc
     {
         class NWQCircuitVisitor : public AllGateVisitor
         {
+
         private:
-            NWQSim::NWQBackend *m_backend;
+            std::shared_ptr<NWQSim::Circuit> m_circuit;
 
         public:
             using AllGateVisitor::visit;
-            NWQCircuitVisitor(NWQSim::NWQBackend *backend) : m_backend(backend) {}
+
+            NWQCircuitVisitor(int n_qubits)
+            {
+                m_circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
+            }
 
             void visit(Hadamard &h) override
             {
-                m_backend->add_gate("H", std::vector<int>{(int)h.bits()[0]});
+                m_circuit->H(h.bits()[0]);
             }
 
             void visit(X &x) override
             {
-                m_backend->add_gate("X", std::vector<int>{(int)x.bits()[0]});
+                m_circuit->X(x.bits()[0]);
             }
 
             void visit(Y &y) override
             {
-                m_backend->add_gate("Y", std::vector<int>{(int)y.bits()[0]});
+                m_circuit->Y(x.bits()[0]);
             }
 
             void visit(Z &z) override
             {
-                m_backend->add_gate("Z", std::vector<int>{(int)z.bits()[0]});
+                m_circuit->Z(x.bits()[0]);
             }
 
             void visit(Rx &rx) override
             {
-                m_backend->add_gate("RX", std::vector<int>{(int)rx.bits()[0]},
-                                    {InstructionParameterToDouble(rx.getParameter(0))});
+                m_circuit->RX(InstructionParameterToDouble(rx.getParameter(0)), rx.bits()[0]);
             }
 
             void visit(Ry &ry) override
             {
-                m_backend->add_gate("RY", std::vector<int>{(int)ry.bits()[0]},
-                                    {InstructionParameterToDouble(ry.getParameter(0))});
+                m_circuit->RY(InstructionParameterToDouble(ry.getParameter(0)), ry.bits()[0]);
             }
 
             void visit(Rz &rz) override
             {
-                m_backend->add_gate("RZ", std::vector<int>{(int)rz.bits()[0]},
-                                    {InstructionParameterToDouble(rz.getParameter(0))});
+                m_circuit->RZ(InstructionParameterToDouble(rz.getParameter(0)), rz.bits()[0]);
             }
 
             void visit(S &s) override
             {
-                m_backend->add_gate("S", std::vector<int>{(int)s.bits()[0]});
+                m_circuit->S(s.bits()[0]);
             }
 
             void visit(Sdg &sdg) override
             {
-                m_backend->add_gate("SDG", std::vector<int>{(int)sdg.bits()[0]});
+                m_circuit->SDG(sdg.bits()[0]);
             }
 
             void visit(T &t) override
             {
-                m_backend->add_gate("T", std::vector<int>{(int)t.bits()[0]});
+                m_circuit->T(t.bits()[0]);
             }
 
             void visit(Tdg &tdg) override
             {
-                m_backend->add_gate("TDG", std::vector<int>{(int)tdg.bits()[0]});
+                m_circuit->TDG(tdg.bits()[0]);
             }
 
             void visit(CNOT &cnot) override
             {
-                m_backend->add_gate("CX", std::vector<int>{(int)cnot.bits()[0],
-                                                           (int)cnot.bits()[1]});
+                m_circuit->CX(cnot.bits()[0], cnot.bits()[1]);
             }
 
             void visit(CY &cy) override
             {
-                m_backend->add_gate("CY",
-                                    std::vector<int>{(int)cy.bits()[0], (int)cy.bits()[1]});
+                m_circuit->CY(cy.bits()[0], cy.bits()[1]);
             }
 
             void visit(CZ &cz) override
             {
-                m_backend->add_gate("CZ",
-                                    std::vector<int>{(int)cz.bits()[0], (int)cz.bits()[1]});
+                m_circuit->CZ(cz.bits()[0], cz.bits()[1]);
             }
 
             void visit(Swap &s) override
             {
-                m_backend->add_gate("SWAP",
-                                    std::vector<int>{(int)s.bits()[0], (int)s.bits()[1]});
+                m_circuit->SWAP(s.bits()[0], s.bits()[1]);
             }
 
             void visit(CH &ch) override
             {
-                m_backend->add_gate("CH",
-                                    std::vector<int>{(int)ch.bits()[0], (int)ch.bits()[1]});
+                m_circuit->CH(ch.bits()[0], ch.bits()[1]);
             }
 
             void visit(CPhase &cphase) override
             {
-                m_backend->add_gate(
-                    "CP",
-                    std::vector<int>{(int)cphase.bits()[0], (int)cphase.bits()[1]},
-                    {InstructionParameterToDouble(cphase.getParameter(0))});
+                m_circuit->CP(InstructionParameterToDouble(cphase.getParameter(0)), cphase.bits()[0], cphase.bits()[1]);
             }
 
             void visit(CRZ &crz) override
             {
-                m_backend->add_gate("CRZ",
-                                    std::vector<int>{(int)crz.bits()[0], (int)crz.bits()[1]},
-                                    {InstructionParameterToDouble(crz.getParameter(0))});
+                m_circuit->CRZ(InstructionParameterToDouble(crz.getParameter(0)), crz.bits()[0], crz.bits()[1]);
             }
 
             void visit(Identity &i) override {}
@@ -130,8 +123,7 @@ namespace xacc
                 const auto phi = InstructionParameterToDouble(u.getParameter(1));
                 const auto lambda = InstructionParameterToDouble(u.getParameter(2));
 
-                m_backend->add_gate("U", std::vector<int>{(int)u.bits()[0]},
-                                    {theta, phi, lambda});
+                m_circuit->U(theta, phi, lambda, u.bits()[0]);
             }
 
             void visit(Measure &measure) override
@@ -141,14 +133,16 @@ namespace xacc
 
             // NOT SUPPORTED:
             void visit(IfStmt &ifStmt) override {}
+
             std::vector<size_t> getMeasureBits() const { return m_measureQubits; }
+
+            std::shared_ptr<NWQSim::Circuit> getNWQCircuit() const { return m_circuit; }
 
         private:
             std::vector<size_t> m_measureQubits;
         };
 
-        void
-        NWQAccelerator::initialize(const HeterogeneousMap &params)
+        void NWQAccelerator::initialize(const HeterogeneousMap &params)
         {
             if (params.stringExists("sim-type"))
             {
@@ -170,15 +164,15 @@ namespace xacc
             std::shared_ptr<AcceleratorBuffer> buffer,
             const std::shared_ptr<CompositeInstruction> circuit)
         {
-            auto nwq_sim = NWQSim::get_backend();
-            if (!nwq_sim)
+            m_state = BackendManager::create_state(backend_name, buffer->size(), simulation_type);
+
+            if (!m_state)
             {
                 throw std::logic_error("NWQ-Sim was not installed or selected backend is not supported.");
             }
-            nwq_sim->init(buffer->size());
 
             // Create a visitor that will map IR to NWQ-Sim
-            NWQCircuitVisitor visitor(nwq_sim.get());
+            NWQCircuitVisitor visitor(buffer->size());
 
             // Walk the IR tree, and visit each node
             InstructionIterator it(circuit);
@@ -191,6 +185,8 @@ namespace xacc
                 }
             }
 
+            m_state->sim(visitor.getNWQCircuit());
+
             auto measured_bits = visitor.getMeasureBits();
             if (measured_bits.empty())
             {
@@ -202,32 +198,7 @@ namespace xacc
             }
             std::sort(measured_bits.begin(), measured_bits.end());
 
-            buffer->addExtraInfo("exp-val-z", nwq_sim->calcExpectationValueZ(measured_bits));
-
-            //  const auto measured_results = nwq_sim->measure(m_shots);
-            //     const auto nwqSimMeasureToBitString = [&measured_bits](const auto &val)
-            //     {
-            //         std::string bitString;
-            //         for (const auto &bit : measured_bits)
-            //         {
-            //             if (val & (1ULL << bit))
-            //             {
-            //                 bitString.push_back('1');
-            //             }
-            //             else
-            //             {
-            //                 bitString.push_back('0');
-            //             }
-            //         }
-            //         std::reverse(bitString.begin(), bitString.end()); // Reverse the bit string
-
-            //         return bitString;
-            //     };
-
-            //     for (const auto &m : measured_results)
-            //     {
-            //         buffer->appendMeasurement(nwqSimMeasureToBitString(m));
-            //     }
+            buffer->addExtraInfo("exp-val-z", m_state->calcExpectationValueZ(measured_bits));
         }
 
         void NWQAccelerator::execute(
@@ -246,4 +217,3 @@ namespace xacc
 
     } // namespace quantum
 } // namespace xacc
-

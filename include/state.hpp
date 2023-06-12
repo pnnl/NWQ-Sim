@@ -3,8 +3,8 @@
 #include "util.hpp"
 #include "circuit.hpp"
 
-#include "../private/config.hpp"
-#include "../private/gate_factory/sv_gates.hpp"
+#include "private/config.hpp"
+#include "private/gate_factory/sv_gates.hpp"
 #include <vector>
 #include <string>
 
@@ -29,7 +29,7 @@ namespace NWQSim
         virtual void reset_state() = 0;
         virtual void set_seed(IdxType seed) = 0;
 
-        virtual void sim(Circuit *circuit) = 0;
+        virtual void sim(std::shared_ptr<NWQSim::Circuit> circuit) = 0;
         virtual IdxType *get_results() = 0;
         virtual IdxType measure(IdxType qubit) = 0;
         virtual IdxType *measure_all(IdxType repetition) = 0;

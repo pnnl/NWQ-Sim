@@ -12,9 +12,9 @@
 #include "parser_util.hpp"
 #include "lexer.hpp"
 
-#include "public/util.hpp"
-#include "public/state.hpp"
-#include "public/circuit.hpp"
+#include "util.hpp"
+#include "state.hpp"
+#include "circuit.hpp"
 
 using namespace std;
 using namespace NWQSim;
@@ -59,7 +59,7 @@ private:
 
     void classify_measurements();
 
-    void execute_gate(shared_ptr<QuantumState> state, Circuit *circuit, qasm_gate gate);
+    void execute_gate(shared_ptr<QuantumState> state, std::shared_ptr<NWQSim::Circuit> circuit, qasm_gate gate);
     IdxType *sub_execute(shared_ptr<QuantumState> state, IdxType repetition);
 
     void dump_defined_gates();
@@ -568,7 +568,7 @@ IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, IdxType repeti
 {
     state->reset_state();
 
-    Circuit *circuit = new Circuit(num_qubits());
+    std::shared_ptr<NWQSim::Circuit> circuit = std::make_shared<Circuit>(num_qubits());
 
     for (auto gate : *list_gates)
     {
@@ -594,12 +594,10 @@ IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, IdxType repeti
         state->sim(circuit);
     }
 
-    delete circuit;
-
     return state->get_results();
 }
 
-void qasm_parser::execute_gate(shared_ptr<QuantumState> state, Circuit *circuit, qasm_gate gate)
+void qasm_parser::execute_gate(shared_ptr<QuantumState> state, std::shared_ptr<NWQSim::Circuit> circuit, qasm_gate gate)
 {
     auto gate_name = gate.name;
     auto params = gate.params;

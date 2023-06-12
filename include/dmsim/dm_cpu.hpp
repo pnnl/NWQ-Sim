@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../public/state.hpp"
+#include "../state.hpp"
 
-#include "../public/util.hpp"
-#include "../public/gate.hpp"
-#include "../public/circuit.hpp"
+#include "../util.hpp"
+#include "../gate.hpp"
+#include "../circuit.hpp"
 #include "../private/config.hpp"
 
 #include "../circuit_pass/fusion.hpp"
@@ -88,7 +88,7 @@ namespace NWQSim
             rng.seed(seed);
         }
 
-        void sim(Circuit *circuit) override
+        void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
             IdxType origional_gates = circuit->num_gates();
 

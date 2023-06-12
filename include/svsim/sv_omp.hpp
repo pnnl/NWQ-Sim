@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../public/util.hpp"
+#include "../util.hpp"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
 

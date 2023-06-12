@@ -17,7 +17,7 @@
 #include "../nlohmann/json.hpp" // json parser
 #include "noise_model.hpp"
 
-#include "../../public/gate.hpp"
+#include "../../gate.hpp"
 #include "../config.hpp"
 #include "../sim_gate.hpp"
 

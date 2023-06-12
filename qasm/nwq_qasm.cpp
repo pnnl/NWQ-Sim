@@ -6,12 +6,12 @@
 /********** UPDATE THE INCLUDE PATH FOR LOCAL HEADER FILE HERE ************/
 #include "src/qasm_parser.hpp"
 #include "src/parser_util.hpp"
-#include "backendManager.hpp"
 /**************************************************************************/
 
 /********** LOAD THE SIMULATION BACKEND ************/
-#include "public/state.hpp"
-#include "public/util.hpp"
+#include "backendManager.hpp"
+#include "state.hpp"
+#include "util.hpp"
 /**************************************************************************/
 
 using namespace NWQSim;

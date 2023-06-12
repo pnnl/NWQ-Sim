@@ -1,7 +1,7 @@
 #pragma once
 
-#include "public/state.hpp"
-#include "public/util.hpp"
+#include "state.hpp"
+#include "util.hpp"
 
 #include "svsim/sv_cpu.hpp"
 #include "dmsim/dm_cpu.hpp"

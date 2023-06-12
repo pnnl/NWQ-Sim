@@ -4,8 +4,8 @@
 #include <map>
 #include <cmath>
 
-#include "../../public/util.hpp"
-#include "../../public/gate.hpp"
+#include "../../util.hpp"
+#include "../../gate.hpp"
 
 #include "../sim_gate.hpp"
 
