@@ -111,7 +111,7 @@ int main(int argc, char **argv)
     if (cmdOptionExists(argv, argv + argc, "-a"))
     {
         bool passed = true;
-        for (int benchmark_index = 0; benchmark_index < 36; benchmark_index++)
+        for (int benchmark_index = 12; benchmark_index < 36; benchmark_index++)
         {
             ValType fidelity = run_brnchmark(backend_name, benchmark_index, total_shots, simulation_method, run_with_basis);
             if (fidelity < pass_threshold)

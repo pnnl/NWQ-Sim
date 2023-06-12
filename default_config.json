@@ -1,7 +1,8 @@
 {
     "PRINT_SIM_TRACE": true,
     "ENABLE_FUSION": true,
-    "ENABLE_NOISE": true,
+    "ENABLE_NOISE": false,
+    "ENABLE_TENSOR_CORE": false,
     "DEVICE_CONFIG_PATH": "../data/device/",
     "DEVICE_CONFIG_FILE": "dummy_ibmq12"
 }

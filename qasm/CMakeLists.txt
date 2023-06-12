@@ -21,7 +21,7 @@ if(CUDAToolkit_FOUND)
     set_source_files_properties(${SOURCE_FILE} PROPERTIES LANGUAGE CUDA)
 
     target_compile_features(nwq_qasm PRIVATE cuda_std_17)
-    # target_link_libraries(nwq_qasm PUBLIC CUDA::cudart)
+    #target_link_libraries(nwq_qasm PUBLIC CUDA::cudart)
     target_compile_definitions(nwq_qasm PUBLIC CUDA_ENABLED)
 endif()
 

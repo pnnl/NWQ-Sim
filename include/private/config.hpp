@@ -11,6 +11,8 @@ namespace NWQSim::Config
     inline bool PRINT_SIM_TRACE;
     inline bool ENABLE_NOISE;
     inline bool ENABLE_FUSION;
+    inline bool ENABLE_TENSOR_CORE;
+
     inline std::string DEVICE_CONFIG_PATH;
     inline std::string DEVICE_CONFIG_FILE;
 
@@ -39,6 +41,7 @@ namespace NWQSim::Config
             j.at("PRINT_SIM_TRACE").get_to(PRINT_SIM_TRACE);
             j.at("ENABLE_NOISE").get_to(ENABLE_NOISE);
             j.at("ENABLE_FUSION").get_to(ENABLE_FUSION);
+            j.at("ENABLE_TENSOR_CORE").get_to(ENABLE_TENSOR_CORE);
 
             if (ENABLE_NOISE)
             {
@@ -56,6 +59,9 @@ namespace NWQSim::Config
 
             if (j.find("ENABLE_FUSION") != j.end())
                 j.at("ENABLE_FUSION").get_to(ENABLE_FUSION);
+
+            if (j.find("ENABLE_TENSOR_CORE") != j.end())
+                j.at("ENABLE_TENSOR_CORE").get_to(ENABLE_TENSOR_CORE);
 
             if (j.find("DEVICE_CONFIG_PATH") != j.end())
                 j.at("DEVICE_CONFIG_PATH").get_to(DEVICE_CONFIG_PATH);
@@ -76,6 +82,8 @@ namespace NWQSim::Config
                       << "\033[1;32m" << (ENABLE_FUSION ? "Enabled" : "Disabled") << "\033[0m" << std::endl;
             std::cout << std::left << std::setw(40) << "\033[1;33mNoise:\033[0m"
                       << "\033[1;32m" << (ENABLE_NOISE ? "Enabled" : "Disabled") << "\033[0m" << std::endl;
+            std::cout << std::left << std::setw(40) << "\033[1;33mTensor Core:\033[0m"
+                      << "\033[1;32m" << (ENABLE_TENSOR_CORE ? "Enabled" : "Disabled") << "\033[0m" << std::endl;
             std::cout << std::left << std::setw(40) << "\033[1;33mDevice Config Path:\033[0m"
                       << "\033[1;32m" << (DEVICE_CONFIG_PATH.empty() ? "Not Set" : DEVICE_CONFIG_PATH) << "\033[0m" << std::endl;
             std::cout << std::left << std::setw(40) << "\033[1;33mDevice Config File:\033[0m"

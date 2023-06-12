@@ -16,10 +16,12 @@
 
 #ifdef CUDA_ENABLED
 #include "svsim/sv_nvgpu.cuh"
+#include "dmsim/dm_nvgpu.cuh"
 #endif
 
 #ifdef CUDA_MPI_ENABLED
 #include "svsim/sv_nvgpu_mpi.cuh"
+#include "dmsim/dm_nvgpu_mpi.cuh"
 #endif
 
 #include <iostream>
@@ -106,14 +108,20 @@ public:
 #ifdef CUDA_ENABLED
         else if (backend == "NVGPU")
         {
-            return std::make_shared<NWQSim::SV_NVGPU>(numQubits);
+            if (simulator_method == "sv")
+                return std::make_shared<NWQSim::SV_NVGPU>(numQubits);
+            else
+                return std::make_shared<NWQSim::DM_NVGPU>(numQubits);
         }
 #endif
 
 #ifdef CUDA_MPI_ENABLED
         else if (backend == "NVGPU_MPI")
         {
-            return std::make_shared<NWQSim::SV_NVGPU_MPI>(numQubits);
+            if (simulator_method == "sv")
+                return std::make_shared<NWQSim::SV_NVGPU_MPI>(numQubits);
+            else
+                return std::make_shared<NWQSim::DM_NVGPU_MPI>(numQubits);
         }
 #endif
         else
