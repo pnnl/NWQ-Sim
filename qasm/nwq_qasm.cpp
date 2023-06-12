@@ -6,7 +6,7 @@
 /********** UPDATE THE INCLUDE PATH FOR LOCAL HEADER FILE HERE ************/
 #include "src/qasm_parser.hpp"
 #include "src/parser_util.hpp"
-#include "src/backendManager.hpp"
+#include "backendManager.hpp"
 /**************************************************************************/
 
 /********** LOAD THE SIMULATION BACKEND ************/
