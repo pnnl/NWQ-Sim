@@ -1,6 +1,9 @@
 #include <iostream>
+
 #include "xacc.hpp"
-#include "../nwq_accelerator.hpp"
+#include "nwq_accelerator.hpp"
+
+#include "backendManager.hpp"
 
 int main(int argc, char **argv)
 {
@@ -9,17 +12,19 @@ int main(int argc, char **argv)
 
   auto nwq_acc = std::make_shared<xacc::quantum::NWQAccelerator>();
 
+  auto temp = BackendManager::create_state("cpu", 2, "sv");
+
   auto qpp_acc = xacc::getAccelerator("qpp"); //, {std::make_pair("shots", 4096)}
 
   xacc::qasm(R"(
-.compiler xasm
-.circuit bell
-.qbit q
-H(q[0]);
-CX(q[0], q[1]);
-Measure(q[0]);
-Measure(q[1]);
-)");
+  .compiler xasm
+  .circuit bell
+  .qbit q
+  H(q[0]);
+  CX(q[0], q[1]);
+  Measure(q[0]);
+  Measure(q[1]);
+  )");
   auto bell = xacc::getCompiled("bell");
 
   // Allocate some qubits and execute
@@ -35,7 +40,6 @@ Measure(q[1]);
             << "\n";
   buffer_qpp->print();
 
-  // delete accelerator;
-
   xacc::Finalize();
+  return 0;
 }

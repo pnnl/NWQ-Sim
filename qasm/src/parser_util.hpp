@@ -13,7 +13,7 @@
 
 #include "lexer.hpp"
 #include "qasm_parser_expr.hpp"
-#include "util.hpp"
+#include "nwq_util.hpp"
 
 using namespace std;
 using namespace NWQSim;

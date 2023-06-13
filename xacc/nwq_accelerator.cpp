@@ -1,12 +1,14 @@
 
 #include <cassert>
 
+#include <xacc.hpp>
 #include "AllGateVisitor.hpp"
 
 #include "nwq_accelerator.hpp"
 #include "../include/state.hpp"
+#include "../include/circuit.hpp"
 #include "../include/backendManager.hpp"
-
+#include "../include/nwq_util.hpp"
 namespace xacc
 {
     namespace quantum
@@ -37,12 +39,12 @@ namespace xacc
 
             void visit(Y &y) override
             {
-                m_circuit->Y(x.bits()[0]);
+                m_circuit->Y(y.bits()[0]);
             }
 
             void visit(Z &z) override
             {
-                m_circuit->Z(x.bits()[0]);
+                m_circuit->Z(z.bits()[0]);
             }
 
             void visit(Rx &rx) override
@@ -198,7 +200,7 @@ namespace xacc
             }
             std::sort(measured_bits.begin(), measured_bits.end());
 
-            buffer->addExtraInfo("exp-val-z", m_state->calcExpectationValueZ(measured_bits));
+            buffer->addExtraInfo("exp-val-z", m_state->get_exp_z(measured_bits));
         }
 
         void NWQAccelerator::execute(
@@ -217,3 +219,8 @@ namespace xacc
 
     } // namespace quantum
 } // namespace xacc
+
+// int main()
+// {
+//     return 0;
+// }

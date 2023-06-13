@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../util.hpp"
+#include "../nwq_util.hpp"
 #include "../gate.hpp"
 #include <complex>
 namespace NWQSim

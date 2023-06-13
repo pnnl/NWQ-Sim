@@ -21,6 +21,7 @@
 #define ERROR_BAR (1e-3)
 
 #define PRINT_PROGRESS_BAR
+
 namespace NWQSim
 {
     /* Basic data type for indices */
@@ -77,7 +78,7 @@ namespace NWQSim
             }
         }
         return (count % 2) == 0;
-    };
+    }
 
     /***********************************************
      * CPU Timer based on Linux sys/time.h

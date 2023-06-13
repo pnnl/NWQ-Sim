@@ -11,7 +11,7 @@
 /********** LOAD THE SIMULATION BACKEND ************/
 #include "backendManager.hpp"
 #include "state.hpp"
-#include "util.hpp"
+#include "nwq_util.hpp"
 /**************************************************************************/
 
 using namespace NWQSim;

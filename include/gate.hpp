@@ -19,7 +19,7 @@
 // #include <vector>
 // #include <cstring>
 
-#include "util.hpp"
+#include "nwq_util.hpp"
 
 #include <iostream>
 #include <sstream>

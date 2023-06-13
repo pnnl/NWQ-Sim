@@ -1,7 +1,7 @@
 #pragma once
 
 #include "state.hpp"
-#include "util.hpp"
+#include "nwq_util.hpp"
 
 #include "svsim/sv_cpu.hpp"
 #include "dmsim/dm_cpu.hpp"

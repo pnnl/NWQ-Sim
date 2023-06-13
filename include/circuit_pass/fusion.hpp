@@ -21,7 +21,7 @@
 
 #include "../private/config.hpp"
 #include "../circuit.hpp"
-#include "../util.hpp"
+#include "../nwq_util.hpp"
 
 #include "../private/sim_gate.hpp"
 #include "../private/gate_factory/sv_gates.hpp"

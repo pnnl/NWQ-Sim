@@ -12,7 +12,7 @@
 #include "parser_util.hpp"
 #include "lexer.hpp"
 
-#include "util.hpp"
+#include "nwq_util.hpp"
 #include "state.hpp"
 #include "circuit.hpp"
 

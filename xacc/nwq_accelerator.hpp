@@ -15,18 +15,18 @@ namespace xacc
         {
         public:
             // Identifiable interface impls
-            virtual const std::string name() const override { return "nwq-sim"; }
-            virtual const std::string description() const override
+            const std::string name() const override { return "nwq-sim"; }
+            const std::string description() const override
             {
                 return "XACC Simulation Accelerator based on NWQ-Sim library.";
             }
 
             // Accelerator interface impls
             virtual void initialize(const HeterogeneousMap &params = {}) override;
-            virtual void updateConfiguration(const HeterogeneousMap &config) override
+            void updateConfiguration(const HeterogeneousMap &config) override
             {
                 initialize(config);
-            };
+            }
             virtual const std::vector<std::string> configurationKeys() override
             {
                 return {};

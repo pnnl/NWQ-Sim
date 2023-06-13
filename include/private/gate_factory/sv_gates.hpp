@@ -4,7 +4,7 @@
 #include <map>
 #include <cmath>
 
-#include "../../util.hpp"
+#include "../../nwq_util.hpp"
 #include "../../gate.hpp"
 
 #include "../sim_gate.hpp"

@@ -22,9 +22,9 @@ if(APPLE)
 else()
     message("Not running on Apple platform")
     # Configuration for non-Apple platforms
-    set(CMAKE_C_COMPILER cc)
-    set(CMAKE_CXX_COMPILER CC)
-    set(CMAKE_CUDA_HOST_COMPILER mpicxx)
+    # set(CMAKE_C_COMPILER gcc)
+    # set(CMAKE_CXX_COMPILER g++)
+    # set(CMAKE_CUDA_HOST_COMPILER mpicxx)
 
     # Set CUDA architecture
     set(CMAKE_CUDA_ARCHITECTURES 80)
@@ -59,4 +59,6 @@ message(STATUS "NVSHMEM found: ${nvshmem_found_str}")
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
 # Subdirectories
-add_subdirectory(qasm)
+# add_subdirectory(qasm)
+
+add_subdirectory(xacc)

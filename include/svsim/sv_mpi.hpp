@@ -2,7 +2,7 @@
 
 #include "../state.hpp"
 
-#include "../util.hpp"
+#include "../nwq_util.hpp"
 #include "../gate.hpp"
 #include "../circuit.hpp"
 
