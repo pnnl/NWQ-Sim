@@ -20,8 +20,7 @@ namespace NWQSim
 
     public:
         // user input gate sequence
-        std::shared_ptr<std::vector<Gate>>
-            gates;
+        std::shared_ptr<std::vector<Gate>> gates;
 
         Circuit(IdxType _n_qubits) : n_qubits(_n_qubits)
         {
@@ -72,13 +71,8 @@ namespace NWQSim
             /** X = [0 1]
                     [1 0]
              */
-            Gate *G = new Gate(OP::X, qubit);
-            ValType gm_real[4] = {0, 1, 1, 0};
-            ValType gm_imag[4] = {0, 0, 0, 0};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::X, qubit);
+            gates->push_back(G);
         }
         void Y(IdxType qubit)
         {
@@ -86,13 +80,8 @@ namespace NWQSim
             /** Y = [0 -i]
                     [i  0]
              */
-            Gate *G = new Gate(OP::Y, qubit);
-            ValType gm_real[4] = {0, 0, 0, 0};
-            ValType gm_imag[4] = {0, -1, 1, 0};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::Y, qubit);
+            gates->push_back(G);
         }
         void Z(IdxType qubit)
         {
@@ -100,13 +89,8 @@ namespace NWQSim
             /** Z = [1  0]
                     [0 -1]
              */
-            Gate *G = new Gate(OP::Z, qubit);
-            ValType gm_real[4] = {1, 0, 0, -1};
-            ValType gm_imag[4] = {0, 0, 0, 0};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::Z, qubit);
+            gates->push_back(G);
         }
         void H(IdxType qubit)
         {
@@ -114,13 +98,8 @@ namespace NWQSim
             /** H = 1/sqrt(2) * [1  1]
                                 [1 -1]
              */
-            Gate *G = new Gate(OP::H, qubit);
-            ValType gm_real[4] = {S2I, S2I, S2I, -S2I};
-            ValType gm_imag[4] = {0, 0, 0, 0};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::H, qubit);
+            gates->push_back(G);
         }
         void S(IdxType qubit)
         {
@@ -128,13 +107,8 @@ namespace NWQSim
             /** S = [1 0]
                     [0 i]
             */
-            Gate *G = new Gate(OP::S, qubit);
-            ValType gm_real[4] = {1, 0, 0, 0};
-            ValType gm_imag[4] = {0, 0, 0, 1};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::S, qubit);
+            gates->push_back(G);
         }
         void SDG(IdxType qubit)
         {
@@ -142,13 +116,8 @@ namespace NWQSim
             /** SDG = [1  0]
                       [0 -i]
             */
-            Gate *G = new Gate(OP::SDG, qubit);
-            ValType gm_real[4] = {1, 0, 0, 0};
-            ValType gm_imag[4] = {0, 0, 0, -1};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::SDG, qubit);
+            gates->push_back(G);
         }
         void T(IdxType qubit)
         {
@@ -156,13 +125,8 @@ namespace NWQSim
             /** T = [1 0]
                     [0 s2i+s2i*i]
             */
-            Gate *G = new Gate(OP::T, qubit);
-            ValType gm_real[4] = {1, 0, 0, S2I};
-            ValType gm_imag[4] = {0, 0, 0, S2I};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::T, qubit);
+            gates->push_back(G);
         }
         void TDG(IdxType qubit)
         {
@@ -170,13 +134,8 @@ namespace NWQSim
             /** TDG = [1 0]
                       [0 s2i-s2i*i]
             */
-            Gate *G = new Gate(OP::TDG, qubit);
-            ValType gm_real[4] = {1, 0, 0, S2I};
-            ValType gm_imag[4] = {0, 0, 0, -S2I};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::TDG, qubit);
+            gates->push_back(G);
         }
         void RI(ValType theta, IdxType qubit)
         {
@@ -184,13 +143,8 @@ namespace NWQSim
             /** RI = [e^(ia) 0] = [cos(a)+i*sin(a) 0]
                      [0 e^(ia)]   [0 cos(a)+i*sin(a)]
             */
-            Gate *G = new Gate(OP::RI, qubit, -1, 1, theta);
-            ValType gm_real[4] = {cos(theta), 0, 0, cos(theta)};
-            ValType gm_imag[4] = {sin(theta), 0, 0, sin(theta)};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::RI, qubit, -1, 1, theta);
+            gates->push_back(G);
         }
         void RX(ValType theta, IdxType qubit)
         {
@@ -198,13 +152,8 @@ namespace NWQSim
             /** RX = [cos(a/2) -i*sin(a/2)]
                      [-i*sin(a/2) cos(a/2)]
             */
-            Gate *G = new Gate(OP::RX, qubit, -1, 1, theta);
-            ValType gm_real[4] = {cos(HALF * theta), 0, 0, cos(HALF * theta)};
-            ValType gm_imag[4] = {0, -sin(HALF * theta), -sin(HALF * theta), 0};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::RX, qubit, -1, 1, theta);
+            gates->push_back(G);
         }
         void RY(ValType theta, IdxType qubit)
         {
@@ -212,13 +161,8 @@ namespace NWQSim
             /** RY = [cos(a/2) -sin(a/2)]
                      [sin(a/2)  cos(a/2)]
             */
-            Gate *G = new Gate(OP::RY, qubit, -1, 1, theta);
-            ValType gm_real[4] = {cos(HALF * theta), -sin(HALF * theta), sin(HALF * theta), cos(HALF * theta)};
-            ValType gm_imag[4] = {0};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::RY, qubit, -1, 1, theta);
+            gates->push_back(G);
         }
         void RZ(ValType theta, IdxType qubit)
         {
@@ -226,13 +170,8 @@ namespace NWQSim
             /** RZ = [cos(a/2)-i*sin(a/2)  0]
                      [0  cos(a/2)+i*sin(a/2)]
             */
-            Gate *G = new Gate(OP::RZ, qubit, -1, 1, theta);
-            ValType gm_real[4] = {cos(HALF * theta), 0, 0, cos(HALF * theta)};
-            ValType gm_imag[4] = {-sin(HALF * theta), 0, 0, sin(HALF * theta)};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::RZ, qubit, -1, 1, theta);
+            gates->push_back(G);
         }
 
         void P(ValType theta, IdxType qubit)
@@ -241,13 +180,8 @@ namespace NWQSim
             /** P = [1, 0     ]  = [1,0]
                     [0, e^(ia)]    [0,cos(a)+i*sin(a)]
             */
-            Gate *G = new Gate(OP::P, qubit, -1, 1, theta);
-            ValType gm_real[4] = {1, 0, 0, cos(theta)};
-            ValType gm_imag[4] = {0, 0, 0, sin(theta)};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::P, qubit, -1, 1, theta);
+            gates->push_back(G);
         }
         void U(ValType theta, ValType phi, ValType lam, IdxType qubit)
         {
@@ -255,19 +189,8 @@ namespace NWQSim
             /** U = [cos(theta/2), -e^(i*lam)sin(theta/2)]
                     [e^(i*phi)sin(theta/2), e^(i*(phi+lam))cos(theta/2)]
             */
-            Gate *G = new Gate(OP::U, qubit, -1, 1, theta, phi, lam);
-            ValType gm_real[4] = {cos(HALF * theta),
-                                  -cos(lam) * sin(HALF * theta),
-                                  cos(phi) * sin(HALF * theta),
-                                  cos(phi + lam) * cos(HALF * theta)};
-            ValType gm_imag[4] = {0,
-                                  -sin(lam) * sin(HALF * theta),
-                                  sin(phi) * sin(HALF * theta),
-                                  sin(lam + phi) * cos(HALF * theta)};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::U, qubit, -1, 1, theta, phi, lam);
+            gates->push_back(G);
         }
         void CX(IdxType ctrl, IdxType qubit)
         {
@@ -277,16 +200,8 @@ namespace NWQSim
                         [0 0 0 1]
                         [0 0 1 0]
             */
-            Gate *G = new Gate(OP::CX, qubit, ctrl, 2);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, 0, 1,
-                                   0, 0, 1, 0};
-            ValType gm_imag[16] = {0};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            Gate G(OP::CX, qubit, ctrl, 2);
+            gates->push_back(G);
         }
         void CY(IdxType ctrl, IdxType qubit)
         {
@@ -296,19 +211,8 @@ namespace NWQSim
                         [0 0 0 -i]
                         [0 0 i 0]
             */
-            Gate *G = new Gate(OP::CY, qubit, ctrl, 2);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, 0};
-            ValType gm_imag[16] = {0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, -1,
-                                   0, 0, 1, 0};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            Gate G(OP::CY, qubit, ctrl, 2);
+            gates->push_back(G);
         }
         void CZ(IdxType ctrl, IdxType qubit)
         {
@@ -318,16 +222,8 @@ namespace NWQSim
                         [0 0 1 0]
                         [0 0 0 -1]
             */
-            Gate *G = new Gate(OP::CZ, qubit, ctrl, 2);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, 1, 0,
-                                   0, 0, 0, -1};
-            ValType gm_imag[16] = {0};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            Gate G(OP::CZ, qubit, ctrl, 2);
+            gates->push_back(G);
         }
         void CH(IdxType ctrl, IdxType qubit)
         {
@@ -337,16 +233,8 @@ namespace NWQSim
                         [0 0 s2i s2i]
                         [0 0 s2i -s2i]
             */
-            Gate *G = new Gate(OP::CH, qubit, ctrl, 2);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, S2I, S2I,
-                                   0, 0, S2I, -S2I};
-            ValType gm_imag[16] = {0};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            Gate G(OP::CH, qubit, ctrl, 2);
+            gates->push_back(G);
         }
         void CS(IdxType ctrl, IdxType qubit)
         {
@@ -356,19 +244,7 @@ namespace NWQSim
                         [0 0 1 0]
                         [0 0 0 i]
             */
-            Gate *G = new Gate(OP::CS, qubit, ctrl, 2);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, 1, 0,
-                                   0, 0, 0, 0};
-            ValType gm_imag[16] = {0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, 1};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            Gate G(OP::CS, qubit, ctrl, 2);
         }
         void CSDG(IdxType ctrl, IdxType qubit)
         {
@@ -378,19 +254,8 @@ namespace NWQSim
                         [0 0 1 0]
                         [0 0 0 -i]
             */
-            Gate *G = new Gate(OP::CSDG, qubit, ctrl, 2);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, 1, 0,
-                                   0, 0, 0, 0};
-            ValType gm_imag[16] = {0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, -1};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            Gate G(OP::CSDG, qubit, ctrl, 2);
+            gates->push_back(G);
         }
         void CT(IdxType ctrl, IdxType qubit)
         {
@@ -400,19 +265,8 @@ namespace NWQSim
                         [0 0 1 0]
                         [0 0 0 s2i+si2*i]
             */
-            Gate *G = new Gate(OP::CT, qubit, ctrl, 2);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, 1, 0,
-                                   0, 0, 0, S2I};
-            ValType gm_imag[16] = {0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, S2I};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            Gate G(OP::CT, qubit, ctrl, 2);
+            gates->push_back(G);
         }
         void CTDG(IdxType ctrl, IdxType qubit)
         {
@@ -422,19 +276,8 @@ namespace NWQSim
                         [0 0 1 0]
                         [0 0 0 s2i-si2*i]
             */
-            Gate *G = new Gate(OP::CTDG, qubit, ctrl, 2);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, 1, 0,
-                                   0, 0, 0, S2I};
-            ValType gm_imag[16] = {0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, -S2I};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            Gate G(OP::CTDG, qubit, ctrl, 2);
+            gates->push_back(G);
         }
         void CRX(ValType theta, IdxType ctrl, IdxType qubit)
         {
@@ -444,19 +287,8 @@ namespace NWQSim
                         [0 0 cos(a/2) -i*sin(a/2)]
                         [0 0 -i*sin(a/2) cos(a/2)]
             */
-            Gate *G = new Gate(OP::CRX, qubit, ctrl, 2, theta);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, cos(HALF * theta), 0,
-                                   0, 0, 0, cos(HALF * theta)};
-            ValType gm_imag[16] = {0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, -sin(HALF * theta),
-                                   0, 0, -sin(HALF * theta), 0};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            Gate G(OP::CRX, qubit, ctrl, 2, theta);
+            gates->push_back(G);
         }
         void CRY(ValType theta, IdxType ctrl, IdxType qubit)
         {
@@ -466,16 +298,8 @@ namespace NWQSim
                         [0 0 cos(a/2) -sin(a/2)]
                         [0 0 sin(a/2)  cos(a/2)]
             */
-            Gate *G = new Gate(OP::CRY, qubit, ctrl, 2, theta);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, cos(HALF * theta), -sin(HALF * theta),
-                                   0, 0, sin(HALF * theta), cos(HALF * theta)};
-            ValType gm_imag[16] = {0};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            Gate G(OP::CRY, qubit, ctrl, 2, theta);
+            gates->push_back(G);
         }
         void CRZ(ValType theta, IdxType ctrl, IdxType qubit)
         {
@@ -485,19 +309,8 @@ namespace NWQSim
                         [0 0 cos(a/2)-i*sin(a/2)  0]
                         [0 0 0  cos(a/2)+i*sin(a/2)]
             */
-            Gate *G = new Gate(OP::CRZ, qubit, ctrl, 2, theta);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, cos(HALF * theta), 0,
-                                   0, 0, 0, cos(HALF * theta)};
-            ValType gm_imag[16] = {0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, -sin(HALF * theta), 0,
-                                   0, 0, 0, sin(HALF * theta)};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            Gate G(OP::CRZ, qubit, ctrl, 2, theta);
+            gates->push_back(G);
         }
         void CSX(IdxType ctrl, IdxType qubit)
         {
@@ -507,19 +320,8 @@ namespace NWQSim
                         [0 0 (1+i)/2 (1-i)/2]
                         [0 0 (1-i)/2 (1+i)/2]
             */
-            Gate *G = new Gate(OP::CSX, qubit, ctrl, 2);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, HALF, HALF,
-                                   0, 0, HALF, HALF};
-            ValType gm_imag[16] = {0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, HALF, -HALF,
-                                   0, 0, -HALF, HALF};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            Gate G(OP::CSX, qubit, ctrl, 2);
+            gates->push_back(G);
         }
         void CP(ValType theta, IdxType ctrl, IdxType qubit)
         {
@@ -529,19 +331,8 @@ namespace NWQSim
                         [0 0 1 0]
                         [0 0 0 cos(a)+i*sin(a)]
             */
-            Gate *G = new Gate(OP::CP, qubit, ctrl, 2, theta);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, 1, 0,
-                                   0, 0, 0, cos(theta)};
-            ValType gm_imag[16] = {0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, sin(theta)};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            Gate G(OP::CP, qubit, ctrl, 2, theta);
+            gates->push_back(G);
         }
         void CU(ValType theta, ValType phi, ValType lam, ValType gamma,
                 IdxType ctrl, IdxType qubit)
@@ -552,19 +343,8 @@ namespace NWQSim
                         [0 0 e^(i*gamma)cos(theta/2), -e^(i*(gamma+lam))sin(theta/2)]
                         [0 0 e^(i*(gamma+phi))sin(theta/2), e^(i*(gamma+phi+lam))cos(theta/2)]
             */
-            Gate *G = new Gate(OP::CU, qubit, ctrl, 2, theta, phi, lam);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, cos(gamma) * cos(HALF * theta), -cos(gamma + lam) * sin(HALF * theta),
-                                   0, 0, cos(gamma + phi) * sin(HALF * theta), cos(gamma + phi + lam) * cos(HALF * theta)};
-            ValType gm_imag[16] = {0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, sin(gamma) * cos(HALF * theta), -sin(gamma + lam) * sin(HALF * theta),
-                                   0, 0, sin(gamma + phi) * sin(HALF * theta), sin(gamma + phi + lam) * cos(HALF * theta)};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit, ctrl), n_qubits);
+            Gate G(OP::CU, qubit, ctrl, 2, theta, phi, lam);
+            gates->push_back(G);
         }
         void RXX(ValType theta, IdxType qubit0, IdxType qubit1)
         {
@@ -574,21 +354,8 @@ namespace NWQSim
                         [0               -i*sin(theta/2) cos(theta/2)    0]
                         [-i*sin(theta/2) 0               0               cos(theta/2)]
             */
-            Gate *G = new Gate(OP::RXX, qubit0, qubit1, 2, theta);
-            ValType gm_real[16] = {cos(HALF * theta), 0, 0, 0,
-                                   0, cos(HALF * theta), 0, 0,
-                                   0, 0, cos(HALF * theta), 0,
-                                   0, 0, 0, cos(HALF * theta)};
-
-            ValType gm_imag[16] = {0, 0, 0, -sin(HALF * theta),
-                                   0, 0, -sin(HALF * theta), 0,
-                                   0, -sin(HALF * theta), 0, 0,
-                                   -sin(HALF * theta), 0, 0, 0};
-
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit0, qubit1), n_qubits);
+            Gate G(OP::RXX, qubit0, qubit1, 2, theta);
+            gates->push_back(G);
         }
         void RYY(ValType theta, IdxType qubit0, IdxType qubit1)
         {
@@ -598,21 +365,8 @@ namespace NWQSim
                         [0               -i*sin(theta/2) cos(theta/2)    0]
                         [i*sin(theta/2) 0               0               cos(theta/2)]
             */
-            Gate *G = new Gate(OP::RYY, qubit0, qubit1, 2, theta);
-            ValType gm_real[16] = {cos(HALF * theta), 0, 0, 0,
-                                   0, cos(HALF * theta), 0, 0,
-                                   0, 0, cos(HALF * theta), 0,
-                                   0, 0, 0, cos(HALF * theta)};
-
-            ValType gm_imag[16] = {0, 0, 0, sin(HALF * theta),
-                                   0, 0, -sin(HALF * theta), 0,
-                                   0, -sin(HALF * theta), 0, 0,
-                                   sin(HALF * theta), 0, 0, 0};
-
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit0, qubit1), n_qubits);
+            Gate G(OP::RYY, qubit0, qubit1, 2, theta);
+            gates->push_back(G);
         }
         void RZZ(ValType theta, IdxType qubit0, IdxType qubit1)
         {
@@ -622,22 +376,8 @@ namespace NWQSim
              *          [0                 0               e^(i theta/2)  0]
              *          [0                 0               0               e^(-i theta/2)]
              */
-            Gate *G = new Gate(OP::RZZ, qubit0, qubit1, 2, theta);
-
-            ValType gm_real[16] = {cos(-HALF * theta), 0, 0, 0,
-                                   0, cos(HALF * theta), 0, 0,
-                                   0, 0, cos(HALF * theta), 0,
-                                   0, 0, 0, cos(-HALF * theta)};
-
-            ValType gm_imag[16] = {sin(-HALF * theta), 0, 0, 0,
-                                   0, sin(HALF * theta), 0, 0,
-                                   0, 0, sin(HALF * theta), 0,
-                                   0, 0, 0, sin(-HALF * theta)};
-
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(qubit0, qubit1), n_qubits);
+            Gate G(OP::RZZ, qubit0, qubit1, 2, theta);
+            gates->push_back(G);
         }
 
         void SX(IdxType qubit)
@@ -646,13 +386,8 @@ namespace NWQSim
             /** SX = 1/2 [1+i 1-i]
                          [1-i 1+i]
             */
-            Gate *G = new Gate(OP::SX, qubit);
-            ValType gm_real[4] = {HALF, HALF, HALF, HALF};
-            ValType gm_imag[4] = {HALF, -HALF, -HALF, HALF};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::SX, qubit);
+            gates->push_back(G);
         }
 
         void ID(IdxType qubit)
@@ -661,13 +396,8 @@ namespace NWQSim
             /** ID  = [1 0]
                       [0 1]
             */
-            Gate *G = new Gate(OP::ID, qubit);
-            ValType gm_real[4] = {1, 0, 0, 1};
-            ValType gm_imag[4] = {0, 0, 0, 0};
-            G->set_gm(gm_real, gm_imag, 2);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::ID, qubit);
+            gates->push_back(G);
         }
 
         void SWAP(IdxType ctrl, IdxType qubit)
@@ -678,37 +408,24 @@ namespace NWQSim
                         [0 1 0 0]
                         [0 0 0 1]
             */
-            Gate *G = new Gate(OP::SWAP, qubit, ctrl, 2);
-            ValType gm_real[16] = {1, 0, 0, 0,
-                                   0, 0, 1, 0,
-                                   0, 1, 0, 0,
-                                   0, 0, 0, 1};
-            ValType gm_imag[16] = {0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, 0,
-                                   0, 0, 0, 0};
-            G->set_gm(gm_real, gm_imag, 4);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(std::max(ctrl, qubit), n_qubits);
+            Gate G(OP::SWAP, qubit, ctrl, 2);
+            gates->push_back(G);
         }
 
         void M(IdxType qubit) // default is pauli-Z
         {
-            Gate *G = new Gate(OP::M, qubit);
-            gates->push_back(*G);
+            Gate G(OP::M, qubit);
+            gates->push_back(G);
         }
         void MA(IdxType repetition) // default is pauli-Z
         {
-            Gate *G = new Gate(OP::MA, -1, -1, 1, 0, 0, 0, repetition);
-            gates->push_back(*G);
+            Gate G(OP::MA, -1, -1, 1, 0, 0, 0, repetition);
+            gates->push_back(G);
         }
         void RESET(IdxType qubit)
         {
-            Gate *G = new Gate(OP::RESET, qubit);
-            gates->push_back(*G);
-
-            // n_qubits = std::max(qubit, n_qubits);
+            Gate G(OP::RESET, qubit);
+            gates->push_back(G);
         }
 
         // ============================== Other Gate Definition ================================
