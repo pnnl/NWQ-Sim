@@ -219,8 +219,3 @@ namespace xacc
 
     } // namespace quantum
 } // namespace xacc
-
-// int main()
-// {
-//     return 0;
-// }

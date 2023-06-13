@@ -3,16 +3,12 @@
 #include "xacc.hpp"
 #include "nwq_accelerator.hpp"
 
-#include "backendManager.hpp"
-
 int main(int argc, char **argv)
 {
   xacc::Initialize(argc, argv);
   // Accelerator:
 
   auto nwq_acc = std::make_shared<xacc::quantum::NWQAccelerator>();
-
-  auto temp = BackendManager::create_state("cpu", 2, "sv");
 
   auto qpp_acc = xacc::getAccelerator("qpp"); //, {std::make_pair("shots", 4096)}
 

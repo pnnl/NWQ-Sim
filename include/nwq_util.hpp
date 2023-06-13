@@ -29,7 +29,7 @@ namespace NWQSim
     /* Basic data type for value */
     using ValType = double;
 
-    std::string formatDuration(std::chrono::seconds input_seconds)
+    inline std::string formatDuration(std::chrono::seconds input_seconds)
     {
         using namespace std::chrono;
         hours hrs = duration_cast<hours>(input_seconds % 24h);
@@ -40,7 +40,7 @@ namespace NWQSim
                (secs.count() < 10 ? "0" : "") + std::to_string(secs.count());
     }
 
-    void printProgressBar(int current, int total, std::chrono::time_point<std::chrono::steady_clock> start_time)
+    inline void printProgressBar(int current, int total, std::chrono::time_point<std::chrono::steady_clock> start_time)
     {
         const int barWidth = 50;
         auto now = std::chrono::steady_clock::now();
@@ -67,7 +67,7 @@ namespace NWQSim
                   << " Remaining: " << formatDuration(std::chrono::seconds(remaining)) << "\033[0m  \r";
         std::cout.flush();
     }
-    bool hasEvenParity(unsigned long long x, const std::vector<size_t> &in_qubitIndices)
+    inline bool hasEvenParity(unsigned long long x, const std::vector<size_t> &in_qubitIndices)
     {
         size_t count = 0;
         for (const auto &bitIdx : in_qubitIndices)
@@ -84,7 +84,7 @@ namespace NWQSim
      * CPU Timer based on Linux sys/time.h
      ***********************************************/
     // CPU timer
-    double get_cpu_timer()
+    inline double get_cpu_timer()
     {
         struct timeval tp;
         gettimeofday(&tp, NULL);
@@ -109,13 +109,13 @@ namespace NWQSim
      * Printing
      ***********************************************/
     // print a binary number
-    void print_binary(IdxType v, int width)
+    inline void print_binary(IdxType v, int width)
     {
         for (int i = width - 1; i >= 0; i--)
             putchar('0' + ((v >> i) & 1));
     }
     // print measurement results for n repetitions
-    void print_measurement(IdxType *res_state, IdxType n_qubits, int repetition)
+    inline void print_measurement(IdxType *res_state, IdxType n_qubits, int repetition)
     {
         assert(res_state != NULL);
         printf("\n===============  Measurement (tests=%d) ================\n", repetition);

@@ -46,10 +46,6 @@ int main(int argc, char **argv)
         simulation_method = std::string(getCmdOption(argv, argv + argc, "-sim"));
     }
 
-    std::transform(backend_name.begin(), backend_name.end(), backend_name.begin(),
-                   [](unsigned char c)
-                   { return std::toupper(c); });
-
 // If MPI or NVSHMEM backend, initialize MPI
 #ifdef MPI_ENABLED
     if (backend_name == "MPI" || backend_name == "NVGPU_MPI")

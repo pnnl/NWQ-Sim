@@ -99,7 +99,7 @@ namespace NWQSim::Config
      * @param file_dir the path where json file locates. e.g., "./Data/"
      * @param backend_name the backend name, e.g., "ibmq_toronto"
      */
-    void readConfigFile()
+    inline void readConfigFile()
     {
         std::string appendix = ".json";
         std::string path = DEVICE_CONFIG_PATH + DEVICE_CONFIG_FILE + appendix;

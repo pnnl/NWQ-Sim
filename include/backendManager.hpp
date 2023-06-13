@@ -82,6 +82,10 @@ public:
 
     static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "sv")
     {
+        // Convert to uppercase
+        std::transform(backend.begin(), backend.end(), backend.begin(),
+                       [](unsigned char c)
+                       { return std::toupper(c); });
 
         if (backend == "CPU")
         {
@@ -126,7 +130,7 @@ public:
 #endif
         else
         {
-            safe_print("Invalid backend name. Please use one of the available backends. (Case insensitive)\n");
+            safe_print("Invalid backend name: %s. Please use one of the available backends. (Case insensitive)\n", backend.c_str());
             print_available_backends();
             exit(1);
         }

@@ -21,6 +21,7 @@
 #include <string>
 #include <iostream>
 #include <cuda.h>
+#include <memory>
 #include <mma.h>
 
 namespace NWQSim
@@ -187,7 +188,7 @@ namespace NWQSim
 
         IdxType measure(IdxType qubit) override
         {
-            std::shared_ptr<NWQSim::Circuit> circuit = = std::make_shared<Circuit>(n_qubits);
+            std::shared_ptr<Circuit> circuit = std::make_shared<Circuit>(n_qubits);
             circuit->M(qubit);
             sim(circuit);
             return results[0];
@@ -195,7 +196,7 @@ namespace NWQSim
 
         IdxType *measure_all(IdxType repetition) override
         {
-            std::shared_ptr<NWQSim::Circuit> circuit == std::make_shared<Circuit>(n_qubits);
+            std::shared_ptr<Circuit> circuit = std::make_shared<Circuit>(n_qubits);
             circuit->MA(repetition);
             sim(circuit);
             return results;
