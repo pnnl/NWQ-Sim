@@ -6,7 +6,7 @@ module load PrgEnv-nvidia
 module load cudatoolkit
 
 export LD_LIBRARY_PATH=/opt/nvidia/hpc_sdk/Linux_x86_64/22.7/comm_libs/mpi/lib:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=$HOME/nvshmem_archive/lib:/opt/nvidia/hpc_sdk/Linux_x86_64/22.7/compilers/lib/:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$HOME/nvshmem/lib:/opt/nvidia/hpc_sdk/Linux_x86_64/22.7/compilers/lib/:$LD_LIBRARY_PATH
 
 
 
@@ -27,4 +27,3 @@ export LD_LIBRARY_PATH=$HOME/.xacc/lib:$LD_LIBRARY_PATH
 #module load nersc-easybuild/21.12 
 #module load GDRCopy/2.1-GCCcore-10.2.0-CUDA-11.1.1
 #module load OpenMPI/4.0.5-gcccuda-2020b
-#

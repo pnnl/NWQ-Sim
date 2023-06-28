@@ -28,7 +28,7 @@ else()
     # Set CUDA architecture
     set(CMAKE_CUDA_ARCHITECTURES 80)
     # Set the nvshmem home directory
-    list(APPEND CMAKE_PREFIX_PATH $ENV{HOME}/nvshmem_archive)
+    list(APPEND CMAKE_PREFIX_PATH $ENV{HOME}/nvshmem)
     set(CMAKE_CUDA_FLAGS_RELEASE "-O3")
 endif()
 
