@@ -21,8 +21,7 @@ namespace NWQSim
     public:
         // user input gate sequence
         std::shared_ptr<std::vector<Gate>> gates;
-        map<string, creg> list_cregs;
-        std::vector<int> initial_mapping;
+
         Circuit(IdxType _n_qubits) : n_qubits(_n_qubits)
         {
             // Implementation of constructor
@@ -43,25 +42,7 @@ namespace NWQSim
         {
             gates = std::make_shared<std::vector<Gate>>(new_gates);
         }
-        void set_creg(map<string, creg> list_cregs)
-        {
-            this->list_cregs = list_cregs;
-        }
-        void set_mapping(std::vector<int> initial_mapping)
-        {
-            for (auto ini : initial_mapping)
-            {
-                this->initial_mapping.push_back(ini);
-            }
-        }
-        std::vector<int> get_mapping()
-        {
-            return this->initial_mapping;
-        }
-        map<string, creg> get_cregs()
-        {
-            return this->list_cregs;
-        }
+
         void clear()
         {
             // Implementation of clear function

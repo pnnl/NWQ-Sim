@@ -7,7 +7,6 @@ project(MyPackage
         DESCRIPTION "NWQSim Qasm" 
         LANGUAGES C CXX)
 
-# find_package(OpenMP)
 # Set C++ and CUDA standards
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -29,13 +28,17 @@ else()
     # Set CUDA architecture
     set(CMAKE_CUDA_ARCHITECTURES 80)
     # Set the nvshmem home directory
-    list(APPEND CMAKE_PREFIX_PATH $ENV{HOME}/nvshmem)
+    list(APPEND CMAKE_PREFIX_PATH $ENV{HOME}/nvshmem_archive)
     set(CMAKE_CUDA_FLAGS_RELEASE "-O3")
 endif()
 
 
 # Enable highest optimization for release build
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
+if (NOT XACC_DIR)
+  set(XACC_DIR "$ENV{HOME}/.xacc")
+endif()
 
 # Find required packages
 find_package(CUDAToolkit)
