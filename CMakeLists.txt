@@ -41,7 +41,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 find_package(CUDAToolkit)
 find_package(MPI)
 find_package(OpenMP)
-find_package(NVSHMEM)
+find_package(NVSHMEM QUIET)
+find_package(XACC QUIET)
 
 if(NVSHMEM_FOUND)
     set(nvshmem_found_str "TRUE")
@@ -49,16 +50,25 @@ else()
     set(nvshmem_found_str "FALSE")
 endif()
 
+if(XACC_FOUND)
+    set(xacc_found_str "TRUE")
+else()
+    set(xacc_found_str "FALSE")
+endif()
+
 # Print package statuses
 message(STATUS "CUDA found: ${CUDAToolkit_FOUND}")
 message(STATUS "MPI found: ${MPI_FOUND}")
 message(STATUS "OpenMP found: ${OpenMP_CXX_FOUND}")
 message(STATUS "NVSHMEM found: ${nvshmem_found_str}")
+message(STATUS "XACC found: ${xacc_found_str}")
 
 # Include directories
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
 # Subdirectories
-# add_subdirectory(qasm)
+add_subdirectory(qasm)
 
-add_subdirectory(xacc)
+if(XACC_FOUND)
+    add_subdirectory(xacc)
+endif()

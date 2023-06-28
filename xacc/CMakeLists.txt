@@ -4,9 +4,6 @@ if (NOT XACC_DIR)
   set(XACC_DIR "$ENV{HOME}/.xacc")
 endif()
 
-# Find Xacc
-find_package(XACC REQUIRED)
-
 # Set additional compiler flags for C++
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")
 
