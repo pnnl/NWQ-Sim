@@ -220,6 +220,7 @@ namespace NWQSim
                     std::logic_error("Invalid gate type");
                 }
             }
+            std::cout << std::endl;
         }
 
         //============== C1 Gate ================

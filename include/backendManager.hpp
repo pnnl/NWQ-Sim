@@ -128,6 +128,11 @@ public:
                 return std::make_shared<NWQSim::DM_NVGPU_MPI>(numQubits);
         }
 #endif
+        else if (backend == "LIST")
+        {
+            print_available_backends();
+            exit(0);
+        }
         else
         {
             safe_print("Invalid backend name: %s. Please use one of the available backends. (Case insensitive)\n", backend.c_str());

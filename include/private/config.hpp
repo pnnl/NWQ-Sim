@@ -71,7 +71,7 @@ namespace NWQSim::Config
         }
     }
 
-    inline void printConfig(IdxType i_proc = 0)
+    inline void printConfig(IdxType i_proc, const std::string &sim_backend)
     {
         if (i_proc == 0)
         {
@@ -88,6 +88,8 @@ namespace NWQSim::Config
                       << "\033[1;32m" << (DEVICE_CONFIG_PATH.empty() ? "Not Set" : DEVICE_CONFIG_PATH) << "\033[0m" << std::endl;
             std::cout << std::left << std::setw(40) << "\033[1;33mDevice Config File:\033[0m"
                       << "\033[1;32m" << (DEVICE_CONFIG_FILE.empty() ? "Not Set" : DEVICE_CONFIG_FILE) << "\033[0m" << std::endl;
+            std::cout << std::left << std::setw(40) << "\033[1;33mSimulation Backend:\033[0m"
+                      << "\033[1;32m" << (sim_backend == "sv" ? "SVSim" : "DMSim") << "\033[0m" << std::endl;
             std::cout << std::endl;
         }
     }

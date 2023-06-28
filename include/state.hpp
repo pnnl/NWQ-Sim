@@ -21,9 +21,9 @@ namespace NWQSim
         }                          // constructor
         virtual ~QuantumState() {} // virtual destructor
 
-        virtual void print_config()
+        virtual void print_config(std::string sim_backend)
         {
-            Config::printConfig(i_proc);
+            Config::printConfig(i_proc, sim_backend);
         };
 
         virtual void reset_state() = 0;

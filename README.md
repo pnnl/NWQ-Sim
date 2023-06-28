@@ -236,8 +236,41 @@ Alternatively, you can allocate an interactive job and execute
 $ ./run_all
 ```
 
+# Program Runtime Configuration Options
 
+This guide provides detailed instructions on how to execute the compiled program along with the available command-line arguments to configure the program runtime.
 
+**Location:** Navigate to the `build` directory in your local project workspace.
+
+**Execution:** Run the executable program with the desired command-line arguments to adjust program behaviors as needed. Here is a comprehensive list of the command-line arguments:
+
+- `-q`: Executes a simulation with the given QASM file.
+
+- `-t <index>`: Runs the testing benchmarks for the specific index provided.
+
+- `-a`: Runs all testing benchmarks. 
+
+- `-backend list`: Lists all the available backends.
+
+- `-backend <name>`: Sets the backend for your program to the specified one. The backend name string is case-insensitive.
+
+- `-shots <value>`: Configures the total number of shots.
+
+- `-basis`: Activates the program to run benchmark circuits using only basis gates.
+
+- `-sim <method>`: Sets the simulation method. There are two available options:
+  - `sv`: Stochastic Vector simulation.
+  - `dm`: Density Matrix simulation. Please note, when running with `dm`, the given circuit can only contain IBM basis gates and 2-qubit gates that are included in the device configuration file specified in the default_configuration.json file.
+
+**Example Usage:** To run the qasm frontend from the `build` directory with a specific backend, a total number of shots, and a simulation method, use the following command: 
+
+```
+./qasm/nwq_sim -backend <name> -shots <value> -sim <method> -q <path/to/qasm>
+```
+
+Replace `<name>`, `<value>`, `<method>`, and `<path/to/qasm>` with your desired backend name, number of shots, and simulation method respectively.
+
+Please ensure that you replace `/qasm/nwq_sim` with the actual name of your compiled executable file if not using the qasm frontend.
 
 ## Authors 
 
