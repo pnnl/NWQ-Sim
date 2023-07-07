@@ -1,5 +1,9 @@
 import json
+from qiskit_ibm_provider import IBMProvider
 
+# Save your credentials on disk.
+#IBMProvider.save_account(token='<IBM Quantum API key>')
+provider = IBMProvider(instance='ibm-q-ornl/pnnl/csc488')
 
 def tfFromUnit(unit):  # time factor from unit, convert time unis to seconds
     if unit == "ns":
@@ -106,3 +110,15 @@ def procBackendProp(backend, path_to_file=None):
         with open(path_to_file + info_dict["name"] + "Config.json", "w") as f:
             json.dump(info_dict, f)
     return info_dict
+
+
+#backend = provider.get_backend('ibm_brisbane')
+backend = provider.get_backend('ibm_sherbrooke')
+
+procBackendProp(backend, "./")
+
+
+
+
+
+
