@@ -22,6 +22,7 @@ int main(int argc, char **argv)
 {
     IdxType total_shots = 16384;
     bool run_with_basis = false;
+    bool print_metrics = false;
     std::string backend_name = "CPU";
     std::string simulation_method = "sv";
 
@@ -34,6 +35,11 @@ int main(int argc, char **argv)
     if (cmdOptionExists(argv, argv + argc, "-basis"))
     {
         run_with_basis = true;
+    }
+
+    if (cmdOptionExists(argv, argv + argc, "-metrics"))
+    {
+        print_metrics = true;
     }
 
     if (cmdOptionExists(argv, argv + argc, "-backend"))
@@ -68,7 +74,7 @@ int main(int argc, char **argv)
             return 1;
         }
         state->print_config(simulation_method);
-        map<string, IdxType> *counts = parser.execute(state, total_shots);
+        map<string, IdxType> *counts = parser.execute(state, total_shots, print_metrics);
 
         std::vector<size_t> in_bits;
 
