@@ -76,6 +76,8 @@ namespace NWQSim
 
             // Loop over each gate in the circuit and update the depth of the corresponding qubits
             int max_depth = 0;
+
+            int two_q_gates = 0;
             for (int i = 0; i < gates->size(); i++)
             {
                 if (gates->at(i).op_name == OP::MA)
@@ -107,7 +109,11 @@ namespace NWQSim
 
                 // Update the depth of the control and target qubits
                 if (ctrl != -1)
+                {
                     qubit_depth[ctrl] = depth;
+                    two_q_gates++;
+                }
+
                 qubit_depth[target] = depth;
 
                 // Update the maximum depth if the current depth is greater than the previous maximum
@@ -136,7 +142,7 @@ namespace NWQSim
             entanglement_var /= n_qubits;
 
             // Print the results to the console
-            printf("Circuit Depth: %d; Gate Density: %.4f; Retention Lifespan: %.4f; Entanglement Variance: %.4f\n", max_depth, gate_density, retention_lifespan, entanglement_var);
+            printf("Circuit Depth: %d; Two-qubit Gate Count: %d; Gate Density: %.4f; Retention Lifespan: %.4f; Entanglement Variance: %.4f\n", max_depth, two_q_gates, gate_density, retention_lifespan, entanglement_var);
         }
 
         // ===================== Standard Gates =========================
