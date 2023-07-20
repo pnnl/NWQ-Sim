@@ -9,6 +9,7 @@ A Quantum System Simulation Environment on classical multi-node, multi-CPU/GPU h
 
 NWQSim is under active development. Please raise any bugs and suggest features. 
 
+
 ## About SV-Sim
 
 SV-Sim is implemented in C++/CUDA/HIP for general full-state quantum circuit simulation. It assumes qubits are all-to-all connected unless the input circuits are with respect to circuit topology. We use internal gate representations for advanced optimization and profiling.
@@ -62,68 +63,6 @@ Internally, it supports arbitrary 1 or 2 qubit gates for optimization and extens
 | C1 | C1(a0-a3)  | Arbitrary 1-qubit gate |
 | C2 | C2(a0-a15) | Arbitrary 2-qubit gate | 
 
-### Prerequisite
-SV-Sim in general only requires a C++ compiler. However, in order to build for GPUs or scaling (up and out) or using other APIs (python, qir, qiskit), we need the following libraries:
-
-|  Dependency  | Version | Comments |
-|:-----------: | ------- | -------- |
-|     CUDA     | 11.0 or later | NVIDIA GPU backend only | 
-|     GCC      | 7.0 or later  | Or other native C++ compiler |
-|    OpenMP    | Local     | single-node only |
-|     MPI      | Local   | CPU multi-node only | 
-|   NVSHMEM    | 2.6.0   | NVIDIA GPU cluster scale-out only |
-|  Python      | 3.4     | Python API only |
-|  Pybind11    | 2.5.0   | Python API only |
-|  mpi4py      | 3.0.3   | Python API on cluster only |
-|   ROCM       | 3.1.0   | AMD GPU only |
-|   Qiskit     | 0.20.0  | Qiskit interface only |
-|  Q# runtime  | Local   | Q#/QIR interface only |
-
-### Configure and run on ORNL Summit Supercomputer
-
-```
-$ git clone https://github.com/qir-alliance/nwqsim.git 
-$ cd nwqsim/env
-```
-You need to update the env file “setup_summit.sh”, specify the nvshmem path at the end of the LD_LIBRARY_PATH. If you use Q#/QIR, you need to configure the qsharp runtime paths
-```
-$ source setup_summit.sh
-$ cd ../qasm/ibmq_bench/
-$ vim Makefile
-```
-You need to update the Makefile here, mainly the path to NVSHMEM, the GPU arch number, and the project number in run_all.lsf
-```
-$ make -j 8
-$ bsub run_all.lsf
-```
-Alternatively, you can allocate an interactive job and execute
-```
-$ bsub -Is -W 20 -nnodes 2 -P CSCXXX  $SHELL
-$ ./run_all
-```
-
-### Configure and run on NERSC Perlmutter Supercomputer
-```
-$ git clone https://github.com/qir-alliance/nwqsim.git 
-$ cd nwqsim/env
-```
-You need to update the env file “setup_perlmutter.sh”, specify the nvshmem path at the end of the LD_LIBRARY_PATH. If you use Q#/QIR, you need to configure the qsharp runtime paths
-```
-$ source setup_perlmutter.sh
-$ cd ../svsim/qasm/ibmq_bench/
-$ vim makefile_perlmutter
-```
-You need to update the Makefile here, mainly the path to NVSHMEM.
-```
-$ make -j 8 -f makefile_perlmutter
-```
-Alternatively, you can allocate an interactive job and execute
-```
-$ salloc -N 2 -n 8 --qos interactive_ss11 --time 60:00 --constraint gpu -c 1 -G 8 --gpus-per-task 1 --account=m4142_g
-$ ./run_all_perlmutter.sh
-```
-
-
 ## About DM-Sim
 
 DM-Sim is implemented in C++/CUDA/HIP for general density-matrix quantum circuit simulation with noise. It needs to load backend device calibration data (including topology, T1, T2, SPAM, etc.) as a json file for runtime configuration to the simulator instance.  
@@ -175,102 +114,10 @@ Internally, it supports arbitrary 1 or 2 qubit gates for optimization and extens
 | C2 | C2(array of 0-15)  | Arbitrary density-matrix 1-qubit gate |
 | C4 | C4(array of 0-255) | Arbitrary density-matrix 2-qubit gate | 
 
+## Building and Running NWQ-Sim
 
-### Prerequisite
-DM-Sim generally only requires a C++ compiler. However, in order to build for GPUs or scaling (up and out) or using other APIs (python, qir, qiskit), we need the following libraries:
+To build and run NWQ-Sim, please refer to the detailed instructions provided in the [User Manual](doc/user_manual.md). The User Manual contains step-by-step guidelines on installing dependencies, building from source, configuring runtime options, and more.
 
-|  Dependency  | Version | Comments |
-|:-----------: | ------- | -------- |
-|     CUDA     | 11.0 or later | NVIDIA GPU backend only | 
-|     GCC      | 7.0 or later  | Or other native C++ compiler |
-|    OpenMP    | Local     | single-node only |
-|     MPI      | Local   | CPU multi-node only | 
-|   NVSHMEM    | 2.6.0   | NVIDIA GPU cluster scale-out only |
-|  Python      | 3.4     | Python API only |
-|  Pybind11    | 2.5.0   | Python API only |
-|  mpi4py      | 3.0.3   | Python API on cluster only |
-|   ROCM       | 3.1.0   | AMD GPU only |
-|   Qiskit     | 0.20.0  | Qiskit interface only |
-|  Q# runtime  | Local   | Q#/QIR interface only |
-
-### Configure and run on ORNL Summit Supercomputer
-
-```
-$ git clone https://github.com/qir-alliance/nwqsim.git 
-$ cd nwqsim/env
-```
-You need to update the env file “setup_summit.sh”, specify the nvshmem path at the end of the LD_LIBRARY_PATH. If you use Q#/QIR, you need to configure the qsharp runtime paths
-```
-$ source setup_summit.sh
-$ cd ../dmsim/qasm/ibmq_bench/
-$ vim Makefile
-```
-You need to update the Makefile here, mainly the path to NVSHMEM, the GPU arch number, and the project number in run_all.lsf
-```
-$ make -j 8
-$ bsub run_all.lsf
-```
-Alternatively, you can allocate an interactive job and execute
-```
-$ bsub -Is -W 20 -nnodes 2 -P CSCXXX  $SHELL
-$ ./run_all
-```
-
-### Configure and run on NERSC Perlmutter Supercomputer
-```
-$ git clone https://github.com/qir-alliance/nwqsim.git 
-$ cd nwqsim/env
-```
-You need to update the env file “setup_perlmutter.sh”, specify the nvshmem path at the end of the LD_LIBRARY_PATH. If you use Q#/QIR, you need to configure the qsharp runtime paths
-```
-$ source setup_perlmutter.sh
-$ cd ../qasm/ibmq_bench/
-$ vim Makefile
-```
-You need to update the Makefile here, mainly the path to NVSHMEM.
-```
-$ make -j 8
-```
-Alternatively, you can allocate an interactive job and execute
-```
-$ ./run_all
-```
-
-# Program Runtime Configuration Options
-
-This guide provides detailed instructions on how to execute the compiled program along with the available command-line arguments to configure the program runtime.
-
-**Location:** Navigate to the `build` directory in your local project workspace.
-
-**Execution:** Run the executable program with the desired command-line arguments to adjust program behaviors as needed. Here is a comprehensive list of the command-line arguments:
-
-- `-q`: Executes a simulation with the given QASM file.
-
-- `-t <index>`: Runs the testing benchmarks for the specific index provided.
-
-- `-a`: Runs all testing benchmarks. 
-
-- `-backend list`: Lists all the available backends.
-
-- `-backend <name>`: Sets the backend for your program to the specified one. The backend name string is case-insensitive.
-
-- `-shots <value>`: Configures the total number of shots.
-
-- `-basis`: Activates the program to run benchmark circuits using only basis gates.
-
-- `-sim <method>`: Sets the simulation method. There are two available options:
-  - `sv`: Stochastic Vector simulation.
-  - `dm`: Density Matrix simulation. Please note, when running with `dm`, the given circuit can only contain IBM basis gates and 2-qubit gates that are included in the device configuration file specified in the default_configuration.json file.
-
-**Example Usage:** To run the qasm frontend from the `build` directory with a specific backend, a total number of shots, and a simulation method, use the following command: 
-
-```
-./qasm/nwq_sim -backend <name> -shots <value> -sim <method> -q <path/to/qasm>
-```
-
-Replace `<name>`, `<value>`, `<method>`, and `<path/to/qasm>` with your desired backend name, number of shots, and simulation method respectively.
-
-Please ensure that you replace `/qasm/nwq_sim` with the actual name of your compiled executable file if not using the qasm frontend.
 
 ## Authors 
 
@@ -278,7 +125,7 @@ Please ensure that you replace `/qasm/nwq_sim` with the actual name of your comp
 
 Additionally, the following folks contribute the project:
 
- - Meng Wang, University of British Columbia and Pacific Northwest National Laboratory 
+ - Meng Wang, The University of British Columbia and Pacific Northwest National Laboratory 
  - Sriram Krishnamoorthy, Pacific Northwest National Laboratory 
  - Bo Fang, Pacific Northwest National Laboratory
  - Muqing Zheng, Lehigh University and Pacific Northwest National Laboratory
@@ -291,7 +138,6 @@ Additionally, the following folks contribute the project:
  - Alan Geller, Microsoft
  - Samuel Stein, Pacific Northwest National Laboratory
  - Thien Nguyen, Oak Ridge National Laboratory
-
 
 
 
