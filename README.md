@@ -175,6 +175,6 @@ This project is fully supported by the [Quantum Science Center (QSC)](https://qs
 
 ## Contributing
 
-Please contact us If you'd like to contribute to SV-Sim. See the contact in our paper or my [webpage](http://www.angliphd.com).
+Please contact us If you'd like to contribute to NWQ-Sim. See the contact in our paper or my [webpage](http://www.angliphd.com).
 
 
