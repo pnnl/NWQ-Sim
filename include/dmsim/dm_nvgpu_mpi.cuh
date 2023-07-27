@@ -21,12 +21,15 @@
 #include <string>
 #include <iostream>
 #include <cuda.h>
-#include <mma.h>
 #include <mpi.h>
 
 #include <nvshmem.h>
 #include <nvshmemx.h>
 #include <nvshmemx_error.h>
+
+#ifdef FP64_TC_AVAILABLE
+#include <mma.h>
+#endif
 
 namespace NWQSim
 {
@@ -159,8 +162,11 @@ namespace NWQSim
 
             IdxType n_gates = cpu_vec.size();
 
-            bool is_tc = Config::ENABLE_TENSOR_CORE;
+            bool is_tc = false;
 
+#ifdef FP64_TC_AVAILABLE
+            is_tc = Config::ENABLE_TENSOR_CORE;
+#endif
             DM_NVGPU_MPI *dm_gpu;
             SAFE_ALOC_GPU(dm_gpu, sizeof(DM_NVGPU_MPI));
             // Copy the simulator instance to GPU
@@ -909,6 +915,7 @@ namespace NWQSim
             return term;
         }
 
+#ifdef FP64_TC_AVAILABLE
         //============== Unified 4-qubit Gate with TC V1 ================
         // This is with tensorcore optimization
         __device__ __inline__ void C4TCV1_GATE(const ValType *gm_real, const ValType *gm_imag,
@@ -1462,7 +1469,7 @@ namespace NWQSim
                 // BARR_NVSHMEM;
             }
         }
-
+#endif
         ///*
         __device__ __inline__ void M_GATE(ValType *gm_real, ValType *gm_imag,
                                           const IdxType qubit, const IdxType cur_index)
@@ -1736,10 +1743,11 @@ namespace NWQSim
                 {
                     dm_gpu->SWAP_GATE(0, ctrl + (n_qubits));
                     BARR_NVSHMEM;
-
+#ifdef FP64_TC_AVAILABLE
                     if (enable_tc)
                         dm_gpu->C4TCV3_GATE(gm_real, gm_imag, ctrl, qubit, 0, qubit + (n_qubits));
                     else
+#endif
                         dm_gpu->C4V1_GATE(gm_real, gm_imag, ctrl, qubit, 0, qubit + (n_qubits));
 
                     BARR_NVSHMEM;
@@ -1747,9 +1755,11 @@ namespace NWQSim
                 }
                 else
                 {
+#ifdef FP64_TC_AVAILABLE
                     if (enable_tc)
                         dm_gpu->C4TCV3_GATE(gm_real, gm_imag, ctrl, qubit, ctrl + (n_qubits), qubit + (n_qubits));
                     else
+#endif
                         dm_gpu->C4V1_GATE(gm_real, gm_imag, ctrl, qubit, ctrl + (n_qubits), qubit + (n_qubits));
                 }
             }

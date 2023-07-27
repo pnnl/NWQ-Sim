@@ -26,10 +26,14 @@ else()
     set(CMAKE_CUDA_HOST_COMPILER mpicxx)
 
     # Set CUDA architecture
-    set(CMAKE_CUDA_ARCHITECTURES 80)
+    set(CMAKE_CUDA_ARCHITECTURES "$ENV{MY_CUDA_ARCH}")
     # Set the nvshmem home directory
     list(APPEND CMAKE_PREFIX_PATH $ENV{HOME}/nvshmem)
     set(CMAKE_CUDA_FLAGS_RELEASE "-O3")
+endif()
+
+if("$ENV{MY_CUDA_ARCH}" STREQUAL "80")
+    add_compile_definitions(FP64_TC_AVAILABLE)
 endif()
 
 

@@ -21,8 +21,11 @@
 #include <string>
 #include <iostream>
 #include <cuda.h>
-#include <mma.h>
 #include <sstream>
+
+#ifdef FP64_TC_AVAILABLE
+#include <mma.h>
+#endif
 
 namespace NWQSim
 {
@@ -133,7 +136,11 @@ namespace NWQSim
 
             IdxType n_gates = cpu_vec.size();
 
-            bool is_tc = Config::ENABLE_TENSOR_CORE;
+            bool is_tc = false;
+
+#ifdef FP64_TC_AVAILABLE
+            is_tc = Config::ENABLE_TENSOR_CORE;
+#endif
 
             DM_NVGPU *dm_gpu;
             SAFE_ALOC_GPU(dm_gpu, sizeof(DM_NVGPU));
@@ -459,6 +466,7 @@ namespace NWQSim
             return term;
         }
 
+#ifdef FP64_TC_AVAILABLE
         //============== Unified 4-qubit Gate with TC V1 ================
         // This is with tensorcore optimization
         __device__ __inline__ void C4TCV1_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1,
@@ -720,7 +728,7 @@ namespace NWQSim
             }
             // BARR_NVGPU;
         }
-
+#endif
         __device__ __inline__ void M_GATE(ValType *gm_real, ValType *gm_imag,
                                           const IdxType qubit, const IdxType cur_index)
         {
@@ -918,9 +926,11 @@ namespace NWQSim
             }
             else if (op_name == OP::C4)
             {
+#ifdef FP64_TC_AVAILABLE
                 if (tensor_core)
                     dm_gpu->C4TCV1_GATE(gm_real, gm_imag, ctrl, qubit, ctrl + (n_qubits), qubit + (n_qubits));
                 else
+#endif
                     dm_gpu->C4_GATE(gm_real, gm_imag, ctrl, qubit, ctrl + (n_qubits), qubit + (n_qubits));
             }
             grid.sync();
