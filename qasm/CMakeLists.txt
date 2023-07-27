@@ -4,13 +4,13 @@ add_executable(nwq_qasm nwq_qasm.cpp)
 target_compile_features(nwq_qasm PRIVATE cxx_std_17)
 
 # Link against OpenMP if available
-if(TARGET OpenMP::OpenMP_CXX)
+if(OpenMP_FOUND)
     target_link_libraries(nwq_qasm PUBLIC OpenMP::OpenMP_CXX)
     target_compile_definitions(nwq_qasm PUBLIC OMP_ENABLED)
 endif()
 
 # Link against MPI if available
-if(TARGET MPI::MPI_CXX)
+if(MPI_FOUND)
     target_link_libraries(nwq_qasm PUBLIC MPI::MPI_CXX)
     target_compile_definitions(nwq_qasm PUBLIC MPI_ENABLED)
 endif()
