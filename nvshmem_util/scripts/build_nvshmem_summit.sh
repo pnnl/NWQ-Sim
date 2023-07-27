@@ -1,4 +1,3 @@
-"build_nvshmem_summit.sh" 38L, 800C                                                                                                                       10,0-1        All
 #!/bin/bash
 
 set -e

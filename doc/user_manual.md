@@ -44,7 +44,9 @@ make
 ```
 
 ## Build on NERSC Perlmutter Supercomputer
-follow these steps to build NWQ-Sim on the NERSC Perlmutter Supercomputer:
+NVSHMEM is required to enable multi-gpu execution on Perlmutter HPC. The current NVSHMEM library has an issue where it prevents multi-GPU execution from utilizing more than 2GB of GPU memory on each GPU. We have provided a fix for this issue in the source code.
+
+Follow these steps to build NWQ-Sim on the NERSC Perlmutter Supercomputer:
 
 1. Initialize the environment with provided script
 
@@ -59,11 +61,17 @@ wget https://developer.download.nvidia.com/compute/redist/nvshmem/2.9.0/source/n
 
 tar -xf nvshmem_src_2.9.0-2.tar.xz
 ```
+* Replace the mem.cpp file in nvshmem_src
+
+```bash
+cp ~/NWQ-Sim/nvshmem_util/mem.cpp ~/nvshmem_src_2.9.0-2/src/mem/mem.cpp
+```
+
 * Copy the provided NVSHMEM build script to nvshmem_src folder and then build it
 ```bash
-cp ~/NWQ-Sim/scripts/build_nvshmem.sh ~/nvshmem_src_2.9.0-2/
+cp ~/NWQ-Sim/nvshmem_util/scripts/build_nvshmem_perlmutter.sh ~/nvshmem_src_2.9.0-2/
 cd ~/nvshmem_src_2.9.0-2
-./build_nvshmem.sh
+./build_nvshmem_perlmutter.sh
 ```
 
 Finally, build NWQ-Sim using the steps in [Build from Source](#build_base)
@@ -75,7 +83,35 @@ TO BE ADDED.
 
 ## Configure and run on ORNL Summit Supercomputer
 
-TO BE ADDED.
+Follow these steps to build NWQ-Sim on the OLCF Summit Supercomputer:
+
+1. Initialize the environment with provided script
+
+```bash
+source ~/NWQ-Sim/environment/setup_summit.sh
+```
+
+2. Build NVSHMEM
+* Download and extract the NVSHMEM txz archive from [here](https://developer.download.nvidia.com/compute/redist/nvshmem/). For example, to download and extract NVSHMEM 2.9.0:
+```bash
+wget https://developer.download.nvidia.com/compute/redist/nvshmem/2.9.0/source/nvshmem_src_2.9.0-2.tar.xz
+
+tar -xf nvshmem_src_2.9.0-2.tar.xz
+```
+* Replace the mem.cpp file in nvshmem_src
+
+```bash
+cp ~/NWQ-Sim/nvshmem_util/mem.cpp ~/nvshmem_src_2.9.0-2/src/mem/mem.cpp
+```
+
+* Copy the provided NVSHMEM build script to nvshmem_src folder and then build it
+```bash
+cp ~/NWQ-Sim/nvshmem_util/scripts/build_nvshmem_summit.sh ~/nvshmem_src_2.9.0-2/
+cd ~/nvshmem_src_2.9.0-2
+./build_nvshmem_summit.sh
+```
+
+Finally, build NWQ-Sim using the steps in [Build from Source](#build_base)
 
 
 ## Program Runtime Configuration Options

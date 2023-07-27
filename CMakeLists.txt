@@ -1,10 +1,25 @@
-# Specify a minimum CMake version
-cmake_minimum_required(VERSION 3.20) 
+if(APPLE)
+    message("Running on Apple platform")
+    # Additional configuration for Apple platforms
+else()
+    message("Not running on Apple platform")
+    # Configuration for non-Apple platforms
+    set(CMAKE_C_COMPILER "$ENV{cc}")
+    set(CMAKE_CXX_COMPILER "$ENV{CC}")
+    set(CMAKE_CUDA_HOST_COMPILER mpicxx)
+
+    # Set CUDA architecture
+    set(CMAKE_CUDA_ARCHITECTURES "$ENV{MY_CUDA_ARCH}")
+    # Set the nvshmem home directory
+    list(APPEND CMAKE_PREFIX_PATH $ENV{HOME}/nvshmem)
+    set(CMAKE_CUDA_FLAGS_RELEASE "-O3")
+endif()
+
 
 # Specify the project details
-project(MyPackage 
-        VERSION 0.0.1 
-        DESCRIPTION "NWQSim Qasm" 
+project(MyPackage
+        VERSION 0.0.1
+        DESCRIPTION "NWQSim Qasm"
         LANGUAGES C CXX)
 
 # Set C++ and CUDA standards
@@ -15,30 +30,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-if(APPLE)
-    message("Running on Apple platform")
-    # Additional configuration for Apple platforms
-else()
-    message("Not running on Apple platform")
-    # Configuration for non-Apple platforms
-    set(CMAKE_C_COMPILER cc)
-    set(CMAKE_CXX_COMPILER CC)
-    set(CMAKE_CUDA_HOST_COMPILER mpicxx)
-
-    # Set CUDA architecture
-    set(CMAKE_CUDA_ARCHITECTURES "$ENV{MY_CUDA_ARCH}")
-    # Set the nvshmem home directory
-    list(APPEND CMAKE_PREFIX_PATH $ENV{HOME}/nvshmem)
-    set(CMAKE_CUDA_FLAGS_RELEASE "-O3")
-endif()
-
 if("$ENV{MY_CUDA_ARCH}" STREQUAL "80")
     add_compile_definitions(FP64_TC_AVAILABLE)
 endif()
 
-
-# Enable highest optimization for release build
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 if (NOT XACC_DIR)
   set(XACC_DIR "$ENV{HOME}/.xacc")
