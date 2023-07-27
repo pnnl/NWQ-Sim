@@ -1,3 +1,7 @@
+# Specify a minimum CMake version
+cmake_minimum_required(VERSION 3.20) 
+
+
 if(APPLE)
     message("Running on Apple platform")
     # Additional configuration for Apple platforms
