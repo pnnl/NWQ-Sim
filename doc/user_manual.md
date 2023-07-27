@@ -92,8 +92,7 @@ source ~/NWQ-Sim/environment/setup_summit.sh
 ```
 
 2. Build NVSHMEM
-* Download and extract the NVSHMEM txz archive from [here](https://developer.download.nvidia.com/compute/redist/nvsh
-mem/). For example, to download and extract NVSHMEM 2.9.0:
+* Download and extract the NVSHMEM txz archive from [here](https://developer.download.nvidia.com/compute/redist/nvshmem/). For example, to download and extract NVSHMEM 2.9.0:
 ```bash
 wget https://developer.download.nvidia.com/compute/redist/nvshmem/2.9.0/source/nvshmem_src_2.9.0-2.tar.xz
 
