@@ -23,11 +23,11 @@ if(CUDAToolkit_FOUND)
     target_compile_features(nwq_qasm PRIVATE cuda_std_17)
     #target_link_libraries(nwq_qasm PUBLIC CUDA::cudart)
     target_compile_definitions(nwq_qasm PUBLIC CUDA_ENABLED)
-endif()
 
-# If NVSHMEM is available, link against it and set the definitions
-if(NVSHMEM_FOUND AND TARGET nvshmem::nvshmem)
-    set_target_properties(nwq_qasm PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-    target_link_libraries(nwq_qasm PUBLIC nvshmem::nvshmem)
-    target_compile_definitions(nwq_qasm PUBLIC CUDA_MPI_ENABLED)
+    # If NVSHMEM is available, link against it and set the definitions
+    if(NVSHMEM_FOUND AND TARGET nvshmem::nvshmem)
+        set_target_properties(nwq_qasm PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+        target_link_libraries(nwq_qasm PUBLIC nvshmem::nvshmem)
+        target_compile_definitions(nwq_qasm PUBLIC CUDA_MPI_ENABLED)
+    endif()
 endif()
