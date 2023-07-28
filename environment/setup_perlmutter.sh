@@ -18,6 +18,9 @@ export NVSHMEM_DISABLE_CUDA_VMM=1
 export PYTHONPATH=$PYTHONPATH:$HOME/.xacc
 export LD_LIBRARY_PATH=$HOME/.xacc/lib:$LD_LIBRARY_PATH
 
+export cc=cc
+export CC=CC
+
 #module unload cgpu
 #module load gcc/9.3.0
 #module load cudatoolkit/21.3_11.2

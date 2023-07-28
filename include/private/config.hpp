@@ -8,13 +8,13 @@
 
 namespace NWQSim::Config
 {
-    inline bool PRINT_SIM_TRACE;
-    inline bool ENABLE_NOISE;
-    inline bool ENABLE_FUSION;
-    inline bool ENABLE_TENSOR_CORE;
+    inline bool PRINT_SIM_TRACE = true;
+    inline bool ENABLE_NOISE = false;
+    inline bool ENABLE_FUSION = true;
+    inline bool ENABLE_TENSOR_CORE = false;
 
-    inline std::string DEVICE_CONFIG_PATH;
-    inline std::string DEVICE_CONFIG_FILE;
+    inline std::string DEVICE_CONFIG_PATH = "~/NWQ-Sim/data/device/";
+    inline std::string DEVICE_CONFIG_FILE = "dummy_ibmq12";
 
     inline nlohmann::json backend_config = {};
 
@@ -23,7 +23,10 @@ namespace NWQSim::Config
         std::ifstream i(filename);
         if (!i.is_open())
         {
-            throw std::runtime_error("Could not open " + filename);
+            std::cout << "Could not open " << filename << std::endl;
+            std::cout << "Using Default Configurations" << std::endl;
+            return;
+            // throw std::runtime_error("Could not open " + filename);
         }
 
         nlohmann::json j;

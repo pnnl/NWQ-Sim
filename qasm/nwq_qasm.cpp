@@ -2,6 +2,7 @@
 #include <string>
 #include <algorithm>
 #include <cctype>
+#include <iomanip>
 
 /********** UPDATE THE INCLUDE PATH FOR LOCAL HEADER FILE HERE ************/
 #include "src/qasm_parser.hpp"
@@ -26,6 +27,37 @@ int main(int argc, char **argv)
     std::string backend = "CPU";
     std::string simulation_method = "sv";
 
+    if (cmdOptionExists(argv, argv + argc, "-h"))
+    {
+
+        std::cout << "\033[1;33m"
+                  << "Usage: ./nwq_qasm [options]"
+                  << "\033[0m" << std::endl
+                  << std::endl;
+
+        std::cout << std::left << std::setw(20) << "\033[1;32mOption\033[0m"
+                  << "           Description" << std::endl;
+
+        std::cout << std::setw(20) << "-q"
+                  << "Executes a simulation with the given QASM file." << std::endl;
+        std::cout << std::setw(20) << "-t <index>"
+                  << "Runs the testing benchmarks for the specific index provided." << std::endl;
+        std::cout << std::setw(20) << "-a"
+                  << "Runs all testing benchmarks." << std::endl;
+        std::cout << std::setw(20) << "-backend_list"
+                  << "Lists all the available backends." << std::endl;
+        std::cout << std::setw(20) << "-metrics"
+                  << "Print the metrics of the circuit." << std::endl;
+        std::cout << std::setw(20) << "-backend <name>"
+                  << "Sets the backend for your program to the specified one (default: " << backend << "). The backend name string is case-insensitive." << std::endl;
+        std::cout << std::setw(20) << "-shots <value>"
+                  << "Configures the total number of shots (default: " << total_shots << ")." << std::endl;
+        std::cout << std::setw(20) << "-sim <method>"
+                  << "Sets the simulation method (default: " << simulation_method << "). Available options: sv, dm." << std::endl;
+        std::cout << std::setw(20) << "-basis"
+                  << "Run the transpiled benchmark circuits which only contain basis gates." << std::endl;
+    }
+
     if (cmdOptionExists(argv, argv + argc, "-shots"))
     {
         const char *shots_str = getCmdOption(argv, argv + argc, "-shots");
@@ -40,6 +72,11 @@ int main(int argc, char **argv)
     if (cmdOptionExists(argv, argv + argc, "-metrics"))
     {
         print_metrics = true;
+    }
+
+    if (cmdOptionExists(argv, argv + argc, "-backend_list"))
+    {
+        BackendManager::print_available_backends();
     }
 
     if (cmdOptionExists(argv, argv + argc, "-backend"))
@@ -81,26 +118,26 @@ int main(int argc, char **argv)
         state->print_config(simulation_method);
         map<string, IdxType> *counts = parser.execute(state, total_shots, print_metrics);
 
-        std::vector<size_t> in_bits;
+        // std::vector<size_t> in_bits;
 
-        for (int i = 0; i < parser.num_qubits(); ++i)
-        {
-            in_bits.push_back(i);
-        }
+        // for (int i = 0; i < parser.num_qubits(); ++i)
+        // {
+        //     in_bits.push_back(i);
+        // }
 
-        ValType exp_val_z = state->get_exp_z(in_bits);
-        ValType exp_val_z_all = state->get_exp_z();
-        for (size_t i = 0; i < parser.num_qubits(); ++i)
-        {
-            in_bits[i] = i;
-        }
+        // ValType exp_val_z = state->get_exp_z(in_bits);
+        // ValType exp_val_z_all = state->get_exp_z();
+        // for (size_t i = 0; i < parser.num_qubits(); ++i)
+        // {
+        //     in_bits[i] = i;
+        // }
 
         if (state->i_proc == 0)
         {
             print_counts(counts, total_shots);
             // fflush(stdout);
-            printf("exp-val-z: %f\n", exp_val_z);
-            printf("exp-val-z all: %f\n", exp_val_z_all);
+            // printf("exp-val-z: %f\n", exp_val_z);
+            // printf("exp-val-z all: %f\n", exp_val_z_all);
         }
 
         delete counts;
