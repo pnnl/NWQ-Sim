@@ -96,7 +96,7 @@ namespace NWQSim
                 else
                 {
                     // Two-qubit gate
-                    depth = max(qubit_depth[ctrl], qubit_depth[target]) + 1;
+                    depth = std::max(qubit_depth[ctrl], qubit_depth[target]) + 1;
                     g2_gates++;
 
                     // Increment the number of two-qubit gates applied to each qubit
