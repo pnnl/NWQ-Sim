@@ -142,7 +142,7 @@ namespace NWQSim
             entanglement_var /= n_qubits;
 
             // Print the results to the console
-            printf("Circuit Depth: %d; Two-qubit Gate Count: %d; Gate Density: %.4f; Retention Lifespan: %.4f; Entanglement Variance: %.4f\n", max_depth, two_q_gates, gate_density, retention_lifespan, entanglement_var);
+            printf("Circuit Depth: %d; Two-qubit Gate Count: %d; Gate Density: %.4f; Retention Lifespan: %.4f; Entanglement Variance: %.4f\n\n", max_depth, two_q_gates, gate_density, retention_lifespan, entanglement_var);
         }
 
         // ===================== Standard Gates =========================

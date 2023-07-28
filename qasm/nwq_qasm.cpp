@@ -53,7 +53,7 @@ int main(int argc, char **argv)
         std::cout << std::setw(20) << "-shots <value>"
                   << "Configures the total number of shots (default: " << total_shots << ")." << std::endl;
         std::cout << std::setw(20) << "-sim <method>"
-                  << "Sets the simulation method (default: " << simulation_method << "). Available options: sv, dm." << std::endl;
+                  << "Select the simulation method: sv (state vector, default), dm (density matrix). (default: " << simulation_method << ")." << std::endl;
         std::cout << std::setw(20) << "-basis"
                   << "Run the transpiled benchmark circuits which only contain basis gates." << std::endl;
     }
