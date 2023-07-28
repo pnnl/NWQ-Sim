@@ -63,11 +63,13 @@ else()
 endif()
 
 # Print package statuses
+message(STATUS "\n==================== NWQSim Environment Search Summary ===================")
 message(STATUS "CUDA found: ${CUDAToolkit_FOUND}")
 message(STATUS "MPI found: ${MPI_FOUND}")
 message(STATUS "OpenMP found: ${OpenMP_CXX_FOUND}")
 message(STATUS "NVSHMEM found: ${nvshmem_found_str}")
 message(STATUS "XACC found: ${xacc_found_str}")
+message(STATUS "==========================================================================\n")
 
 # Include directories
 include_directories(${PROJECT_SOURCE_DIR}/include)
