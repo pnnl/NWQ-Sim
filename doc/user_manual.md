@@ -50,7 +50,17 @@ For multi-GPU execution on HPCs with NVIDIA GPUs, NWQ-Sim requires the NVSHMEM l
 
 ### ORNL Frontier HPC
 
-TO BE ADDED.
+Currently, for AMD CPU, single/OpenMP/MPI work, for AMD GPU, only single AMD MI250X GPU works.
+
+Follow these steps to build NWQ-Sim on the OLCF Frontier HPC:
+
+1. Initialize the environment with provided script
+
+```bash
+source ~/NWQ-Sim/environment/setup_frontier.sh
+```
+
+Then, build NWQ-Sim using the steps in [Build from Source](#build_base)
 
 ### ORNL Summit HPC
 
@@ -162,10 +172,19 @@ Replace `<name>`, `<value>`, `<method>`, and `<path/to/qasm>` with your desired 
 Please ensure that you replace `/qasm/nwq_sim` with the actual name of your compiled executable file if not using the qasm frontend.
 
 ### Running on Frontier HPC
-TO BE ADDED
+
+To run NWQ-Sim on the Frontier or Crusher Supercomputer, initilize the environment first
+```bash
+source ~/NWQ-Sim/environment/setup_frontier.sh
+```
+Launch multi-CPU execution for regular or interactive jobs:
+```bash
+srun -N<nodes> -n<CPUS> ./qasm/nwq_sim <NWQ-Sim Command> -backend MPI
+```
 
 ### Running on Summit HPC
-To run NWQ-Sim on the Perlmutter Supercomputer, initilize the environment first
+
+To run NWQ-Sim on the Summit Supercomputer, initilize the environment first
 ```bash
 source ~/NWQ-Sim/environment/setup_summit.sh
 ```
@@ -196,7 +215,23 @@ NWQ-Sim is also capable of conducting chemistry simulations using the XACC front
 
 Below is an example of how to use NWQ-Sim with the XACC frontend for a VQE simulation:
 
+
 1. Install XACC by following the steps outlined in the [XACC repository](https://github.com/eclipse/xacc#build-from-source).
+
+Note, to successfully install and run XACC on Summit, you need to:
+```bash
+module load openblas
+```
+Also, do not use all threads to build (make -j$(nproc --all) install) which draws error, use:
+```bash
+make -j8 install
+```
+
+To successfully install XACC on Frontier, you need to load the two modules (the default cray-python/3.9 won't work)
+```bash
+module load openblas/0.3.17
+module load cray-python/3.10.10
+```
 
 2. Navigate to /NWQSim/xacc folder and create a source file.
 2. Include the NWQ-Sim backend implementation in your code:
