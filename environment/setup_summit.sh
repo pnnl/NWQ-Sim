@@ -5,6 +5,7 @@ module load gcc/9.3.0
 module load cuda/11.5.2
 module load gdrcopy/2.3
 module load spectrum-mpi
+module load openblas
 
 export SHMEM_SYMMETRIC_HEAP_SIZE=2G
 export NVSHMEM_SYMMETRIC_SIZE=8G
