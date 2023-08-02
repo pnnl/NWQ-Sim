@@ -187,10 +187,9 @@ namespace NWQSim
             for (int i = 0; i < n_gates; i++)
             {
 
-#ifdef PRINT_PROGRESS_BAR
+                if (Config::PRINT_SIM_TRACE)
+                    printProgressBar(i, n_gates, start);
 
-                printProgressBar(i, n_gates, start);
-#endif
                 auto g = gates[i];
 
                 if (g.op_name == OP::C1)

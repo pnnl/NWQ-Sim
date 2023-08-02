@@ -127,3 +127,56 @@ typedef struct GPU_Timer
     cudaEvent_t start;
     cudaEvent_t stop;
 } gpu_timer;
+
+/***********************************************
+ * VQE Related Functions
+ ***********************************************/
+
+__device__ bool hasEvenParity(unsigned long long x, const size_t *in_bits, const size_t in_bits_size)
+{
+    size_t count = 0;
+    for (size_t i = 0; i < in_bits_size; ++i)
+    {
+        if (x & (1ULL << in_bits[i]))
+        {
+            count++;
+        }
+    }
+    return (count % 2) == 0;
+}
+
+__device__ double parity(unsigned long long num)
+{
+    num ^= num >> 32;
+    num ^= num >> 16;
+    num ^= num >> 8;
+    num ^= num >> 4;
+    num &= 0xf;
+    return (0x6996 >> num) & 1;
+}
+
+__global__ void gpu_exp_z_bits(const size_t *in_bits, size_t in_bits_size, const double *sv_real, const double *sv_imag, double *result, const unsigned long long dim)
+{
+    unsigned long long idx = threadIdx.x + blockIdx.x * blockDim.x + blockIdx.y * blockDim.x * gridDim.x;
+
+    if (idx < dim)
+    {
+        double res = (hasEvenParity(idx, in_bits, in_bits_size) ? 1.0 : -1.0) *
+                     (sv_real[idx] * sv_real[idx] + sv_imag[idx] * sv_imag[idx]);
+
+        atomicAdd(result, res);
+    }
+}
+
+__global__ void gpu_exp_z(const double *sv_real, const double *sv_imag, double *result, const unsigned long long dim)
+{
+    unsigned long long idx = threadIdx.x + blockIdx.x * blockDim.x + blockIdx.y * blockDim.x * gridDim.x;
+
+    if (idx < dim)
+    {
+        bool parityVal = parity(idx);
+        double res = (parityVal ? -1.0 : 1.0) * (sv_real[idx] * sv_real[idx] + sv_imag[idx] * sv_imag[idx]);
+
+        atomicAdd(result, res);
+    }
+}

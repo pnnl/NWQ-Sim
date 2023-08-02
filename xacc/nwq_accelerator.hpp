@@ -27,6 +27,10 @@ namespace xacc
             {
                 initialize(config);
             }
+            void updateConfiguration(const HeterogeneousMap &&config) override
+            {
+                updateConfiguration(config);
+            }
             virtual const std::vector<std::string> configurationKeys() override
             {
                 return {};
@@ -41,8 +45,9 @@ namespace xacc
 
         private:
             int m_shots = 8192;
-            std::string backend_name = "cpu";   //  cpu_omp
-            std::string simulation_type = "sv"; // sv or dm
+            std::string backend_name = "nvgpu";
+            std::string simulation_type = "sv";
+            bool vqe_mode = false;
 
             std::shared_ptr<NWQSim::QuantumState> m_state;
         };

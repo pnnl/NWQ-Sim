@@ -203,14 +203,70 @@ namespace NWQSim
 
         ValType get_exp_z(const std::vector<size_t> &in_bits) override
         {
+            // copy these vectors to device
+            size_t *in_bits_gpu;
 
-            return 0;
+            SAFE_ALOC_GPU(in_bits_gpu, in_bits.size() * sizeof(size_t));
+            hipSafeCall(hipMemcpy(in_bits_gpu, in_bits.data(), in_bits.size() * sizeof(size_t), hipMemcpyHostToDevice));
+
+            // result
+            double result = 0.0;
+            double *result_gpu;
+            SAFE_ALOC_GPU(result_gpu, sizeof(ValType));
+            hipSafeCall(hipMemcpy(result_gpu, &result, sizeof(double), hipMemcpyHostToDevice));
+
+            // get device properties and calculate the optimal number of blocks per SM
+            hipDeviceProp_t deviceProp;
+            hipSafeCall(hipGetDeviceProperties(&deviceProp, 0));
+
+            int numBlocksPerSm;
+            hipSafeCall(hipOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
+                                                                     gpu_exp_z_bits, THREADS_CTA_HIP, 0));
+
+            dim3 gridDim(numBlocksPerSm * deviceProp.multiProcessorCount, 1, 1);
+            dim3 blockDim(THREADS_CTA_HIP, 1, 1);
+
+            // call the kernels
+            gpu_exp_z_bits<<<gridDim, blockDim>>>(in_bits_gpu, in_bits.size(), sv_real, sv_imag, result_gpu, dim);
+
+            // copy result back
+            hipSafeCall(hipMemcpy(&result, result_gpu, sizeof(ValType), hipMemcpyDeviceToHost));
+
+            SAFE_FREE_GPU(in_bits_gpu);
+            SAFE_FREE_GPU(result_gpu);
+
+            return result;
         }
 
         ValType get_exp_z() override
         {
 
-            return 0;
+            // result
+            double result = 0.0;
+            double *result_gpu;
+            SAFE_ALOC_GPU(result_gpu, sizeof(ValType));
+            hipSafeCall(hipMemcpy(result_gpu, &result, sizeof(double), hipMemcpyHostToDevice));
+
+            // get device properties and calculate the optimal number of blocks per SM
+            hipDeviceProp_t deviceProp;
+            hipSafeCall(hipGetDeviceProperties(&deviceProp, 0));
+
+            int numBlocksPerSm;
+            hipSafeCall(hipOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
+                                                                     gpu_exp_z, THREADS_CTA_HIP, 0));
+
+            dim3 gridDim(numBlocksPerSm * deviceProp.multiProcessorCount, 1, 1);
+            dim3 blockDim(THREADS_CTA_HIP, 1, 1);
+
+            // call the kernels
+            gpu_exp_z<<<gridDim, blockDim>>>(sv_real, sv_imag, result_gpu, dim);
+
+            // copy result back
+            hipSafeCall(hipMemcpy(&result, result_gpu, sizeof(ValType), hipMemcpyDeviceToHost));
+
+            SAFE_FREE_GPU(result_gpu);
+
+            return result;
         }
 
         void print_res_state() override

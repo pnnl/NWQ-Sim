@@ -91,7 +91,10 @@ public:
 
     static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "sv")
     {
-
+        // Convert to uppercase
+        std::transform(backend.begin(), backend.end(), backend.begin(),
+                       [](unsigned char c)
+                       { return std::toupper(c); });
         if (backend == "CPU")
         {
             if (simulator_method == "sv")

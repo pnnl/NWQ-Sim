@@ -140,28 +140,12 @@ namespace NWQSim
 
         virtual ValType get_exp_z(const std::vector<size_t> &in_bits) override
         {
-            double result = 0.0;
-
-            // for (unsigned long long i = 0; i < dim; ++i)
-            // {
-            //     result += (hasEvenParity(i, in_bits) ? 1.0 : -1.0) *
-            //               (dm_real[i] * dm_real[i] + dm_imag[i] * dm_imag[i]);
-            // }
-
-            return result;
+            throw std::logic_error("get_exp_z Not implemented (DM_CPU)");
         }
 
         virtual ValType get_exp_z() override
         {
-            double result = 0.0;
-
-            // for (unsigned long long i = 0; i < dim; ++i)
-            // {
-            //     bool parity = __builtin_parity(i);
-            //     result += (parity ? -1.0 : 1.0) * (dm_real[i] * dm_real[i] + dm_imag[i] * dm_imag[i]);
-            // }
-
-            return result;
+            throw std::logic_error("get_exp_z Not implemented (DM_CPU)");
         }
 
         void print_res_state() override
@@ -209,10 +193,9 @@ namespace NWQSim
             for (int i = 0; i < n_gates; i++)
             {
 
-#ifdef PRINT_PROGRESS_BAR
+                if (Config::PRINT_SIM_TRACE)
+                    printProgressBar(i, n_gates, start);
 
-                printProgressBar(i, n_gates, start);
-#endif
                 auto g = gates[i];
 
                 if (g.op_name == OP::C2)

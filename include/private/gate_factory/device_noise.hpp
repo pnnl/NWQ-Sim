@@ -324,8 +324,7 @@ namespace NWQSim
 
             default:
                 throw std::invalid_argument("Unsupported basis gate!");
-                break;
-            }
+                        }
 
             if (!Config::ENABLE_NOISE)
             {

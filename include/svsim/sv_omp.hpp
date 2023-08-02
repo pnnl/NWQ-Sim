@@ -58,8 +58,16 @@ namespace NWQSim
         {
 #pragma omp parallel
             {
-                for (auto g : gates)
+                auto start = std::chrono::steady_clock::now();
+                int n_gates = gates.size();
+                for (int i = 0; i < n_gates; i++)
                 {
+
+                    if (Config::PRINT_SIM_TRACE && omp_get_thread_num() == 0)
+                        printProgressBar(i, n_gates, start);
+
+                    auto g = gates[i];
+
                     if (g.op_name == OP::C1)
                     {
                         C1_GATE(g.gm_real, g.gm_imag, g.qubit);

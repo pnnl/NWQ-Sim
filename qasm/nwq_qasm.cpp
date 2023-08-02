@@ -82,11 +82,6 @@ int main(int argc, char **argv)
     if (cmdOptionExists(argv, argv + argc, "-backend"))
     {
         backend = std::string(getCmdOption(argv, argv + argc, "-backend"));
-
-        // Convert to uppercase
-        std::transform(backend.begin(), backend.end(), backend.begin(),
-                       [](unsigned char c)
-                       { return std::toupper(c); });
     }
 
     if (cmdOptionExists(argv, argv + argc, "-sim"))

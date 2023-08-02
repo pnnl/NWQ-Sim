@@ -10,6 +10,9 @@ int main(int argc, char **argv)
 
   auto nwq_acc = std::make_shared<xacc::quantum::NWQAccelerator>();
 
+  if (argc == 2)
+    nwq_acc->updateConfiguration({std::make_pair("backend", std::string(argv[1]))});
+
   auto qpp_acc = xacc::getAccelerator("qpp"); //, {std::make_pair("shots", 4096)}
 
   xacc::qasm(R"(
@@ -26,7 +29,15 @@ int main(int argc, char **argv)
   // Allocate some qubits and execute
   auto buffer_nwq = xacc::qalloc(2);
   nwq_acc->execute(buffer_nwq, bell);
-  std::cout << "NWQ: "
+  std::cout << "NWQ (Counts): "
+            << "\n";
+  buffer_nwq->print();
+
+  // Allocate some qubits and execute
+  buffer_nwq->resetBuffer();
+  nwq_acc->updateConfiguration({std::make_pair("vqe_mode", true)});
+  nwq_acc->execute(buffer_nwq, bell);
+  std::cout << "NWQ (EXP-Z): "
             << "\n";
   buffer_nwq->print();
 

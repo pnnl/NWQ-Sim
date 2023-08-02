@@ -256,15 +256,12 @@ namespace NWQSim
 
         ValType get_exp_z(const std::vector<size_t> &in_bits) override
         {
-            double result = 0.0;
-
-            return result;
+            throw std::logic_error("get_exp_z Not implemented (DM_CUDA_MPI)");
         }
 
         ValType get_exp_z() override
         {
-
-            return 0;
+            throw std::logic_error("get_exp_z Not implemented (DM_CUDA_MPI)");
         }
 
         IdxType measure(IdxType qubit) override

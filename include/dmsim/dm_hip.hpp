@@ -214,14 +214,12 @@ namespace NWQSim
 
         ValType get_exp_z(const std::vector<size_t> &in_bits) override
         {
-
-            return 0;
+            throw std::logic_error("get_exp_z Not implemented (DM_HIP)");
         }
 
         ValType get_exp_z() override
         {
-
-            return 0;
+            throw std::logic_error("get_exp_z Not implemented (DM_HIP)");
         }
 
         void print_res_state() override

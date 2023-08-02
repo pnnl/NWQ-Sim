@@ -160,6 +160,11 @@ namespace xacc
             {
                 m_shots = params.get<int>("shots");
             }
+
+            if (params.keyExists<bool>("vqe_mode"))
+            {
+                vqe_mode = params.get<bool>("vqe_mode");
+            }
         }
 
         void NWQAccelerator::execute(
@@ -190,17 +195,48 @@ namespace xacc
             m_state->sim(visitor.getNWQCircuit());
 
             auto measured_bits = visitor.getMeasureBits();
-            if (measured_bits.empty())
+
+            if (vqe_mode)
             {
-                // Default is just measure alls:
-                for (size_t i = 0; i < buffer->size(); ++i)
+                if (measured_bits.empty() || measured_bits.size() == buffer->size())
                 {
-                    measured_bits.emplace_back(i);
+                    // Default is just measure alls:
+                    buffer->addExtraInfo("exp-val-z", m_state->get_exp_z());
+                }
+                else
+                {
+                    std::sort(measured_bits.begin(), measured_bits.end());
+                    buffer->addExtraInfo("exp-val-z", m_state->get_exp_z(measured_bits));
                 }
             }
-            std::sort(measured_bits.begin(), measured_bits.end());
+            else
+            {
+                const auto measured_results = m_state->measure_all(m_shots);
 
-            buffer->addExtraInfo("exp-val-z", m_state->get_exp_z(measured_bits));
+                const auto nwqSimMeasureToBitString = [&measured_bits](const auto &val)
+                {
+                    std::string bitString;
+                    for (const auto &bit : measured_bits)
+                    {
+                        if (val & (1ULL << bit))
+                        {
+                            bitString.push_back('1');
+                        }
+                        else
+                        {
+                            bitString.push_back('0');
+                        }
+                    }
+                    std::reverse(bitString.begin(), bitString.end()); // Reverse the bit string
+
+                    return bitString;
+                };
+
+                for (int i = 0; i < m_shots; i++)
+                {
+                    buffer->appendMeasurement(nwqSimMeasureToBitString(measured_results[i]));
+                }
+            }
         }
 
         void NWQAccelerator::execute(

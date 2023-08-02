@@ -291,9 +291,16 @@ namespace NWQSim
         void simulation_kernel(std::vector<SVGate> gates)
         {
 
-            //=========================================
-            for (auto g : gates)
+            auto start = std::chrono::steady_clock::now();
+            int n_gates = gates.size();
+            for (int i = 0; i < n_gates; i++)
             {
+
+                if (Config::PRINT_SIM_TRACE && i_proc == 0)
+                    printProgressBar(i, n_gates, start);
+
+                auto g = gates[i];
+
                 // only need sync when operating on remote qubits
                 if ((g.ctrl >= lg2_m_cpu) || (g.qubit >= lg2_m_cpu))
                 {
