@@ -4,3 +4,5 @@ module load cray-mpich
 
 export cc=gcc
 export CC=g++
+
+export MY_HIP_ARCH=gfx90a

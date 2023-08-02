@@ -71,6 +71,8 @@ endif()
 
 if(HIP_FOUND)
     set(hip_found_str "TRUE")
+    set(CMAKE_HIP_ARCHITECTURES "$ENV{MY_HIP_ARCH}")
+    set(CMAKE_HIP_FLAGS_RELEASE "-O3")
 else()
     set(hip_found_str "FALSE")
 endif()
