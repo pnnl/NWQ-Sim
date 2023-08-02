@@ -153,7 +153,5 @@ __global__ void gpu_exp_z(const double *sv_real, const double *sv_imag, double *
         atomicAdd(result, res);
     }
 }
-*VQE Related Functions
-                                         *********************************************** /
 
     
