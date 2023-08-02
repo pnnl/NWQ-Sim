@@ -31,7 +31,10 @@ Additional dependencies depend on the specific features you require:
 Build from Source
 -----------------
 
-To build NWQ-Sim from source, follow these steps:
+NWQ-Sim uses CMake for building, which automatically detects the
+execution environment, determines which backends to build, and includes
+the appropriate libraries accordingly. To build NWQ-Sim from source,
+follow these steps:
 
 1. Clone the NWQ-Sim repository:
 
@@ -54,62 +57,36 @@ To build NWQ-Sim from source, follow these steps:
    cmake ..
    make
 
-Build on NERSC Perlmutter Supercomputer
----------------------------------------
+Build on HPC Systems
+--------------------
 
-NVSHMEM is required to enable multi-gpu execution on Perlmutter HPC. The
-current NVSHMEM library has an issue where it prevents multi-GPU
-execution from utilizing more than 2GB of GPU memory on each GPU. We
-have provided a fix for this issue in the source code.
+For multi-GPU execution on HPCs with NVIDIA GPUs, NWQ-Sim requires the
+NVSHMEM library. However, the current version of NVSHMEM library has a
+known issue that restricts each GPU to utilize no more than 2GB of GPU
+memory. To overcome this limitation, we have incorporated a fix in our
+source code.
 
-Follow these steps to build NWQ-Sim on the NERSC Perlmutter
-Supercomputer:
+ORNL Frontier HPC
+~~~~~~~~~~~~~~~~~
+
+Currently, for AMD CPU, single/OpenMP/MPI work, for AMD GPU, only single
+AMD MI250X GPU works.
+
+Follow these steps to build NWQ-Sim on the OLCF Frontier HPC:
 
 1. Initialize the environment with provided script
 
 .. code:: bash
 
-   source ~/NWQ-Sim/environment/setup_perlmutter.sh
+   source ~/NWQ-Sim/environment/setup_frontier.sh
 
-2. Build NVSHMEM
-
--  Download and extract the NVSHMEM txz archive from
-   `here <https://developer.download.nvidia.com/compute/redist/nvshmem/>`__.
-   For example, to download and extract NVSHMEM 2.9.0:
-
-.. code:: bash
-
-   wget https://developer.download.nvidia.com/compute/redist/nvshmem/2.9.0/source/nvshmem_src_2.9.0-2.tar.xz
-
-   tar -xf nvshmem_src_2.9.0-2.tar.xz
-
--  Replace the mem.cpp file in nvshmem_src
-
-.. code:: bash
-
-   cp ~/NWQ-Sim/nvshmem_util/mem.cpp ~/nvshmem_src_2.9.0-2/src/mem/mem.cpp
-
--  Copy the provided NVSHMEM build script to nvshmem_src folder and then
-   build it
-
-.. code:: bash
-
-   cp ~/NWQ-Sim/nvshmem_util/scripts/build_nvshmem_perlmutter.sh ~/nvshmem_src_2.9.0-2/
-   cd ~/nvshmem_src_2.9.0-2
-   ./build_nvshmem_perlmutter.sh
-
-Finally, build NWQ-Sim using the steps in `Build from
+Then, build NWQ-Sim using the steps in `Build from
 Source <#build_base>`__
 
-Configure and run on ORNL Frontier Supercomputer
-------------------------------------------------
+ORNL Summit HPC
+~~~~~~~~~~~~~~~
 
-TO BE ADDED.
-
-Configure and run on ORNL Summit Supercomputer
-----------------------------------------------
-
-Follow these steps to build NWQ-Sim on the OLCF Summit Supercomputer:
+Follow these steps to build NWQ-Sim on the OLCF Summit HPC:
 
 1. Initialize the environment with provided script
 
@@ -147,6 +124,47 @@ Follow these steps to build NWQ-Sim on the OLCF Summit Supercomputer:
 Finally, build NWQ-Sim using the steps in `Build from
 Source <#build_base>`__
 
+NERSC Perlmutter HPC
+~~~~~~~~~~~~~~~~~~~~
+
+Follow these steps to build NWQ-Sim on the NERSC Perlmutter HPC:
+
+1. Initialize the environment with provided script
+
+.. code:: bash
+
+   source ~/NWQ-Sim/environment/setup_perlmutter.sh
+
+2. Build NVSHMEM
+
+-  Download and extract the NVSHMEM txz archive from
+   `here <https://developer.download.nvidia.com/compute/redist/nvshmem/>`__.
+   For example, to download and extract NVSHMEM 2.9.0:
+
+.. code:: bash
+
+   wget https://developer.download.nvidia.com/compute/redist/nvshmem/2.9.0/source/nvshmem_src_2.9.0-2.tar.xz
+
+   tar -xf nvshmem_src_2.9.0-2.tar.xz
+
+-  Replace the mem.cpp file in nvshmem_src
+
+.. code:: bash
+
+   cp ~/NWQ-Sim/nvshmem_util/mem.cpp ~/nvshmem_src_2.9.0-2/src/mem/mem.cpp
+
+-  Copy the provided NVSHMEM build script to nvshmem_src folder and then
+   build it
+
+.. code:: bash
+
+   cp ~/NWQ-Sim/nvshmem_util/scripts/build_nvshmem_perlmutter.sh ~/nvshmem_src_2.9.0-2/
+   cd ~/nvshmem_src_2.9.0-2
+   ./build_nvshmem_perlmutter.sh
+
+Finally, build NWQ-Sim using the steps in `Build from
+Source <#build_base>`__
+
 Program Runtime Configuration Options
 -------------------------------------
 
@@ -176,6 +194,7 @@ list of the command-line arguments:
    -  MPI
    -  NVGPU
    -  NVGPU_MPI
+   -  AMDGPU
 
 -  ``-backend <name>``: Sets the backend for your program to the
    specified one. The backend name string is case-insensitive.
@@ -209,8 +228,43 @@ respectively.
 Please ensure that you replace ``/qasm/nwq_sim`` with the actual name of
 your compiled executable file if not using the qasm frontend.
 
-Running on Perlmutter Supercomputer
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Running on Frontier HPC
+~~~~~~~~~~~~~~~~~~~~~~~
+
+To run NWQ-Sim on the Frontier or Crusher Supercomputer, initilize the
+environment first
+
+.. code:: bash
+
+   source ~/NWQ-Sim/environment/setup_frontier.sh
+
+Launch multi-CPU execution for regular or interactive jobs:
+
+.. code:: bash
+
+   srun -N<nodes> -n<CPUS> ./qasm/nwq_sim <NWQ-Sim Command> -backend MPI
+
+Running on Summit HPC
+~~~~~~~~~~~~~~~~~~~~~
+
+To run NWQ-Sim on the Summit Supercomputer, initilize the environment
+first
+
+.. code:: bash
+
+   source ~/NWQ-Sim/environment/setup_summit.sh
+
+Launch multi-GPU execution for regular or interactive jobs:
+
+.. code:: bash
+
+   jsrun -n<GPUS> -a1 -g1 -c1 -brs <NWQ-Sim Command> -backend NVGPU_MPI
+
+Replace with the total number of GPUs, and with the NWQ-Sim execution
+command.
+
+Running on Perlmutter HPC
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To run NWQ-Sim on the Perlmutter Supercomputer, initilize the
 environment first
@@ -229,26 +283,56 @@ Replace ``<NODES>`` with the number of compute nodes, ``<GPUS>`` with
 the total number of GPUs, and ``<NWQ-Sim Command>`` with the NWQ-Sim
 execution command.
 
-XACC Frontend
--------------
+NWQ-Sim for Chemistry Simulations
+---------------------------------
 
-To use NWQ-Sim as an execution backend for XACC, follow these steps: 1.
-Install XACC by following the steps outlined in the `XACC
-repository <https://github.com/eclipse/xacc#build-from-source>`__.
+NWQ-Sim is also capable of conducting chemistry simulations using the
+XACC frontend, such as Variational Quantum Eigensolver (VQE)
+simulations. This allows for a range of complex quantum chemical
+computations using NWQ-Sim.
 
-2. Include the NWQ-Sim backend implementation in your code:
+Below is an example of how to use NWQ-Sim with the XACC frontend for a
+VQE simulation:
+
+1. Install XACC by following the steps outlined in the `XACC
+   repository <https://github.com/eclipse/xacc#build-from-source>`__.
+
+Note, to successfully install and run XACC on Summit, you need to:
+
+.. code:: bash
+
+   module load openblas
+
+Also, do not use all threads to build (make -j$(nproc –all) install)
+which draws error, use:
+
+.. code:: bash
+
+   make -j8 install
+
+To successfully install XACC on Frontier, you need to load the two
+modules (the default cray-python/3.9 won’t work)
+
+.. code:: bash
+
+   module load openblas/0.3.17
+   module load cray-python/3.10.10
+
+2. Navigate to /NWQSim/xacc folder and create a source file.
+3. Include the NWQ-Sim backend implementation in your code:
 
 .. code:: cpp
 
    #include "nwq_accelerator.hpp"
 
-Create an NWQAccelerator object:
+4. Create an NWQAccelerator object:
 
 .. code:: cpp
 
    auto nwq_acc = std::make_shared<xacc::quantum::NWQAccelerator>();
 
-Utilize the NWQAccelerator with XACC. For example, you can run XACC-VQE:
+5. Utilize the NWQAccelerator with XACC. For example, you can run
+   XACC-VQE:
 
 .. code:: cpp
 
@@ -299,3 +383,21 @@ Utilize the NWQAccelerator with XACC. For example, you can run XACC-VQE:
 Replace the target source file in ``NWQ-Sim/xacc/CMakeList.txt`` and
 build the project. The executable will be located at
 ``NWQ-Sim/build/xacc/nwq_xacc``.
+
+Example Execution
+~~~~~~~~~~~~~~~~~
+
+Here, we illustrate an execution of the Adapt VQE simulation on a water
+molecule using NWQ-Sim. The chart below depicts the variation in delta
+energy per iteration of the algorithm. As observed, the desired chemical
+accuracy is achieved around the 14th iteration, demonstrating the
+effectiveness of the approach.
+
+.. figure:: adapt_vqe.png
+   :alt: Adapt VQE Delta Energy Chart
+
+   Adapt VQE Delta Energy Chart
+
+Please note, this is an example; actual results may vary based on the
+specific quantum chemistry problem and the precision of your
+Hamiltonian.

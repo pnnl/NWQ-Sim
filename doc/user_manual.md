@@ -149,6 +149,7 @@ This guide provides detailed instructions on how to execute the compiled program
   - MPI
   - NVGPU
   - NVGPU_MPI
+  - AMDGPU
 
 
 - `-backend <name>`: Sets the backend for your program to the specified one. The backend name string is case-insensitive.
