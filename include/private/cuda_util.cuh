@@ -5,27 +5,27 @@
 #include <iostream>
 
 /***********************************************
- * NVGPU specific attributes
+ * CUDA specific attributes
  ***********************************************/
-#define THREADS_CTA_NVGPU 256
+#define THREADS_CTA_CUDA 256
 
 /***********************************************
- * Macros for NVGPU
+ * Macros for CUDA
  ***********************************************/
-#define LOCAL_G_NVGPU(arr, i) arr[(i)]
-#define LOCAL_P_NVGPU(arr, i, val) arr[(i)] = val;
-#define BARR_NVGPU grid.sync();
+#define LOCAL_G_CUDA(arr, i) arr[(i)]
+#define LOCAL_P_CUDA(arr, i, val) arr[(i)] = val;
+#define BARR_CUDA grid.sync();
 
 // CLUSTER BASED
-#define PGAS_P(arr, i, val) nvshmem_double_p(&(arr)[(i) & ((m_gpu) - 1)], (val), ((i) >> (lg2_m_gpu)))
-#define PGAS_G(arr, i) nvshmem_double_g(&(arr)[(i) & ((m_gpu) - 1)], ((i) >> (lg2_m_gpu)))
+#define PGAS_P(arr, i, val) nvshmem_double_p(&(arr)[(i) & ((m_gpu)-1)], (val), ((i) >> (lg2_m_gpu)))
+#define PGAS_G(arr, i) nvshmem_double_g(&(arr)[(i) & ((m_gpu)-1)], ((i) >> (lg2_m_gpu)))
 #define BARR_NVSHMEM                         \
     if (threadIdx.x == 0 && blockIdx.x == 0) \
         nvshmem_barrier_all();               \
     grid.sync();
 
-#define LOCAL_G_NVGPU_MPI(arr, i) arr[(i) & (m_gpu - 1)]
-#define LOCAL_P_NVGPU_MPI(arr, i, val) arr[(i) & (m_gpu - 1)] = val;
+#define LOCAL_G_CUDA_MPI(arr, i) arr[(i) & (m_gpu - 1)]
+#define LOCAL_P_CUDA_MPI(arr, i, val) arr[(i) & (m_gpu - 1)] = val;
 
 /***********************************************
  * Error Checking:

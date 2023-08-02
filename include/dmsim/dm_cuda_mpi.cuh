@@ -6,7 +6,7 @@
 #include "../circuit.hpp"
 
 #include "../private/config.hpp"
-#include "../private/nvgpu_util.cuh"
+#include "../private/cuda_util.cuh"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
 
@@ -38,13 +38,13 @@ namespace NWQSim
     using namespace nvcuda;
 
     // Simulation kernel runtime
-    class DM_NVGPU_MPI;
-    __global__ void dm_simulation_kernel_nvgpu_mpi(DM_NVGPU_MPI *dm_gpu, IdxType n_gates, IdxType n_qubits, bool enable_tc);
+    class DM_CUDA_MPI;
+    __global__ void dm_simulation_kernel_cuda_mpi(DM_CUDA_MPI *dm_gpu, IdxType n_gates, IdxType n_qubits, bool enable_tc);
 
-    class DM_NVGPU_MPI : public QuantumState
+    class DM_CUDA_MPI : public QuantumState
     {
     public:
-        DM_NVGPU_MPI(IdxType _n_qubits) : QuantumState(_n_qubits)
+        DM_CUDA_MPI(IdxType _n_qubits) : QuantumState(_n_qubits)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -102,7 +102,7 @@ namespace NWQSim
             rng.seed(time(0));
         }
 
-        ~DM_NVGPU_MPI()
+        ~DM_CUDA_MPI()
         {
             // Release for CPU side
             SAFE_FREE_HOST_CUDA(dm_real_cpu);
@@ -167,11 +167,11 @@ namespace NWQSim
 #ifdef FP64_TC_AVAILABLE
             is_tc = Config::ENABLE_TENSOR_CORE;
 #endif
-            DM_NVGPU_MPI *dm_gpu;
-            SAFE_ALOC_GPU(dm_gpu, sizeof(DM_NVGPU_MPI));
+            DM_CUDA_MPI *dm_gpu;
+            SAFE_ALOC_GPU(dm_gpu, sizeof(DM_CUDA_MPI));
             // Copy the simulator instance to GPU
             cudaSafeCall(cudaMemcpy(dm_gpu, this,
-                                    sizeof(DM_NVGPU_MPI), cudaMemcpyHostToDevice));
+                                    sizeof(DM_CUDA_MPI), cudaMemcpyHostToDevice));
 
             double *sim_times;
             double sim_time;
@@ -190,13 +190,13 @@ namespace NWQSim
             // 8*16 is per warp shared-memory usage for C4 TC, with real and imag
             unsigned smem_size;
             if (is_tc)
-                smem_size = THREADS_CTA_NVGPU / 32 * 8 * 16 * 2 * sizeof(ValType);
+                smem_size = THREADS_CTA_CUDA / 32 * 8 * 16 * 2 * sizeof(ValType);
             else
                 smem_size = 0;
 
             int numBlocksPerSm;
             cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
-                                                                       dm_simulation_kernel_nvgpu_mpi, THREADS_CTA_NVGPU, smem_size));
+                                                                       dm_simulation_kernel_cuda_mpi, THREADS_CTA_CUDA, smem_size));
             gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
             void *args[] = {&dm_gpu, &n_gates, &n_qubits, &is_tc};
             cudaSafeCall(cudaDeviceSynchronize());
@@ -205,8 +205,8 @@ namespace NWQSim
                 MPI_Barrier(MPI_COMM_WORLD);
             sim_timer.start_timer();
 
-            NVSHMEM_CHECK(nvshmemx_collective_launch((const void *)dm_simulation_kernel_nvgpu_mpi, gridDim,
-                                                     THREADS_CTA_NVGPU, args, smem_size, 0));
+            NVSHMEM_CHECK(nvshmemx_collective_launch((const void *)dm_simulation_kernel_cuda_mpi, gridDim,
+                                                     THREADS_CTA_CUDA, args, smem_size, 0));
 
             cudaSafeCall(cudaDeviceSynchronize());
 
@@ -519,24 +519,24 @@ namespace NWQSim
                     const IdxType term1 = MOD2E(DIV2E(i, p), q - p - 1) * EXP2E(p + 1);
                     const IdxType term2 = DIV2E(DIV2E(i, p), q - p - 1) * EXP2E(q + 1);
                     const IdxType term = term2 + term1 + term0;
-                    el_real[0] = LOCAL_G_NVGPU_MPI(dm_real, term + SV4IDX(0));
-                    el_imag[0] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV4IDX(0));
-                    el_real[3] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV4IDX(3));
-                    el_imag[3] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV4IDX(3));
+                    el_real[0] = LOCAL_G_CUDA_MPI(dm_real, term + SV4IDX(0));
+                    el_imag[0] = LOCAL_G_CUDA_MPI(dm_imag, term + SV4IDX(0));
+                    el_real[3] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV4IDX(3));
+                    el_imag[3] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV4IDX(3));
 
                     if (qubit0 == q) // qubit0 is the remote qubit
                     {
-                        el_real[1] = LOCAL_G_NVGPU_MPI(dm_real, term + SV4IDX(1));
-                        el_imag[1] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV4IDX(1));
-                        el_real[2] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV4IDX(2));
-                        el_imag[2] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV4IDX(2));
+                        el_real[1] = LOCAL_G_CUDA_MPI(dm_real, term + SV4IDX(1));
+                        el_imag[1] = LOCAL_G_CUDA_MPI(dm_imag, term + SV4IDX(1));
+                        el_real[2] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV4IDX(2));
+                        el_imag[2] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV4IDX(2));
                     }
                     else // qubit1 is the remote qubit
                     {
-                        el_real[1] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV4IDX(1));
-                        el_imag[1] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV4IDX(1));
-                        el_real[2] = LOCAL_G_NVGPU_MPI(dm_real, term + SV4IDX(2));
-                        el_imag[2] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV4IDX(2));
+                        el_real[1] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV4IDX(1));
+                        el_imag[1] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV4IDX(1));
+                        el_real[2] = LOCAL_G_CUDA_MPI(dm_real, term + SV4IDX(2));
+                        el_imag[2] = LOCAL_G_CUDA_MPI(dm_imag, term + SV4IDX(2));
                     }
 #pragma unroll
                     for (unsigned j = 0; j < 4; j++)
@@ -548,24 +548,24 @@ namespace NWQSim
                             res_imag[j] += (el_real[k] * gm_imag[j * 4 + k]) + (el_imag[k] * gm_real[j * 4 + k]);
                         }
                     }
-                    LOCAL_P_NVGPU_MPI(dm_real, term + SV4IDX(0), res_real[0]);
-                    LOCAL_P_NVGPU_MPI(dm_imag, term + SV4IDX(0), res_imag[0]);
-                    LOCAL_P_NVGPU_MPI(dm_real_remote, term + SV4IDX(3), res_real[3]);
-                    LOCAL_P_NVGPU_MPI(dm_imag_remote, term + SV4IDX(3), res_imag[3]);
+                    LOCAL_P_CUDA_MPI(dm_real, term + SV4IDX(0), res_real[0]);
+                    LOCAL_P_CUDA_MPI(dm_imag, term + SV4IDX(0), res_imag[0]);
+                    LOCAL_P_CUDA_MPI(dm_real_remote, term + SV4IDX(3), res_real[3]);
+                    LOCAL_P_CUDA_MPI(dm_imag_remote, term + SV4IDX(3), res_imag[3]);
 
                     if (qubit0 == q) // qubit0 is the remote qubit
                     {
-                        LOCAL_P_NVGPU_MPI(dm_real, term + SV4IDX(1), res_real[1]);
-                        LOCAL_P_NVGPU_MPI(dm_imag, term + SV4IDX(1), res_imag[1]);
-                        LOCAL_P_NVGPU_MPI(dm_real_remote, term + SV4IDX(2), res_real[2]);
-                        LOCAL_P_NVGPU_MPI(dm_imag_remote, term + SV4IDX(2), res_imag[2]);
+                        LOCAL_P_CUDA_MPI(dm_real, term + SV4IDX(1), res_real[1]);
+                        LOCAL_P_CUDA_MPI(dm_imag, term + SV4IDX(1), res_imag[1]);
+                        LOCAL_P_CUDA_MPI(dm_real_remote, term + SV4IDX(2), res_real[2]);
+                        LOCAL_P_CUDA_MPI(dm_imag_remote, term + SV4IDX(2), res_imag[2]);
                     }
                     else // qubit1 is the remote qubit
                     {
-                        LOCAL_P_NVGPU_MPI(dm_real_remote, term + SV4IDX(1), res_real[1]);
-                        LOCAL_P_NVGPU_MPI(dm_imag_remote, term + SV4IDX(1), res_imag[1]);
-                        LOCAL_P_NVGPU_MPI(dm_real, term + SV4IDX(2), res_real[2]);
-                        LOCAL_P_NVGPU_MPI(dm_imag, term + SV4IDX(2), res_imag[2]);
+                        LOCAL_P_CUDA_MPI(dm_real_remote, term + SV4IDX(1), res_real[1]);
+                        LOCAL_P_CUDA_MPI(dm_imag_remote, term + SV4IDX(1), res_imag[1]);
+                        LOCAL_P_CUDA_MPI(dm_real, term + SV4IDX(2), res_real[2]);
+                        LOCAL_P_CUDA_MPI(dm_imag, term + SV4IDX(2), res_imag[2]);
                     }
                 }
                 grid.sync();
@@ -623,20 +623,20 @@ namespace NWQSim
                 const IdxType term2 = DIV2E(DIV2E(i, p), q - p - 1) * EXP2E(q + 1);
                 const IdxType term = term2 + term1 + term0;
 
-                el_real[1] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV4IDX(1));
-                el_imag[1] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV4IDX(1));
-                el_real[2] = LOCAL_G_NVGPU_MPI(dm_real, term + SV4IDX(2));
-                el_imag[2] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV4IDX(2));
+                el_real[1] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV4IDX(1));
+                el_imag[1] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV4IDX(1));
+                el_real[2] = LOCAL_G_CUDA_MPI(dm_real, term + SV4IDX(2));
+                el_imag[2] = LOCAL_G_CUDA_MPI(dm_imag, term + SV4IDX(2));
 
                 res_real[1] = el_real[2];
                 res_imag[1] = el_imag[2];
                 res_real[2] = el_real[1];
                 res_imag[2] = el_imag[1];
 
-                LOCAL_P_NVGPU_MPI(dm_real_remote, term + SV4IDX(1), res_real[1]);
-                LOCAL_P_NVGPU_MPI(dm_imag_remote, term + SV4IDX(1), res_imag[1]);
-                LOCAL_P_NVGPU_MPI(dm_real, term + SV4IDX(2), res_real[2]);
-                LOCAL_P_NVGPU_MPI(dm_imag, term + SV4IDX(2), res_imag[2]);
+                LOCAL_P_CUDA_MPI(dm_real_remote, term + SV4IDX(1), res_real[1]);
+                LOCAL_P_CUDA_MPI(dm_imag_remote, term + SV4IDX(1), res_imag[1]);
+                LOCAL_P_CUDA_MPI(dm_real, term + SV4IDX(2), res_real[2]);
+                LOCAL_P_CUDA_MPI(dm_imag, term + SV4IDX(2), res_imag[2]);
             }
             grid.sync();
             if (tid == 0)
@@ -780,79 +780,79 @@ namespace NWQSim
 
                     if (qubit3 == s) // qubit3 is remote qubit
                     {
-                        el_real[0] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(0));
-                        el_real[1] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(1));
-                        el_real[2] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(2));
-                        el_real[3] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(3));
-                        el_real[4] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(4));
-                        el_real[5] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(5));
-                        el_real[6] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(6));
-                        el_real[7] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(7));
-                        el_real[8] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(8));
-                        el_real[9] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(9));
-                        el_real[10] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(10));
-                        el_real[11] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(11));
-                        el_real[12] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(12));
-                        el_real[13] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(13));
-                        el_real[14] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(14));
-                        el_real[15] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(15));
+                        el_real[0] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(0));
+                        el_real[1] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(1));
+                        el_real[2] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(2));
+                        el_real[3] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(3));
+                        el_real[4] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(4));
+                        el_real[5] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(5));
+                        el_real[6] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(6));
+                        el_real[7] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(7));
+                        el_real[8] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(8));
+                        el_real[9] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(9));
+                        el_real[10] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(10));
+                        el_real[11] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(11));
+                        el_real[12] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(12));
+                        el_real[13] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(13));
+                        el_real[14] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(14));
+                        el_real[15] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(15));
 
-                        el_imag[0] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(0));
-                        el_imag[1] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(1));
-                        el_imag[2] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(2));
-                        el_imag[3] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(3));
-                        el_imag[4] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(4));
-                        el_imag[5] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(5));
-                        el_imag[6] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(6));
-                        el_imag[7] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(7));
-                        el_imag[8] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(8));
-                        el_imag[9] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(9));
-                        el_imag[10] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(10));
-                        el_imag[11] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(11));
-                        el_imag[12] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(12));
-                        el_imag[13] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(13));
-                        el_imag[14] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(14));
-                        el_imag[15] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(15));
+                        el_imag[0] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(0));
+                        el_imag[1] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(1));
+                        el_imag[2] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(2));
+                        el_imag[3] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(3));
+                        el_imag[4] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(4));
+                        el_imag[5] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(5));
+                        el_imag[6] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(6));
+                        el_imag[7] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(7));
+                        el_imag[8] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(8));
+                        el_imag[9] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(9));
+                        el_imag[10] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(10));
+                        el_imag[11] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(11));
+                        el_imag[12] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(12));
+                        el_imag[13] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(13));
+                        el_imag[14] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(14));
+                        el_imag[15] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(15));
                     }
                     else // qubit2 is remote (not possible qubit0 or 1 is remote)
                     {
-                        // if (( (laneid>>1)&1)!=0) el_real_s[j*16+laneid] = LOCAL_G_NVGPU_MPI(dm_real_remote,addr);
-                        // else el_real_s[j*16+laneid] = LOCAL_G_NVGPU_MPI(dm_real, addr);
+                        // if (( (laneid>>1)&1)!=0) el_real_s[j*16+laneid] = LOCAL_G_CUDA_MPI(dm_real_remote,addr);
+                        // else el_real_s[j*16+laneid] = LOCAL_G_CUDA_MPI(dm_real, addr);
                         // laneid = 2,3,6,7,10,11,14,15;
 
-                        el_real[0] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(0));
-                        el_real[1] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(1));
-                        el_real[2] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(2));
-                        el_real[3] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(3));
-                        el_real[4] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(4));
-                        el_real[5] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(5));
-                        el_real[6] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(6));
-                        el_real[7] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(7));
-                        el_real[8] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(8));
-                        el_real[9] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(9));
-                        el_real[10] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(10));
-                        el_real[11] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(11));
-                        el_real[12] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(12));
-                        el_real[13] = LOCAL_G_NVGPU_MPI(dm_real, term + SV16IDX(13));
-                        el_real[14] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(14));
-                        el_real[15] = LOCAL_G_NVGPU_MPI(dm_real_remote, term + SV16IDX(15));
+                        el_real[0] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(0));
+                        el_real[1] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(1));
+                        el_real[2] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(2));
+                        el_real[3] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(3));
+                        el_real[4] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(4));
+                        el_real[5] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(5));
+                        el_real[6] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(6));
+                        el_real[7] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(7));
+                        el_real[8] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(8));
+                        el_real[9] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(9));
+                        el_real[10] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(10));
+                        el_real[11] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(11));
+                        el_real[12] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(12));
+                        el_real[13] = LOCAL_G_CUDA_MPI(dm_real, term + SV16IDX(13));
+                        el_real[14] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(14));
+                        el_real[15] = LOCAL_G_CUDA_MPI(dm_real_remote, term + SV16IDX(15));
 
-                        el_imag[0] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(0));
-                        el_imag[1] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(1));
-                        el_imag[2] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(2));
-                        el_imag[3] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(3));
-                        el_imag[4] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(4));
-                        el_imag[5] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(5));
-                        el_imag[6] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(6));
-                        el_imag[7] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(7));
-                        el_imag[8] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(8));
-                        el_imag[9] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(9));
-                        el_imag[10] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(10));
-                        el_imag[11] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(11));
-                        el_imag[12] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(12));
-                        el_imag[13] = LOCAL_G_NVGPU_MPI(dm_imag, term + SV16IDX(13));
-                        el_imag[14] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(14));
-                        el_imag[15] = LOCAL_G_NVGPU_MPI(dm_imag_remote, term + SV16IDX(15));
+                        el_imag[0] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(0));
+                        el_imag[1] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(1));
+                        el_imag[2] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(2));
+                        el_imag[3] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(3));
+                        el_imag[4] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(4));
+                        el_imag[5] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(5));
+                        el_imag[6] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(6));
+                        el_imag[7] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(7));
+                        el_imag[8] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(8));
+                        el_imag[9] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(9));
+                        el_imag[10] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(10));
+                        el_imag[11] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(11));
+                        el_imag[12] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(12));
+                        el_imag[13] = LOCAL_G_CUDA_MPI(dm_imag, term + SV16IDX(13));
+                        el_imag[14] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(14));
+                        el_imag[15] = LOCAL_G_CUDA_MPI(dm_imag_remote, term + SV16IDX(15));
                     }
 #pragma unroll
                     for (unsigned j = 0; j < 16; j++)
@@ -871,26 +871,26 @@ namespace NWQSim
                         {
                             if ((j & 1) != 0)
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real_remote, term + SV16IDX(j), res_real);
-                                LOCAL_P_NVGPU_MPI(dm_imag_remote, term + SV16IDX(j), res_imag);
+                                LOCAL_P_CUDA_MPI(dm_real_remote, term + SV16IDX(j), res_real);
+                                LOCAL_P_CUDA_MPI(dm_imag_remote, term + SV16IDX(j), res_imag);
                             }
                             else
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real, term + SV16IDX(j), res_real);
-                                LOCAL_P_NVGPU_MPI(dm_imag, term + SV16IDX(j), res_imag);
+                                LOCAL_P_CUDA_MPI(dm_real, term + SV16IDX(j), res_real);
+                                LOCAL_P_CUDA_MPI(dm_imag, term + SV16IDX(j), res_imag);
                             }
                         }
                         else // qubit2 is remote (not possible qubit0 or 1 is remote)
                         {
                             if (((j >> 1) & 1) != 0)
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real_remote, term + SV16IDX(j), res_real);
-                                LOCAL_P_NVGPU_MPI(dm_imag_remote, term + SV16IDX(j), res_imag);
+                                LOCAL_P_CUDA_MPI(dm_real_remote, term + SV16IDX(j), res_real);
+                                LOCAL_P_CUDA_MPI(dm_imag_remote, term + SV16IDX(j), res_imag);
                             }
                             else
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real, term + SV16IDX(j), res_real);
-                                LOCAL_P_NVGPU_MPI(dm_imag, term + SV16IDX(j), res_imag);
+                                LOCAL_P_CUDA_MPI(dm_real, term + SV16IDX(j), res_real);
+                                LOCAL_P_CUDA_MPI(dm_imag, term + SV16IDX(j), res_imag);
                             }
                         }
                     }
@@ -1264,16 +1264,16 @@ namespace NWQSim
                                 if (qubit3 == s) // qubit3 is remote qubit
                                 {
                                     if ((laneid & 1) != 0)
-                                        el_real_s[j * 16 + laneid] = LOCAL_G_NVGPU_MPI(dm_real_remote, addr);
+                                        el_real_s[j * 16 + laneid] = LOCAL_G_CUDA_MPI(dm_real_remote, addr);
                                     else
-                                        el_real_s[j * 16 + laneid] = LOCAL_G_NVGPU_MPI(dm_real, addr);
+                                        el_real_s[j * 16 + laneid] = LOCAL_G_CUDA_MPI(dm_real, addr);
                                 }
                                 else // qubit2 is remote (not possible qubit0 or 1 is remote)
                                 {
                                     if (((laneid >> 1) & 1) != 0)
-                                        el_real_s[j * 16 + laneid] = LOCAL_G_NVGPU_MPI(dm_real_remote, addr);
+                                        el_real_s[j * 16 + laneid] = LOCAL_G_CUDA_MPI(dm_real_remote, addr);
                                     else
-                                        el_real_s[j * 16 + laneid] = LOCAL_G_NVGPU_MPI(dm_real, addr);
+                                        el_real_s[j * 16 + laneid] = LOCAL_G_CUDA_MPI(dm_real, addr);
                                 }
                             }
                             else
@@ -1282,16 +1282,16 @@ namespace NWQSim
                                 if (qubit3 == s) // qubit3 is remote qubit
                                 {
                                     if ((laneid & 1) != 0)
-                                        el_imag_s[j * 16 + laneid] = LOCAL_G_NVGPU_MPI(dm_imag_remote, addr);
+                                        el_imag_s[j * 16 + laneid] = LOCAL_G_CUDA_MPI(dm_imag_remote, addr);
                                     else
-                                        el_imag_s[j * 16 + laneid] = LOCAL_G_NVGPU_MPI(dm_imag, addr);
+                                        el_imag_s[j * 16 + laneid] = LOCAL_G_CUDA_MPI(dm_imag, addr);
                                 }
                                 else // qubit2 is remote (not possible qubit0 or 1 is remote)
                                 {
                                     if (((laneid >> 1) & 1) != 0)
-                                        el_imag_s[j * 16 + laneid] = LOCAL_G_NVGPU_MPI(dm_imag_remote, addr);
+                                        el_imag_s[j * 16 + laneid] = LOCAL_G_CUDA_MPI(dm_imag_remote, addr);
                                     else
-                                        el_imag_s[j * 16 + laneid] = LOCAL_G_NVGPU_MPI(dm_imag, addr);
+                                        el_imag_s[j * 16 + laneid] = LOCAL_G_CUDA_MPI(dm_imag, addr);
                                     // el_imag_s[j*16+laneid] = PGAS_G(dm_imag, addr);
                                 }
                             }
@@ -1326,26 +1326,26 @@ namespace NWQSim
                         {
                             if ((k0 & 1) != 0)
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real_remote, term0, c_frag_real.x[0]);
-                                LOCAL_P_NVGPU_MPI(dm_imag_remote, term0, c_frag_imag.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_real_remote, term0, c_frag_real.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_imag_remote, term0, c_frag_imag.x[0]);
                             }
                             else
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real, term0, c_frag_real.x[0]);
-                                LOCAL_P_NVGPU_MPI(dm_imag, term0, c_frag_imag.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_real, term0, c_frag_real.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_imag, term0, c_frag_imag.x[0]);
                             }
                         }
                         else // qubit2 is remote (not possible qubit0 or 1 is remote)
                         {
                             if (((k0 >> 1) & 1) != 0)
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real_remote, term0, c_frag_real.x[0]);
-                                LOCAL_P_NVGPU_MPI(dm_imag_remote, term0, c_frag_imag.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_real_remote, term0, c_frag_real.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_imag_remote, term0, c_frag_imag.x[0]);
                             }
                             else
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real, term0, c_frag_real.x[0]);
-                                LOCAL_P_NVGPU_MPI(dm_imag, term0, c_frag_imag.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_real, term0, c_frag_real.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_imag, term0, c_frag_imag.x[0]);
                             }
                         }
                         // Store second result per segment-C
@@ -1357,26 +1357,26 @@ namespace NWQSim
                         {
                             if ((k1 & 1) != 0)
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real_remote, term1, c_frag_real.x[1]);
-                                LOCAL_P_NVGPU_MPI(dm_imag_remote, term1, c_frag_imag.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_real_remote, term1, c_frag_real.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_imag_remote, term1, c_frag_imag.x[1]);
                             }
                             else
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real, term1, c_frag_real.x[1]);
-                                LOCAL_P_NVGPU_MPI(dm_imag, term1, c_frag_imag.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_real, term1, c_frag_real.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_imag, term1, c_frag_imag.x[1]);
                             }
                         }
                         else // qubit2 is remote (not possible qubit0 or 1 is remote)
                         {
                             if (((k1 >> 1) & 1) != 0)
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real_remote, term1, c_frag_real.x[1]);
-                                LOCAL_P_NVGPU_MPI(dm_imag_remote, term1, c_frag_imag.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_real_remote, term1, c_frag_real.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_imag_remote, term1, c_frag_imag.x[1]);
                             }
                             else
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real, term1, c_frag_real.x[1]);
-                                LOCAL_P_NVGPU_MPI(dm_imag, term1, c_frag_imag.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_real, term1, c_frag_real.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_imag, term1, c_frag_imag.x[1]);
                             }
                         }
                         //============= For matrix-A lower-part ============
@@ -1406,26 +1406,26 @@ namespace NWQSim
                         {
                             if ((k2 & 1) != 0)
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real_remote, term2, c_frag_real.x[0]);
-                                LOCAL_P_NVGPU_MPI(dm_imag_remote, term2, c_frag_imag.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_real_remote, term2, c_frag_real.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_imag_remote, term2, c_frag_imag.x[0]);
                             }
                             else
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real, term2, c_frag_real.x[0]);
-                                LOCAL_P_NVGPU_MPI(dm_imag, term2, c_frag_imag.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_real, term2, c_frag_real.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_imag, term2, c_frag_imag.x[0]);
                             }
                         }
                         else // qubit2 is remote (not possible qubit0 or 1 is remote)
                         {
                             if (((k2 >> 1) & 1) != 0)
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real_remote, term2, c_frag_real.x[0]);
-                                LOCAL_P_NVGPU_MPI(dm_imag_remote, term2, c_frag_imag.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_real_remote, term2, c_frag_real.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_imag_remote, term2, c_frag_imag.x[0]);
                             }
                             else
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real, term2, c_frag_real.x[0]);
-                                LOCAL_P_NVGPU_MPI(dm_imag, term2, c_frag_imag.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_real, term2, c_frag_real.x[0]);
+                                LOCAL_P_CUDA_MPI(dm_imag, term2, c_frag_imag.x[0]);
                             }
                         }
                         // Store second result per segment-C
@@ -1437,26 +1437,26 @@ namespace NWQSim
                         {
                             if ((k3 & 1) != 0)
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real_remote, term3, c_frag_real.x[1]);
-                                LOCAL_P_NVGPU_MPI(dm_imag_remote, term3, c_frag_imag.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_real_remote, term3, c_frag_real.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_imag_remote, term3, c_frag_imag.x[1]);
                             }
                             else
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real, term3, c_frag_real.x[1]);
-                                LOCAL_P_NVGPU_MPI(dm_imag, term3, c_frag_imag.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_real, term3, c_frag_real.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_imag, term3, c_frag_imag.x[1]);
                             }
                         }
                         else // qubit2 is remote (not possible qubit0 or 1 is remote)
                         {
                             if (((k3 >> 1) & 1) != 0)
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real_remote, term3, c_frag_real.x[1]);
-                                LOCAL_P_NVGPU_MPI(dm_imag_remote, term3, c_frag_imag.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_real_remote, term3, c_frag_real.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_imag_remote, term3, c_frag_imag.x[1]);
                             }
                             else
                             {
-                                LOCAL_P_NVGPU_MPI(dm_real, term3, c_frag_real.x[1]);
-                                LOCAL_P_NVGPU_MPI(dm_imag, term3, c_frag_imag.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_real, term3, c_frag_real.x[1]);
+                                LOCAL_P_CUDA_MPI(dm_imag, term3, c_frag_imag.x[1]);
                             }
                         }
                     }
@@ -1692,7 +1692,7 @@ namespace NWQSim
         }
     };
 
-    __global__ void dm_simulation_kernel_nvgpu_mpi(DM_NVGPU_MPI *dm_gpu, IdxType n_gates, IdxType n_qubits, bool enable_tc)
+    __global__ void dm_simulation_kernel_cuda_mpi(DM_CUDA_MPI *dm_gpu, IdxType n_gates, IdxType n_qubits, bool enable_tc)
     {
         IdxType cur_index = 0;
         IdxType lg2_m_gpu = dm_gpu->lg2_m_gpu;

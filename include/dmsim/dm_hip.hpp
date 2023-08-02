@@ -6,41 +6,36 @@
 #include "../circuit.hpp"
 
 #include "../private/config.hpp"
-#include "../private/nvgpu_util.cuh"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
-
+#include "../private/hip_util.hpp"
 #include "../circuit_pass/fusion.hpp"
 
 #include <assert.h>
 #include <random>
 #include <complex.h>
-#include <cooperative_groups.h>
 #include <vector>
 #include <algorithm>
 #include <string>
 #include <iostream>
-#include <cuda.h>
 #include <sstream>
 
-#ifdef FP64_TC_AVAILABLE
-#include <mma.h>
-#endif
+#include <hip/hip_runtime.h>
+#include <hip/hip_cooperative_groups.h>
 
 namespace NWQSim
 {
     using namespace cooperative_groups;
     using namespace std;
-    using namespace nvcuda;
 
     // Simulation kernel runtime
-    class DM_NVGPU;
-    __global__ void dm_simulation_kernel_nvgpu(DM_NVGPU *dm_gpu, IdxType n_gates, IdxType n_qubits, bool tensor_core);
+    class DM_HIP;
+    __global__ void dm_simulation_kernel_hip(DM_HIP *dm_gpu, IdxType n_gates, IdxType n_qubits, bool tensor_core);
 
-    class DM_NVGPU : public QuantumState
+    class DM_HIP : public QuantumState
     {
     public:
-        DM_NVGPU(IdxType _n_qubits) : QuantumState(_n_qubits)
+        DM_HIP(IdxType _n_qubits) : QuantumState(_n_qubits)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -50,54 +45,54 @@ namespace NWQSim
 
             // always be 0 since 1-MPI maps to 1-GPU
             i_proc = 0;
-            cudaSafeCall(cudaSetDevice(i_proc));
+            hipSafeCall(hipSetDevice(i_proc));
 
             // CPU side initialization
-            SAFE_ALOC_HOST_CUDA(dm_real_cpu, dm_size);
-            SAFE_ALOC_HOST_CUDA(dm_imag_cpu, dm_size);
+            SAFE_ALOC_HOST_HIP(dm_real_cpu, dm_size);
+            SAFE_ALOC_HOST_HIP(dm_imag_cpu, dm_size);
             memset(dm_real_cpu, 0, dm_size);
             memset(dm_imag_cpu, 0, dm_size);
             // State-vector initial state [0..0] = 1
             dm_real_cpu[0] = 1.;
 
             // NVSHMEM GPU memory allocation
-            SAFE_ALOC_GPU(dm_real, dm_size);
-            SAFE_ALOC_GPU(dm_imag, dm_size);
-            SAFE_ALOC_GPU(m_real, dm_size + sizeof(ValType));
-            SAFE_ALOC_GPU(m_imag, dm_size + sizeof(ValType));
+            SAFE_ALOC_GPU_HIP(dm_real, dm_size);
+            SAFE_ALOC_GPU_HIP(dm_imag, dm_size);
+            SAFE_ALOC_GPU_HIP(m_real, dm_size + sizeof(ValType));
+            SAFE_ALOC_GPU_HIP(m_imag, dm_size + sizeof(ValType));
 
-            cudaCheckError();
+            hipCheckError();
             gpu_mem = dm_size * 4;
 
             // GPU memory initilization
-            cudaSafeCall(cudaMemcpy(dm_real, dm_real_cpu, dm_size,
-                                    cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(dm_imag, dm_imag_cpu, dm_size,
-                                    cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemset(m_real, 0, dm_size + sizeof(ValType)));
-            cudaSafeCall(cudaMemset(m_imag, 0, dm_size + sizeof(ValType)));
+            hipSafeCall(hipMemcpy(dm_real, dm_real_cpu, dm_size,
+                                  hipMemcpyHostToDevice));
+            hipSafeCall(hipMemcpy(dm_imag, dm_imag_cpu, dm_size,
+                                  hipMemcpyHostToDevice));
+            hipSafeCall(hipMemset(m_real, 0, dm_size + sizeof(ValType)));
+            hipSafeCall(hipMemset(m_imag, 0, dm_size + sizeof(ValType)));
 
             rng.seed(time(0));
         }
 
-        ~DM_NVGPU()
+        ~DM_HIP()
         {
             // Release for CPU side
-            SAFE_FREE_HOST_CUDA(dm_real_cpu);
-            SAFE_FREE_HOST_CUDA(dm_imag_cpu);
-            SAFE_FREE_HOST_CUDA(randoms);
-            SAFE_FREE_HOST_CUDA(results);
+            SAFE_FREE_HOST_HIP(dm_real_cpu);
+            SAFE_FREE_HOST_HIP(dm_imag_cpu);
+            SAFE_FREE_HOST_HIP(randoms);
+            SAFE_FREE_HOST_HIP(results);
 
             // Release for GPU side
-            SAFE_FREE_GPU(dm_real);
-            SAFE_FREE_GPU(dm_imag);
-            SAFE_FREE_GPU(m_real);
-            SAFE_FREE_GPU(m_imag);
+            SAFE_FREE_GPU_HIP(dm_real);
+            SAFE_FREE_GPU_HIP(dm_imag);
+            SAFE_FREE_GPU_HIP(m_real);
+            SAFE_FREE_GPU_HIP(m_imag);
 
-            SAFE_FREE_GPU(gates_gpu);
+            SAFE_FREE_GPU_HIP(gates_gpu);
 
-            SAFE_FREE_GPU(randoms_gpu);
-            SAFE_FREE_GPU(results_gpu);
+            SAFE_FREE_GPU_HIP(randoms_gpu);
+            SAFE_FREE_GPU_HIP(results_gpu);
         }
 
         void reset_state() override
@@ -108,12 +103,12 @@ namespace NWQSim
             // State Vector initial state [0..0] = 1
             dm_real_cpu[0] = 1.;
             // GPU side initialization
-            cudaSafeCall(cudaMemcpy(dm_real, dm_real_cpu,
-                                    dm_size, cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(dm_imag, dm_imag_cpu,
-                                    dm_size, cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemset(m_real, 0, dm_size + sizeof(ValType)));
-            cudaSafeCall(cudaMemset(m_imag, 0, dm_size + sizeof(ValType)));
+            hipSafeCall(hipMemcpy(dm_real, dm_real_cpu,
+                                  dm_size, hipMemcpyHostToDevice));
+            hipSafeCall(hipMemcpy(dm_imag, dm_imag_cpu,
+                                  dm_size, hipMemcpyHostToDevice));
+            hipSafeCall(hipMemset(m_real, 0, dm_size + sizeof(ValType)));
+            hipSafeCall(hipMemset(m_imag, 0, dm_size + sizeof(ValType)));
         }
 
         void set_seed(IdxType seed) override
@@ -142,58 +137,58 @@ namespace NWQSim
             is_tc = Config::ENABLE_TENSOR_CORE;
 #endif
 
-            DM_NVGPU *dm_gpu;
-            SAFE_ALOC_GPU(dm_gpu, sizeof(DM_NVGPU));
+            DM_HIP *dm_gpu;
+            SAFE_ALOC_GPU_HIP(dm_gpu, sizeof(DM_HIP));
             // Copy the simulator instance to GPU
-            cudaSafeCall(cudaMemcpy(dm_gpu, this,
-                                    sizeof(DM_NVGPU), cudaMemcpyHostToDevice));
+            hipSafeCall(hipMemcpy(dm_gpu, this,
+                                  sizeof(DM_HIP), hipMemcpyHostToDevice));
 
             double sim_time;
             gpu_timer sim_timer;
 
             if (Config::PRINT_SIM_TRACE)
             {
-                printf("DMSIM_NVGPU is running! Requesting %lld qubits.\n", n_qubits);
+                printf("DMSIM_HIP is running! Requesting %lld qubits.\n", n_qubits);
             }
 
             dim3 gridDim(1, 1, 1);
-            cudaDeviceProp deviceProp;
-            cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
+            hipDeviceProp_t deviceProp;
+            hipSafeCall(hipGetDeviceProperties(&deviceProp, 0));
             // 8*16 is per warp shared-memory usage for C4 TC, with real and imag
             unsigned smem_size;
             if (is_tc)
-                smem_size = THREADS_CTA_NVGPU / 32 * 8 * 16 * 2 * sizeof(ValType);
+                smem_size = THREADS_CTA_HIP / 32 * 8 * 16 * 2 * sizeof(ValType);
             else
                 smem_size = 0;
             int numBlocksPerSm;
-            cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
-                                                                       dm_simulation_kernel_nvgpu, THREADS_CTA_NVGPU, smem_size));
+            hipSafeCall(hipOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
+                                                                     dm_simulation_kernel_hip, THREADS_CTA_HIP, smem_size));
             gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
             void *args[] = {&dm_gpu, &n_gates, &n_qubits, &is_tc};
-            cudaSafeCall(cudaDeviceSynchronize());
+            hipSafeCall(hipDeviceSynchronize());
 
             sim_timer.start_timer();
 
-            cudaLaunchCooperativeKernel((void *)dm_simulation_kernel_nvgpu, gridDim,
-                                        THREADS_CTA_NVGPU, args, smem_size);
-            cudaSafeCall(cudaDeviceSynchronize());
+            hipLaunchCooperativeKernel((void *)dm_simulation_kernel_hip, gridDim,
+                                       THREADS_CTA_HIP, args, smem_size, 0);
+            hipSafeCall(hipDeviceSynchronize());
 
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
 
             // Copy the results back to CPU
-            cudaSafeCall(cudaMemcpy(results, results_gpu, n_measures * sizeof(IdxType), cudaMemcpyDeviceToHost));
-            cudaCheckError();
+            hipSafeCall(hipMemcpy(results, results_gpu, n_measures * sizeof(IdxType), hipMemcpyDeviceToHost));
+            hipCheckError();
 
             if (Config::PRINT_SIM_TRACE)
             {
-                printf("\n============== DM-Sim ===============\n");
-                printf("n_qubits:%lld, n_gates:%lld, sim_gates:%lld, ngpus:%d, TensorCore: %s, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_gpu:%.3lf MB\n",
-                       n_qubits, origional_gates, n_gates, 1, (Config::ENABLE_TENSOR_CORE ? "Enabled" : "Disabled"), sim_time, 0.,
+                printf("\n============== DM-Sim (HIP) ===============\n");
+                printf("n_qubits:%lld, n_gates:%lld, sim_gates:%lld, ngpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_gpu:%.3lf MB\n",
+                       n_qubits, origional_gates, n_gates, 1, sim_time, 0.,
                        sim_time, gpu_mem / 1024 / 1024, gpu_mem / 1024 / 1024);
                 printf("=====================================\n");
             }
-            SAFE_FREE_GPU(dm_gpu);
+            SAFE_FREE_GPU_HIP(dm_gpu);
         }
 
         IdxType *get_results() override
@@ -231,8 +226,8 @@ namespace NWQSim
 
         void print_res_state() override
         {
-            cudaSafeCall(cudaMemcpy(dm_real_cpu, dm_real, dm_size, cudaMemcpyDeviceToHost));
-            cudaSafeCall(cudaMemcpy(dm_imag_cpu, dm_imag, dm_size, cudaMemcpyDeviceToHost));
+            hipSafeCall(hipMemcpy(dm_real_cpu, dm_real, dm_size, hipMemcpyDeviceToHost));
+            hipSafeCall(hipMemcpy(dm_imag_cpu, dm_imag, dm_size, hipMemcpyDeviceToHost));
 
             IdxType num = ((IdxType)1 << n_qubits);
             printf("----- DMSim ------\n");
@@ -286,9 +281,9 @@ namespace NWQSim
             size_t vec_size = cpu_vec.size() * sizeof(DMGate);
 
             // Allocate memory on GPU
-            SAFE_FREE_GPU(gates_gpu);
-            SAFE_ALOC_GPU(gates_gpu, vec_size);
-            cudaSafeCall(cudaMemcpy(gates_gpu, cpu_vec.data(), vec_size, cudaMemcpyHostToDevice));
+            SAFE_FREE_GPU_HIP(gates_gpu);
+            SAFE_ALOC_GPU_HIP(gates_gpu, vec_size);
+            hipSafeCall(hipMemcpy(gates_gpu, cpu_vec.data(), vec_size, hipMemcpyHostToDevice));
         }
 
         IdxType prepare_measure(std::vector<Gate> gates)
@@ -304,23 +299,23 @@ namespace NWQSim
             }
 
             // Prepare randoms and results memory
-            SAFE_FREE_HOST_CUDA(results);
-            SAFE_ALOC_HOST_CUDA(results, sizeof(IdxType) * n_slots);
+            SAFE_FREE_HOST_HIP(results);
+            SAFE_ALOC_HOST_HIP(results, sizeof(IdxType) * n_slots);
             memset(results, 0, sizeof(IdxType) * n_slots);
 
-            SAFE_FREE_GPU(results_gpu);
-            SAFE_ALOC_GPU(results_gpu, sizeof(IdxType) * n_slots);
-            cudaSafeCall(cudaMemset(results_gpu, 0, sizeof(IdxType) * n_slots));
+            SAFE_FREE_GPU_HIP(results_gpu);
+            SAFE_ALOC_GPU_HIP(results_gpu, sizeof(IdxType) * n_slots);
+            hipSafeCall(hipMemset(results_gpu, 0, sizeof(IdxType) * n_slots));
 
-            SAFE_FREE_HOST_CUDA(randoms);
-            SAFE_ALOC_HOST_CUDA(randoms, sizeof(ValType) * n_slots);
+            SAFE_FREE_HOST_HIP(randoms);
+            SAFE_ALOC_HOST_HIP(randoms, sizeof(ValType) * n_slots);
             for (IdxType i = 0; i < n_slots; i++)
                 randoms[i] = uni_dist(rng);
 
-            SAFE_FREE_GPU(randoms_gpu);
-            SAFE_ALOC_GPU(randoms_gpu, sizeof(ValType) * n_slots);
-            cudaSafeCall(cudaMemcpy(randoms_gpu, randoms,
-                                    sizeof(ValType) * n_slots, cudaMemcpyHostToDevice));
+            SAFE_FREE_GPU_HIP(randoms_gpu);
+            SAFE_ALOC_GPU_HIP(randoms_gpu, sizeof(ValType) * n_slots);
+            hipSafeCall(hipMemcpy(randoms_gpu, randoms,
+                                  sizeof(ValType) * n_slots, hipMemcpyHostToDevice));
 
             return n_slots;
         }
@@ -352,14 +347,14 @@ namespace NWQSim
                 IdxType pos2 = outer + mider + inner + qubit0_dim;
                 IdxType pos3 = outer + mider + inner + q0dim + q1dim;
 
-                const ValType el0_real = LOCAL_G_NVGPU(dm_real, pos0);
-                const ValType el0_imag = LOCAL_G_NVGPU(dm_imag, pos0);
-                const ValType el1_real = LOCAL_G_NVGPU(dm_real, pos1);
-                const ValType el1_imag = LOCAL_G_NVGPU(dm_imag, pos1);
-                const ValType el2_real = LOCAL_G_NVGPU(dm_real, pos2);
-                const ValType el2_imag = LOCAL_G_NVGPU(dm_imag, pos2);
-                const ValType el3_real = LOCAL_G_NVGPU(dm_real, pos3);
-                const ValType el3_imag = LOCAL_G_NVGPU(dm_imag, pos3);
+                const ValType el0_real = LOCAL_G_HIP(dm_real, pos0);
+                const ValType el0_imag = LOCAL_G_HIP(dm_imag, pos0);
+                const ValType el1_real = LOCAL_G_HIP(dm_real, pos1);
+                const ValType el1_imag = LOCAL_G_HIP(dm_imag, pos1);
+                const ValType el2_real = LOCAL_G_HIP(dm_real, pos2);
+                const ValType el2_imag = LOCAL_G_HIP(dm_imag, pos2);
+                const ValType el3_real = LOCAL_G_HIP(dm_real, pos3);
+                const ValType el3_imag = LOCAL_G_HIP(dm_imag, pos3);
 
                 // Real part
                 ValType dm_real_pos0 = (gm_real[0] * el0_real) - (gm_imag[0] * el0_imag) + (gm_real[1] * el1_real) - (gm_imag[1] * el1_imag) + (gm_real[2] * el2_real) - (gm_imag[2] * el2_imag) + (gm_real[3] * el3_real) - (gm_imag[3] * el3_imag);
@@ -373,15 +368,15 @@ namespace NWQSim
                 ValType dm_imag_pos2 = (gm_real[8] * el0_imag) + (gm_imag[8] * el0_real) + (gm_real[9] * el1_imag) + (gm_imag[9] * el1_real) + (gm_real[10] * el2_imag) + (gm_imag[10] * el2_real) + (gm_real[11] * el3_imag) + (gm_imag[11] * el3_real);
                 ValType dm_imag_pos3 = (gm_real[12] * el0_imag) + (gm_imag[12] * el0_real) + (gm_real[13] * el1_imag) + (gm_imag[13] * el1_real) + (gm_real[14] * el2_imag) + (gm_imag[14] * el2_real) + (gm_real[15] * el3_imag) + (gm_imag[15] * el3_real);
 
-                LOCAL_P_NVGPU(dm_real, pos0, dm_real_pos0);
-                LOCAL_P_NVGPU(dm_real, pos1, dm_real_pos1);
-                LOCAL_P_NVGPU(dm_real, pos2, dm_real_pos2);
-                LOCAL_P_NVGPU(dm_real, pos3, dm_real_pos3);
+                LOCAL_P_HIP(dm_real, pos0, dm_real_pos0);
+                LOCAL_P_HIP(dm_real, pos1, dm_real_pos1);
+                LOCAL_P_HIP(dm_real, pos2, dm_real_pos2);
+                LOCAL_P_HIP(dm_real, pos3, dm_real_pos3);
 
-                LOCAL_P_NVGPU(dm_imag, pos0, dm_imag_pos0);
-                LOCAL_P_NVGPU(dm_imag, pos1, dm_imag_pos1);
-                LOCAL_P_NVGPU(dm_imag, pos2, dm_imag_pos2);
-                LOCAL_P_NVGPU(dm_imag, pos3, dm_imag_pos3);
+                LOCAL_P_HIP(dm_imag, pos0, dm_imag_pos0);
+                LOCAL_P_HIP(dm_imag, pos1, dm_imag_pos1);
+                LOCAL_P_HIP(dm_imag, pos2, dm_imag_pos2);
+                LOCAL_P_HIP(dm_imag, pos3, dm_imag_pos3);
             }
         }
 
@@ -420,23 +415,23 @@ namespace NWQSim
                 const IdxType term = term4 + term3 + term2 + term1 + term0;
 
                 const ValType el_real[16] = {
-                    LOCAL_G_NVGPU(dm_real, term + SV16IDX(0)), LOCAL_G_NVGPU(dm_real, term + SV16IDX(1)),
-                    LOCAL_G_NVGPU(dm_real, term + SV16IDX(2)), LOCAL_G_NVGPU(dm_real, term + SV16IDX(3)),
-                    LOCAL_G_NVGPU(dm_real, term + SV16IDX(4)), LOCAL_G_NVGPU(dm_real, term + SV16IDX(5)),
-                    LOCAL_G_NVGPU(dm_real, term + SV16IDX(6)), LOCAL_G_NVGPU(dm_real, term + SV16IDX(7)),
-                    LOCAL_G_NVGPU(dm_real, term + SV16IDX(8)), LOCAL_G_NVGPU(dm_real, term + SV16IDX(9)),
-                    LOCAL_G_NVGPU(dm_real, term + SV16IDX(10)), LOCAL_G_NVGPU(dm_real, term + SV16IDX(11)),
-                    LOCAL_G_NVGPU(dm_real, term + SV16IDX(12)), LOCAL_G_NVGPU(dm_real, term + SV16IDX(13)),
-                    LOCAL_G_NVGPU(dm_real, term + SV16IDX(14)), LOCAL_G_NVGPU(dm_real, term + SV16IDX(15))};
+                    LOCAL_G_HIP(dm_real, term + SV16IDX(0)), LOCAL_G_HIP(dm_real, term + SV16IDX(1)),
+                    LOCAL_G_HIP(dm_real, term + SV16IDX(2)), LOCAL_G_HIP(dm_real, term + SV16IDX(3)),
+                    LOCAL_G_HIP(dm_real, term + SV16IDX(4)), LOCAL_G_HIP(dm_real, term + SV16IDX(5)),
+                    LOCAL_G_HIP(dm_real, term + SV16IDX(6)), LOCAL_G_HIP(dm_real, term + SV16IDX(7)),
+                    LOCAL_G_HIP(dm_real, term + SV16IDX(8)), LOCAL_G_HIP(dm_real, term + SV16IDX(9)),
+                    LOCAL_G_HIP(dm_real, term + SV16IDX(10)), LOCAL_G_HIP(dm_real, term + SV16IDX(11)),
+                    LOCAL_G_HIP(dm_real, term + SV16IDX(12)), LOCAL_G_HIP(dm_real, term + SV16IDX(13)),
+                    LOCAL_G_HIP(dm_real, term + SV16IDX(14)), LOCAL_G_HIP(dm_real, term + SV16IDX(15))};
                 const ValType el_imag[16] = {
-                    LOCAL_G_NVGPU(dm_imag, term + SV16IDX(0)), LOCAL_G_NVGPU(dm_imag, term + SV16IDX(1)),
-                    LOCAL_G_NVGPU(dm_imag, term + SV16IDX(2)), LOCAL_G_NVGPU(dm_imag, term + SV16IDX(3)),
-                    LOCAL_G_NVGPU(dm_imag, term + SV16IDX(4)), LOCAL_G_NVGPU(dm_imag, term + SV16IDX(5)),
-                    LOCAL_G_NVGPU(dm_imag, term + SV16IDX(6)), LOCAL_G_NVGPU(dm_imag, term + SV16IDX(7)),
-                    LOCAL_G_NVGPU(dm_imag, term + SV16IDX(8)), LOCAL_G_NVGPU(dm_imag, term + SV16IDX(9)),
-                    LOCAL_G_NVGPU(dm_imag, term + SV16IDX(10)), LOCAL_G_NVGPU(dm_imag, term + SV16IDX(11)),
-                    LOCAL_G_NVGPU(dm_imag, term + SV16IDX(12)), LOCAL_G_NVGPU(dm_imag, term + SV16IDX(13)),
-                    LOCAL_G_NVGPU(dm_imag, term + SV16IDX(14)), LOCAL_G_NVGPU(dm_imag, term + SV16IDX(15))};
+                    LOCAL_G_HIP(dm_imag, term + SV16IDX(0)), LOCAL_G_HIP(dm_imag, term + SV16IDX(1)),
+                    LOCAL_G_HIP(dm_imag, term + SV16IDX(2)), LOCAL_G_HIP(dm_imag, term + SV16IDX(3)),
+                    LOCAL_G_HIP(dm_imag, term + SV16IDX(4)), LOCAL_G_HIP(dm_imag, term + SV16IDX(5)),
+                    LOCAL_G_HIP(dm_imag, term + SV16IDX(6)), LOCAL_G_HIP(dm_imag, term + SV16IDX(7)),
+                    LOCAL_G_HIP(dm_imag, term + SV16IDX(8)), LOCAL_G_HIP(dm_imag, term + SV16IDX(9)),
+                    LOCAL_G_HIP(dm_imag, term + SV16IDX(10)), LOCAL_G_HIP(dm_imag, term + SV16IDX(11)),
+                    LOCAL_G_HIP(dm_imag, term + SV16IDX(12)), LOCAL_G_HIP(dm_imag, term + SV16IDX(13)),
+                    LOCAL_G_HIP(dm_imag, term + SV16IDX(14)), LOCAL_G_HIP(dm_imag, term + SV16IDX(15))};
 #pragma unroll
                 for (unsigned j = 0; j < 16; j++)
                 {
@@ -448,11 +443,11 @@ namespace NWQSim
                         res_real += (el_real[k] * gm_real[j * 16 + k]) - (el_imag[k] * gm_imag[j * 16 + k]);
                         res_imag += (el_real[k] * gm_imag[j * 16 + k]) + (el_imag[k] * gm_real[j * 16 + k]);
                     }
-                    LOCAL_P_NVGPU(dm_real, term + SV16IDX(j), res_real);
-                    LOCAL_P_NVGPU(dm_imag, term + SV16IDX(j), res_imag);
+                    LOCAL_P_HIP(dm_real, term + SV16IDX(j), res_real);
+                    LOCAL_P_HIP(dm_imag, term + SV16IDX(j), res_imag);
                 }
             }
-            // BARR_NVGPU;
+            // BARR_HIP;
         }
 
         __device__ __inline__ IdxType get_term(IdxType idx, IdxType p, IdxType q, IdxType r, IdxType s)
@@ -534,12 +529,12 @@ namespace NWQSim
                     if (laneid < 16)
                     {
                         IdxType addr = term + SV16IDX(laneid);
-                        el_real_s[j * 16 + laneid] = LOCAL_G_NVGPU(dm_real, addr);
+                        el_real_s[j * 16 + laneid] = LOCAL_G_HIP(dm_real, addr);
                     }
                     else
                     {
                         IdxType addr = term + SV16IDX(laneid - 16);
-                        el_imag_s[j * 16 + laneid - 16] = LOCAL_G_NVGPU(dm_imag, addr);
+                        el_imag_s[j * 16 + laneid - 16] = LOCAL_G_HIP(dm_imag, addr);
                     }
                 }
                 __syncwarp();
@@ -576,31 +571,31 @@ namespace NWQSim
                 IdxType j0 = ((2 * laneid) & 7);
                 IdxType k0 = ((2 * laneid) >> 3);
                 const IdxType term0 = get_term(i + j0, p, q, r, s) + SV16IDX(k0);
-                LOCAL_P_NVGPU(dm_real, term0, c_frag_real_up.x[0]);
-                LOCAL_P_NVGPU(dm_imag, term0, c_frag_imag_up.x[0]);
+                LOCAL_P_HIP(dm_real, term0, c_frag_real_up.x[0]);
+                LOCAL_P_HIP(dm_imag, term0, c_frag_imag_up.x[0]);
 
                 // Store second result per segment-C
                 IdxType j1 = ((2 * laneid + 1) & 7);
                 IdxType k1 = ((2 * laneid + 1) >> 3);
                 const IdxType term1 = get_term(i + j1, p, q, r, s) + SV16IDX(k1);
-                LOCAL_P_NVGPU(dm_real, term1, c_frag_real_up.x[1]);
-                LOCAL_P_NVGPU(dm_imag, term1, c_frag_imag_up.x[1]);
+                LOCAL_P_HIP(dm_real, term1, c_frag_real_up.x[1]);
+                LOCAL_P_HIP(dm_imag, term1, c_frag_imag_up.x[1]);
 
                 // Store first result per segment-C
                 IdxType j2 = ((2 * laneid) & 7);
                 IdxType k2 = ((2 * laneid) >> 3) + 8;
                 const IdxType term2 = get_term(i + j2, p, q, r, s) + SV16IDX(k2);
-                LOCAL_P_NVGPU(dm_real, term2, c_frag_real_dn.x[0]);
-                LOCAL_P_NVGPU(dm_imag, term2, c_frag_imag_dn.x[0]);
+                LOCAL_P_HIP(dm_real, term2, c_frag_real_dn.x[0]);
+                LOCAL_P_HIP(dm_imag, term2, c_frag_imag_dn.x[0]);
 
                 // Store second result per segment-C
                 IdxType j3 = ((2 * laneid + 1) & 7);
                 IdxType k3 = ((2 * laneid + 1) >> 3) + 8;
                 const IdxType term3 = get_term(i + j3, p, q, r, s) + SV16IDX(k3);
-                LOCAL_P_NVGPU(dm_real, term3, c_frag_real_dn.x[1]);
-                LOCAL_P_NVGPU(dm_imag, term3, c_frag_imag_dn.x[1]);
+                LOCAL_P_HIP(dm_real, term3, c_frag_real_dn.x[1]);
+                LOCAL_P_HIP(dm_imag, term3, c_frag_imag_dn.x[1]);
             }
-            // BARR_NVGPU;
+            // BARR_HIP;
         }
 
         //============== Unified 4-qubit Gate with TC V2 ================
@@ -657,9 +652,9 @@ namespace NWQSim
                 {
                     const IdxType term = get_term(i + j, p, q, r, s);
                     if (laneid < 16)
-                        el_real_s[j * 16 + laneid] = LOCAL_G_NVGPU(dm_real, term + SV16IDX(laneid));
+                        el_real_s[j * 16 + laneid] = LOCAL_G_HIP(dm_real, term + SV16IDX(laneid));
                     else
-                        el_imag_s[j * 16 + laneid - 16] = LOCAL_G_NVGPU(dm_imag, term + SV16IDX(laneid - 16));
+                        el_imag_s[j * 16 + laneid - 16] = LOCAL_G_HIP(dm_imag, term + SV16IDX(laneid - 16));
                 }
                 __syncwarp();
 
@@ -685,14 +680,14 @@ namespace NWQSim
                 IdxType j0 = ((2 * laneid) & 7);
                 IdxType k0 = ((2 * laneid) >> 3);
                 const IdxType term0 = get_term(i + j0, p, q, r, s) + SV16IDX(k0);
-                LOCAL_P_NVGPU(dm_real, term0, c_frag_real.x[0]);
-                LOCAL_P_NVGPU(dm_imag, term0, c_frag_imag.x[0]);
+                LOCAL_P_HIP(dm_real, term0, c_frag_real.x[0]);
+                LOCAL_P_HIP(dm_imag, term0, c_frag_imag.x[0]);
                 // Store second result per segment-C
                 IdxType j1 = ((2 * laneid + 1) & 7);
                 IdxType k1 = ((2 * laneid + 1) >> 3);
                 const IdxType term1 = get_term(i + j1, p, q, r, s) + SV16IDX(k1);
-                LOCAL_P_NVGPU(dm_real, term1, c_frag_real.x[1]);
-                LOCAL_P_NVGPU(dm_imag, term1, c_frag_imag.x[1]);
+                LOCAL_P_HIP(dm_real, term1, c_frag_real.x[1]);
+                LOCAL_P_HIP(dm_imag, term1, c_frag_imag.x[1]);
 
                 //============= For matrix-A lower-part ============
                 wmma::fill_fragment(c_frag_real, 0.0);
@@ -716,17 +711,17 @@ namespace NWQSim
                 IdxType j2 = ((2 * laneid) & 7);
                 IdxType k2 = ((2 * laneid) >> 3) + 8;
                 const IdxType term2 = get_term(i + j2, p, q, r, s) + SV16IDX(k2);
-                LOCAL_P_NVGPU(dm_real, term2, c_frag_real.x[0]);
-                LOCAL_P_NVGPU(dm_imag, term2, c_frag_imag.x[0]);
+                LOCAL_P_HIP(dm_real, term2, c_frag_real.x[0]);
+                LOCAL_P_HIP(dm_imag, term2, c_frag_imag.x[0]);
 
                 // Store second result per segment-C
                 IdxType j3 = ((2 * laneid + 1) & 7);
                 IdxType k3 = ((2 * laneid + 1) >> 3) + 8;
                 const IdxType term3 = get_term(i + j3, p, q, r, s) + SV16IDX(k3);
-                LOCAL_P_NVGPU(dm_real, term3, c_frag_real.x[1]);
-                LOCAL_P_NVGPU(dm_imag, term3, c_frag_imag.x[1]);
+                LOCAL_P_HIP(dm_real, term3, c_frag_real.x[1]);
+                LOCAL_P_HIP(dm_imag, term3, c_frag_imag.x[1]);
             }
-            // BARR_NVGPU;
+            // BARR_HIP;
         }
 #endif
         __device__ __inline__ void M_GATE(ValType *gm_real, ValType *gm_imag,
@@ -739,7 +734,7 @@ namespace NWQSim
 
             for (IdxType i = tid; i < ((IdxType)1 << (n_qubits)); i += blockDim.x * gridDim.x)
             {
-                const ValType val = LOCAL_G_NVGPU(dm_real, (i << (n_qubits)) + i);
+                const ValType val = LOCAL_G_HIP(dm_real, (i << (n_qubits)) + i);
                 if ((i & mask) == 0)
                     m_real[i] = 0;
                 else
@@ -766,9 +761,9 @@ namespace NWQSim
                     gm_real[0] = 1.0 / (1.0 - prob_of_one);
                 }
             }
-            BARR_NVGPU;
+            BARR_HIP;
             C2_GATE(gm_real, gm_imag, qubit, qubit + n_qubits);
-            BARR_NVGPU;
+            BARR_HIP;
             if (tid == 0)
                 results_gpu[cur_index] = (rand <= prob_of_one ? 1 : 0);
         }
@@ -779,12 +774,12 @@ namespace NWQSim
             const IdxType n_size = (IdxType)1 << (n_qubits);
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
 
-            BARR_NVGPU;
+            BARR_HIP;
 
             for (IdxType i = tid; i < n_size; i += blockDim.x * gridDim.x)
-                m_real[i] = abs(LOCAL_G_NVGPU(dm_real, (i << (n_qubits)) + i));
+                m_real[i] = abs(LOCAL_G_HIP(dm_real, (i << (n_qubits)) + i));
 
-            BARR_NVGPU;
+            BARR_HIP;
 
             // Parallel prefix sum
             for (IdxType d = 0; d < (n_qubits); d++)
@@ -827,7 +822,7 @@ namespace NWQSim
                         results_gpu[cur_index + i] = j;
                 }
             }
-            BARR_NVGPU;
+            BARR_HIP;
         }
 
         __device__ __inline__ void RESET_GATE(const IdxType qubit)
@@ -843,7 +838,7 @@ namespace NWQSim
                 if ((i & mask) == 0)
                     m_real[i] = 0;
                 else
-                    m_real[i] = abs(LOCAL_G_NVGPU(dm_real, (i << (n_qubits)) + i));
+                    m_real[i] = abs(LOCAL_G_HIP(dm_real, (i << (n_qubits)) + i));
             }
             grid.sync();
             for (IdxType k = ((IdxType)1 << (n_qubits - 1)); k > 0; k >>= 1)
@@ -853,7 +848,7 @@ namespace NWQSim
                 grid.sync();
             }
 
-            BARR_NVGPU;
+            BARR_HIP;
             ValType prob_of_one = m_real[0];
             grid.sync();
 
@@ -888,11 +883,11 @@ namespace NWQSim
                     }
                 }
             }
-            BARR_NVGPU;
+            BARR_HIP;
         }
     };
 
-    __global__ void dm_simulation_kernel_nvgpu(DM_NVGPU *dm_gpu, IdxType n_gates, IdxType n_qubits, bool tensor_core)
+    __global__ void dm_simulation_kernel_hip(DM_HIP *dm_gpu, IdxType n_gates, IdxType n_qubits, bool tensor_core)
     {
         IdxType cur_index = 0;
         grid_group grid = this_grid();

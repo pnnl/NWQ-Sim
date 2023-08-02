@@ -15,13 +15,18 @@
 #endif
 
 #ifdef CUDA_ENABLED
-#include "svsim/sv_nvgpu.cuh"
-#include "dmsim/dm_nvgpu.cuh"
+#include "svsim/sv_cuda.cuh"
+#include "dmsim/dm_cuda.cuh"
 #endif
 
 #ifdef CUDA_MPI_ENABLED
-#include "svsim/sv_nvgpu_mpi.cuh"
-#include "dmsim/dm_nvgpu_mpi.cuh"
+#include "svsim/sv_cuda_mpi.cuh"
+#include "dmsim/dm_cuda_mpi.cuh"
+#endif
+
+#ifdef HIP_ENABLED
+#include "svsim/sv_hip.hpp"
+#include "dmsim/dm_hip.hpp"
 #endif
 
 #include <iostream>
@@ -78,6 +83,10 @@ public:
 #ifdef CUDA_MPI_ENABLED
         safe_print("- NVGPU_MPI\n");
 #endif
+
+#ifdef HIP_ENABLED
+        safe_print("- AMDGPU\n");
+#endif
     }
 
     static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "sv")
@@ -112,6 +121,16 @@ public:
                 return std::make_shared<NWQSim::SV_NVGPU>(numQubits);
             else
                 return std::make_shared<NWQSim::DM_NVGPU>(numQubits);
+        }
+#endif
+
+#ifdef HIP_ENABLED
+        else if (backend == "AMDGPU")
+        {
+            if (simulator_method == "sv")
+                return std::make_shared<NWQSim::SV_HIP>(numQubits);
+            else
+                return std::make_shared<NWQSim::DM_HIP>(numQubits);
         }
 #endif
 

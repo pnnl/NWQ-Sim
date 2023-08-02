@@ -8,7 +8,7 @@
 #include "../private/config.hpp"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
-#include "../private/amdgpu_util.hpp"
+#include "../private/hip_util.hpp"
 #include "../circuit_pass/fusion.hpp"
 
 #include <assert.h>
@@ -29,13 +29,13 @@ namespace NWQSim
     using namespace std;
 
     // Simulation kernel runtime
-    class SV_AMDGPU;
-    __global__ void simulation_kernel_nvgpu(SV_AMDGPU *sv_gpu, IdxType n_gates);
+    class SV_HIP;
+    __global__ void simulation_kernel_hip(SV_HIP *sv_gpu, IdxType n_gates);
 
-    class SV_AMDGPU : public QuantumState
+    class SV_HIP : public QuantumState
     {
     public:
-        SV_AMDGPU(IdxType _n_qubits) : QuantumState(_n_qubits)
+        SV_HIP(IdxType _n_qubits) : QuantumState(_n_qubits)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -75,7 +75,7 @@ namespace NWQSim
             rng.seed(time(0));
         }
 
-        ~SV_AMDGPU()
+        ~SV_HIP()
         {
             // Release for CPU side
             SAFE_FREE_HOST_HIP(sv_real_cpu);
@@ -129,11 +129,11 @@ namespace NWQSim
 
             IdxType n_gates = cpu_vec.size();
 
-            SV_AMDGPU *sv_gpu;
-            SAFE_ALOC_GPU_HIP(sv_gpu, sizeof(SV_AMDGPU));
+            SV_HIP *sv_gpu;
+            SAFE_ALOC_GPU_HIP(sv_gpu, sizeof(SV_HIP));
             // Copy the simulator instance to GPU
             hipSafeCall(hipMemcpy(sv_gpu, this,
-                                  sizeof(SV_AMDGPU), hipMemcpyHostToDevice));
+                                  sizeof(SV_HIP), hipMemcpyHostToDevice));
 
             double sim_time;
             gpu_timer sim_timer;
@@ -151,14 +151,14 @@ namespace NWQSim
             unsigned smem_size = 0 * sizeof(ValType);
             int numBlocksPerSm;
             hipSafeCall(hipOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
-                                                                     simulation_kernel_nvgpu, THREADS_CTA_HIP, smem_size));
+                                                                     simulation_kernel_hip, THREADS_CTA_HIP, smem_size));
             gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
             void *args[] = {&sv_gpu, &n_gates};
             hipSafeCall(hipDeviceSynchronize());
 
             sim_timer.start_timer();
 
-            hipSafeCall(hipLaunchCooperativeKernel((void *)simulation_kernel_nvgpu, gridDim,
+            hipSafeCall(hipLaunchCooperativeKernel((void *)simulation_kernel_hip, gridDim,
                                                    THREADS_CTA_HIP, args, smem_size, 0));
             hipSafeCall(hipDeviceSynchronize());
 
@@ -171,7 +171,7 @@ namespace NWQSim
 
             if (Config::PRINT_SIM_TRACE)
             {
-                printf("\n============== SV-Sim ===============\n");
+                printf("\n============== SV-Sim (HIP) ===============\n");
                 printf("n_qubits:%lld, n_gates:%lld, sim_gates:%lld, ngpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_gpu:%.3lf MB\n",
                        n_qubits, origional_gates, n_gates, 1, sim_time, 0.,
                        sim_time, gpu_mem / 1024 / 1024, gpu_mem / 1024 / 1024);
@@ -618,7 +618,7 @@ namespace NWQSim
         }
     };
 
-    __global__ void simulation_kernel_nvgpu(SV_AMDGPU *sv_gpu, IdxType n_gates)
+    __global__ void simulation_kernel_hip(SV_HIP *sv_gpu, IdxType n_gates)
     {
         IdxType cur_index = 0;
         grid_group grid = this_grid();

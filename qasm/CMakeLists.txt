@@ -31,3 +31,12 @@ if(CUDAToolkit_FOUND)
         target_compile_definitions(nwq_qasm PUBLIC CUDA_MPI_ENABLED)
     endif()
 endif()
+
+if(HIP_FOUND)
+    enable_language(HIP)
+    set_source_files_properties(${SOURCE_FILE} PROPERTIES LANGUAGE HIP)
+
+    # target_compile_features(nwq_qasm PRIVATE hip_std_17)
+    target_compile_definitions(nwq_qasm PUBLIC HIP_ENABLED)
+
+endif()

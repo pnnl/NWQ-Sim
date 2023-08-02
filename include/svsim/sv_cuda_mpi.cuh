@@ -6,7 +6,7 @@
 #include "../circuit.hpp"
 
 #include "../private/config.hpp"
-#include "../private/nvgpu_util.cuh"
+#include "../private/cuda_util.cuh"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
 
@@ -34,13 +34,13 @@ namespace NWQSim
     using namespace std;
 
     // Simulation kernel runtime
-    class SV_NVGPU_MPI;
-    __global__ void simulation_kernel_nvgpu_mpi(SV_NVGPU_MPI *sv_gpu, IdxType n_gates);
+    class SV_CUDA_MPI;
+    __global__ void simulation_kernel_cuda_mpi(SV_CUDA_MPI *sv_gpu, IdxType n_gates);
 
-    class SV_NVGPU_MPI : public QuantumState
+    class SV_CUDA_MPI : public QuantumState
     {
     public:
-        SV_NVGPU_MPI(IdxType _n_qubits) : QuantumState(_n_qubits)
+        SV_CUDA_MPI(IdxType _n_qubits) : QuantumState(_n_qubits)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -97,7 +97,7 @@ namespace NWQSim
             rng.seed(time(0));
         }
 
-        ~SV_NVGPU_MPI()
+        ~SV_CUDA_MPI()
         {
             // Release for CPU side
             SAFE_FREE_HOST_CUDA(sv_real_cpu);
@@ -155,11 +155,11 @@ namespace NWQSim
 
             IdxType n_gates = cpu_vec.size();
 
-            SV_NVGPU_MPI *sv_gpu;
-            SAFE_ALOC_GPU(sv_gpu, sizeof(SV_NVGPU_MPI));
+            SV_CUDA_MPI *sv_gpu;
+            SAFE_ALOC_GPU(sv_gpu, sizeof(SV_CUDA_MPI));
             // Copy the simulator instance to GPU
             cudaSafeCall(cudaMemcpy(sv_gpu, this,
-                                    sizeof(SV_NVGPU_MPI), cudaMemcpyHostToDevice));
+                                    sizeof(SV_CUDA_MPI), cudaMemcpyHostToDevice));
 
             double *sim_times;
             double sim_time;
@@ -176,11 +176,11 @@ namespace NWQSim
             cudaDeviceProp deviceProp;
             cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
             // 8*16 is per warp shared-memory usage for C4 TC, with real and imag
-            // unsigned smem_size = THREADS_CTA_NVGPU/32*8*16*2*sizeof(ValType);
+            // unsigned smem_size = THREADS_CTA_CUDA/32*8*16*2*sizeof(ValType);
             unsigned smem_size = 0 * sizeof(ValType);
             int numBlocksPerSm;
             cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
-                                                                       simulation_kernel_nvgpu_mpi, THREADS_CTA_NVGPU, smem_size));
+                                                                       simulation_kernel_cuda_mpi, THREADS_CTA_CUDA, smem_size));
             gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
             void *args[] = {&sv_gpu, &n_gates};
             cudaSafeCall(cudaDeviceSynchronize());
@@ -189,8 +189,8 @@ namespace NWQSim
                 MPI_Barrier(MPI_COMM_WORLD);
             sim_timer.start_timer();
 
-            NVSHMEM_CHECK(nvshmemx_collective_launch((const void *)simulation_kernel_nvgpu_mpi, gridDim,
-                                                     THREADS_CTA_NVGPU, args, smem_size, 0));
+            NVSHMEM_CHECK(nvshmemx_collective_launch((const void *)simulation_kernel_cuda_mpi, gridDim,
+                                                     THREADS_CTA_CUDA, args, smem_size, 0));
             cudaSafeCall(cudaDeviceSynchronize());
 
             sim_timer.stop_timer();
@@ -395,18 +395,18 @@ namespace NWQSim
                 IdxType offset = (outer << (qubit + 1));
                 IdxType pos0 = ((offset + inner) & (m_gpu - 1));
                 IdxType pos1 = ((offset + inner + ((IdxType)1 << qubit)) & (m_gpu - 1));
-                const ValType el0_real = LOCAL_G_NVGPU_MPI(sv_real, pos0);
-                const ValType el0_imag = LOCAL_G_NVGPU_MPI(sv_imag, pos0);
-                const ValType el1_real = LOCAL_G_NVGPU_MPI(sv_real, pos1);
-                const ValType el1_imag = LOCAL_G_NVGPU_MPI(sv_imag, pos1);
+                const ValType el0_real = LOCAL_G_CUDA_MPI(sv_real, pos0);
+                const ValType el0_imag = LOCAL_G_CUDA_MPI(sv_imag, pos0);
+                const ValType el1_real = LOCAL_G_CUDA_MPI(sv_real, pos1);
+                const ValType el1_imag = LOCAL_G_CUDA_MPI(sv_imag, pos1);
                 ValType sv_real_pos0 = (gm_real[0] * el0_real) - (gm_imag[0] * el0_imag) + (gm_real[1] * el1_real) - (gm_imag[1] * el1_imag);
                 ValType sv_imag_pos0 = (gm_real[0] * el0_imag) + (gm_imag[0] * el0_real) + (gm_real[1] * el1_imag) + (gm_imag[1] * el1_real);
                 ValType sv_real_pos1 = (gm_real[2] * el0_real) - (gm_imag[2] * el0_imag) + (gm_real[3] * el1_real) - (gm_imag[3] * el1_imag);
                 ValType sv_imag_pos1 = (gm_real[2] * el0_imag) + (gm_imag[2] * el0_real) + (gm_real[3] * el1_imag) + (gm_imag[3] * el1_real);
-                LOCAL_P_NVGPU_MPI(sv_real, pos0, sv_real_pos0);
-                LOCAL_P_NVGPU_MPI(sv_imag, pos0, sv_imag_pos0);
-                LOCAL_P_NVGPU_MPI(sv_real, pos1, sv_real_pos1);
-                LOCAL_P_NVGPU_MPI(sv_imag, pos1, sv_imag_pos1);
+                LOCAL_P_CUDA_MPI(sv_real, pos0, sv_real_pos0);
+                LOCAL_P_CUDA_MPI(sv_imag, pos0, sv_imag_pos0);
+                LOCAL_P_CUDA_MPI(sv_real, pos1, sv_real_pos1);
+                LOCAL_P_CUDA_MPI(sv_imag, pos1, sv_imag_pos1);
             }
             grid.sync();
         }
@@ -457,18 +457,18 @@ namespace NWQSim
                 grid.sync();
                 for (IdxType i = tid; i < per_pe_work; i += blockDim.x * gridDim.x)
                 {
-                    const ValType el0_real = LOCAL_G_NVGPU_MPI(sv_real_pos0, i);
-                    const ValType el0_imag = LOCAL_G_NVGPU_MPI(sv_imag_pos0, i);
-                    const ValType el1_real = LOCAL_G_NVGPU_MPI(sv_real_pos1, i);
-                    const ValType el1_imag = LOCAL_G_NVGPU_MPI(sv_imag_pos1, i);
+                    const ValType el0_real = LOCAL_G_CUDA_MPI(sv_real_pos0, i);
+                    const ValType el0_imag = LOCAL_G_CUDA_MPI(sv_imag_pos0, i);
+                    const ValType el1_real = LOCAL_G_CUDA_MPI(sv_real_pos1, i);
+                    const ValType el1_imag = LOCAL_G_CUDA_MPI(sv_imag_pos1, i);
                     ValType real_pos0 = (gm_real[0] * el0_real) - (gm_imag[0] * el0_imag) + (gm_real[1] * el1_real) - (gm_imag[1] * el1_imag);
                     ValType imag_pos0 = (gm_real[0] * el0_imag) + (gm_imag[0] * el0_real) + (gm_real[1] * el1_imag) + (gm_imag[1] * el1_real);
                     ValType real_pos1 = (gm_real[2] * el0_real) - (gm_imag[2] * el0_imag) + (gm_real[3] * el1_real) - (gm_imag[3] * el1_imag);
                     ValType imag_pos1 = (gm_real[2] * el0_imag) + (gm_imag[2] * el0_real) + (gm_real[3] * el1_imag) + (gm_imag[3] * el1_real);
-                    LOCAL_P_NVGPU_MPI(sv_real_pos0, i, real_pos0);
-                    LOCAL_P_NVGPU_MPI(sv_imag_pos0, i, imag_pos0);
-                    LOCAL_P_NVGPU_MPI(sv_real_pos1, i, real_pos1);
-                    LOCAL_P_NVGPU_MPI(sv_imag_pos1, i, imag_pos1);
+                    LOCAL_P_CUDA_MPI(sv_real_pos0, i, real_pos0);
+                    LOCAL_P_CUDA_MPI(sv_imag_pos0, i, imag_pos0);
+                    LOCAL_P_CUDA_MPI(sv_real_pos1, i, real_pos1);
+                    LOCAL_P_CUDA_MPI(sv_imag_pos1, i, imag_pos1);
                 }
                 grid.sync();
                 if (flag == 0) // copy local to right
@@ -515,19 +515,19 @@ namespace NWQSim
 
                 for (IdxType i = tid; i < per_pe_work; i += blockDim.x * gridDim.x)
                 {
-                    const ValType el0_real = LOCAL_G_NVGPU_MPI(sv_real, i);
-                    const ValType el0_imag = LOCAL_G_NVGPU_MPI(sv_imag, i);
-                    const ValType el1_real = LOCAL_G_NVGPU_MPI(sv_real_remote, i);
-                    const ValType el1_imag = LOCAL_G_NVGPU_MPI(sv_imag_remote, i);
+                    const ValType el0_real = LOCAL_G_CUDA_MPI(sv_real, i);
+                    const ValType el0_imag = LOCAL_G_CUDA_MPI(sv_imag, i);
+                    const ValType el1_real = LOCAL_G_CUDA_MPI(sv_real_remote, i);
+                    const ValType el1_imag = LOCAL_G_CUDA_MPI(sv_imag_remote, i);
 
                     ValType real_pos0 = (gm_real[0] * el0_real) - (gm_imag[0] * el0_imag) + (gm_real[1] * el1_real) - (gm_imag[1] * el1_imag);
                     ValType imag_pos0 = (gm_real[0] * el0_imag) + (gm_imag[0] * el0_real) + (gm_real[1] * el1_imag) + (gm_imag[1] * el1_real);
                     ValType real_pos1 = (gm_real[2] * el0_real) - (gm_imag[2] * el0_imag) + (gm_real[3] * el1_real) - (gm_imag[3] * el1_imag);
                     ValType imag_pos1 = (gm_real[2] * el0_imag) + (gm_imag[2] * el0_real) + (gm_real[3] * el1_imag) + (gm_imag[3] * el1_real);
-                    LOCAL_P_NVGPU_MPI(sv_real, i, real_pos0);
-                    LOCAL_P_NVGPU_MPI(sv_imag, i, imag_pos0);
-                    LOCAL_P_NVGPU_MPI(sv_real_remote, i, real_pos1);
-                    LOCAL_P_NVGPU_MPI(sv_imag_remote, i, imag_pos1);
+                    LOCAL_P_CUDA_MPI(sv_real, i, real_pos0);
+                    LOCAL_P_CUDA_MPI(sv_imag, i, imag_pos0);
+                    LOCAL_P_CUDA_MPI(sv_real_remote, i, real_pos1);
+                    LOCAL_P_CUDA_MPI(sv_imag_remote, i, imag_pos1);
                 }
                 grid.sync();
                 if (tid == 0)
@@ -564,14 +564,14 @@ namespace NWQSim
                 IdxType pos2 = outer + mider + inner + qubit0_dim;
                 IdxType pos3 = outer + mider + inner + q0dim + q1dim;
 
-                const ValType el0_real = LOCAL_G_NVGPU_MPI(sv_real, pos0);
-                const ValType el0_imag = LOCAL_G_NVGPU_MPI(sv_imag, pos0);
-                const ValType el1_real = LOCAL_G_NVGPU_MPI(sv_real, pos1);
-                const ValType el1_imag = LOCAL_G_NVGPU_MPI(sv_imag, pos1);
-                const ValType el2_real = LOCAL_G_NVGPU_MPI(sv_real, pos2);
-                const ValType el2_imag = LOCAL_G_NVGPU_MPI(sv_imag, pos2);
-                const ValType el3_real = LOCAL_G_NVGPU_MPI(sv_real, pos3);
-                const ValType el3_imag = LOCAL_G_NVGPU_MPI(sv_imag, pos3);
+                const ValType el0_real = LOCAL_G_CUDA_MPI(sv_real, pos0);
+                const ValType el0_imag = LOCAL_G_CUDA_MPI(sv_imag, pos0);
+                const ValType el1_real = LOCAL_G_CUDA_MPI(sv_real, pos1);
+                const ValType el1_imag = LOCAL_G_CUDA_MPI(sv_imag, pos1);
+                const ValType el2_real = LOCAL_G_CUDA_MPI(sv_real, pos2);
+                const ValType el2_imag = LOCAL_G_CUDA_MPI(sv_imag, pos2);
+                const ValType el3_real = LOCAL_G_CUDA_MPI(sv_real, pos3);
+                const ValType el3_imag = LOCAL_G_CUDA_MPI(sv_imag, pos3);
 
                 // Real part
                 ValType sv_real_pos0 = (gm_real[0] * el0_real) - (gm_imag[0] * el0_imag) + (gm_real[1] * el1_real) - (gm_imag[1] * el1_imag) + (gm_real[2] * el2_real) - (gm_imag[2] * el2_imag) + (gm_real[3] * el3_real) - (gm_imag[3] * el3_imag);
@@ -585,15 +585,15 @@ namespace NWQSim
                 ValType sv_imag_pos2 = (gm_real[8] * el0_imag) + (gm_imag[8] * el0_real) + (gm_real[9] * el1_imag) + (gm_imag[9] * el1_real) + (gm_real[10] * el2_imag) + (gm_imag[10] * el2_real) + (gm_real[11] * el3_imag) + (gm_imag[11] * el3_real);
                 ValType sv_imag_pos3 = (gm_real[12] * el0_imag) + (gm_imag[12] * el0_real) + (gm_real[13] * el1_imag) + (gm_imag[13] * el1_real) + (gm_real[14] * el2_imag) + (gm_imag[14] * el2_real) + (gm_real[15] * el3_imag) + (gm_imag[15] * el3_real);
 
-                LOCAL_P_NVGPU_MPI(sv_real, pos0, sv_real_pos0);
-                LOCAL_P_NVGPU_MPI(sv_real, pos1, sv_real_pos1);
-                LOCAL_P_NVGPU_MPI(sv_real, pos2, sv_real_pos2);
-                LOCAL_P_NVGPU_MPI(sv_real, pos3, sv_real_pos3);
+                LOCAL_P_CUDA_MPI(sv_real, pos0, sv_real_pos0);
+                LOCAL_P_CUDA_MPI(sv_real, pos1, sv_real_pos1);
+                LOCAL_P_CUDA_MPI(sv_real, pos2, sv_real_pos2);
+                LOCAL_P_CUDA_MPI(sv_real, pos3, sv_real_pos3);
 
-                LOCAL_P_NVGPU_MPI(sv_imag, pos0, sv_imag_pos0);
-                LOCAL_P_NVGPU_MPI(sv_imag, pos1, sv_imag_pos1);
-                LOCAL_P_NVGPU_MPI(sv_imag, pos2, sv_imag_pos2);
-                LOCAL_P_NVGPU_MPI(sv_imag, pos3, sv_imag_pos3);
+                LOCAL_P_CUDA_MPI(sv_imag, pos0, sv_imag_pos0);
+                LOCAL_P_CUDA_MPI(sv_imag, pos1, sv_imag_pos1);
+                LOCAL_P_CUDA_MPI(sv_imag, pos2, sv_imag_pos2);
+                LOCAL_P_CUDA_MPI(sv_imag, pos3, sv_imag_pos3);
             }
             // BARR_NVSHMEM;
         }
@@ -647,24 +647,24 @@ namespace NWQSim
                     const IdxType term1 = MOD2E(DIV2E(i, p), q - p - 1) * EXP2E(p + 1);
                     const IdxType term2 = DIV2E(DIV2E(i, p), q - p - 1) * EXP2E(q + 1);
                     const IdxType term = term2 + term1 + term0;
-                    el_real[0] = LOCAL_G_NVGPU_MPI(sv_real, term + SV4IDX(0));
-                    el_imag[0] = LOCAL_G_NVGPU_MPI(sv_imag, term + SV4IDX(0));
-                    el_real[3] = LOCAL_G_NVGPU_MPI(sv_real_remote, term + SV4IDX(3));
-                    el_imag[3] = LOCAL_G_NVGPU_MPI(sv_imag_remote, term + SV4IDX(3));
+                    el_real[0] = LOCAL_G_CUDA_MPI(sv_real, term + SV4IDX(0));
+                    el_imag[0] = LOCAL_G_CUDA_MPI(sv_imag, term + SV4IDX(0));
+                    el_real[3] = LOCAL_G_CUDA_MPI(sv_real_remote, term + SV4IDX(3));
+                    el_imag[3] = LOCAL_G_CUDA_MPI(sv_imag_remote, term + SV4IDX(3));
 
                     if (qubit0 == q) // qubit0 is the remote qubit
                     {
-                        el_real[1] = LOCAL_G_NVGPU_MPI(sv_real, term + SV4IDX(1));
-                        el_imag[1] = LOCAL_G_NVGPU_MPI(sv_imag, term + SV4IDX(1));
-                        el_real[2] = LOCAL_G_NVGPU_MPI(sv_real_remote, term + SV4IDX(2));
-                        el_imag[2] = LOCAL_G_NVGPU_MPI(sv_imag_remote, term + SV4IDX(2));
+                        el_real[1] = LOCAL_G_CUDA_MPI(sv_real, term + SV4IDX(1));
+                        el_imag[1] = LOCAL_G_CUDA_MPI(sv_imag, term + SV4IDX(1));
+                        el_real[2] = LOCAL_G_CUDA_MPI(sv_real_remote, term + SV4IDX(2));
+                        el_imag[2] = LOCAL_G_CUDA_MPI(sv_imag_remote, term + SV4IDX(2));
                     }
                     else // qubit1 is the remote qubit
                     {
-                        el_real[1] = LOCAL_G_NVGPU_MPI(sv_real_remote, term + SV4IDX(1));
-                        el_imag[1] = LOCAL_G_NVGPU_MPI(sv_imag_remote, term + SV4IDX(1));
-                        el_real[2] = LOCAL_G_NVGPU_MPI(sv_real, term + SV4IDX(2));
-                        el_imag[2] = LOCAL_G_NVGPU_MPI(sv_imag, term + SV4IDX(2));
+                        el_real[1] = LOCAL_G_CUDA_MPI(sv_real_remote, term + SV4IDX(1));
+                        el_imag[1] = LOCAL_G_CUDA_MPI(sv_imag_remote, term + SV4IDX(1));
+                        el_real[2] = LOCAL_G_CUDA_MPI(sv_real, term + SV4IDX(2));
+                        el_imag[2] = LOCAL_G_CUDA_MPI(sv_imag, term + SV4IDX(2));
                     }
 #pragma unroll
                     for (unsigned j = 0; j < 4; j++)
@@ -676,24 +676,24 @@ namespace NWQSim
                             res_imag[j] += (el_real[k] * gm_imag[j * 4 + k]) + (el_imag[k] * gm_real[j * 4 + k]);
                         }
                     }
-                    LOCAL_P_NVGPU_MPI(sv_real, term + SV4IDX(0), res_real[0]);
-                    LOCAL_P_NVGPU_MPI(sv_imag, term + SV4IDX(0), res_imag[0]);
-                    LOCAL_P_NVGPU_MPI(sv_real_remote, term + SV4IDX(3), res_real[3]);
-                    LOCAL_P_NVGPU_MPI(sv_imag_remote, term + SV4IDX(3), res_imag[3]);
+                    LOCAL_P_CUDA_MPI(sv_real, term + SV4IDX(0), res_real[0]);
+                    LOCAL_P_CUDA_MPI(sv_imag, term + SV4IDX(0), res_imag[0]);
+                    LOCAL_P_CUDA_MPI(sv_real_remote, term + SV4IDX(3), res_real[3]);
+                    LOCAL_P_CUDA_MPI(sv_imag_remote, term + SV4IDX(3), res_imag[3]);
 
                     if (qubit0 == q) // qubit0 is the remote qubit
                     {
-                        LOCAL_P_NVGPU_MPI(sv_real, term + SV4IDX(1), res_real[1]);
-                        LOCAL_P_NVGPU_MPI(sv_imag, term + SV4IDX(1), res_imag[1]);
-                        LOCAL_P_NVGPU_MPI(sv_real_remote, term + SV4IDX(2), res_real[2]);
-                        LOCAL_P_NVGPU_MPI(sv_imag_remote, term + SV4IDX(2), res_imag[2]);
+                        LOCAL_P_CUDA_MPI(sv_real, term + SV4IDX(1), res_real[1]);
+                        LOCAL_P_CUDA_MPI(sv_imag, term + SV4IDX(1), res_imag[1]);
+                        LOCAL_P_CUDA_MPI(sv_real_remote, term + SV4IDX(2), res_real[2]);
+                        LOCAL_P_CUDA_MPI(sv_imag_remote, term + SV4IDX(2), res_imag[2]);
                     }
                     else // qubit1 is the remote qubit
                     {
-                        LOCAL_P_NVGPU_MPI(sv_real_remote, term + SV4IDX(1), res_real[1]);
-                        LOCAL_P_NVGPU_MPI(sv_imag_remote, term + SV4IDX(1), res_imag[1]);
-                        LOCAL_P_NVGPU_MPI(sv_real, term + SV4IDX(2), res_real[2]);
-                        LOCAL_P_NVGPU_MPI(sv_imag, term + SV4IDX(2), res_imag[2]);
+                        LOCAL_P_CUDA_MPI(sv_real_remote, term + SV4IDX(1), res_real[1]);
+                        LOCAL_P_CUDA_MPI(sv_imag_remote, term + SV4IDX(1), res_imag[1]);
+                        LOCAL_P_CUDA_MPI(sv_real, term + SV4IDX(2), res_real[2]);
+                        LOCAL_P_CUDA_MPI(sv_imag, term + SV4IDX(2), res_imag[2]);
                     }
                 }
                 grid.sync();
@@ -818,8 +818,8 @@ namespace NWQSim
 
             if (i_proc == (n_gpus - 1) && tid == 0) // last GPU
             {
-                ValType val = LOCAL_G_NVGPU_MPI(m_real, n_size - 1);
-                LOCAL_P_NVGPU_MPI(m_real, n_size - 1, 0);
+                ValType val = LOCAL_G_CUDA_MPI(m_real, n_size - 1);
+                LOCAL_P_CUDA_MPI(m_real, n_size - 1, 0);
                 ValType purity = fabs(val);
                 if (fabs(purity - 1.0) > ERROR_BAR)
                     printf("MA: Purity Check fails with %lf\n", purity);
@@ -851,7 +851,7 @@ namespace NWQSim
                 IdxType local_gpu = j >> (lg2_m_gpu);
                 if (local_gpu == i_proc)
                 {
-                    ValType lower = LOCAL_G_NVGPU_MPI(m_real, j);
+                    ValType lower = LOCAL_G_CUDA_MPI(m_real, j);
                     ValType upper = (j + 1 == n_size) ? 1 : PGAS_G(m_real, j + 1);
                     for (IdxType i = 0; i < repetition; i++)
                     {
@@ -938,7 +938,7 @@ namespace NWQSim
                 IdxType local_gpu = j >> (lg2_m_gpu);
                 if (local_gpu == i_proc)
                 {
-                    ValType lower = LOCAL_G_NVGPU_MPI(m_real, j);
+                    ValType lower = LOCAL_G_CUDA_MPI(m_real, j);
                     ValType upper = (j + 1 == n_size) ? 1 : PGAS_G(m_real, j + 1);
                     for (IdxType i = 0; i < repetition; i++)
                     {
@@ -1096,20 +1096,20 @@ namespace NWQSim
                 const IdxType term2 = DIV2E(DIV2E(i, p), q - p - 1) * EXP2E(q + 1);
                 const IdxType term = term2 + term1 + term0;
 
-                el_real[1] = LOCAL_G_NVGPU_MPI(sv_real_remote, term + SV4IDX(1));
-                el_imag[1] = LOCAL_G_NVGPU_MPI(sv_imag_remote, term + SV4IDX(1));
-                el_real[2] = LOCAL_G_NVGPU_MPI(sv_real, term + SV4IDX(2));
-                el_imag[2] = LOCAL_G_NVGPU_MPI(sv_imag, term + SV4IDX(2));
+                el_real[1] = LOCAL_G_CUDA_MPI(sv_real_remote, term + SV4IDX(1));
+                el_imag[1] = LOCAL_G_CUDA_MPI(sv_imag_remote, term + SV4IDX(1));
+                el_real[2] = LOCAL_G_CUDA_MPI(sv_real, term + SV4IDX(2));
+                el_imag[2] = LOCAL_G_CUDA_MPI(sv_imag, term + SV4IDX(2));
 
                 res_real[1] = el_real[2];
                 res_imag[1] = el_imag[2];
                 res_real[2] = el_real[1];
                 res_imag[2] = el_imag[1];
 
-                LOCAL_P_NVGPU_MPI(sv_real_remote, term + SV4IDX(1), res_real[1]);
-                LOCAL_P_NVGPU_MPI(sv_imag_remote, term + SV4IDX(1), res_imag[1]);
-                LOCAL_P_NVGPU_MPI(sv_real, term + SV4IDX(2), res_real[2]);
-                LOCAL_P_NVGPU_MPI(sv_imag, term + SV4IDX(2), res_imag[2]);
+                LOCAL_P_CUDA_MPI(sv_real_remote, term + SV4IDX(1), res_real[1]);
+                LOCAL_P_CUDA_MPI(sv_imag_remote, term + SV4IDX(1), res_imag[1]);
+                LOCAL_P_CUDA_MPI(sv_real, term + SV4IDX(2), res_real[2]);
+                LOCAL_P_CUDA_MPI(sv_imag, term + SV4IDX(2), res_imag[2]);
             }
             grid.sync();
             if (tid == 0)
@@ -1153,7 +1153,7 @@ namespace NWQSim
                     {
                         printf("Purity Check fails after Gate-%lld with %lf\n", t, purity);
                         // Gate *g = &circuit_handle_gpu[t];
-                        // printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld,theta:%lf) with %lf\n", t, OP_NAMES_NVGPU[g->op_name], g->ctrl, g->qubit, g->theta, purity);
+                        // printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld,theta:%lf) with %lf\n", t, OP_NAMES_CUDA[g->op_name], g->ctrl, g->qubit, g->theta, purity);
                     }
                 }
             }
@@ -1161,7 +1161,7 @@ namespace NWQSim
         }
     };
 
-    __global__ void simulation_kernel_nvgpu_mpi(SV_NVGPU_MPI *sv_gpu, IdxType n_gates)
+    __global__ void simulation_kernel_cuda_mpi(SV_CUDA_MPI *sv_gpu, IdxType n_gates)
     {
         IdxType cur_index = 0;
         IdxType lg2_m_gpu = sv_gpu->lg2_m_gpu;
