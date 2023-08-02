@@ -206,13 +206,13 @@ namespace NWQSim
             // copy these vectors to device
             size_t *in_bits_gpu;
 
-            SAFE_ALOC_GPU(in_bits_gpu, in_bits.size() * sizeof(size_t));
+            SAFE_ALOC_GPU_HIP(in_bits_gpu, in_bits.size() * sizeof(size_t));
             hipSafeCall(hipMemcpy(in_bits_gpu, in_bits.data(), in_bits.size() * sizeof(size_t), hipMemcpyHostToDevice));
 
             // result
             double result = 0.0;
             double *result_gpu;
-            SAFE_ALOC_GPU(result_gpu, sizeof(ValType));
+            SAFE_ALOC_GPU_HIP(result_gpu, sizeof(ValType));
             hipSafeCall(hipMemcpy(result_gpu, &result, sizeof(double), hipMemcpyHostToDevice));
 
             // get device properties and calculate the optimal number of blocks per SM
@@ -232,8 +232,8 @@ namespace NWQSim
             // copy result back
             hipSafeCall(hipMemcpy(&result, result_gpu, sizeof(ValType), hipMemcpyDeviceToHost));
 
-            SAFE_FREE_GPU(in_bits_gpu);
-            SAFE_FREE_GPU(result_gpu);
+            SAFE_FREE_GPU_HIP(in_bits_gpu);
+            SAFE_FREE_GPU_HIP(result_gpu);
 
             return result;
         }
@@ -244,7 +244,7 @@ namespace NWQSim
             // result
             double result = 0.0;
             double *result_gpu;
-            SAFE_ALOC_GPU(result_gpu, sizeof(ValType));
+            SAFE_ALOC_GPU_HIP(result_gpu, sizeof(ValType));
             hipSafeCall(hipMemcpy(result_gpu, &result, sizeof(double), hipMemcpyHostToDevice));
 
             // get device properties and calculate the optimal number of blocks per SM
@@ -264,7 +264,7 @@ namespace NWQSim
             // copy result back
             hipSafeCall(hipMemcpy(&result, result_gpu, sizeof(ValType), hipMemcpyDeviceToHost));
 
-            SAFE_FREE_GPU(result_gpu);
+            SAFE_FREE_GPU_HIP(result_gpu);
 
             return result;
         }
