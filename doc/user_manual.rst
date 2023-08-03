@@ -66,7 +66,7 @@ known issue that restricts each GPU to utilize no more than 2GB of GPU
 memory. To overcome this limitation, we have incorporated a fix in our
 source code.
 
-ORNL Frontier HPC
+OLCF Frontier HPC
 ~~~~~~~~~~~~~~~~~
 
 Currently, for AMD CPU, single/OpenMP/MPI work, for AMD GPU, only single
@@ -115,7 +115,7 @@ Follow these steps to build NWQ-Sim on the OLCF Frontier HPC:
 
    make -j4
 
-ORNL Summit HPC
+OLCF Summit HPC
 ~~~~~~~~~~~~~~~
 
 Follow these steps to build NWQ-Sim on the OLCF Summit HPC:
@@ -195,6 +195,20 @@ Follow these steps to build NWQ-Sim on the NERSC Perlmutter HPC:
    ./build_nvshmem_perlmutter.sh
 
 Finally, build NWQ-Sim using the steps in `Build from
+Source <#build_base>`__
+
+ALCF Theta HPC
+~~~~~~~~~~~~~~
+
+Follow these steps to build NWQ-Sim on the Argonne ALCF Theta HPC:
+
+Initialize the environment with provided script
+
+.. code:: bash
+
+   source ~/NWQ-Sim/environment/setup_theta.sh
+
+Then build NWQ-Sim using the steps in `Build from
 Source <#build_base>`__
 
 Program Runtime Configuration Options
@@ -314,6 +328,25 @@ Launch multi-GPU execution for regular or interactive jobs:
 Replace ``<NODES>`` with the number of compute nodes, ``<GPUS>`` with
 the total number of GPUs, and ``<NWQ-Sim Command>`` with the NWQ-Sim
 execution command.
+
+Running on Theta HPC
+~~~~~~~~~~~~~~~~~~~~
+
+To run NWQ-Sim on the Theta Supercomputer, initilize the environment
+first
+
+.. code:: bash
+
+   source ~/NWQ-Sim/environment/setup_theta.sh
+
+Launch regular or interactive jobs and use the following command to
+execute:
+
+.. code:: bash
+
+   aprun -n <NODES> -N 1 <NWQ-Sim Command> -backend MPI
+
+Replace ``<NODES>`` with the number of compute nodes
 
 NWQ-Sim for Chemistry Simulations
 ---------------------------------
