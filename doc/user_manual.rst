@@ -55,7 +55,7 @@ follow these steps:
 .. code:: bash
 
    cmake ..
-   make
+   make -j4
 
 Build on HPC Systems
 --------------------
@@ -80,8 +80,40 @@ Follow these steps to build NWQ-Sim on the OLCF Frontier HPC:
 
    source ~/NWQ-Sim/environment/setup_frontier.sh
 
-Then, build NWQ-Sim using the steps in `Build from
-Source <#build_base>`__
+1. Clone the NWQ-Sim repository:
+
+.. code:: bash
+
+   git clone https://github.com/pnnl/NWQ-Sim.git
+   cd NWQ-Sim
+
+2. Create a build directory and navigate into it:
+
+.. code:: bash
+
+   mkdir build
+   cd build
+
+3. Configure the project using CMake
+
+.. code:: bash
+
+   cmake ..
+
+4. (ISSUE) Default clang++ compiler on Frontier HPC produces
+   slow-running code. hipcc improves performance but can’t be set
+   directly in CMake. A temporary fix is provided below to replace
+   clang++ with hipcc in build scripts:
+
+.. code:: bash
+
+   sed -i 's|/opt/rocm-5.3.0/llvm/bin/clang++|hipcc|g' qasm/CMakeFiles/nwq_qasm.dir/build.make
+
+5. Build
+
+.. code:: bash
+
+   make -j4
 
 ORNL Summit HPC
 ~~~~~~~~~~~~~~~
