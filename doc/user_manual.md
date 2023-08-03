@@ -48,7 +48,7 @@ make -j4
 
 For multi-GPU execution on HPCs with NVIDIA GPUs, NWQ-Sim requires the NVSHMEM library. However, the current version of NVSHMEM library has a known issue that restricts each GPU to utilize no more than 2GB of GPU memory. To overcome this limitation, we have incorporated a fix in our source code.
 
-### ORNL Frontier HPC
+### OLCF Frontier HPC
 
 Currently, for AMD CPU, single/OpenMP/MPI work, for AMD GPU, only single AMD MI250X GPU works.
 
@@ -84,7 +84,7 @@ sed -i 's|/opt/rocm-5.3.0/llvm/bin/clang++|hipcc|g' qasm/CMakeFiles/nwq_qasm.dir
 make -j4
 ```
 
-### ORNL Summit HPC
+### OLCF Summit HPC
 
 Follow these steps to build NWQ-Sim on the OLCF Summit HPC:
 
@@ -149,6 +149,19 @@ cd ~/nvshmem_src_2.9.0-2
 ```
 
 Finally, build NWQ-Sim using the steps in [Build from Source](#build_base)
+
+### ALCF Theta HPC
+
+Follow these steps to build NWQ-Sim on the Argonne ALCF Theta HPC:
+
+Initialize the environment with provided script
+
+```bash
+source ~/NWQ-Sim/environment/setup_theta.sh
+```
+
+Then build NWQ-Sim using the steps in [Build from Source](#build_base)
+
 
 
 ## Program Runtime Configuration Options
@@ -231,6 +244,21 @@ srun -C gpu -N <NODES> -n <GPUS> -c 1 --gpus-per-task=1 --gpu-bind=single:1 <NWQ
 ```
 
 Replace `<NODES>` with the number of compute nodes, `<GPUS>` with the total number of GPUs, and `<NWQ-Sim Command>` with the NWQ-Sim execution command.
+
+
+### Running on Theta HPC
+
+To run NWQ-Sim on the Theta Supercomputer, initilize the environment first
+```bash
+source ~/NWQ-Sim/environment/setup_theta.sh
+```
+
+Launch regular or interactive jobs and use the following command to execute:
+```bash
+aprun -n <NODES> -N 1 <NWQ-Sim Command> -backend MPI
+```
+Replace `<NODES>` with the number of compute nodes
+
 
 ## NWQ-Sim for Chemistry Simulations
 
