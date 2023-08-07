@@ -358,10 +358,10 @@ Please note, this is an example; actual results may vary based on the specific q
 Include the necessary libraries at the beginning of your program. 
 
 ```cpp
-#include "backendManager.hpp"
-#include "state.hpp"
-#include "circuit.hpp"
-#include "nwq_util.hpp"
+#include "include/backendManager.hpp"
+#include "include/state.hpp"
+#include "include/circuit.hpp"
+#include "include/nwq_util.hpp"
 ```
 
 ### 2. Building the Quantum Circuit
