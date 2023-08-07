@@ -1763,7 +1763,7 @@ void RESET_GATE(const Simulation* sim, const IdxType t)
     }
     else
     {
-        if ((qubit+sim->n_qubits)>=sim->lg2_m_gpu) //remote qubit, need switch
+        if (qubit>=sim->lg2_m_gpu) //remote qubit, need switch
         {
             IdxType pair_gpu = (sim->i_gpu)^((IdxType)1<<(qubit-(sim->lg2_m_gpu)));
             assert(pair_gpu != sim->i_gpu);
@@ -1859,11 +1859,11 @@ void simulation_kernel(Simulation* sim)
         enum OP op_name = sim->circuit_handle->fused_circuit[t].op_name;
         if (op_name == RESET)
         {
-            //RESET_GATE(sim, t);
+            RESET_GATE(sim, t);
         }
         else if (op_name == M)
         {
-            //M_GATE(sim, t);
+            M_GATE(sim, t);
         }
         else if (op_name == MA)
         {

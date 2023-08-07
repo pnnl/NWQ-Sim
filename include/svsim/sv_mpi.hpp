@@ -757,7 +757,7 @@ namespace NWQSim
             }
             else
             {
-                if ((qubit + n_qubits) >= lg2_m_cpu) // remote qubit, need switch
+                if (qubit >= lg2_m_cpu) // remote qubit, need switch
                 {
                     IdxType pair_cpu = (i_proc) ^ ((IdxType)1 << (qubit - (lg2_m_cpu)));
                     assert(pair_cpu != i_proc);

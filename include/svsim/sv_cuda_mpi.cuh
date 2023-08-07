@@ -1010,7 +1010,7 @@ namespace NWQSim
             }
             else
             {
-                if ((qubit + n_qubits) >= lg2_m_gpu) // remote qubit, need switch
+                if (qubit >= lg2_m_gpu) // remote qubit, need switch
                 {
                     IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (qubit - (lg2_m_gpu)));
                     assert(pair_gpu != i_proc);
