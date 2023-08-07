@@ -1,0 +1,14 @@
+cx 262
+u1 129
+u3 106
+u 93
+u2 66
+h 52
+r 32
+t 24
+tdg 18
+rz 16
+sdg 8
+s 8
+reset 3
+id 2

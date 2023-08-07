@@ -1,0 +1,14 @@
+cx 208
+u1 114
+u3 100
+u 77
+u2 58
+r 28
+h 16
+t 16
+tdg 12
+id 4
+sdg 4
+s 4
+reset 4
+rz 2
