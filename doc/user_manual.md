@@ -351,3 +351,58 @@ Here, we illustrate an execution of the Adapt VQE simulation on a water molecule
 ![Adapt VQE Delta Energy Chart](adapt_vqe.png)
 
 Please note, this is an example; actual results may vary based on the specific quantum chemistry problem and the precision of your Hamiltonian.
+
+## C++ Tutorial
+### 1. Essential Libraries
+
+Include the necessary libraries at the beginning of your program. 
+
+```cpp
+#include "backendManager.hpp"
+#include "state.hpp"
+#include "circuit.hpp"
+#include "nwq_util.hpp"
+```
+
+### 2. Building the Quantum Circuit
+
+Construct your quantum circuit with the provided functions. The gate
+
+```cpp
+// Create a circuit with 2 qubits
+int n_qubits = 2;
+auto circuit = std::make_shared<Circuit>(n_qubits);
+
+// Add some gates to the circuit
+circuit->H(0);
+circuit->CX(0, 1);
+circuit->RZ(0.125, 0);
+```
+
+### 3. Preparing the Quantum State
+Set up the quantum state simulation backend.
+
+```cpp
+std::string backend = "CPU";
+std::string sim_method = "sv";
+auto state = BackendManager::create_state(backend, n_qubits, sim_method);
+```
+
+### 4. Running The Simulation and Gathering Results
+
+Finally, you can run your quantum circuit with your prepared state and gather the results. The measurement operation can be added in circuit or can be directly called from state.
+
+```cpp
+// Add measurement operation to circuit then simulate
+int shots = 1024;
+circuit->MA(shots);
+state->sim(circuit);
+long long int *result = state->get_results();
+```
+or
+```cpp
+// Simulate and then directly sample from state
+int shots = 1024;
+state->sim(circuit);
+long long int *result = state->measure_all(shots);
+```
