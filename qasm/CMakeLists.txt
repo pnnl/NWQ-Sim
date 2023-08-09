@@ -39,4 +39,9 @@ if(HIP_FOUND)
     # target_compile_features(nwq_qasm PRIVATE hip_std_17)
     target_compile_definitions(nwq_qasm PUBLIC HIP_ENABLED)
 
+    # Link against MPI if available
+    if(MPI_FOUND)
+        target_compile_definitions(nwq_qasm PUBLIC HIP_MPI_ENABLED)
+    endif()
+
 endif()

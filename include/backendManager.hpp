@@ -29,6 +29,10 @@
 #include "dmsim/dm_hip.hpp"
 #endif
 
+#ifdef HIP_MPI_ENABLED
+#include "svsim/sv_hip_mpi.hpp"
+#endif
+
 #include <iostream>
 #include <memory>
 
@@ -87,6 +91,10 @@ public:
 #ifdef HIP_ENABLED
         safe_print("- AMDGPU\n");
 #endif
+
+#ifdef HIP_MPI_ENABLED
+        safe_print("- AMDGPU_MPI\n");
+#endif
     }
 
     static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "sv")
@@ -144,6 +152,16 @@ public:
                 return std::make_shared<NWQSim::SV_CUDA_MPI>(numQubits);
             else
                 return std::make_shared<NWQSim::DM_CUDA_MPI>(numQubits);
+        }
+#endif
+
+#ifdef HIP_MPI_ENABLED
+        else if (backend == "AMDGPU_MPI")
+        {
+            // if (simulator_method == "sv")
+            return std::make_shared<NWQSim::SV_HIP_MPI>(numQubits);
+            // else
+            //     return std::make_shared<NWQSim::DM_HIP>(numQubits);
         }
 #endif
         else if (backend == "LIST")

@@ -102,6 +102,13 @@ typedef struct GPU_Timer
 } gpu_timer;
 
 /***********************************************
+ * Cluster Based
+ ***********************************************/
+
+#define LOCAL_G_HIP_MPI(arr, i) arr[(i) & (sim->m_gpu - 1)]
+#define LOCAL_P_HIP_MPI(arr, i, val) arr[(i) & (sim->m_gpu - 1)] = val;
+
+/***********************************************
  * VQE Related Functions
  ***********************************************/
 
@@ -153,5 +160,3 @@ __global__ void gpu_exp_z(const double *sv_real, const double *sv_imag, double *
         atomicAdd(result, res);
     }
 }
-
-    
