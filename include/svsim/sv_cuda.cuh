@@ -673,6 +673,40 @@ namespace NWQSim
             }
             BARR_CUDA;
         }
+
+        __device__ __inline__ void Purity_Check(const IdxType t)
+        {
+            grid_group grid = this_grid();
+            const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
+            const IdxType per_pe_work = (dim);
+            ValType *m_real = m_real;
+
+            for (IdxType i = tid; i < dim; i += blockDim.x * gridDim.x)
+            {
+                m_real[i] = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
+            }
+            BARR;
+
+            for (IdxType k = ((IdxType)1 << (n_qubits - 1)); k > 0; k >>= 1)
+            {
+                for (IdxType i = tid; i < k; i += blockDim.x * gridDim.x)
+                {
+                    m_real[i] += m_real[i + k];
+                }
+                grid.sync();
+            }
+            BARR;
+            if (threadIdx.x == 0 && blockIdx.x == 0)
+            {
+                ValType purity = m_real[0];
+                if (abs(purity - 1.0) > ERROR_BAR)
+                {
+                    Gate *g = &circuit_handle_gpu[t];
+                    printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld,theta:%lf) with %lf\n", t, OP_NAMES_NVGPU[g->op_name], g->ctrl, g->qubit, g->theta, purity);
+                }
+            }
+            BARR;
+        }
     };
 
     __global__ void simulation_kernel_cuda(SV_CUDA *sv_gpu, IdxType n_gates)

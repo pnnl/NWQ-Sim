@@ -22,6 +22,8 @@
 
 #define PRINT_PROGRESS_BAR
 
+#define PURITY_CHECK
+
 namespace NWQSim
 {
     /* Basic data type for indices */
