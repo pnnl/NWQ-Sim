@@ -107,6 +107,7 @@ namespace NWQSim
             SAFE_FREE_GPU_HIP(m_real);
             SAFE_FREE_GPU_HIP(m_imag);
             SAFE_FREE_GPU_HIP(sim_gpu);
+            SAFE_FREE_GPU_HIP(randoms_gpu);
 
             // Release for CPU side
             SAFE_FREE_HOST_HIP(sv_real_cpu);
@@ -334,6 +335,10 @@ namespace NWQSim
             SAFE_FREE_HOST_HIP(results);
             SAFE_ALOC_HOST_HIP(results, sizeof(IdxType) * n_slots);
             memset(results, 0, sizeof(IdxType) * n_slots);
+
+            SAFE_FREE_HOST_HIP(results_local);
+            SAFE_ALOC_HOST_HIP(results_local, sizeof(IdxType) * n_slots);
+            memset(results_local, 0, sizeof(IdxType) * n_slots);
 
             SAFE_FREE_HOST_HIP(randoms);
             SAFE_ALOC_HOST_HIP(randoms, sizeof(ValType) * n_slots);
@@ -911,6 +916,7 @@ namespace NWQSim
         for (IdxType i = 1; i < sim->m_gpu; i++)
             m_buff[i] = m_buff[i - 1] + ((sv_real_cpu[i - 1] * sv_real_cpu[i - 1]) + (sv_imag_cpu[i - 1] * sv_imag_cpu[i - 1]));
 
+
         for (IdxType j = 0; j < n_size; j++)
         {
             IdxType local_cpu = j >> (sim->lg2_m_gpu);
@@ -930,8 +936,11 @@ namespace NWQSim
                     // all nodes store partial results locally. since other entires are all
                     // zeros, we can do all-reduce to merge
                     if (lower <= r && r < upper)
+                    {
                         sim->results_local[cur_index + i] = j;
+                    }
                 }
+
             }
         }
         SAFE_FREE_HOST_HIP(m_buff);

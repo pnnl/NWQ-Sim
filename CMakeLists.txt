@@ -76,8 +76,9 @@ if(HIP_FOUND)
     # Set directories and flags
     set(MPICH_DIR "/opt/cray/pe/mpich/8.1.23/ofi/amd/5.0")
     set(GTL_ROOT "/opt/cray/pe/mpich/8.1.23/gtl/lib")
+    set(XPMEM_ROOT "/opt/cray/xpmem/2.6.2-2.5_2.22__gd067c3f.shasta/lib64")
     set(MPI_CFLAGS "${CRAY_XPMEM_INCLUDE_OPTS} -I${MPICH_DIR}/include")
-    set(MPI_LDFLAGS "${CRAY_XPMEM_POST_LINK_OPTS} -lxpmem -L${MPICH_DIR}/lib -lmpi -L${GTL_ROOT} -lmpi_gtl_hsa")
+    set(MPI_LDFLAGS "${CRAY_XPMEM_POST_LINK_OPTS} -L${XPMEM_ROOT} -lxpmem -L${MPICH_DIR}/lib -lmpi -L${GTL_ROOT} -lmpi_gtl_hsa")
 
     # Set compiler and flags
     #set(CMAKE_CXX_COMPILER hipcc)
