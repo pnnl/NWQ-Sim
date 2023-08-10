@@ -193,7 +193,7 @@ namespace NWQSim
                     avg_sim_time /= (double)n_gpus;
                     printf("\n============== SV-Sim ===============\n");
                     printf("nqubits:%lld, ngates:%lld, sim_gates:%lld, ngpus:%lld, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_gpu:%.3lf MB\n",
-                           n_qubits, input_gates, n_gates, n_gpus, avg_sim_time, 0.,
+                           n_qubits, origional_gates, n_gates, n_gpus, avg_sim_time, 0.,
                            avg_sim_time, gpu_mem / 1024 / 1024 * n_gpus, gpu_mem / 1024 / 1024);
                     printf("=====================================\n");
                     SAFE_FREE_HOST_HIP(sim_times);
@@ -291,6 +291,7 @@ namespace NWQSim
         ValType *m_imag;
         // For measurement randoms
         ValType *randoms = NULL;
+        ValType *randoms_gpu = NULL;
         // For measurement result
         IdxType *results = NULL;
         // Local measurement result for MA
@@ -300,6 +301,8 @@ namespace NWQSim
         std::uniform_real_distribution<ValType> uni_dist;
         // GPU memory usage
         ValType gpu_mem;
+        
+        SV_HIP_MPI *sim_gpu;
 
         // GPU-side gates instance
         SVGate *gates_gpu = NULL;
@@ -331,10 +334,6 @@ namespace NWQSim
             SAFE_FREE_HOST_HIP(results);
             SAFE_ALOC_HOST_HIP(results, sizeof(IdxType) * n_slots);
             memset(results, 0, sizeof(IdxType) * n_slots);
-
-            SAFE_FREE_GPU_HIP(results_gpu);
-            SAFE_ALOC_GPU_HIP(results_gpu, sizeof(IdxType) * n_slots);
-            hipSafeCall(hipMemset(results_gpu, 0, sizeof(IdxType) * n_slots));
 
             SAFE_FREE_HOST_HIP(randoms);
             SAFE_ALOC_HOST_HIP(randoms, sizeof(ValType) * n_slots);
@@ -760,7 +759,7 @@ namespace NWQSim
 
         if (ctrl < sim->lg2_m_gpu && qubit < sim->lg2_m_gpu)
         {
-            void *args[] = {(void *)(&sim->sim_gpu), &ctrl, &qubit, (void *)&t};
+            void *args[] = {(void *)(&sim->sim_gpu), (void *)&ctrl, (void *)&qubit, (void *)&t};
             LAUNCH_KERNEL(C2LC_GATE);
         }
 
@@ -1126,12 +1125,12 @@ namespace NWQSim
         for (IdxType t = 0; t < gates.size(); t++)
         {
             auto op_name = gates[t].op_name;
-            auto qubit = (sv_gpu->gates_gpu)[t].qubit;
-            auto ctrl = (sv_gpu->gates_gpu)[t].ctrl;
+            auto qubit = gates[t].qubit;
+            auto ctrl = gates[t].ctrl;
 
             if (op_name == OP::RESET)
             {
-                RESET_GATE(sim, t);
+                RESET_GATE(sim, t, qubit);
             }
             else if (op_name == OP::M)
             {
@@ -1164,5 +1163,3 @@ namespace NWQSim
     }
 
 }; // namespace NWQSim
-
-#endif

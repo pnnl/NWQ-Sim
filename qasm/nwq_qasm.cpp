@@ -91,7 +91,7 @@ int main(int argc, char **argv)
 
 // If MPI or NVSHMEM backend, initialize MPI
 #ifdef MPI_ENABLED
-    if (backend == "MPI" || backend == "NVGPU_MPI")
+    if (backend == "MPI" || backend == "NVGPU_MPI" || backend == "AMDGPU_MPI")
     {
         MPI_Init(&argc, &argv);
     }
