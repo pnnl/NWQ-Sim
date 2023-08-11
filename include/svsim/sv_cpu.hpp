@@ -220,7 +220,7 @@ namespace NWQSim
                 }
 
 #ifdef PURITY_CHECK
-                Purity_Check(g, i, sv_real, sv_imag);
+                Purity_Check(g, i);
 #endif
             }
             std::cout << std::endl;
@@ -509,14 +509,14 @@ namespace NWQSim
         }
 
         //============== Purity Check  ================
-        void Purity_Check(SVGate g, const IdxType t, ValType *sv_real, ValType *sv_imag)
+        void Purity_Check(SVGate g, const IdxType t)
         {
             ValType purity = 0;
             for (IdxType i = 0; i < (((IdxType)1 << n_qubits)); i++)
                 purity += ((sv_real[i] * sv_real[i]) + (sv_imag[i] * sv_imag[i]));
             if (fabs(purity - 1.0) > ERROR_BAR)
             {
-                printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld,theta:%lf) with %lf\n", t, OP_NAMES[g.op_name], g.ctrl, g.qubit, purity);
+                printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld) with %lf\n", t, OP_NAMES[g.op_name], g.ctrl, g.qubit, purity);
             }
         }
     };

@@ -678,8 +678,7 @@ namespace NWQSim
         {
             grid_group grid = this_grid();
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
-            const IdxType per_pe_work = (dim);
-            ValType *m_real = m_real;
+            // const IdxType per_pe_work = (dim);
 
             for (IdxType i = tid; i < dim; i += blockDim.x * gridDim.x)
             {
@@ -701,8 +700,7 @@ namespace NWQSim
                 ValType purity = m_real[0];
                 if (abs(purity - 1.0) > ERROR_BAR)
                 {
-                    Gate *g = &circuit_handle_gpu[t];
-                    printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld,theta:%lf) with %lf\n", t, OP_NAMES_NVGPU[g->op_name], g->ctrl, g->qubit, g->theta, purity);
+                    printf("Purity Check fails after Gate-%lld with %lf\n", t, purity);
                 }
             }
             BARR;
