@@ -200,12 +200,12 @@ This guide provides detailed instructions on how to execute the compiled program
 **Example Usage:** To run the qasm frontend from the `build` directory with a specific backend, a total number of shots, and a simulation method, use the following command: 
 
 ```
-./qasm/nwq_sim -backend <name> -shots <value> -sim <method> -q <path/to/qasm>
+./qasm/nwq_qasm -backend <name> -shots <value> -sim <method> -q <path/to/qasm>
 ```
 
 Replace `<name>`, `<value>`, `<method>`, and `<path/to/qasm>` with your desired backend name, number of shots, and simulation method respectively.
 
-Please ensure that you replace `/qasm/nwq_sim` with the actual name of your compiled executable file if not using the qasm frontend.
+Please ensure that you replace `/qasm/nwq_qasm` with the actual name of your compiled executable file if not using the qasm frontend.
 
 ### Running on Frontier HPC
 
@@ -215,7 +215,7 @@ source ~/NWQ-Sim/environment/setup_frontier.sh
 ```
 Launch multi-CPU execution for regular or interactive jobs:
 ```bash
-srun -N<nodes> -n<CPUS> ./qasm/nwq_sim <NWQ-Sim Command> -backend MPI
+srun -N<nodes> -n<CPUS> ./qasm/nwq_qasm <NWQ-Sim Command> -backend MPI
 ```
 
 ### Running on Summit HPC
