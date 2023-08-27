@@ -44,12 +44,13 @@ private:
     generator gen;
     helper::symbol_replacer sr;
 
-    /* File Loading Util */
-    ifstream qasmFile;
+    /* QASM Loading Util */
+    std::unique_ptr<std::istream> qasmStreamPtr;
     string line;
     stringstream ss;
 
     /* Helper Functions */
+    void config_parser();
     void load_instruction();
     void parse_gate_defination();
 
@@ -67,29 +68,25 @@ private:
     void dump_gates();
 
 public:
-    qasm_parser(const char *filename);
+    qasm_parser(){}
+    bool load_qasm_file(const char *filename);
+    bool load_qasm_string(const std::string qasm_string);
     IdxType num_qubits();
     map<string, IdxType> *execute(shared_ptr<QuantumState> state, IdxType repetition, bool print_metrics = false);
     ~qasm_parser();
 };
 
-qasm_parser::qasm_parser(const char *filename)
+void qasm_parser::config_parser()
 {
-    qasmFile.open(filename);
-    if (!qasmFile)
-        throw runtime_error(string("Could not open qasm file at:") + filename);
-
+    if ((*qasmStreamPtr).fail()) throw runtime_error("qasm is not well configured (failed read or failed load)!\n");
     sr.add_replace("pi", "pi", token::e_pi);
     sr.add_replace("sin", "sin", token::e_func);
     sr.add_replace("cos", "cos", token::e_func);
-
     list_gates = new vector<qasm_gate>;
     list_conditional_gates = new vector<qasm_gate>;
-
-    while (!qasmFile.eof())
+    while (!(*qasmStreamPtr).eof())
     {
         load_instruction();
-
         // dump_cur_inst();
         if (cur_inst.size() > 0)
         {
@@ -117,12 +114,9 @@ qasm_parser::qasm_parser(const char *filename)
             // parse classical registers
             {
                 creg creg;
-
                 creg.name = cur_inst[INST_REG_NAME].value;
                 creg.width = stoi(cur_inst[INST_REG_WIDTH].value);
-
                 creg.qubit_indices.insert(creg.qubit_indices.end(), creg.width, UN_DEF);
-
                 list_cregs.insert({creg.name, creg});
             }
             else if (cur_inst[INST_NAME].value == GATE)
@@ -140,12 +134,9 @@ qasm_parser::qasm_parser(const char *filename)
                     cur_gate.creg_name = cur_inst[INST_IF_CREG].value;
                     cur_gate.if_creg_val = stoll(cur_inst[INST_IF_VAL].value);
                     cur_gate.conditional_inst = new vector<qasm_gate>;
-
                     auto c_inst = slices(cur_inst, INST_IF_INST_START, cur_inst.size() - 1);
                     parse_gate(c_inst, cur_gate.conditional_inst);
-
                     list_gates->push_back(cur_gate);
-
                     contains_if = true;
                 }
             }
@@ -157,10 +148,24 @@ qasm_parser::qasm_parser(const char *filename)
         }
     }
     classify_measurements();
-
     // dump_defined_gates();
     // dump_gates();
 }
+
+bool qasm_parser::load_qasm_file(const char *filename)
+{
+    qasmStreamPtr = std::make_unique<std::ifstream>(std::ifstream(filename));
+    config_parser();
+    return true;
+}
+
+bool qasm_parser::load_qasm_string(const std::string qasm_string)
+{
+    qasmStreamPtr = std::make_unique<std::istringstream>(std::istringstream(qasm_string));
+    config_parser();
+    return true;
+}
+
 
 void qasm_parser::load_instruction()
 {
@@ -168,7 +173,7 @@ void qasm_parser::load_instruction()
 
     cur_inst.clear();
 
-    getline(qasmFile, line);
+    getline(*qasmStreamPtr, line);
     transform(line.begin(), line.end(), line.begin(), ::toupper);
 
     if (!gen.process(line))
@@ -206,7 +211,7 @@ void qasm_parser::load_instruction()
         {
             while (ss.str().find('}') == string::npos)
             {
-                getline(qasmFile, line);
+                getline(*qasmStreamPtr, line);
                 ss << line;
             }
         }
@@ -214,14 +219,14 @@ void qasm_parser::load_instruction()
         {
             while (ss.str().find(';') == string::npos)
             {
-                getline(qasmFile, line);
+                getline(*qasmStreamPtr, line);
                 ss << line;
             }
             if (ss.str().find('{') != string::npos)
             {
                 while (ss.str().find('}') == string::npos)
                 {
-                    getline(qasmFile, line);
+                    getline(*qasmStreamPtr, line);
                     ss << line;
                 }
             }

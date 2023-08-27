@@ -21,7 +21,7 @@ ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, s
 
 int main(int argc, char **argv)
 {
-    IdxType total_shots = 16384;
+    IdxType total_shots = 1024;
     bool run_with_basis = false;
     bool print_metrics = false;
     std::string backend = "CPU";
@@ -40,6 +40,8 @@ int main(int argc, char **argv)
 
         std::cout << std::setw(20) << "-q"
                   << "Executes a simulation with the given QASM file." << std::endl;
+        std::cout << std::setw(20) << "-qs"
+                  << "Executes a simulation with the given QASM string." << std::endl;
         std::cout << std::setw(20) << "-t <index>"
                   << "Runs the testing benchmarks for the specific index provided." << std::endl;
         std::cout << std::setw(20) << "-a"
@@ -100,8 +102,8 @@ int main(int argc, char **argv)
     if (cmdOptionExists(argv, argv + argc, "-q"))
     {
         const char *filename = getCmdOption(argv, argv + argc, "-q");
-
-        qasm_parser parser(filename);
+        qasm_parser parser;
+        parser.load_qasm_file(filename);
 
         // Create the backend
         std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method);
@@ -138,13 +140,35 @@ int main(int argc, char **argv)
         delete counts;
     }
 
+    if (cmdOptionExists(argv, argv + argc, "-qs"))
+    {
+        const char *qasmString = getCmdOption(argv, argv + argc, "-qs");
+        qasm_parser parser;
+        cout << "String:\n\n" << endl;
+        cout << string(qasmString) << "\n\n" << endl;
+        parser.load_qasm_string(std::string(qasmString)+";\n");
+        // Create the backend
+        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method);
+        if (!state)
+        {
+            std::cerr << "Failed to create backend\n";
+            return 1;
+        }
+        state->print_config(simulation_method);
+        map<string, IdxType> *counts = parser.execute(state, total_shots, print_metrics);
+        if (state->i_proc == 0)
+        {
+            print_counts(counts, total_shots);
+        }
+        delete counts;
+    }
+
     if (cmdOptionExists(argv, argv + argc, "-t"))
     {
+        total_shots = 16384; //for verification
         int benchmark_index = stoi(getCmdOption(argv, argv + argc, "-t"));
-
         ValType fidelity = run_brnchmark(backend, benchmark_index, total_shots, simulation_method, run_with_basis);
-
-        BackendManager::safe_print("Fidelity between NWQSim and Qiskit Execution: %.4f\n", fidelity);
+        BackendManager::safe_print("%s", "Fidelity between NWQSim and Qiskit Execution: %.4f\n", fidelity);
     }
 
     if (cmdOptionExists(argv, argv + argc, "-a"))
@@ -155,14 +179,14 @@ int main(int argc, char **argv)
             ValType fidelity = run_brnchmark(backend, benchmark_index, total_shots, simulation_method, run_with_basis);
             if (fidelity < pass_threshold)
             {
-                BackendManager::safe_print("Benchmark %d fidelity: %.4f Failed!\n", benchmark_index, fidelity);
+                BackendManager::safe_print("%s", "Benchmark %d fidelity: %.4f Failed!\n", benchmark_index, fidelity);
                 passed = false;
             }
         }
         if (passed)
-            BackendManager::safe_print("All benchmarks passed!\n");
+            BackendManager::safe_print("%s", "All benchmarks passed!\n");
         else
-            BackendManager::safe_print("TESTING FAILED!\n");
+            BackendManager::safe_print("%s", "TESTING FAILED!\n");
     }
 
 // Finalize MPI if necessary
@@ -198,7 +222,8 @@ ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, s
         return -1;
     }
 
-    qasm_parser parser(ss_file.str().c_str());
+    qasm_parser parser;
+    parser.load_qasm_file(ss_file.str().c_str());
 
     // Create the backend
     std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method);
