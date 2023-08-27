@@ -1163,6 +1163,7 @@ namespace NWQSim
         IdxType cur_index = 0;
         IdxType lg2_m_gpu = sv_gpu->lg2_m_gpu;
         grid_group grid = this_grid();
+        bool already_sync = false;
 
         for (IdxType t = 0; t < n_gates; t++)
         {
@@ -1178,14 +1179,20 @@ namespace NWQSim
             // only need sync when operating on remote qubits
             if ((ctrl >= lg2_m_gpu) || (qubit >= lg2_m_gpu))
             {
-                grid.sync();
-                if (threadIdx.x == 0 && blockIdx.x == 0)
-                    nvshmem_barrier_all();
+                if (!already_sync) //do not need repeated sync
+                {
+                    if (threadIdx.x == 0 && blockIdx.x == 0)
+                        nvshmem_barrier_all();
+                    grid.sync();
+                }
             }
+            already_sync = false;
 
+            // only need sync when operating on remote qubits
             if (op_name == OP::C1)
             {
                 sv_gpu->C1V2_GATE(gm_real, gm_imag, qubit);
+                //sv_gpu->C1V1_GATE(gm_real, gm_imag, qubit);
             }
             else if (op_name == OP::C2)
             {
@@ -1216,11 +1223,17 @@ namespace NWQSim
                 sv_gpu->MA_GATE(repetition, cur_index);
                 cur_index += repetition;
             }
+
+
             // only need sync when operating on remote qubits
             if ((ctrl >= lg2_m_gpu) || (qubit >= lg2_m_gpu))
+            {
                 if (threadIdx.x == 0 && blockIdx.x == 0)
                     nvshmem_barrier_all();
+                already_sync = true;
+            }
             grid.sync();
         }
+
     }
 }
