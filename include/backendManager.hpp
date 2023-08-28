@@ -66,26 +66,26 @@ public:
 
     static void print_available_backends()
     {
-        safe_print("%s", "Available backends:\n");
-        safe_print("%s", "- CPU\n");
+        safe_print("Available backends:\n");
+        safe_print("- CPU\n");
 #ifdef OMP_ENABLED
-        safe_print("%s", "- OpenMP\n");
+        safe_print("- OpenMP\n");
 #endif
 
 #ifdef MPI_ENABLED
-        safe_print("%s", "- MPI\n");
+        safe_print("- MPI\n");
 #endif
 
 #ifdef CUDA_ENABLED
-        safe_print("%s", "- NVGPU\n");
+        safe_print("- NVGPU\n");
 #endif
 
 #ifdef CUDA_MPI_ENABLED
-        safe_print("%s", "- NVGPU_MPI\n");
+        safe_print("- NVGPU_MPI\n");
 #endif
 
 #ifdef HIP_ENABLED
-        safe_print("%s", "- AMDGPU\n");
+        safe_print("- AMDGPU\n");
 #endif
     }
 
@@ -153,7 +153,7 @@ public:
         }
         else
         {
-            safe_print("%s", "Invalid backend name: %s. Please use one of the available backends. (Case insensitive)\n", backend.c_str());
+            safe_print("Invalid backend name: %s. Please use one of the available backends. (Case insensitive)\n", backend.c_str());
             print_available_backends();
             exit(1);
         }

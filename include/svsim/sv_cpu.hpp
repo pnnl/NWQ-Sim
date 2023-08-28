@@ -148,14 +148,12 @@ namespace NWQSim
         void print_res_state() override
         {
             IdxType num = ((IdxType)1 << n_qubits);
-            printf("----- SVSim ------\n");
+            printf("\nstate_vector=[");
             for (IdxType i = 0; i < num; i++)
             {
-                printf("(%.3lf,%.3lfj) ", sv_real[i], sv_imag[i]);
-                if ((i + 1) % 8 == 0)
-                    printf("\n");
+                printf("%lf+%lfj, ", sv_real[i], sv_imag[i]);
             }
-            printf("\n");
+            printf("]\n");
         }
 
     protected:

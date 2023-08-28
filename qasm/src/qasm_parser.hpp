@@ -11,6 +11,7 @@
 
 #include "parser_util.hpp"
 #include "lexer.hpp"
+#include "private/nlohmann/json.hpp"
 
 #include "nwq_util.hpp"
 #include "state.hpp"
@@ -19,6 +20,7 @@
 using namespace std;
 using namespace NWQSim;
 using namespace lexertk;
+using namespace nlohmann;
 
 class qasm_parser
 {
@@ -46,11 +48,13 @@ private:
 
     /* QASM Loading Util */
     std::unique_ptr<std::istream> qasmStreamPtr;
+    std::unique_ptr<std::istream> qobjStreamPtr;
     string line;
     stringstream ss;
 
     /* Helper Functions */
-    void config_parser();
+    void parse_qasm();
+    void parse_qobj();
     void load_instruction();
     void parse_gate_defination();
 
@@ -69,16 +73,20 @@ private:
 
 public:
     qasm_parser(){}
-    bool load_qasm_file(const char *filename);
-    bool load_qasm_string(const std::string qasm_string);
+    void load_qasm_file(const char *filename);
+    void load_qasm_string(const std::string qasm_string);
+    void load_qobj_file(const char *filename);
+    void load_qobj_string(const std::string qobj_string);
+
     IdxType num_qubits();
     map<string, IdxType> *execute(shared_ptr<QuantumState> state, IdxType repetition, bool print_metrics = false);
     ~qasm_parser();
 };
 
-void qasm_parser::config_parser()
+void qasm_parser::parse_qasm()
 {
-    if ((*qasmStreamPtr).fail()) throw runtime_error("qasm is not well configured (failed read or failed load)!\n");
+    if ((*qasmStreamPtr).fail()) 
+        throw runtime_error("qasm is not well configured (failed read or failed load)!\n");
     sr.add_replace("pi", "pi", token::e_pi);
     sr.add_replace("sin", "sin", token::e_func);
     sr.add_replace("cos", "cos", token::e_func);
@@ -152,18 +160,16 @@ void qasm_parser::config_parser()
     // dump_gates();
 }
 
-bool qasm_parser::load_qasm_file(const char *filename)
+void qasm_parser::load_qasm_file(const char *filename)
 {
     qasmStreamPtr = std::make_unique<std::ifstream>(std::ifstream(filename));
-    config_parser();
-    return true;
+    parse_qasm();
 }
 
-bool qasm_parser::load_qasm_string(const std::string qasm_string)
+void qasm_parser::load_qasm_string(const std::string qasm_string)
 {
     qasmStreamPtr = std::make_unique<std::istringstream>(std::istringstream(qasm_string));
-    config_parser();
-    return true;
+    parse_qasm();
 }
 
 
@@ -244,6 +250,86 @@ void qasm_parser::load_instruction()
         }
     }
 }
+
+
+void qasm_parser::parse_qobj()
+{
+    if ((*qobjStreamPtr).fail()) 
+        throw runtime_error("qobj is not well configured (failed read or failed load)!\n");
+    json qobj = json::parse(*qobjStreamPtr);
+    list_gates = new vector<qasm_gate>;
+    list_conditional_gates = new vector<qasm_gate>;
+
+    //================ QREG ==================
+    for (auto qr : qobj["header"]["qreg_sizes"])
+    {
+        qreg qreg;
+        qreg.name= qr[0];
+        qreg.width = qr[1];
+        qreg.offset = global_qubit_offset;
+        global_qubit_offset += qreg.width;
+        list_qregs.insert({qreg.name, qreg});
+        if (global_qubit_offset > 63)
+            skip_if = true;
+    }
+    //================ CREG ==================
+    for (auto cr : qobj["header"]["creg_sizes"])
+    {
+        creg creg;
+        creg.name = cr[0];
+        creg.width = cr[1];
+        creg.qubit_indices.insert(creg.qubit_indices.end(), creg.width, UN_DEF);
+        list_cregs.insert({creg.name, creg});
+    }
+    
+    //================ CREG ==================
+    for (auto is : qobj["instructions"])
+    {
+        string op = is["name"];
+        transform(op.begin(), op.end(), op.begin(), ::toupper);
+
+        if (op == "MEASURE")
+        {
+            qasm_gate gate;
+            gate.name = MEASURE;
+            gate.measured_qubit_index = is["qubits"][0];
+            IdxType idx = is["memory"][0];
+            //cout << (qobj["header"]["clbit_labels"])[idx][0] << endl;
+            gate.creg_name = (qobj["header"]["clbit_labels"])[idx][0]; 
+            gate.creg_index = (qobj["header"]["clbit_labels"])[idx][1]; 
+            list_gates->push_back(gate);
+        }
+        else if (op == "BARRIER")
+        {
+
+        }
+        else
+        {
+            qasm_gate gate;
+            gate.name = op;
+            for (auto p : is["params"])
+                gate.params.push_back(p);
+            for (auto q : is["qubits"])
+                gate.qubits.push_back(q);
+            list_gates->push_back(gate);
+        }
+    }
+    classify_measurements();
+
+}
+
+void qasm_parser::load_qobj_file(const char *filename)
+{
+    qobjStreamPtr = std::make_unique<std::ifstream>(std::ifstream(filename));
+    parse_qobj();
+}
+
+void qasm_parser::load_qobj_string(const std::string qobj_string)
+{
+    qobjStreamPtr = std::make_unique<std::istringstream>(std::istringstream(qobj_string));
+    parse_qobj();
+}
+
 
 void qasm_parser::dump_cur_inst()
 {

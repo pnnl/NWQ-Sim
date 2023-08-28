@@ -192,7 +192,6 @@ namespace NWQSim
             int n_gates = gates.size();
             for (int i = 0; i < n_gates; i++)
             {
-
                 if (Config::PRINT_SIM_TRACE)
                     printProgressBar(i, n_gates, start);
 
