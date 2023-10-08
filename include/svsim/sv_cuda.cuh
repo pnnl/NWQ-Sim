@@ -181,6 +181,25 @@ namespace NWQSim
             SAFE_FREE_GPU(sv_gpu);
         }
 
+        void save_state() override
+        {
+            // Save current state to CPU memory
+            cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, sv_size, cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaMemcpy(sv_imag_cpu, sv_imag, sv_size, cudaMemcpyDeviceToHost));
+        }
+
+        void load_state() override
+        {
+            // Load state from CPU memory
+            cudaSafeCall(cudaMemcpy(sv_real, sv_real_cpu, sv_size, cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu, sv_size, cudaMemcpyHostToDevice));
+        }
+
+        void clear_state() override
+        {
+            // No need to clear the state in Single GPU Version
+        }
+
         IdxType *get_results() override
         {
             return results;
@@ -241,7 +260,6 @@ namespace NWQSim
 
         ValType get_exp_z() override
         {
-
             // result
             double result = 0.0;
             double *result_gpu;
