@@ -1,15 +1,12 @@
 # Specify a minimum CMake version
 cmake_minimum_required(VERSION 3.20) 
 
-
-if(APPLE)
-    message("Running on Apple platform")
-    # Additional configuration for Apple platforms
-else()
-    message("Not running on Apple platform")
-    # Configuration for non-Apple platforms
+if(DEFINED ENV{cc} AND DEFINED ENV{CC})
+    message("Environment variables cc and CC are set")
     set(CMAKE_C_COMPILER "$ENV{cc}")
     set(CMAKE_CXX_COMPILER "$ENV{CC}")
+else()
+    message("Environment variables cc and/or CC are not set, using default settings")
 endif()
 
 
@@ -36,10 +33,22 @@ find_package(XACC QUIET)
 find_package(HIP QUIET)
 
 if(CUDAToolkit_FOUND)
-    set(CMAKE_CUDA_HOST_COMPILER mpicxx)
 
     # Set CUDA architecture
     set(CMAKE_CUDA_ARCHITECTURES "$ENV{MY_CUDA_ARCH}")
+
+    # Check for command line option, then environment variable
+    if(NOT DEFINED CUDA_ARCH)
+        if(DEFINED ENV{MY_CUDA_ARCH})
+            set(CMAKE_CUDA_ARCHITECTURES "$ENV{MY_CUDA_ARCH}")
+        else()
+            message(FATAL_ERROR "CUDA architecture is not set. Please set it manually using cmake -DCUDA_ARCH=N .. or by setting the MY_CUDA_ARCH environment variable.")
+        endif()
+    else()
+        set(CMAKE_CUDA_ARCHITECTURES "${CUDA_ARCH}")
+    endif()
+
+
     set(CMAKE_CUDA_FLAGS_RELEASE "-O3")
     set(CMAKE_CUDA_STANDARD 17)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
@@ -55,6 +64,8 @@ if(CUDAToolkit_FOUND)
 
     if(NVSHMEM_FOUND)
         set(nvshmem_found_str "TRUE")
+
+        set(CMAKE_CUDA_HOST_COMPILER mpicxx)
     else()
         set(nvshmem_found_str "FALSE")
     endif()
@@ -71,8 +82,19 @@ endif()
 
 if(HIP_FOUND)
     set(hip_found_str "TRUE")
-    set(CMAKE_HIP_ARCHITECTURES "$ENV{MY_HIP_ARCH}")
     set(CMAKE_HIP_FLAGS_RELEASE "-O3")
+
+    # Check for command line option, then environment variable
+    if(NOT DEFINED HIP_ARCH)
+        if(DEFINED ENV{MY_HIP_ARCH})
+            set(CMAKE_HIP_ARCHITECTURES "$ENV{MY_HIP_ARCH}")
+        else()
+            message(FATAL_ERROR "HIP architecture is not set. Please set it manually using cmake -DHIP_ARCH=N .. or by setting the MY_HIP_ARCH environment variable.")
+        endif()
+    else()
+        set(CMAKE_HIP_ARCHITECTURES "${HIP_ARCH}")
+    endif()
+    # set(CMAKE_HIP_ARCHITECTURES "$ENV{MY_HIP_ARCH}")
 else()
     set(hip_found_str "FALSE")
 endif()

@@ -1,4 +1,4 @@
-set(XACC_SOURCE_FILE bell.cpp nwq_accelerator.cpp)
+set(XACC_SOURCE_FILE toy_vqe.cpp nwq_accelerator.cpp)
 
 # Set additional compiler flags for C++
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")

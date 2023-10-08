@@ -1,7 +1,9 @@
 
 #include <cassert>
-
+#include <chrono>
 #include <xacc.hpp>
+#include "IRUtils.hpp"
+
 #include "AllGateVisitor.hpp"
 
 #include "nwq_accelerator.hpp"
@@ -167,10 +169,27 @@ namespace xacc
             }
         }
 
+        std::unique_ptr<NWQCircuitVisitor> get_circuit_visitor(const int n_qubits, const std::shared_ptr<CompositeInstruction> circuit)
+        {
+            auto visitor = std::make_unique<NWQCircuitVisitor>(n_qubits);
+            InstructionIterator it(circuit);
+            while (it.hasNext())
+            {
+                auto nextInst = it.next();
+                if (nextInst->isEnabled())
+                {
+                    nextInst->accept(visitor.get());
+                }
+            }
+
+            return visitor;
+        }
+
         void NWQAccelerator::execute(
             std::shared_ptr<AcceleratorBuffer> buffer,
             const std::shared_ptr<CompositeInstruction> circuit)
         {
+
             m_state = BackendManager::create_state(backend_name, buffer->size(), simulation_type);
 
             if (!m_state)
@@ -178,25 +197,13 @@ namespace xacc
                 throw std::logic_error("NWQ-Sim was not installed or selected backend is not supported.");
             }
 
-            // Create a visitor that will map IR to NWQ-Sim
-            NWQCircuitVisitor visitor(buffer->size());
+            std::unique_ptr<NWQCircuitVisitor> visitor = get_circuit_visitor(buffer->size(), circuit);
 
-            // Walk the IR tree, and visit each node
-            InstructionIterator it(circuit);
-            while (it.hasNext())
-            {
-                auto nextInst = it.next();
-                if (nextInst->isEnabled())
-                {
-                    nextInst->accept(&visitor);
-                }
-            }
+            m_state->sim(visitor->getNWQCircuit());
 
-            m_state->sim(visitor.getNWQCircuit());
+            auto measured_bits = visitor->getMeasureBits();
 
-            auto measured_bits = visitor.getMeasureBits();
-
-            if (vqe_mode)
+            if (m_shots == 0)
             {
                 if (measured_bits.empty() || measured_bits.size() == buffer->size())
                 {
@@ -244,13 +251,70 @@ namespace xacc
             const std::vector<std::shared_ptr<CompositeInstruction>>
                 circuits)
         {
-            for (auto &f : circuits)
+            if (circuits.size() == 1 || !vqe_mode)
             {
-                auto tmpBuffer =
-                    std::make_shared<xacc::AcceleratorBuffer>(f->name(), buffer->size());
-                execute(tmpBuffer, f);
-                buffer->appendChild(f->name(), tmpBuffer);
+                // Only one circuit, or vqe_mode is not enabled, just execute them one by one
+                for (auto &f : circuits)
+                {
+                    auto tmpBuffer =
+                        std::make_shared<xacc::AcceleratorBuffer>(f->name(), buffer->size());
+                    execute(tmpBuffer, f);
+                    buffer->appendChild(f->name(), tmpBuffer);
+                }
             }
+            else
+            {
+                // Multiple circuits, execute them in parallel
+                auto kernelDecomposed = ObservedAnsatz::fromObservedComposites(circuits);
+                // Always validate kernel decomposition in DEBUG
+                assert(kernelDecomposed.validate(circuits));
+
+                // Base kernel:
+                auto baseKernel = kernelDecomposed.getBase();
+                // Basis-change + measures
+                auto obsCircuits = kernelDecomposed.getObservedSubCircuits();
+
+                m_state = BackendManager::create_state(backend_name, buffer->size(), simulation_type);
+                if (!m_state)
+                {
+                    throw std::logic_error("NWQ-Sim was not installed or selected backend is not supported.");
+                }
+
+                // parse ansatz circuit
+                std::unique_ptr<NWQCircuitVisitor> visitor = get_circuit_visitor(buffer->size(), baseKernel);
+
+                // simulate and store post-anstaz state
+                m_state->sim(visitor->getNWQCircuit());
+                m_state->save_state();
+
+                for (auto &f : obsCircuits)
+                {
+                    // parse observable circuit
+                    visitor = get_circuit_visitor(buffer->size(), f);
+
+                    m_state->load_state();
+                    m_state->sim(visitor->getNWQCircuit());
+                    auto measured_bits = visitor->getMeasureBits();
+
+                    auto tmpBuffer =
+                        std::make_shared<xacc::AcceleratorBuffer>(f->name(), buffer->size());
+
+                    if (measured_bits.empty() || measured_bits.size() == buffer->size())
+                    {
+                        // Default is just measure alls:
+                        tmpBuffer->addExtraInfo("exp-val-z", m_state->get_exp_z());
+                    }
+                    else
+                    {
+                        std::sort(measured_bits.begin(), measured_bits.end());
+                        tmpBuffer->addExtraInfo("exp-val-z", m_state->get_exp_z(measured_bits));
+                    }
+
+                    buffer->appendChild(f->name(), tmpBuffer);
+                }
+                m_state->clear_state();
+            }
+
         }
 
     } // namespace quantum
