@@ -55,32 +55,12 @@ int main(int argc, char **argv)
 {
   xacc::Initialize(argc, argv);
 
-  bool vqe_mode = false;
-  int shots = -1;
-
-  for (int i = 1; i < argc; ++i)
-  {
-    std::string arg = argv[i];
-    if (arg == "--vqe_mode")
-    {
-      vqe_mode = true;
-    }
-    else if (arg == "--shots" && i + 1 < argc)
-    {
-      shots = std::stoi(argv[++i]);
-    }
-  }
-
+  
   // Get reference to the Accelerator
-  // specified by --accelerator argument
-  // auto accelerator = xacc::getAccelerator("qpp");
   std::shared_ptr<xacc::Accelerator> accelerator = std::make_shared<xacc::quantum::NWQAccelerator>();
-  accelerator->updateConfiguration({std::make_pair("vqe_mode", vqe_mode)});
+  accelerator->updateConfiguration({std::make_pair("vqe_mode", true)});
 
-  if (shots != -1)
-    accelerator->updateConfiguration({std::make_pair("shots", shots)});
-
-  auto str = readFile("be-5.txt");
+  auto str = readFile("../xacc/examples/be-5.txt");
   auto be_vqe = xacc::quantum::getObservable("fermion", str);
 
   auto optimizer_vqe = xacc::getOptimizer("nlopt", {std::make_pair("nlopt-optimizer", "cobyla")});

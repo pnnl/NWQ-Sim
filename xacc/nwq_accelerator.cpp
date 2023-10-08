@@ -251,11 +251,6 @@ namespace xacc
             const std::vector<std::shared_ptr<CompositeInstruction>>
                 circuits)
         {
-
-            std::cout << circuits.size() << "circuits with ";
-            // Get the start time
-            auto start_time = std::chrono::high_resolution_clock::now();
-
             if (circuits.size() == 1 || !vqe_mode)
             {
                 // Only one circuit, or vqe_mode is not enabled, just execute them one by one
@@ -320,14 +315,6 @@ namespace xacc
                 m_state->clear_state();
             }
 
-            // Get the end time
-            auto end_time = std::chrono::high_resolution_clock::now();
-
-            // Compute the duration in seconds
-            std::chrono::duration<double> duration_seconds = end_time - start_time;
-
-            // Print the duration and the integer
-            std::cout << "execution time of " << duration_seconds.count() << " seconds.\n";
         }
 
     } // namespace quantum

@@ -25,30 +25,9 @@ int main(int argc, char **argv)
 {
     xacc::Initialize(argc, argv);
 
-    bool vqe_mode = false;
-    int shots = -1;
-
-    for (int i = 1; i < argc; ++i)
-    {
-        std::string arg = argv[i];
-        if (arg == "--vqe_mode")
-        {
-            vqe_mode = true;
-        }
-        else if (arg == "--shots" && i + 1 < argc)
-        {
-            shots = std::stoi(argv[++i]);
-        }
-    }
-
     // Get reference to the Accelerator
-    // specified by --accelerator argument
-    // auto accelerator = xacc::getAccelerator("qpp");
     std::shared_ptr<xacc::Accelerator> accelerator = std::make_shared<xacc::quantum::NWQAccelerator>();
-    accelerator->updateConfiguration({std::make_pair("vqe_mode", vqe_mode)});
-
-    if (shots != -1)
-        accelerator->updateConfiguration({std::make_pair("shots", shots)});
+    accelerator->updateConfiguration({std::make_pair("vqe_mode", true)});
 
     // Create the N=2 deuteron Hamiltonian
     auto H_N_2 = xacc::quantum::getObservable(
