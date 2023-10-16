@@ -55,9 +55,10 @@ class NWQSimSimulator(Backend):
 
     def run_experiment(self, experiment, options):
         qasmjson = json.dumps(experiment.to_dict())
-        cmd = str( "/Users/lian599/local/nwqsim_qiskit/NWQ-Sim/qiskit/build/qasm/nwq_qasm -js '") + qasmjson + "'" 
+        cmd = str( "./build/qasm/nwq_qasm -js '") + qasmjson + "'" 
         #print (cmd)
         output = subprocess.getoutput(cmd)
+        #print(output)
         pos = output.find('nwq_sim_counts=')
         res_counts = json.loads(output[output.find('{',pos):output.find('}',pos)+1])
         pos = output.find('state_vector=')
