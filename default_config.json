@@ -4,5 +4,5 @@
     "ENABLE_NOISE": false,
     "ENABLE_TENSOR_CORE": false,
     "DEVICE_CONFIG_PATH": "../data/device/",
-    "DEVICE_CONFIG_FILE": "dummy_ibmq12"
+    "DEVICE_CONFIG_FILE": "dummy_ibmq15"
 }
