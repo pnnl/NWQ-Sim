@@ -55,7 +55,13 @@ class NWQSimSimulator(Backend):
 
     def run_experiment(self, experiment, options):
         qasmjson = json.dumps(experiment.to_dict())
-        cmd = str( "./build/qasm/nwq_qasm -js '") + qasmjson + "'" 
+        if len(qasmjson) > 1000000:
+            qasmjsonbin = qasmjson.encode('utf-8')
+            with open("expriment.json","wb") as outfile:
+                outfile.write(qasmjsonbin)
+            cmd = str( "./build/qasm/nwq_qasm -j expriment.json") 
+        else:
+            cmd = str( "./build/qasm/nwq_qasm -js '") + qasmjson + "'" 
         #print (cmd)
         output = subprocess.getoutput(cmd)
         #print(output)

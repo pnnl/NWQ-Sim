@@ -30,6 +30,7 @@ def cx_chain(qc,n):
 qc = QuantumCircuit(n_qubits, n_qubits)
 qc.h(0)
 cx_chain(qc,n_qubits)
+
 qc.measure_all()
 #qasm_file = open("qft_n" + str(n_qubits) + ".qasm","w")
 #qasm_file.write(qc.qasm())

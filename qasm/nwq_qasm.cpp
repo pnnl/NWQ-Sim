@@ -39,6 +39,10 @@ int main(int argc, char **argv)
                   << "Executes a simulation with the given QASM file." << std::endl;
         std::cout << std::setw(20) << "-qs"
                   << "Executes a simulation with the given QASM string." << std::endl;
+        std::cout << std::setw(20) << "-j"
+                  << "Executes a simulation with the given json file with Qiskit Experiment Qobj." << std::endl;
+        std::cout << std::setw(20) << "-js"
+                  << "Executes a simulation with the given json string." << std::endl;
         std::cout << std::setw(20) << "-t <index>"
                   << "Runs the testing benchmarks for the specific index provided." << std::endl;
         std::cout << std::setw(20) << "-a"
@@ -147,7 +151,38 @@ int main(int argc, char **argv)
         }
         delete counts;
     }
+    if (cmdOptionExists(argv, argv + argc, "-j"))
+    {
+        const char *qobjFile = getCmdOption(argv, argv + argc, "-j");
+        qasm_parser parser;
+        parser.load_qobj_file(qobjFile);
+        // Create the backend
+        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method);
+        if (!state)
+        {
+            std::cerr << "Failed to create backend\n";
+            return 1;
+        }
+        state->print_config(simulation_method);
+        map<string, IdxType> *counts = parser.execute(state, total_shots, print_metrics);
 
+        json result_count_json;
+        for (const auto& r : (*counts))
+        {
+            result_count_json[(r.first)] = r.second;
+        }
+        cout << "nwq_sim_counts=" << result_count_json.dump() << endl;
+
+        cout << "----------" << endl;
+        state->print_res_state();
+        cout << "----------" << endl;
+
+        //if (state->i_proc == 0)
+        //{
+        //print_counts(counts, total_shots);
+        //}
+        delete counts;
+    }
     if (cmdOptionExists(argv, argv + argc, "-js"))
     {
         const char *qobjString = getCmdOption(argv, argv + argc, "-js");

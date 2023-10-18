@@ -320,7 +320,7 @@ void qasm_parser::parse_qobj()
 
 void qasm_parser::load_qobj_file(const char *filename)
 {
-    qobjStreamPtr = std::make_unique<std::ifstream>(std::ifstream(filename));
+    qobjStreamPtr = std::make_unique<std::ifstream>(std::ifstream(filename, ios::binary));
     parse_qobj();
 }
 
