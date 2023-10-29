@@ -1656,6 +1656,11 @@ void MA_GATE(const Simulation* sim, const IdxType t)
             }
         }
     }
+    //cout << "GPU-" << sim->i_gpu << ":" << endl;
+    //for (IdxType i=0; i<repetition; i++)
+    //cout << results_local[i] << " ";
+    //cout << endl;
+
     MPI_Barrier(MPI_COMM_WORLD);
     MPI_Allreduce(sim->results_local, sim->results, repetition, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
     MPI_Barrier(MPI_COMM_WORLD);

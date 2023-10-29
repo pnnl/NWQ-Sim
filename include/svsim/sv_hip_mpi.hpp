@@ -354,6 +354,104 @@ namespace NWQSim
         }
     };
 
+    __device__ __inline__ void C1_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit)
+    {
+        grid_group grid = this_grid();
+        const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
+        const IdxType per_pe_work = ((half_dim) >> (gpu_scale));
+        for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work; i += blockDim.x * gridDim.x)
+        {
+            IdxType outer = (i >> qubit);
+            IdxType inner = (i & (((IdxType)1 << qubit) - 1));
+            IdxType offset = (outer << (qubit + 1));
+            IdxType pos0 = ((offset + inner) & (m_gpu - 1));
+            IdxType pos1 = ((offset + inner + ((IdxType)1 << qubit)) & (m_gpu - 1));
+            const ValType el0_real = LOCAL_G_HIP_MPI(sv_real, pos0);
+            const ValType el0_imag = LOCAL_G_HIP_MPI(sv_imag, pos0);
+            const ValType el1_real = LOCAL_G_HIP_MPI(sv_real, pos1);
+            const ValType el1_imag = LOCAL_G_HIP_MPI(sv_imag, pos1);
+            ValType sv_real_pos0 = (gm_real[0] * el0_real) - (gm_imag[0] * el0_imag) + (gm_real[1] * el1_real) - (gm_imag[1] * el1_imag);
+            ValType sv_imag_pos0 = (gm_real[0] * el0_imag) + (gm_imag[0] * el0_real) + (gm_real[1] * el1_imag) + (gm_imag[1] * el1_real);
+            ValType sv_real_pos1 = (gm_real[2] * el0_real) - (gm_imag[2] * el0_imag) + (gm_real[3] * el1_real) - (gm_imag[3] * el1_imag);
+            ValType sv_imag_pos1 = (gm_real[2] * el0_imag) + (gm_imag[2] * el0_real) + (gm_real[3] * el1_imag) + (gm_imag[3] * el1_real);
+            LOCAL_P_HIP_MPI(sv_real, pos0, sv_real_pos0);
+            LOCAL_P_HIP_MPI(sv_imag, pos0, sv_imag_pos0);
+            LOCAL_P_HIP_MPI(sv_real, pos1, sv_real_pos1);
+            LOCAL_P_HIP_MPI(sv_imag, pos1, sv_imag_pos1);
+        }
+        grid.sync();
+    }
+
+    __device__ __inline__ void C2_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1)
+    {
+        grid_group grid = this_grid();
+        const int tid = blockDim.x * blockIdx.x + threadIdx.x;
+        const IdxType per_pe_work = ((dim) >> (gpu_scale + 2));
+        assert(qubit0 != qubit1); // Non-cloning
+        const IdxType q0dim = ((IdxType)1 << max(qubit0, qubit1));
+        const IdxType q1dim = ((IdxType)1 << min(qubit0, qubit1));
+        const IdxType outer_factor = ((dim) + q0dim + q0dim - 1) >> (max(qubit0, qubit1) + 1);
+        const IdxType mider_factor = (q0dim + q1dim + q1dim - 1) >> (min(qubit0, qubit1) + 1);
+        const IdxType inner_factor = q1dim;
+        const IdxType qubit0_dim = ((IdxType)1 << qubit0);
+        const IdxType qubit1_dim = ((IdxType)1 << qubit1);
+
+        for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
+                i += blockDim.x * gridDim.x)
+        {
+            IdxType outer = ((i / inner_factor) / (mider_factor)) * (q0dim + q0dim);
+            IdxType mider = ((i / inner_factor) % (mider_factor)) * (q1dim + q1dim);
+            IdxType inner = i % inner_factor;
+            IdxType pos0 = outer + mider + inner;
+            IdxType pos1 = outer + mider + inner + qubit1_dim;
+            IdxType pos2 = outer + mider + inner + qubit0_dim;
+            IdxType pos3 = outer + mider + inner + q0dim + q1dim;
+
+            const ValType el0_real = LOCAL_G_HIP_MPI(sv_real, pos0);
+            const ValType el0_imag = LOCAL_G_HIP_MPI(sv_imag, pos0);
+            const ValType el1_real = LOCAL_G_HIP_MPI(sv_real, pos1);
+            const ValType el1_imag = LOCAL_G_HIP_MPI(sv_imag, pos1);
+            const ValType el2_real = LOCAL_G_HIP_MPI(sv_real, pos2);
+            const ValType el2_imag = LOCAL_G_HIP_MPI(sv_imag, pos2);
+            const ValType el3_real = LOCAL_G_HIP_MPI(sv_real, pos3);
+            const ValType el3_imag = LOCAL_G_HIP_MPI(sv_imag, pos3);
+
+            // Real part
+            ValType sv_real_pos0 = (gm_real[0] * el0_real) - (gm_imag[0] * el0_imag) + (gm_real[1] * el1_real) - (gm_imag[1] * el1_imag) + (gm_real[2] * el2_real) - (gm_imag[2] * el2_imag) + (gm_real[3] * el3_real) - (gm_imag[3] * el3_imag);
+            ValType sv_real_pos1 = (gm_real[4] * el0_real) - (gm_imag[4] * el0_imag) + (gm_real[5] * el1_real) - (gm_imag[5] * el1_imag) + (gm_real[6] * el2_real) - (gm_imag[6] * el2_imag) + (gm_real[7] * el3_real) - (gm_imag[7] * el3_imag);
+            ValType sv_real_pos2 = (gm_real[8] * el0_real) - (gm_imag[8] * el0_imag) + (gm_real[9] * el1_real) - (gm_imag[9] * el1_imag) + (gm_real[10] * el2_real) - (gm_imag[10] * el2_imag) + (gm_real[11] * el3_real) - (gm_imag[11] * el3_imag);
+            ValType sv_real_pos3 = (gm_real[12] * el0_real) - (gm_imag[12] * el0_imag) + (gm_real[13] * el1_real) - (gm_imag[13] * el1_imag) + (gm_real[14] * el2_real) - (gm_imag[14] * el2_imag) + (gm_real[15] * el3_real) - (gm_imag[15] * el3_imag);
+
+            // Imag part
+            ValType sv_imag_pos0 = (gm_real[0] * el0_imag) + (gm_imag[0] * el0_real) + (gm_real[1] * el1_imag) + (gm_imag[1] * el1_real) + (gm_real[2] * el2_imag) + (gm_imag[2] * el2_real) + (gm_real[3] * el3_imag) + (gm_imag[3] * el3_real);
+            ValType sv_imag_pos1 = (gm_real[4] * el0_imag) + (gm_imag[4] * el0_real) + (gm_real[5] * el1_imag) + (gm_imag[5] * el1_real) + (gm_real[6] * el2_imag) + (gm_imag[6] * el2_real) + (gm_real[7] * el3_imag) + (gm_imag[7] * el3_real);
+            ValType sv_imag_pos2 = (gm_real[8] * el0_imag) + (gm_imag[8] * el0_real) + (gm_real[9] * el1_imag) + (gm_imag[9] * el1_real) + (gm_real[10] * el2_imag) + (gm_imag[10] * el2_real) + (gm_real[11] * el3_imag) + (gm_imag[11] * el3_real);
+            ValType sv_imag_pos3 = (gm_real[12] * el0_imag) + (gm_imag[12] * el0_real) + (gm_real[13] * el1_imag) + (gm_imag[13] * el1_real) + (gm_real[14] * el2_imag) + (gm_imag[14] * el2_real) + (gm_real[15] * el3_imag) + (gm_imag[15] * el3_real);
+
+            LOCAL_P_HIP_MPI(sv_real, pos0, sv_real_pos0);
+            LOCAL_P_HIP_MPI(sv_real, pos1, sv_real_pos1);
+            LOCAL_P_HIP_MPI(sv_real, pos2, sv_real_pos2);
+            LOCAL_P_HIP_MPI(sv_real, pos3, sv_real_pos3);
+
+            LOCAL_P_HIP_MPI(sv_imag, pos0, sv_imag_pos0);
+            LOCAL_P_HIP_MPI(sv_imag, pos1, sv_imag_pos1);
+            LOCAL_P_HIP_MPI(sv_imag, pos2, sv_imag_pos2);
+            LOCAL_P_HIP_MPI(sv_imag, pos3, sv_imag_pos3);
+        }
+        grid.sync();
+    }
+
+
+
+
+
+
+
+
+
+
+
+
 #define LAUNCH_KERNEL(X)                                                                        \
     dim3 gridDim(1, 1, 1);                                                                      \
     hipDeviceProp_t deviceProp;                                                                 \
@@ -758,16 +856,15 @@ namespace NWQSim
 
     void C2_GATE(const SV_HIP_MPI *sim, const IdxType t, const IdxType ctrl, const IdxType qubit)
     {
-
         assert(ctrl != qubit); // Non-cloning
         // Case-1: both ctrl and qubit are local
+
 
         if (ctrl < sim->lg2_m_gpu && qubit < sim->lg2_m_gpu)
         {
             void *args[] = {(void *)(&sim->sim_gpu), (void *)&ctrl, (void *)&qubit, (void *)&t};
             LAUNCH_KERNEL(C2LC_GATE);
         }
-
         // Case-2: both ctrl and qubit are global
         else if (ctrl >= sim->lg2_m_gpu && qubit >= sim->lg2_m_gpu)
         {
@@ -940,7 +1037,6 @@ namespace NWQSim
                         sim->results_local[cur_index + i] = j;
                     }
                 }
-
             }
         }
         SAFE_FREE_HOST_HIP(m_buff);
@@ -1126,49 +1222,103 @@ namespace NWQSim
         }
     }
 
+    __global__ void simulation_local_kernel(SV_HIP_MPI *sim, const IdxType start, const IdxType stop)
+    {
+        for (IdxType t = start; t < stop; t++)
+        {
+            OP op_name = (sv_gpu->gates_gpu)[t].op_name;
+            IdxType qubit = (sv_gpu->gates_gpu)[t].qubit;
+            IdxType ctrl = (sv_gpu->gates_gpu)[t].ctrl;
+            ValType *gm_real = (sv_gpu->gates_gpu)[t].gm_real;
+            ValType *gm_imag = (sv_gpu->gates_gpu)[t].gm_imag;
+
+            if (op_name == OP::C1)
+            {
+                sv_gpu->C1V2_GATE(gm_real, gm_imag, qubit);
+            }
+            else if (op_name == OP::C2)
+            {
+                sv_gpu->C2V1_GATE(gm_real, gm_imag, ctrl, qubit);
+            }
+        }
+    }
+
+    void simulation_local(SV_HIP_MPI *sim, std::vector<SVGate> &gates, IdxType start, IdxType stop)
+    {
+        void *args[] = {(void *)(&sim->sim_gpu), (void *)&start, (void*)&stop};
+        LAUNCH_KERNEL(simulation_local_kernel);
+    }
+
+    void simulation_global(SV_HIP_MPI *sim, std::vector<SVGate> &gates, IdxType t)
+    {
+        auto op_name = gates[t].op_name;
+        auto qubit = gates[t].qubit;
+        auto ctrl = gates[t].ctrl;
+
+        if (op_name == OP::RESET)
+        {
+            RESET_GATE(sim, t, qubit);
+        }
+        else if (op_name == OP::M)
+        {
+            M_GATE(sim, t, cur_index);
+            cur_index++;
+        }
+        else if (op_name == OP::MA)
+        {
+            MA_GATE(sim, qubit, cur_index);
+            cur_index += qubit;
+        }
+        else if (op_name == OP::C1)
+        {
+            C1_GATE(sim, t, qubit);
+        }
+        else if (op_name == OP::C2)
+        {
+            C2_GATE(sim, t, ctrl, qubit);
+        }
+#ifdef PURITY_CHECK
+        Purity_Check(sim, t, op_name, ctrl, qubit);
+#endif
+    }
+
+
     //=====================================================================================
     void simulation_kernel(SV_HIP_MPI *sim, std::vector<SVGate> &gates)
     {
         IdxType cur_index = 0;
-
+        vector<IdxType> global_marks;
         for (IdxType t = 0; t < gates.size(); t++)
         {
-            auto op_name = gates[t].op_name;
             auto qubit = gates[t].qubit;
             auto ctrl = gates[t].ctrl;
-
-            if (op_name == OP::RESET)
+            if (ctrl >= sim->lg2_m_gpu || qubit >= sim->lg2_m_gpu) 
             {
-                RESET_GATE(sim, t, qubit);
+                global_marks.append(t);
             }
-            else if (op_name == OP::M)
-            {
-                M_GATE(sim, t, cur_index);
-                cur_index++;
-            }
-            else if (op_name == OP::MA)
-            {
-                MA_GATE(sim, t, cur_index);
-                cur_index += qubit;
-            }
-            else if (op_name == OP::C1)
-            {
-                C1_GATE(sim, t, qubit);
-            }
-            else if (op_name == OP::C2)
-            {
-                C2_GATE(sim, t, ctrl, qubit);
-            }
-
-#ifdef PURITY_CHECK
-            Purity_Check(sim, t, op_name, ctrl, qubit);
-#endif
         }
-
+        global_marks.append(gates.size());
+        IdxType t = 0;
+        for (auto m = global_marks.begin(); m != global_marks.end(); ++m)
+        {
+            IdxType next_stop = *m;
+            if (t < next_stop)
+            {
+                simulation_local(sim, gates, t, next_stop);
+                t = next_stop;
+            }
+            if (t != gates.size())
+            {
+                simulation_global(sim, gates, t);
+                ++t;
+            }
+        }
         // Reduce all the measurement results
         MPI_Barrier(MPI_COMM_WORLD);
         MPI_Allreduce(sim->results_local, sim->results, cur_index, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
         MPI_Barrier(MPI_COMM_WORLD);
     }
+
+
 
 }; // namespace NWQSim
