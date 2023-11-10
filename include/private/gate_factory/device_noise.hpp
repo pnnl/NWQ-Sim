@@ -261,12 +261,11 @@ namespace NWQSim
                 }
 
                 std::complex<double> tr_sp[sp_dim][sp_dim] = {};
-                addTRErr2Q(gate_len, T1_1, T2_1,
-                           gate_len, T1_2, T2_2,
-                           ideal_gate, tr_sp, true);
-                double tr_fid = aveGateFid(tr_sp[0], 16);
+                std::complex<double> tr_sp_noise[sp_dim][sp_dim] = {};
+                addTRErr2Q(gate_len, T1_1, T2_1, gate_len, T1_2, T2_2, ideal_gate, tr_sp_noise, false);
+                double tr_fid = aveGateFid(tr_sp_noise[0], 16);
                 double tr_infid = 1.0 - tr_fid;
-
+                addTRErr2Q(gate_len, T1_1, T2_1, gate_len, T1_2, T2_2, ideal_gate, tr_sp, true);
                 // Depolarizing Error
                 if (err_rate <= tr_infid)
                 {
@@ -354,9 +353,11 @@ namespace NWQSim
                 }
 
                 std::complex<double> tr_sp[sp_dim][sp_dim] = {};
-                addTRErr1Q(gate_len, T1, T2, ideal_gate, tr_sp, true);
-                double tr_fid = aveGateFid(tr_sp[0], sp_dim);
+                std::complex<double> tr_sp_noise[sp_dim][sp_dim] = {};
+                addTRErr1Q(gate_len, T1, T2, ideal_gate, tr_sp_noise, false);
+                double tr_fid = aveGateFid(tr_sp_noise[0], sp_dim);
                 double tr_infid = 1.0 - tr_fid;
+                addTRErr1Q(gate_len, T1, T2, ideal_gate, tr_sp, true);
                 // Depolarizing Error
                 if (err_rate <= tr_infid)
                 {
