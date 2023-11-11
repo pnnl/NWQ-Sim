@@ -281,7 +281,7 @@ namespace NWQSim
                         err_rate_fixed = err_rate_max;
                     }
                     double dep_rate = qubit_dim_double * (err_rate_fixed - tr_infid) / (qubit_dim_double * tr_fid - 1.0);
-                    double dep_rate_max = sp_dim_double / (sp_dim_double - 1.0); // maximum depolarizing rate (note this is not the error probability)
+                    double dep_rate_max = min(1.0, sp_dim_double / (sp_dim_double - 1.0)); // maximum depolarizing rate (note this is not the error probability)
                     double dep_rate_fixed = dep_rate;
                     if (dep_rate > dep_rate_max)
                     { // Again, I think this actually means MODEL FAILURE
@@ -289,7 +289,7 @@ namespace NWQSim
                     }
                     // Now we construct depolarizing error
                     std::complex<double> dep_sp[sp_dim][sp_dim] = {};
-                    addDepErr2Q(dep_rate_fixed, ideal_gate, dep_sp, true);
+                    addDepErr2Q(dep_rate_fixed, ideal_gate, dep_sp, false);
                     dotProd(tr_sp[0], dep_sp[0], gate_sp[0], sp_dim);
                 }
             }
@@ -368,20 +368,22 @@ namespace NWQSim
                 {                                                                      // add depolarizing error
                     double err_rate_max = qubit_dim_double / (qubit_dim_double + 1.0); // 2^n/(2^n+1), n = 1
                     double err_rate_fixed = err_rate;
+
                     if (err_rate > err_rate_max)
                     { // if when error rate is too large, I think this actually means MODEL FAILURE
                         err_rate_fixed = err_rate_max;
                     }
                     double dep_rate = qubit_dim_double * (err_rate_fixed - tr_infid) / (qubit_dim_double * tr_fid - 1.0);
-                    double dep_rate_max = sp_dim_double / (sp_dim_double - 1.0); // maximum depolarizing rate (note this is not the error probability)
+                    double dep_rate_max = min(1.0, sp_dim_double / (sp_dim_double - 1.0)); // maximum depolarizing rate (note this is not the error probability)
                     double dep_rate_fixed = dep_rate;
+
                     if (dep_rate > dep_rate_max)
                     { // Again, I think this actually means MODEL FAILURE
                         dep_rate_fixed = dep_rate_max;
                     }
                     // Now we construct depolarizing error
                     std::complex<double> dep_sp[sp_dim][sp_dim] = {};
-                    addDepErr1Q(dep_rate_fixed, ideal_gate, dep_sp, true);
+                    addDepErr1Q(dep_rate_fixed, ideal_gate, dep_sp, false);
                     dotProd(tr_sp[0], dep_sp[0], gate_sp[0], sp_dim);
                 }
             }
