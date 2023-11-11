@@ -314,16 +314,18 @@ namespace NWQSim
             case OP::ID:
                 set_ID(&ideal_gate[0][0]);
                 break;
+            case OP::DELAY:
+                set_ID(&ideal_gate[0][0]);
+                break;
             case OP::SX:
                 set_SX(&ideal_gate[0][0]);
                 break;
             case OP::RZ:
                 set_RZ(&ideal_gate[0][0], theta);
                 break;
-
             default:
                 throw std::invalid_argument("Unsupported basis gate!");
-                        }
+            }
 
             if (!Config::ENABLE_NOISE)
             {
@@ -339,55 +341,72 @@ namespace NWQSim
                 double sp_dim_double = (double)sp_dim;
                 // Read qubits properties
                 std::string str_q1 = std::to_string(q1); // key must be string
-                double T1, T2, gate_len, err_rate;
+                double T1, T2; 
                 try
                 {
                     T1 = Config::backend_config["T1"][str_q1];
                     T2 = Config::backend_config["T2"][str_q1];
-                    gate_len = Config::backend_config["gate_lens"][gate_name + str_q1];
-                    err_rate = Config::backend_config["gate_errs"][gate_name + str_q1];
                 }
                 catch (...)
                 {
                     throw std::invalid_argument("1-qubit gate properties is not contained in the configuration file.");
                 }
-
                 std::complex<double> tr_sp[sp_dim][sp_dim] = {};
-                std::complex<double> tr_sp_noise[sp_dim][sp_dim] = {};
-                addTRErr1Q(gate_len, T1, T2, ideal_gate, tr_sp_noise, false);
-                double tr_fid = aveGateFid(tr_sp_noise[0], sp_dim);
-                double tr_infid = 1.0 - tr_fid;
-                addTRErr1Q(gate_len, T1, T2, ideal_gate, tr_sp, true);
-                // Depolarizing Error
-                if (err_rate <= tr_infid)
+
+                if (gate_op == OP::DELAY)
                 {
-                    // If relaxation error is already too large, skip depolarizing error
+                    //Delay gate
+                    addTRErr1Q(theta, T1, T2, ideal_gate, tr_sp, false);
                     std::copy(&tr_sp[0][0], &tr_sp[0][0] + sp_dim * sp_dim, gate_sp[0]);
                 }
                 else
-                {                                                                      // add depolarizing error
-                    double err_rate_max = qubit_dim_double / (qubit_dim_double + 1.0); // 2^n/(2^n+1), n = 1
-                    double err_rate_fixed = err_rate;
-
-                    if (err_rate > err_rate_max)
-                    { // if when error rate is too large, I think this actually means MODEL FAILURE
-                        err_rate_fixed = err_rate_max;
+                {
+                    double gate_len, err_rate;
+                    try 
+                    {
+                        gate_len = Config::backend_config["gate_lens"][gate_name + str_q1];
+                        err_rate = Config::backend_config["gate_errs"][gate_name + str_q1];
                     }
-                    double dep_rate = qubit_dim_double * (err_rate_fixed - tr_infid) / (qubit_dim_double * tr_fid - 1.0);
-                    double dep_rate_max = min(1.0, sp_dim_double / (sp_dim_double - 1.0)); // maximum depolarizing rate (note this is not the error probability)
-                    double dep_rate_fixed = dep_rate;
-
-                    if (dep_rate > dep_rate_max)
-                    { // Again, I think this actually means MODEL FAILURE
-                        dep_rate_fixed = dep_rate_max;
+                    catch (...)
+                    {
+                        throw std::invalid_argument("1-qubit gate properties is not contained in the configuration file.");
                     }
-                    // Now we construct depolarizing error
-                    std::complex<double> dep_sp[sp_dim][sp_dim] = {};
-                    addDepErr1Q(dep_rate_fixed, ideal_gate, dep_sp, false);
-                    dotProd(tr_sp[0], dep_sp[0], gate_sp[0], sp_dim);
+                    //Other 1-qubit gates
+                    std::complex<double> tr_sp_noise[sp_dim][sp_dim] = {};
+                    addTRErr1Q(gate_len, T1, T2, ideal_gate, tr_sp_noise, false);
+                    double tr_fid = aveGateFid(tr_sp_noise[0], sp_dim);
+                    double tr_infid = 1.0 - tr_fid;
+                    addTRErr1Q(gate_len, T1, T2, ideal_gate, tr_sp, true);
+                    // Depolarizing Error
+                    if (err_rate <= tr_infid)
+                    {
+                        // If relaxation error is already too large, skip depolarizing error
+                        std::copy(&tr_sp[0][0], &tr_sp[0][0] + sp_dim * sp_dim, gate_sp[0]);
+                    }
+                    else
+                    {                                                                      // add depolarizing error
+                        double err_rate_max = qubit_dim_double / (qubit_dim_double + 1.0); // 2^n/(2^n+1), n = 1
+                        double err_rate_fixed = err_rate;
+
+                        if (err_rate > err_rate_max)
+                        { // if when error rate is too large, I think this actually means MODEL FAILURE
+                            err_rate_fixed = err_rate_max;
+                        }
+                        double dep_rate = qubit_dim_double * (err_rate_fixed - tr_infid) / (qubit_dim_double * tr_fid - 1.0);
+                        double dep_rate_max = min(1.0, sp_dim_double / (sp_dim_double - 1.0)); // maximum depolarizing rate (note this is not the error probability)
+                        double dep_rate_fixed = dep_rate;
+
+                        if (dep_rate > dep_rate_max)
+                        { // Again, I think this actually means MODEL FAILURE
+                            dep_rate_fixed = dep_rate_max;
+                        }
+                        // Now we construct depolarizing error
+                        std::complex<double> dep_sp[sp_dim][sp_dim] = {};
+                        addDepErr1Q(dep_rate_fixed, ideal_gate, dep_sp, false);
+                        dotProd(tr_sp[0], dep_sp[0], gate_sp[0], sp_dim);
+                    }
                 }
             }
-
             DMGate gate(OP::C2, q1, q2);
             gate.set_gm(gate_sp[0], 4);
             return gate;

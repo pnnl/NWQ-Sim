@@ -799,6 +799,8 @@ void qasm_parser::execute_gate(shared_ptr<QuantumState> state, std::shared_ptr<N
         circuit->CSWAP(qubits[0], qubits[1], qubits[2]);
     else if (gate_name == "ID")
         circuit->ID(qubits[0]);
+    else if (gate_name == "DELAY")
+        circuit->DELAY(params[0], qubits[0]);
     else if (gate_name == "RXX")
         circuit->RXX(params[0], qubits[0], qubits[1]);
     else if (gate_name == "RYY")
@@ -806,7 +808,10 @@ void qasm_parser::execute_gate(shared_ptr<QuantumState> state, std::shared_ptr<N
     else if (gate_name == "RZZ")
         circuit->RZZ(params[0], qubits[0], qubits[1]);
     else
+    {
+        std::cerr << "Undefined gate is called: " << gate_name << std::endl;
         throw logic_error("Undefined gate is called!");
+    }
 }
 
 qasm_parser::~qasm_parser()

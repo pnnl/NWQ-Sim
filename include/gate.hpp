@@ -210,6 +210,11 @@ namespace NWQSim
          * for noisy simulation
          ******************************************/
         ID,
+		/******************************************
+         * Delay gate, this is an ID gate with
+         * variable gate length for noisy simulation
+         ******************************************/
+        DELAY, 
         /******************************************
          * SWAP gate: swap the position of two qubits
          * SWAP = [1,0,0,0]
@@ -287,6 +292,7 @@ namespace NWQSim
         "RZZ",
         // Other
         "ID",
+		"DELAY",
         "SWAP",
         "M",
         "MA",

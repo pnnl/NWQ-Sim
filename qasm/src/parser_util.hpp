@@ -53,7 +53,7 @@ string DEFAULT_GATES[] = {
     "CZ", "CX", "CY", "CH",
     "CCX", "CRX", "CRY", "CRZ", "CU", "CU1", "CU3",
     "RESET", "SWAP", "CSWAP",
-    "ID", "RI", "P", "CS", "CSDG", "CT", "CTDG", "CSX", "CP",
+    "ID", "DELAY", "RI", "P", "CS", "CSDG", "CT", "CTDG", "CSX", "CP",
     "RZZ", "RXX", "RYY"};
 
 const string OPENQASM("OPENQASM");
