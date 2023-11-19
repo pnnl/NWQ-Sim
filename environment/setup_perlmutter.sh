@@ -21,9 +21,6 @@ export LD_LIBRARY_PATH=$HOME/.xacc/lib:$LD_LIBRARY_PATH
 export cc=cc
 export CC=CC
 
-#module unload cgpu
-#module load gcc/9.3.0
-#module load cudatoolkit/21.3_11.2
-#module load nersc-easybuild/21.12 
-#module load GDRCopy/2.1-GCCcore-10.2.0-CUDA-11.1.1
-#module load OpenMPI/4.0.5-gcccuda-2020b
+#Use this when issues with MPI/NVSHMEM
+#FI_MR_CACHE_MONITOR=disabled 
+#FI_MR_CUDA_CACHE_MONITOR_ENABLED=0
