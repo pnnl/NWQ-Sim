@@ -93,5 +93,6 @@ setup(
     cmdclass={
         'build': NWQSimSimulatorBuild,
     },
-    distclass=BinaryDistribution
+    distclass=BinaryDistribution,
+    zip_safe=False
 )

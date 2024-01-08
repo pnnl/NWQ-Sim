@@ -27,7 +27,7 @@ def cx_chain(qc,n):
 
 
 
-qc = QuantumCircuit(n_qubits, n_qubits)
+qc = QuantumCircuit(n_qubits)
 qc.h(0)
 cx_chain(qc,n_qubits)
 
@@ -50,10 +50,20 @@ svsim = nwqsim.backends['nwqsim']
 
 #print (qc.qasm())
 
+# default number of shots: 1024
+print("Default number of shots: 1024")
 job2 = svsim.run(qc)
 result2 = job2.result()
 counts2 = result2.get_counts(qc)
 print (counts2)
 print (result2.get_statevector(qc))
 
+# custom number of shots
+print("\nCustom number of shots: 5000")
+job3 = svsim.run(qc, shots=5000)
+result3 = job3.result()
+counts3 = result3.get_counts(qc)
+print (counts3)
+print (result3.get_statevector(qc))
+print ("Are two statevectors the same?", np.allclose(result2.get_statevector(qc), result3.get_statevector(qc)))
 
