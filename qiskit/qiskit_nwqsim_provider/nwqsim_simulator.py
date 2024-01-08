@@ -12,8 +12,8 @@ from qiskit_nwqsim_provider.nwqsim_job import NWQSimJob
 from qiskit import qobj as qobj_mod
 from qiskit.compiler import assemble
 import subprocess
-
-
+import importlib_resources # for finding the nwq_qasm 
+import os
 
 #======================================== NWQSim Simulator ================================
 class NWQSimSimulator(Backend):
@@ -54,14 +54,23 @@ class NWQSimSimulator(Backend):
         return Options(shots=1024, seed=334)
 
     def run_experiment(self, experiment, options):
+        if os.path.isfile("./build/qasm/nwq_qasm"): # meaning we are in the repo/qiskit folder
+            nwq_qasm_path = "./build/qasm/nwq_qasm"
+        else:
+            nwq_qasm_path = str(importlib_resources.files("qiskit_nwqsim_provider").parent.joinpath("qasm/nwq_qasm"))
+        # print(" (DEBUG)", nwq_qasm_path)
+        # if not os.path.isfile(nwq_qasm_path):
+        #     Exception("Please use the absolute path for nwq_qis_path to the cloned repo.")
         qasmjson = json.dumps(experiment.to_dict())
         if len(qasmjson) > 1000000:
             qasmjsonbin = qasmjson.encode('utf-8')
             with open("expriment.json","wb") as outfile:
                 outfile.write(qasmjsonbin)
-            cmd = str( "./build/qasm/nwq_qasm -j expriment.json") 
+            # cmd = str( "./build/qasm/nwq_qasm -j expriment.json") # shots parameter is not included
+            cmd = str( nwq_qasm_path+" -shots {:d} -j expriment.json").format(options['shots'])
         else:
-            cmd = str( "./build/qasm/nwq_qasm -js '") + qasmjson + "'" 
+            # cmd = str( "./build/qasm/nwq_qasm -js '") + qasmjson + "'"  # shots parameter is not included
+            cmd = str( nwq_qasm_path+" -shots {:d} -js '").format(options['shots']) + qasmjson + "'" 
         #print (cmd)
         output = subprocess.getoutput(cmd)
         #print(output)
@@ -91,7 +100,8 @@ class NWQSimSimulator(Backend):
     def run(self, circuits, **kwargs):
         # serialize circuits submit to backend and create a job
         for kwarg in kwargs:
-            if not hasattr(kwarg, self.options):
+            # if not hasattr(kwarg, self.options): # Reversed, see https://docs.python.org/3.8/library/functions.html#hasattr
+            if not hasattr(self.options, kwarg):
                 warnings.warn(
                     "Option %s is not used by this backend" % kwarg, UserWarning, stacklevel=2)
         options = {
