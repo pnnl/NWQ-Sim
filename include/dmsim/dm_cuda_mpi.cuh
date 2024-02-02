@@ -25,7 +25,7 @@
 
 #include <nvshmem.h>
 #include <nvshmemx.h>
-#include <nvshmemx_error.h>
+//#include <nvshmemx_error.h>
 
 #ifdef FP64_TC_AVAILABLE
 #include <mma.h>
