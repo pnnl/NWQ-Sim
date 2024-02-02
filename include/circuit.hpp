@@ -42,7 +42,7 @@ namespace NWQSim
         {
             gates = std::make_shared<std::vector<Gate>>(new_gates);
         }
-        void set_qubits(IdxType _n_qubits)
+        void set_num_qubits(IdxType _n_qubits)
         {
             n_qubits = _n_qubits;
         }
