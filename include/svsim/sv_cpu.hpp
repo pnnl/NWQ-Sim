@@ -74,13 +74,9 @@ namespace NWQSim
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
             IdxType origional_gates = circuit->num_gates();
-
             std::vector<SVGate> gates = fuse_circuit_sv(circuit);
-
             IdxType n_gates = gates.size();
-
             assert(circuit->num_qubits() == n_qubits);
-
             double sim_time;
             cpu_timer sim_timer;
             sim_timer.start_timer();

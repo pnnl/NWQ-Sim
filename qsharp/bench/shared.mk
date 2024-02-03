@@ -2,7 +2,8 @@
 # This is for NERSC Perlmutter 
 
 ###################### NVIDIA GPU Configuration #######################
-NVCC = /opt/nvidia/hpc_sdk/Linux_x86_64/22.5/cuda/11.7/bin/nvcc
+#NVCC =/opt/nvidia/hpc_sdk/Linux_x86_64/23.9/cuda/12.2/bin/nvcc 
+NVCC = nvcc
 NVCC_FLAGS = -O3 -arch=sm_80 -m64 -std=c++17 -rdc=true --compiler-options -fPIC
 NVCC_LIBS = 
 #######################################################################
@@ -14,7 +15,7 @@ CC_LIBS =
 #######################################################################
 
 ##################### Host Q#/QIR Configuration #######################
-QIRCC = /global/common/software/nersc/cos1.3/llvm/11.0.1/bin/clang++
+QIRCC = /global/common/software/nersc/pe/llvm/17/bin/clang++
 QIRCC_FLAGS = -std=c++17 -m64 -O3 -I. -fPIC
 QIR_BRIDGE_PUBLIC = /global/homes/a/angli/qsharp-runtime/src/Qir/Runtime/public/
 QIR_BRIDGE_TEST = 

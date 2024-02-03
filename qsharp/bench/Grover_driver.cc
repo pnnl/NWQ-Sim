@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
     long nQubits = atoi(argv[1]);
     long idxMarked = atoi(argv[2]);
     Microsoft::Quantum::IRuntimeDriver* sim = GetNWQSim();
-    Microsoft::Quantum::InitializeQirContext(svsim, false);
+    Microsoft::Quantum::InitializeQirContext(sim, false);
     Microsoft__Quantum__Samples__SearchForMarkedInput(nQubits, idxMarked);
     return 0;
 }

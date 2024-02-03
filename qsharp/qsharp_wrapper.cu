@@ -17,16 +17,18 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "../src/config.h"
 #include "QirRuntimeApi_I.hpp"
 #include "QSharpSimApi_I.hpp"
 #include "QirContext.hpp"
 #include "SimFactory.hpp"
 
-#include "include/backendManager.hpp"
-#include "include/state.hpp"
-#include "include/circuit.hpp"
-#include "include/nwq_util.hpp"
+#include "../include/backendManager.hpp"
+#include "../include/state.hpp"
+#include "../include/circuit.hpp"
+#include "../include/nwq_util.hpp"
+#include "dump_qasm.hpp"
+
+//#define DUMP_QASM "grover.qasm"
 
 using namespace NWQSim;
 
@@ -51,12 +53,9 @@ public:
     {
         return reinterpret_cast<QubitIdType>(qbase + qubit);
     }
-    NWQSimSimulator() : circit(NULL), state(NULL), n_qubits(0)
+    NWQSimSimulator() : circuit(NULL), state(NULL), n_qubits(0), used_qubits(0)
     {
-        std::string backend="CPU";
-        std::string sim_method="sv";
-        circuit = std::make_shared<Circuit>(_n_qubit);
-        state = BackendManager::create_state(backend, _n_qubits, sim_method);
+        circuit = std::make_shared<Circuit>(n_qubits);
     }
     ~NWQSimSimulator()
     {
@@ -70,14 +69,20 @@ public:
     //================= RuntimeDriver ==================//
     QubitIdType AllocateQubit() override
     {
+        //printf("Alloc qubit- %llu\n",n_qubits);
         ++n_qubits;
+        ++used_qubits;
         return from_qubit(n_qubits - 1);
     }
     void ReleaseQubit(QubitIdType Q) override
     {
+        //printf("Reles qubit- %llu\n",n_qubits);
         --n_qubits;
-        if (n_qubits == 0)
+        if (n_qubits == 0 && state != NULL)
+        {
             state->reset_state();
+            used_qubits = 0;
+        }
     }
     void ReleaseResult(Result result) override {}
 
@@ -94,7 +99,7 @@ public:
     //================= Basis Gates ==================//
     void X(QubitIdType Qtarget)
     {
-        Idxtype target = to_qubit(Qtarget);
+        IdxType target = to_qubit(Qtarget);
 #ifdef DUMP_QASM
         push_qasmstr(DUMP_QASM, "x", target);
 #endif
@@ -102,7 +107,7 @@ public:
     }
     void ID(QubitIdType Qtarget)
     {
-        Idxtype target = to_qubit(Qtarget);
+        IdxType target = to_qubit(Qtarget);
 #ifdef DUMP_QASM
         push_qasmstr(DUMP_QASM, "id", target);
 #endif
@@ -110,7 +115,7 @@ public:
     }
     void RZ(double theta, QubitIdType Qtarget)
     {
-        Idxtype target = to_qubit(Qtarget);
+        IdxType target = to_qubit(Qtarget);
 #ifdef DUMP_QASM
         push_qasmstr(DUMP_QASM, "rz", target, -1, 1, theta);
 #endif
@@ -118,7 +123,7 @@ public:
     }
     void SX(QubitIdType Qtarget)
     {
-        Idxtype target = to_qubit(Qtarget);
+        IdxType target = to_qubit(Qtarget);
 #ifdef DUMP_QASM
         push_qasmstr(DUMP_QASM, "sx", target);
 #endif
@@ -126,8 +131,8 @@ public:
     }
     void CX(QubitIdType Qcontrol, QubitIdType Qtarget)
     {
-        Idxtype ctrl = to_qubit(Qcontrol);
-        Idxtype target = to_qubit(Qtarget);
+        IdxType ctrl = to_qubit(Qcontrol);
+        IdxType target = to_qubit(Qtarget);
 #ifdef DUMP_QASM
         push_qasmstr(DUMP_QASM, "cx", target, ctrl);
 #endif
@@ -135,22 +140,33 @@ public:
     }
     Result measure(QubitIdType Qtarget)
     {
-        Idxtype target = to_qubit(Qtarget);
+        if (state == NULL)
+        {
+            std::string backend="CPU";
+            std::string sim_method="dm";
+            circuit->set_num_qubits(used_qubits);
+            state = BackendManager::create_state(backend, used_qubits, sim_method);
+        }
+        IdxType target = to_qubit(Qtarget);
         circuit->M(target);
-        circuit->set_num_qubits(n_qubits);
 #ifdef DUMP_QASM
-        push_qasmstr(DUMP_QASM, "measure", target, 0, 0, 0, n_qubits);
+        push_qasmstr(DUMP_QASM, "measure", target, 0, 0, 0, used_qubits);
 #endif
         state->sim(circuit);
-        p_res = state->get_results();
-        Idxtype res = p_res[0];
+        IdxType* p_res = state->get_results();
+        IdxType res = p_res[0];
+        //printf("Measure qubit[%llu] is: %llu\n", target, res);
+        circuit->clear();
         return (res == (IdxType)1) ? UseOne() : UseZero();
     }
 
 private:
-    Circuit* circuit;
-    QuantumState* state;
+    //Circuit* circuit;
+    //QuantumState* state;
+    std::shared_ptr<NWQSim::Circuit> circuit;
+    std::shared_ptr<NWQSim::QuantumState> state;
     IdxType n_qubits;
+    IdxType used_qubits;
 };
 
 extern "C" Microsoft::Quantum::IRuntimeDriver *GetNWQSim()
