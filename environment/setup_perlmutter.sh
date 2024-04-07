@@ -13,6 +13,7 @@ export NVSHMEM_SYMMETRIC_SIZE=32g
 
 export NVSHMEM_REMOTE_TRANSPORT=libfabric
 export NVSHMEM_DISABLE_CUDA_VMM=1
+export FI_CXI_DISABLE_HMEM_DEV_REGISTER=1
 
 #XACC https://github.com/eclipse/xacc
 export PYTHONPATH=$PYTHONPATH:$HOME/.xacc
