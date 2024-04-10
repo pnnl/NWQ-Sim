@@ -129,22 +129,37 @@ source ~/NWQ-Sim/environment/setup_perlmutter.sh
 ```
 
 2. Build NVSHMEM
-* Download and extract the NVSHMEM txz archive from [here](https://developer.download.nvidia.com/compute/redist/nvshmem/). For example, to download and extract NVSHMEM 2.9.0:
+* Download and extract the NVSHMEM txz archive from [here](https://developer.download.nvidia.com/compute/redist/nvshmem/). For example, to download and extract NVSHMEM 2.11.0:
 ```bash
-wget https://developer.download.nvidia.com/compute/redist/nvshmem/2.9.0/source/nvshmem_src_2.9.0-2.tar.xz
+wget https://developer.download.nvidia.com/compute/redist/nvshmem/2.11.0/source/nvshmem_src_2.11.0-5.txz
 
-tar -xf nvshmem_src_2.9.0-2.tar.xz
+tar -xf nvshmem_src_2.11.0-5.txz
 ```
-* Replace the mem.cpp file in nvshmem_src
+* Find the mem.cpp file in nvshmem_src in
 
 ```bash
-cp ~/NWQ-Sim/nvshmem_util/mem.cpp ~/nvshmem_src_2.9.0-2/src/mem/mem.cpp
+nvshmem_src_2.11.0-5/src/host/mem/mem.cpp
+```
+Comment out the line (line 41)
+
+```c
+#include "common/nvshmem_common_ibgda.h"
 ```
 
-* Copy the provided NVSHMEM build script to nvshmem_src folder and then build it
+* Copy the provided NVSHMEM build script to nvshmem_src folder
 ```bash
-cp ~/NWQ-Sim/nvshmem_util/scripts/build_nvshmem_perlmutter.sh ~/nvshmem_src_2.9.0-2/
-cd ~/nvshmem_src_2.9.0-2
+cp ~/NWQ-Sim/nvshmem_util/scripts/build_nvshmem_perlmutter.sh ~/nvshmem_src_2.11.0-5/
+cd ~/nvshmem_src_2.11.0-5
+```
+add the following configurations into the build file "build_nvshmem_perlmutter.sh" before the cmake command.
+```bash
+export NVSHMEM_IBGDA_SUPPORT=0
+export NVSHMEM_IBRC_SUPPORT=0
+export NVSHMEM_IBDEVX_SUPPORT=0
+```
+
+* Compile and build NVSHMEM
+```bash
 ./build_nvshmem_perlmutter.sh
 ```
 
@@ -233,7 +248,7 @@ jsrun -n<GPUS> -a1 -g1 -c1 -brs <NWQ-Sim Command> -backend NVGPU_MPI
 Replace <GPUS> with the total number of GPUs, and <NWQ-Sim Command> with the NWQ-Sim execution command.
 
 ### Running on Perlmutter HPC
-To run NWQ-Sim on the Perlmutter Supercomputer, initilize the environment first
+To run NWQ-Sim on the Perlmutter Supercomputer, initialize the environment first
 ```bash
 source ~/NWQ-Sim/environment/setup_perlmutter.sh
 ```
