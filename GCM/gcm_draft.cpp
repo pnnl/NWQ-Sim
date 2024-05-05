@@ -11,8 +11,14 @@ int main() {
         "+R3+R5", "+R4+R6",
         "+R2+R1", "+R2-R1", "-R2+R1", "-R2-R1"
     };
+
+    std::map<std::string, CircuitConfig> basisDict = {
+        {"R1", {{"+_2 -_1", 0.1}, {"+_6 -_5", -0.1}}}
+    };
+
     std::cout << "Test";
-    //Generate ts
+
+    //Generate t's
     uint64_t seed = 1234; //Seed for the PCG64 generator
     Vector ts(7); //Generate random numbers w/ PCG64 and scale them to be between 0 and 100
     ts[0] = 1.0; //Inserting 1 for R0
@@ -21,19 +27,10 @@ int main() {
     }
 
     Matrix Hamiltonian; // Hamiltonian matrix
-    Matrix HFState;     // Hartree-Fock state matrix
-    Matrix Z;
+    Matrix HFState;     // Hartree-Fock state matrix, used as the initial input
   
     int numOrbitals = 8; // Define number of orbitals in the system
-    int numParticles = 4;
-   
-    std::map<std::string, std::vector<Term>> basisDict = {
-        {"R1", {{"+_2 -_1", 0.1}, {"+_6 -_5", -0.1}}}
-    };
-
     
-
-
     //Step 1: Perform Jordan-Wigner transformation
     //Step 2: Generate unitaries
     //Step 3: Trotterize unitaries into Pauli strings
@@ -59,11 +56,11 @@ int main() {
     Hquant.setZero();
     QuantumSH(HFState, Hamiltonian, Sclass, Hclass, bases, ts, basisDict, numOrbitals, matLen, true);
 
-    // Step 13: Solve the general eigenvalue problem classically
+    //Step 13: Solve the general eigenvalue problem classically
     //Matrix overlapMatrix;
     //auto [eigenvalues, eigenvectors] = SolveEigenvalueProblem(evaluatedMatrixElements, overlapMatrix);
 
-    // Output the results
+    //Output the results
     //std::cout << "Eigenvalues:\n" << eigenvalues << std::endl;
     //std::cout << "Eigenvectors:\n" << eigenvectors << std::endl;
     std::cout<<"Press Return to exit...";
