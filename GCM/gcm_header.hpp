@@ -10,7 +10,7 @@
 #include <utility>
 #include <cmath>
 #include "pcg_random.hpp"
-#include "Eigen/Dense"
+#include "../../Eigen/Dense"
 
 
 //Using dynamic Eigen MatrixXd to streamline calculations
