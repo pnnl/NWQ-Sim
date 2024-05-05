@@ -21,7 +21,7 @@ int main() {
     }
 
     Matrix Hamiltonian; // Hamiltonian matrix
-    Matrix HFstate;     // Hartree-Fock state matrix
+    Matrix HFState;     // Hartree-Fock state matrix
     Matrix Z;
   
     int numOrbitals = 8; // Define number of orbitals in the system
@@ -34,31 +34,30 @@ int main() {
     
 
 
-    // Step 1: Perform Jordan-Wigner transformation
-    // Step 2: Generate unitaries
-    // Step 3: Trotterize unitaries into Pauli strings
-    // Step 4-8: Compute matrix elements classically
+    //Step 1: Perform Jordan-Wigner transformation
+    //Step 2: Generate unitaries
+    //Step 3: Trotterize unitaries into Pauli strings
+    //Step 4-8: Compute matrix elements classically
     int matLen = bases.size();
     int matSize = matLen * matLen;
-    // Define matrices of complex numbers
-    ComplexMatrix Sclass(matLen, matLen);
-    ComplexMatrix Hclass(matLen, matLen);
-    // Initialize matrices with zeros
+    //Define matrices of complex numbers
+    Matrix Sclass(matLen, matLen);
+    Matrix Hclass(matLen, matLen);
+    //Initialize matrices with zeros
     Sclass.setZero();
     Hclass.setZero();
-    // Compute function fills in the S and H matrices
-    ComputeSH(Sclass, Hclass, bases, ts, basisDict, numOrbitals, matLen, true);
+    //Compute function fills in the S and H matrices
+    ComputeSH(HFState, Hamiltonian, Sclass, Hclass, bases, ts, basisDict, numOrbitals, matLen, true);
+    std::cout << Sclass;
+    std::cout << Hclass;
 
-    //Matrix SclassReal = Sclass.real();
-    //Matrix HclassReal = Hclass.real();
-
-    // Steps 9 & 10: Evaluate S and H quantumly
-    //ComplexMatrix Squant(matLen, matLen);
-    //ComplexMatrix Hquant(matLen, matLen);
-    // Initialize matrices with zeros
-    //Squant.setZero();
-    //Hquant.setZero();
-    //EvaluateSH(Squant, Hquant, bases, ts);
+    //Steps 9 & 10: Evaluate S and H quantumly
+    Matrix Squant(matLen, matLen);
+    Matrix Hquant(matLen, matLen);
+    //Initialize matrices with zeros
+    Squant.setZero();
+    Hquant.setZero();
+    QuantumSH(HFState, Hamiltonian, Sclass, Hclass, bases, ts, basisDict, numOrbitals, matLen, true);
 
     // Step 13: Solve the general eigenvalue problem classically
     //Matrix overlapMatrix;
