@@ -11,10 +11,13 @@ int main() {
         "+R3+R5", "+R4+R6",
         "+R2+R1", "+R2-R1", "-R2+R1", "-R2-R1"
     };
-
     std::map<std::string, CircuitConfig> basisDict = {
-        {"R1", {{"+_2 -_1", 0.1}, {"+_6 -_5", -0.1}}}
+        {"R1", {{"+_5 -_2",1}, {"+_7 -_4",-1}, {"+_2 -_5",-1}, {"+_4 -_7",1}}},
+        {"R2", {{"+_6 -_1",1}, {"+_8 -_3",-1}, {"+_1 -_6",-1}, {"+_3 -_8",1}}},
+        {"R3", {{"+_6 -_2",1}, {"+_8 -_4",-1}, {"+_2 -_6",-1}, {"+_4 -_8",1}}},
+        {"R4", {{"+_5 -_1",1}, {"+_7 -_3",-1}, {"+_1 -_5",-1}, {"+_3 -_7",1}}}
     };
+    
 
     std::cout << "Test";
 
@@ -25,6 +28,7 @@ int main() {
     for (int i = 1; i < ts.size(); i++) {
         ts[i] = generateRandomNumber(seed);
     }
+    
 
     Matrix Hamiltonian; // Hamiltonian matrix
     Matrix HFState;     // Hartree-Fock state matrix, used as the initial input
@@ -63,8 +67,5 @@ int main() {
     //Output the results
     //std::cout << "Eigenvalues:\n" << eigenvalues << std::endl;
     //std::cout << "Eigenvectors:\n" << eigenvectors << std::endl;
-    std::cout<<"Press Return to exit...";
-    std::cin.sync();
-    std::cin.ignore();
     return 0;
 }

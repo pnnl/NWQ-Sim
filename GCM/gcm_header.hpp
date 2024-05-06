@@ -20,7 +20,7 @@ using ComplexMatrix = Eigen::MatrixXcd;
 using ComplexVector = Eigen::VectorXcd;
 
 typedef std::pair<std::string, double> Term; //A fermionic string <operator, coefficient>
-typedef std::vector<Term> CircuitConfig; //Series of strings
+typedef std::vector<Term> CircuitConfig; //In between circuit for translation from fermionic operators to pauli operators
 
 int generateRandomNumber(uint64_t seed) {
     //Create a PCG random number generator initialized with the given seed
@@ -29,115 +29,6 @@ int generateRandomNumber(uint64_t seed) {
     return dist(rng); // Generate and return the random number
 }
 
-//Decodes R bases into the a fermionic string
-std::vector<Term> baseCircuitCodeSingle(const std::string& singleName, double t, 
-                                        const std::map<std::string, std::vector<Term>>& basisDict, bool left) {
-    std::vector<Term> totalConfig;
-    char signStr = singleName[0]; // '+' or '-'
-    double tAct = 0.0;
-
-    // Determine the action based on the sign and whether it is on the left
-    if (signStr == '+') {
-        tAct = (left ? -t : t);
-    } else if (signStr == '-') {
-        tAct = (left ? t : -t);
-    } else {
-        throw std::invalid_argument("Unknown Sign");
-    }
-
-    // Extract the base string and retrieve the corresponding configuration
-    std::string baseStr = singleName.substr(1); //'R<num>', e.g., 'R1'
-    auto it = basisDict.find(baseStr);
-    if (it == basisDict.end()) {
-        throw std::invalid_argument("Basis configuration not found");
-    }
-
-    // Apply the time scaling factor to each term in the configuration
-    for (const Term& term : it->second) {
-        totalConfig.emplace_back(term.first, term.second * tAct);
-    }
-
-    return totalConfig;
-}
-
-//Decodes R bases into the a fermionic string
-std::vector<CircuitConfig> baseCircuitCodeSeparate(const std::string& name, const Vector& ts,
-                                                   const std::map<std::string, std::vector<Term>>& basisDict, bool left) {
-    //Returns Fermionic Strings
-
-    // Check for composites by counting the occurrences of 'R'
-    size_t countR = std::count(name.begin(), name.end(), 'R');
-    std::vector<std::string> nameList;
-    std::vector<CircuitConfig> configs;
-
-    if (countR > 1) { // Composite case
-        size_t midPos = name.rfind('R') - 1;
-        std::string name0 = name.substr(0, midPos);
-        std::string name1 = name.substr(midPos);
-
-        if (left) {
-            nameList = {name1, name0};
-        } else {
-            nameList = {name0, name1};
-        }
-
-        // Process each component of the composite
-        for (size_t i = 0; i < nameList.size(); ++i) {
-            configs.push_back(baseCircuitCodeSingle(nameList[i], ts[i], basisDict, left));
-        }
-    } else { // Single operator case
-        nameList = {name};
-        configs.push_back(baseCircuitCodeSingle(name, ts[0], basisDict, left));
-    }
-
-    return configs;
-}
-
-//Function to compute the right R
-std::vector<CircuitConfig> computeRightR(const std::string& nameRight, const Vector& tsRight,
-                                         const std::map<std::string, std::vector<Term>>& basisDict, bool isLeft = false, bool debug = false) {
-    if (nameRight.find("R0") != std::string::npos && nameRight.length() > 2) {
-        throw std::invalid_argument("Do not include R0 in composite or with a sign. Not implemented.");
-    }
-
-    size_t countR = std::count(nameRight.begin(), nameRight.end(), 'R'); // Count R's to determine if composite
-    std::vector<CircuitConfig> rightSubs;
-
-    if (countR > 1) { // Composite case
-        rightSubs = baseCircuitCodeSeparate(nameRight, tsRight, basisDict, isLeft);
-        if (debug) {
-            std::cout << "Composite case processed." << std::endl;
-        }
-    } else { // Single operator case
-        rightSubs.push_back(baseCircuitCodeSeparate(nameRight, tsRight, basisDict, isLeft)[0]);
-        if (debug) {
-            std::cout << "Single case processed." << std::endl;
-        }
-    }
-
-    return rightSubs;
-}
-
-//Function to compute the left R
-std::vector<CircuitConfig> computeLeftR(const std::string& nameLeft, const Vector tsLeft,
-                                        const std::map<std::string, std::vector<Term>>& basisDict, bool debug = false) {
-    //Check if it's composite
-    size_t countR = std::count(nameLeft.begin(), nameLeft.end(), 'R');
-    std::vector<CircuitConfig> leftSubs;
-
-    if (countR > 1) { //Composite case
-        leftSubs = computeRightR(nameLeft, tsLeft, basisDict, true, debug);
-        if (debug) {
-            std::cout << "Composite case processed in computeLeftR." << std::endl;
-        }
-    } else { //Single operator case
-        leftSubs.push_back(computeRightR(nameLeft, tsLeft, basisDict, true, debug)[0]);
-        if (debug) {
-            std::cout << "Single case processed in computeLeftR." << std::endl;
-        }
-    }
-    return leftSubs;
-}
 
 //Generates the t values in the correct order depending if its the left or right operator
 void Gen_tLR(Vector& tLR, const std::string& name, const Vector& ts, bool left) { 
@@ -169,7 +60,7 @@ void Gen_tLR(Vector& tLR, const std::string& name, const Vector& ts, bool left) 
     }
 }
 
-class PauliOp {
+class PauliOperator {
 public:
     std::map<std::string, double> terms;
 
@@ -180,6 +71,7 @@ public:
             terms[term] += coefficient;
         }
     }
+
     void display() const {
         for (const auto& term : terms) {
             std::cout << term.first << " * " << term.second << "\n";
@@ -187,7 +79,7 @@ public:
     }
 };
 
-//Functions to define individual Pauli matrices
+// Functions to define individual Pauli matrices
 ComplexMatrix2D pauliI() {
     ComplexMatrix2D I;
     I << 1, 0,
@@ -228,35 +120,33 @@ std::map<char, ComplexMatrix2D> createPauliMap() {
 
 // Function to convert a single Pauli string to a matrix
 ComplexMatrix pauliStringToMatrix(const std::string& pauliString) {
-    //Create a map for gates to their respective matrices
     auto pauliMap = createPauliMap();
     size_t numQubits = pauliString.length();
-    size_t matrixDim = 1 << numQubits; //2^numQubits
-    //Fill with identity to start
-    ComplexMatrix result = ComplexMatrix::Identity(matrixDim, matrixDim);
+    ComplexMatrix result = ComplexMatrix::Identity(1, 1);
 
     for (size_t i = 0; i < numQubits; ++i) {
         ComplexMatrix2D currentMatrix = pauliMap[pauliString[i]];
-        ComplexMatrix fullMatrix = ComplexMatrix::Identity(1 << i, 1 << i).kron(currentMatrix);
-        result = result.kron(fullMatrix);
+        result = Eigen::kroneckerProduct(result, currentMatrix).eval();
     }
+
     return result;
 }
 
-//Converts a PauliOp to a full matrix
-ComplexMatrix pauliOpToMatrix(const PauliOp& pauliOp, int numQubits) {
-    size_t matrixDim = 1 << numQubits; //2^numQubits
-    ComplexMatrix  result = ComplexMatrix ::Zero(matrixDim, matrixDim);
+// Function to convert a PauliOperator to a full matrix
+ComplexMatrix pauliOperatorToMatrix(const PauliOperator& pauliOp, int numQubits) {
+    size_t matrixDim = 1 << numQubits; // 2^numQubits
+    ComplexMatrix result = ComplexMatrix::Zero(matrixDim, matrixDim);
 
     for (const auto& term : pauliOp.terms) {
         const std::string& pauliString = term.first;
         double coefficient = term.second;
         result += coefficient * pauliStringToMatrix(pauliString);
     }
+
     return result;
 }
 
-//Maps fermionic creation and annihilation operators to Pauli strings
+// Function to map fermionic creation and annihilation operators to Pauli strings
 std::pair<std::string, std::string> fermionicToPauli(int index, int numQubits) {
     std::string creation(numQubits, 'I');
     std::string annihilation(numQubits, 'I');
@@ -274,9 +164,9 @@ std::pair<std::string, std::string> fermionicToPauli(int index, int numQubits) {
     return std::make_pair(creation, annihilation);
 }
 
-//Jordan-Wigner Transformation Function
-PauliOp JWTransform(const CircuitConfig& circuitConfig, int numQubits) {
-    PauliOp pauliOp;
+// Jordan-Wigner Transformation Function
+PauliOperator jordanWignerTransform(const CircuitConfig& circuitConfig, int numQubits) {
+    PauliOperator pauliOperator;
 
     for (const auto& fop : circuitConfig) {
         std::string fermionStr = fop.first;
@@ -286,7 +176,7 @@ PauliOp JWTransform(const CircuitConfig& circuitConfig, int numQubits) {
             if (isdigit(fermionStr[i])) {
                 int index = fermionStr[i] - '0';
                 if (index < 0 || index >= numQubits) {
-                    throw std::out_of_range("Index out of range for the number of orbitals");
+                    throw std::out_of_range("Index out of range for the number of qubits");
                 }
 
                 // Determine if it's a creation or annihilation operator
@@ -294,25 +184,97 @@ PauliOp JWTransform(const CircuitConfig& circuitConfig, int numQubits) {
                 std::pair<std::string, std::string> pauliStrings = fermionicToPauli(index, numQubits);
 
                 // Add the appropriate Pauli string to the operator
-                pauliOp.addTerm(isCreation ? pauliStrings.first : pauliStrings.second, coefficient);
+                pauliOperator.addTerm(isCreation ? pauliStrings.first : pauliStrings.second, coefficient);
             }
         }
     }
-    return pauliOp;
+
+    return pauliOperator;
 }
-//Trotterization function
-PauliOp trotterize(const PauliOp& op, int numSlices) {
-    PauliOp trotterized;
-    for (const auto& term : op.terms) {
-        trotterized.addTerm(term.first, term.second / numSlices);
+
+CircuitConfig baseCircuitCodeSingle(const std::string& singleName, double t,
+                                    const std::map<std::string, CircuitConfig>& basisDict, bool left) {
+    CircuitConfig totalConfig;
+    char signStr = singleName[0]; // '+' or '-'
+    double tAct;
+
+    if (signStr == '+') {
+        tAct = left ? -t : t;
+    } else if (signStr == '-') {
+        tAct = left ? t : -t;
+    } else {
+        throw std::invalid_argument("Unknown sign in singleName");
     }
-    return trotterized;
+
+    std::string baseStr = singleName.substr(1); // 'R<num>', e.g., 'R1'
+    auto baseConfigIter = basisDict.find(baseStr);
+    if (baseConfigIter == basisDict.end()) {
+        throw std::invalid_argument("Unknown basis string: " + baseStr);
+    }
+
+    const CircuitConfig& baseConfig = baseConfigIter->second;
+    for (const Term& term : baseConfig) {
+        totalConfig.emplace_back(term.first, term.second * tAct);
+    }
+
+    return totalConfig;
 }
 
-//Placeholder function in case of a need for an evaluation step for hamiltonian matrices
-void Evaluate(){
+CircuitConfig baseCircuitCodeSeparate(const std::string& name,
+                                      const Vector& ts,
+                                      const std::map<std::string, CircuitConfig>& basisDict, bool left) {
+    CircuitConfig combinedConfig;
+    size_t countR = std::count(name.begin(), name.end(), 'R');
+    std::vector<std::string> nameList;
+    Vector tList = ts;
 
-};
+    if (countR > 1) { // Composite case
+        size_t midPos = name.rfind('R') - 1; // E.g., '+R2+R1', midPos = 3
+        std::string name0 = name.substr(0, midPos);
+        std::string name1 = name.substr(midPos);
+
+        if (left) { // If the operator is on the left side
+            nameList = {name1, name0};
+        } else {
+            nameList = {name0, name1};
+        }
+
+        CircuitConfig config0 = baseCircuitCodeSingle(nameList[0], tList[0], basisDict, left);
+        CircuitConfig config1 = baseCircuitCodeSingle(nameList[1], tList[1], basisDict, left);
+        combinedConfig.insert(combinedConfig.end(), config0.begin(), config0.end());
+        combinedConfig.insert(combinedConfig.end(), config1.begin(), config1.end());
+    } else { // Single operator case
+        nameList = {name};
+        combinedConfig = baseCircuitCodeSingle(nameList[0], tList[0], basisDict, left);
+    }
+
+    return combinedConfig;
+}
+
+// Function to compute the left fermionic operator
+PauliOperator computeLeftR(const std::string& nameLeft, const Vector& tsLeft,
+                           const std::map<std::string, CircuitConfig>& basisDict,
+                           int numQubits, bool debug = false) {
+    CircuitConfig leftSub = baseCircuitCodeSeparate(nameLeft, tsLeft, basisDict, true);
+    if (debug) {
+        std::cout << "Left operator (Composite/Simple) processed in computeLeftR." << std::endl;
+    }
+    // Perform Jordan-Wigner transformation to Pauli strings
+    return jordanWignerTransform(leftSub, numQubits);
+}
+
+// Function to compute the right fermionic operator
+PauliOperator computeRightR(const std::string& nameRight, const Vector& tsRight,
+                            const std::map<std::string, CircuitConfig>& basisDict,
+                            int numQubits, bool debug = false) {
+    CircuitConfig rightSub = baseCircuitCodeSeparate(nameRight, tsRight, basisDict, false);
+    if (debug) {
+        std::cout << "Right operator (Composite/Simple) processed in computeRightR." << std::endl;
+    }
+    // Perform Jordan-Wigner transformation to Pauli strings
+    return jordanWignerTransform(rightSub, numQubits);
+}
+
 //Function to compute matrix elements classically
 void ComputeSH(ComplexMatrix HFState, ComplexMatrix HamMat, Matrix& S, Matrix& H, const std::vector<std::string>& bases, const Vector& ts, 
                const std::map<std::string, CircuitConfig>& basisDict, int numOrbitals, int matLen, bool debug = false) {
@@ -325,11 +287,10 @@ void ComputeSH(ComplexMatrix HFState, ComplexMatrix HamMat, Matrix& S, Matrix& H
     //Initialize the final complex matrices, the real part wil be place in S and H
     ComplexMatrix SComp, HComp;
     //Initialize circuitconfig objects for the left and right bases
-    std::vector<CircuitConfig> leftR, rightR;
+    PauliOperator leftR, rightR;
     //The t's that will correspond with the right and left bases respectively
     Vector tr, tl;
     //Left and right pauli operators and matrix representations of the Pauli operators
-    PauliOp leftPauliOp, rightPauliOp;
     ComplexMatrix leftMatrix, rightMatrix;
     //Outer loop & left basis(bases) calculation
     for (int i = 0; i < matLen; i++) {
@@ -338,16 +299,16 @@ void ComputeSH(ComplexMatrix HFState, ComplexMatrix HamMat, Matrix& S, Matrix& H
         Gen_tLR(tl, nal, ts, true); //Get the pair of t's in order for the left side
         //Output the tuple
         //std::cout << "Tuple: (" << tl.first << ", " << (tl.second == -1 ? "" : std::to_string(tl.second)) << ")\n";
-        //Generate fermionic strings for left side
-        leftR = computeLeftR(nal, tl, basisDict, debug);
-        leftPauliOp = JWTransform(leftR, numOrbitals);
-        leftMatrix = pauliOpToMatrix(leftPauliOp);
+        //Generate pauli operators using the basis and basis dictionary and perform JW transform
+        leftR = computeLeftR(nal, tl, basisDict, numOrbitals, debug);
+        //Convert the operators into a matrix, each orbital corresponds to a qubit
+        leftMatrix = pauliOperatorToMatrix(leftR, numOrbitals);
         
         //Take the right side of <R| |R> as the inner loop to fill in the matrices
         //Inner loop & right basis(bases) calculation
         for (int j = 0; j < matLen; j++) {
             //Name of right basis(bases)
-            nar = basis_set[j];
+            nar = bases[j];
             //t values that we are interested in for this(these) particular basis(bases)
             tr(-1, -1);
             //Get the t or pair of t's in order for the right side
@@ -358,50 +319,47 @@ void ComputeSH(ComplexMatrix HFState, ComplexMatrix HamMat, Matrix& S, Matrix& H
             if(nal == nar){ 
                 SComp[i,j] = 1;
                 //Simplify a bit in R0 basis case
-                if(nal == 'R0'){
+                if(nal == "R0"){
                     HMatMeasurable = HMatMeasurement  * HFState;
                 }
                 else{
-                    rightR = computeRightR(nar, tr, basisDict, debug);
-                    rightPauliOp = JWTransform(rightR, numOrbitals);
-                    rightMatrix = pauliOpToMatrix(rightPauliOp);
+                    rightR = computeRightR(nar, tr, basisDict, numOrbitals, debug);
+                    rightMatrix = pauliOperatorToMatrix(rightR, numOrbitals);
                     HMatMeasurable = HMatMeasurement * rightMatrix * HFState;
                 }
-                HMatExpectation = MatrixExpectation(HMatMeasurable);
-                HComp[i,j] = Evaluate(HMatExpectation);
+                //MatrixExpectation(HMatMeasurable);
+                //HComp[i,j] = Evaluate(HMatExpectation);
             }
             //Off diagonal
             else{ 
                 //Simplify a bit in R0 basis case
-                if(nar == 'R0'){
+                if(nar == "R0"){
                     SObs = leftMatrix;
                     HObs = leftMatrix * HamMat;
                 }
                 //Simplify a bit in R0 basis case
-                else if (nal == 'R0'){
-                    rightR = computeRightR(nar, tr, basisDict, debug);
-                    rightPauliOp = JWTransform(rightR, numOrbitals);
-                    rightMatrix = pauliOpToMatrix(rightPauliOp);
+                else if (nal == "R0"){
+                    rightR = computeRightR(nar, tr, basisDict, numOrbitals, debug);
+                    rightMatrix = pauliOperatorToMatrix(rightR, numOrbitals);
                     SObs = rightMatrix;
                     HObs = HamMat * rightMatrix;
                 }
                 else{
-                    rightR = computeRightR(nar, tl, basisDict, debug);
-                    rightPauliOp = JWTransform(rightR, numOrbitals);
-                    rightMatrix = pauliOpToMatrix(rightPauliOp);
+                    rightR = computeRightR(nar, tr, basisDict, numOrbitals, debug);
+                    rightMatrix = pauliOperatorToMatrix(rightR, numOrbitals);
                     SObs = leftMatrix * rightMatrix;
                     HObs = leftMatrix * HamMat * rightMatrix;
                 }
                 //S matrix
                 SMatMeasurement = SObs.adjoint();
                 SMatMeasurable = SMatMeasurement * HFState;
-                SMatExpectation = MatrixExpectation(SMatMeasurable);
-                SComp[i,j] = Evaluate(SMatExpectation);
+                //SMatExpectation = MatrixExpectation(SMatMeasurable);
+                //SComp[i,j] = Evaluate(SMatExpectation);
                 //H matrix
-                HMatMeasurement = Hobs.adjoint();
+                HMatMeasurement = HObs.adjoint();
                 HMatMeasurable = HMatMeasurement * HFState;
-                HMatExpectation = MatrixExpectation(HMatMeasurement);
-                HComp[i,j] = Evaluate(HMatExpectation);
+                //HMatExpectation = MatrixExpectation(HMatMeasurement);
+                //HComp[i,j] = Evaluate(HMatExpectation);
             }
         }
     }
@@ -425,11 +383,10 @@ void QuantumSH(ComplexMatrix HFState, ComplexMatrix HamMat, Matrix& S, Matrix& H
     //Initialize the final complex matrices, the real part wil be place in S and H
     ComplexMatrix SComp, HComp;
     //Initialize circuitconfig objects for the left and right bases
-    std::vector<CircuitConfig> leftR, rightR;
+    PauliOperator leftR, rightR;
     //The t's that will correspond with the right and left bases respectively
     Vector tr, tl;
     //Left and right pauli operators and matrix representations of the Pauli operators
-    PauliOp leftPauliOp, rightPauliOp;
     ComplexMatrix leftMatrix, rightMatrix;
     //Outer loop & left basis(bases) calculation
     for (int i = 0; i < matLen; i++) {
@@ -438,10 +395,10 @@ void QuantumSH(ComplexMatrix HFState, ComplexMatrix HamMat, Matrix& S, Matrix& H
         Gen_tLR(tl, nal, ts, true); //Get the pair of t's in order for the left side
         //Output the tuple
         //std::cout << "Tuple: (" << tl.first << ", " << (tl.second == -1 ? "" : std::to_string(tl.second)) << ")\n";
-        //Generate fermionic strings for left side
-        leftR = computeLeftR(nal, tl, basisDict, debug);
-        leftPauliOp = JWTransform(leftR, numOrbitals);
-        leftMatrix = pauliOpToMatrix(leftPauliOp);
+        //Generate pauli operators using the basis and basis dictionary and perform JW transform
+        leftR = computeLeftR(nal, tl, basisDict, numOrbitals, debug);
+        //Convert the operators into a matrix, each orbital corresponds to a qubit
+        leftMatrix = pauliOperatorToMatrix(leftR, numOrbitals);
         
         //Take the right side of <R| |R> as the inner loop to fill in the matrices
         //Inner loop & right basis(bases) calculation
@@ -449,5 +406,3 @@ void QuantumSH(ComplexMatrix HFState, ComplexMatrix HamMat, Matrix& S, Matrix& H
         }
     }
 }
-
-
