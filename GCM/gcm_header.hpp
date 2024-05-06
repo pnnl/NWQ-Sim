@@ -164,31 +164,31 @@ std::pair<std::string, std::string> fermionicToPauli(int index, int numQubits) {
     return std::make_pair(creation, annihilation);
 }
 
-// Jordan-Wigner Transformation Function
+//Jordan-Wigner Transformation Function
 PauliOperator jordanWignerTransform(const CircuitConfig& circuitConfig, int numQubits) {
     PauliOperator pauliOperator;
-
+    //Circuit config is a vector of fermionic terms so we have to go through each element
     for (const auto& fop : circuitConfig) {
         std::string fermionStr = fop.first;
         double coefficient = fop.second;
 
         for (size_t i = 0; i < fermionStr.length(); ++i) {
+            //Looks for the basis number in the fermionic string
             if (isdigit(fermionStr[i])) {
                 int index = fermionStr[i] - '0';
                 if (index < 0 || index >= numQubits) {
                     throw std::out_of_range("Index out of range for the number of qubits");
                 }
 
-                // Determine if it's a creation or annihilation operator
+                //Creation or annihilation operator and where its applied
                 bool isCreation = fermionStr[i - 1] == '+';
                 std::pair<std::string, std::string> pauliStrings = fermionicToPauli(index, numQubits);
 
-                // Add the appropriate Pauli string to the operator
+                //Add the appropriate Pauli string to output Pauli operator
                 pauliOperator.addTerm(isCreation ? pauliStrings.first : pauliStrings.second, coefficient);
             }
         }
     }
-
     return pauliOperator;
 }
 
