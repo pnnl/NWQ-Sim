@@ -203,7 +203,7 @@ namespace xacc
 
             auto measured_bits = visitor->getMeasureBits();
 
-            if (m_shots == 0)
+            if (m_shots == 0 || vqe_mode)
             {
                 if (measured_bits.empty() || measured_bits.size() == buffer->size())
                 {

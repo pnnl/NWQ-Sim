@@ -26,7 +26,7 @@
 
 #include <nvshmem.h>
 #include <nvshmemx.h>
-//#include <nvshmemx_error.h>
+// #include <nvshmemx_error.h>
 
 namespace NWQSim
 {
@@ -64,6 +64,7 @@ namespace NWQSim
             lg2_m_gpu = n_qubits - gpu_scale;
             m_gpu = ((IdxType)1 << (lg2_m_gpu));
             sv_size_per_gpu = sv_size / n_gpus;
+            sv_offset = i_proc * dim / n_gpus;
             // CPU side initialization
             if (!is_power_of_2(n_gpus))
                 throw std::logic_error("Error: Number of GPUs should be power of 2.");
@@ -230,14 +231,57 @@ namespace NWQSim
             return results;
         }
 
-        ValType get_exp_z(const std::vector<size_t> &in_bits) override
+         ValType get_exp_z(const std::vector<size_t> &in_bits) override
         {
-            throw std::logic_error("get_exp_z Not implemented (SV_CUDA_MPI)");
+            cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, sv_size, cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaMemcpy(sv_imag_cpu, sv_imag, sv_size, cudaMemcpyDeviceToHost));
+            
+            double result = 0.0;
+
+            for (long long i = 0; i < dim; ++i)
+            {
+                result += (hasEvenParity(i + sv_offset, in_bits) ? 1.0 : -1.0) *
+                          (sv_real_cpu[i] * sv_real_cpu[i] + sv_imag_cpu[i] * sv_imag_cpu[i]);
+            }
+
+            double final_result;
+            MPI_Allreduce(&result, &final_result, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+            return final_result;
         }
 
         ValType get_exp_z() override
         {
-            throw std::logic_error("get_exp_z Not implemented (SV_CUDA_MPI)");
+            cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, sv_size, cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaMemcpy(sv_imag_cpu, sv_imag, sv_size, cudaMemcpyDeviceToHost));
+            
+            double result = 0.0;
+
+            for (long long i = 0; i < dim; ++i)
+            {
+                bool parity = __builtin_parity(i + sv_offset);
+                result += (parity ? -1.0 : 1.0) * (sv_real_cpu[i] * sv_real_cpu[i] + sv_imag_cpu[i] * sv_imag_cpu[i]);
+            }
+
+            double final_result;
+            MPI_Allreduce(&result, &final_result, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+            return final_result;
+        }
+       
+
+        void save_state() override
+        {
+            // Save current state to CPU memory
+            cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, sv_size_per_gpu, cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaMemcpy(sv_imag_cpu, sv_imag, sv_size_per_gpu, cudaMemcpyDeviceToHost));
+        }
+
+        void load_state() override
+        {
+            // Load state from CPU memory
+            cudaSafeCall(cudaMemcpy(sv_real, sv_real_cpu, sv_size_per_gpu, cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu, sv_size_per_gpu, cudaMemcpyHostToDevice));
         }
 
         IdxType measure(IdxType qubit) override
@@ -305,6 +349,7 @@ namespace NWQSim
         IdxType dim;
         IdxType half_dim;
         IdxType sv_size;
+        IdxType sv_offset;
         // CPU arrays
         ValType *sv_real_cpu;
         ValType *sv_imag_cpu;
@@ -1179,7 +1224,7 @@ namespace NWQSim
             // only need sync when operating on remote qubits
             if ((ctrl >= lg2_m_gpu) || (qubit >= lg2_m_gpu))
             {
-                if (!already_sync) //do not need repeated sync
+                if (!already_sync) // do not need repeated sync
                 {
                     if (threadIdx.x == 0 && blockIdx.x == 0)
                         nvshmem_barrier_all();
@@ -1192,7 +1237,7 @@ namespace NWQSim
             if (op_name == OP::C1)
             {
                 sv_gpu->C1V2_GATE(gm_real, gm_imag, qubit);
-                //sv_gpu->C1V1_GATE(gm_real, gm_imag, qubit);
+                // sv_gpu->C1V1_GATE(gm_real, gm_imag, qubit);
             }
             else if (op_name == OP::C2)
             {
@@ -1224,7 +1269,6 @@ namespace NWQSim
                 cur_index += repetition;
             }
 
-
             // only need sync when operating on remote qubits
             if ((ctrl >= lg2_m_gpu) || (qubit >= lg2_m_gpu))
             {
@@ -1234,6 +1278,5 @@ namespace NWQSim
             }
             grid.sync();
         }
-
     }
 }

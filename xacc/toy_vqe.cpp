@@ -29,6 +29,9 @@ int main(int argc, char **argv)
     std::shared_ptr<xacc::Accelerator> accelerator = std::make_shared<xacc::quantum::NWQAccelerator>();
     accelerator->updateConfiguration({std::make_pair("vqe_mode", true)});
 
+    if (argc == 2)
+        accelerator->updateConfiguration({std::make_pair("backend", std::string(argv[1]))});
+
     // Create the N=2 deuteron Hamiltonian
     auto H_N_2 = xacc::quantum::getObservable(
         "pauli", std::string("5.907 - 2.1433 X0X1 "

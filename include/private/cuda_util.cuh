@@ -151,13 +151,14 @@ __device__ double parity(unsigned long long num)
     num ^= num >> 16;
     num ^= num >> 8;
     num ^= num >> 4;
-    num &= 0xf;
-    return (0x6996 >> num) & 1;
+    num ^= num >> 2;
+    num ^= num >> 1;
+    return num & 1; // Return the last bit, which is the parity of the original number
 }
 
-__global__ void gpu_exp_z_bits(const size_t *in_bits, size_t in_bits_size, const double *sv_real, const double *sv_imag, double *result, const unsigned long long dim)
+__global__ void gpu_exp_z_bits(const size_t *in_bits, size_t in_bits_size, const double *sv_real, const double *sv_imag, double *result, const unsigned long long dim, const unsigned long long offset)
 {
-    unsigned long long idx = threadIdx.x + blockIdx.x * blockDim.x + blockIdx.y * blockDim.x * gridDim.x;
+    unsigned long long idx = threadIdx.x + blockIdx.x * blockDim.x + blockIdx.y * blockDim.x * gridDim.x + offset;
 
     if (idx < dim)
     {
@@ -168,9 +169,9 @@ __global__ void gpu_exp_z_bits(const size_t *in_bits, size_t in_bits_size, const
     }
 }
 
-__global__ void gpu_exp_z(const double *sv_real, const double *sv_imag, double *result, const unsigned long long dim)
+__global__ void gpu_exp_z(const double *sv_real, const double *sv_imag, double *result, const unsigned long long dim, const unsigned long long offset)
 {
-    unsigned long long idx = threadIdx.x + blockIdx.x * blockDim.x + blockIdx.y * blockDim.x * gridDim.x;
+    unsigned long long idx = threadIdx.x + blockIdx.x * blockDim.x + blockIdx.y * blockDim.x * gridDim.x + offset;
 
     if (idx < dim)
     {
