@@ -63,8 +63,11 @@ namespace NWQSim
             gpu_scale = floor(log((double)n_gpus + 0.5) / log(2.0));
             lg2_m_gpu = n_qubits - gpu_scale;
             m_gpu = ((IdxType)1 << (lg2_m_gpu));
+
             sv_size_per_gpu = sv_size / n_gpus;
             sv_offset = i_proc * dim / n_gpus;
+            dim_per_gpu = dim / n_gpus;
+
             // CPU side initialization
             if (!is_power_of_2(n_gpus))
                 throw std::logic_error("Error: Number of GPUs should be power of 2.");
@@ -103,21 +106,19 @@ namespace NWQSim
             // Release for CPU side
             SAFE_FREE_HOST_CUDA(sv_real_cpu);
             SAFE_FREE_HOST_CUDA(sv_imag_cpu);
-            SAFE_FREE_HOST_CUDA(randoms);
-            SAFE_FREE_HOST_CUDA(results);
 
             // Release for GPU side
             nvshmem_free(sv_real);
             nvshmem_free(sv_imag);
             nvshmem_free(m_real);
             nvshmem_free(m_imag);
+            
+            SAFE_FREE_HOST_CUDA(results);
 
-            ///////      SAFE_FREE_GPU(sim_gpu);
-            SAFE_FREE_GPU(randoms_gpu);
-            SAFE_FREE_GPU(gates_gpu);
-
-            nvshmem_free(results_gpu);
-
+            //SAFE_FREE_GPU(randoms_gpu);
+            //SAFE_FREE_GPU(gates_gpu);
+            //SAFE_FREE_HOST_CUDA(randoms);
+            //SAFE_FREE_HOST_CUDA(results);
             nvshmem_finalize();
         }
 
@@ -158,6 +159,7 @@ namespace NWQSim
 
             SV_CUDA_MPI *sv_gpu;
             SAFE_ALOC_GPU(sv_gpu, sizeof(SV_CUDA_MPI));
+
             // Copy the simulator instance to GPU
             cudaSafeCall(cudaMemcpy(sv_gpu, this,
                                     sizeof(SV_CUDA_MPI), cudaMemcpyHostToDevice));
@@ -198,7 +200,16 @@ namespace NWQSim
             sim_time = sim_timer.measure();
 
             // Copy the results back to CPU
-            cudaSafeCall(cudaMemcpy(results, results_gpu, n_measures * sizeof(IdxType), cudaMemcpyDeviceToHost));
+            
+            if (n_measures > 0) {
+                cudaSafeCall(cudaMemcpy(results, results_gpu, n_measures * sizeof(IdxType), cudaMemcpyDeviceToHost));
+                
+                nvshmem_free(results_gpu);
+                
+                SAFE_FREE_HOST_CUDA(randoms);
+                SAFE_FREE_GPU(randoms_gpu);
+            }    
+            
             cudaCheckError();
 
             if (Config::PRINT_SIM_TRACE)
@@ -231,14 +242,14 @@ namespace NWQSim
             return results;
         }
 
-         ValType get_exp_z(const std::vector<size_t> &in_bits) override
+        ValType get_exp_z(const std::vector<size_t> &in_bits) override
         {
             cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, sv_size, cudaMemcpyDeviceToHost));
             cudaSafeCall(cudaMemcpy(sv_imag_cpu, sv_imag, sv_size, cudaMemcpyDeviceToHost));
-            
+
             double result = 0.0;
 
-            for (long long i = 0; i < dim; ++i)
+            for (long long i = 0; i < dim_per_gpu; ++i)
             {
                 result += (hasEvenParity(i + sv_offset, in_bits) ? 1.0 : -1.0) *
                           (sv_real_cpu[i] * sv_real_cpu[i] + sv_imag_cpu[i] * sv_imag_cpu[i]);
@@ -254,10 +265,10 @@ namespace NWQSim
         {
             cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, sv_size, cudaMemcpyDeviceToHost));
             cudaSafeCall(cudaMemcpy(sv_imag_cpu, sv_imag, sv_size, cudaMemcpyDeviceToHost));
-            
+
             double result = 0.0;
 
-            for (long long i = 0; i < dim; ++i)
+            for (long long i = 0; i < dim_per_gpu; ++i)
             {
                 bool parity = __builtin_parity(i + sv_offset);
                 result += (parity ? -1.0 : 1.0) * (sv_real_cpu[i] * sv_real_cpu[i] + sv_imag_cpu[i] * sv_imag_cpu[i]);
@@ -268,7 +279,6 @@ namespace NWQSim
 
             return final_result;
         }
-       
 
         void save_state() override
         {
@@ -348,6 +358,7 @@ namespace NWQSim
         // gpu_scale is 2^x of the number of GPUs, e.g., with 8 GPUs the gpu_scale is 3 (2^3=8)
         IdxType dim;
         IdxType half_dim;
+        IdxType dim_per_gpu;
         IdxType sv_size;
         IdxType sv_offset;
         // CPU arrays
@@ -400,26 +411,26 @@ namespace NWQSim
                     n_measures += g.repetition;
             }
 
-            // Prepare randoms and results memory
-            SAFE_FREE_HOST_CUDA(results);
-            SAFE_ALOC_HOST_CUDA(results, sizeof(IdxType) * n_measures);
-            memset(results, 0, sizeof(IdxType) * n_measures);
+            if (n_measures > 0) {
+                SAFE_FREE_HOST_CUDA(results);
+             
+                // Prepare randoms and results memory
+                SAFE_ALOC_HOST_CUDA(results, sizeof(IdxType) * n_measures);
+                memset(results, 0, sizeof(IdxType) * n_measures);
+            
+                results_gpu = (IdxType *)nvshmem_malloc(sizeof(IdxType) * n_measures);
+                cudaSafeCall(cudaMemset(results_gpu, 0, sizeof(IdxType) * n_measures));
+                
+                SAFE_ALOC_HOST_CUDA(randoms, sizeof(ValType) * n_measures);
 
-            nvshmem_free(results_gpu);
-            results_gpu = (IdxType *)nvshmem_malloc(sizeof(IdxType) * n_measures);
-
-            cudaSafeCall(cudaMemset(results_gpu, 0, sizeof(IdxType) * n_measures));
-
-            SAFE_FREE_HOST_CUDA(randoms);
-            SAFE_ALOC_HOST_CUDA(randoms, sizeof(ValType) * n_measures);
-
-            for (IdxType i = 0; i < n_measures; i++)
-                randoms[i] = uni_dist(rng);
-            SAFE_FREE_GPU(randoms_gpu);
-            SAFE_ALOC_GPU(randoms_gpu, sizeof(ValType) * n_measures);
-            cudaSafeCall(cudaMemcpy(randoms_gpu, randoms,
-                                    sizeof(ValType) * n_measures, cudaMemcpyHostToDevice));
-
+                for (IdxType i = 0; i < n_measures; i++)
+                    randoms[i] = uni_dist(rng);
+                
+                SAFE_ALOC_GPU(randoms_gpu, sizeof(ValType) * n_measures);
+                cudaSafeCall(cudaMemcpy(randoms_gpu, randoms,
+                                        sizeof(ValType) * n_measures, cudaMemcpyHostToDevice));
+            }
+            
             return n_measures;
         }
 

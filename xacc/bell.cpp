@@ -34,27 +34,25 @@ std::shared_ptr<xacc::CompositeInstruction> generateBellCircuit(int n_qubits) {
 
 int main(int argc, char **argv)
 {
+    xacc::Initialize(argc, argv);
+    // Accelerator:
+    
     MPI_Init(&argc, &argv);
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    
-    xacc::Initialize(argc, argv);
-    // Accelerator:
 
     auto nwq_acc = std::make_shared<xacc::quantum::NWQAccelerator>();
 
     int n_qubits = std::stoi(argv[1]);
 
     if (argc == 3)
-        nwq_acc->updateConfiguration({std::make_pair("backend", std::string(argv[2]))});
-
-    auto qpp_acc = xacc::getAccelerator("qpp"); //, {std::make_pair("shots", 4096)}
+        nwq_acc->updateConfiguration({std::make_pair("backend", std::string(argv[2])), std::make_pair("shots", 0)});
 
     auto bell = generateBellCircuit(n_qubits);
 
     // Allocate some qubits and execute
     auto buffer_nwq = xacc::qalloc(n_qubits);
-    nwq_acc->updateConfiguration({std::make_pair("vqe_mode", true)});
+    
     nwq_acc->execute(buffer_nwq, bell);
     
     if (rank == 0) {
@@ -64,6 +62,6 @@ int main(int argc, char **argv)
     }
     
     xacc::Finalize();
-    MPI_Finalize();
+    // MPI_Finalize();
     return 0;
 }
