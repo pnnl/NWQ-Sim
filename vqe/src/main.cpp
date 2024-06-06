@@ -26,7 +26,7 @@ void callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fv
 int main(int argc, char** argv) {
   NWQSim::IdxType n_particles = 10; // Set the number of particles
   // Note: path relative to presumed build directory
-  std::string hamiltonian_path = "../NWQ-VQE/examples/h2O.hamil"; //  Effective Hamiltonian file path
+  std::string hamiltonian_path = "../vqe/examples/h2O.hamil"; //  Effective Hamiltonian file path
 
   Hamiltonian hamil(hamiltonian_path, n_particles); // Build the Hamiltonian object (used for energy calculation)
   Transformer jw_transform = getJordanWignerTransform; // Choose a transformation function

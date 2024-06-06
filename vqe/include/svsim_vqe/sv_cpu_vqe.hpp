@@ -54,8 +54,11 @@ namespace NWQSim
                                       {
           optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
           // Check if the chosen algorithm is flagged as requiring a derivative
-          compute_gradient = std::string(optimizer.get_algorithm_name()).find("D_") != std::string::npos;
+          std::cout << std::string(optimizer.get_algorithm_name()) << std::endl;
+          optimizer.set_maxeval(200);
+          compute_gradient = std::string(optimizer.get_algorithm_name()).find("no-derivative") == std::string::npos;
           optimizer.set_min_objective(nl_opt_function, (void*)this);
+
           std::vector<double> lower_bounds(ansatz->numParams(), 0);
           std::vector<double> upper_bounds(ansatz->numParams(), 2 * PI);
           optimizer.set_lower_bounds(lower_bounds);
