@@ -233,7 +233,11 @@ namespace NWQSim
                     std::logic_error("Invalid gate type");
                 }
             }
-            std::cout << std::endl;
+            if (Config::PRINT_SIM_TRACE)
+            {
+                std::cout << std::endl;
+            }
+            
         }
 
         //============== Local 2-qubit Gate  ================

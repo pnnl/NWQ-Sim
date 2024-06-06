@@ -53,6 +53,8 @@ int main(int argc, char** argv) {
 
   // Start the VQE optimization
   state.optimize(parameters, fval);
+  std::cout << "Final Parameters: " << parameters << std::endl;
+  std::cout << "Final Energy: " << fval << std::endl;
 
   return 0;
 }

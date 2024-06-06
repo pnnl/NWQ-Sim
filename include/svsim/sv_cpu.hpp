@@ -217,7 +217,10 @@ namespace NWQSim
                 Purity_Check(g, i);
 #endif
             }
-            std::cout << std::endl;
+            if (Config::PRINT_SIM_TRACE)
+            {
+                std::cout << std::endl;
+            }
         }
 
         //============== C1 Gate ================

@@ -53,7 +53,7 @@ namespace NWQSim
                                       g_est(seed)
                                       {
           optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
-          // Check if the chosen algorithm is flagged as requiring a derivative
+          // Check if the chosen algorithm requires derivatives
           std::cout << std::string(optimizer.get_algorithm_name()) << std::endl;
           optimizer.set_maxeval(200);
           compute_gradient = std::string(optimizer.get_algorithm_name()).find("no-derivative") == std::string::npos;

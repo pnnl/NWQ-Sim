@@ -12,7 +12,7 @@ namespace NWQSim{
       FermionOpType typeval;
       IdxType term_index;
     };
-    const std::regex pattern("\\(([\\d\\.e\\+-]+),\\s*([\\d\\.]+)\\)([\\d^\\s]+)");
+    const std::regex pattern("\\(([\\d\\.e\\+-]+),\\s*([\\d\\.]+)\\)([\\d^\\s]+){0,1}");
     Hamiltonian::Hamiltonian(std::string input_path, IdxType n_particles, 
                     Transformer transform) {
       std::ifstream input_file(input_path);
@@ -28,6 +28,7 @@ namespace NWQSim{
       IdxType max_index = 0;
       std::queue<FermiArgs> arglist;
       IdxType term_counter = 0;
+      ValType energy_constant = 0;
       while (std::getline(input_file, line)) {
         if (line.length() == 0 || line[0] == 'c') {
           continue;
@@ -38,6 +39,9 @@ namespace NWQSim{
             continue;
           }
           coeff = {std::stod(match.str(1)), std::stod(match.str(2))};
+          if (match.str(3) == "") {
+            energy_constant = coeff.real();
+          }
           std::string fermi_ops = match.str(3);
           linestream = std::istringstream(fermi_ops);
           std::vector<std::string> term_ops;
@@ -77,7 +81,9 @@ namespace NWQSim{
       IdxType n_spatial_orbitals = (max_index + 1) / 2;
       IdxType n_occ = n_particles / 2;
       IdxType n_virt = n_spatial_orbitals - n_occ;
-      env = MolecularEnvironment(n_spatial_orbitals, n_particles);
+      env = MolecularEnvironment(n_spatial_orbitals, 
+                                 n_particles,
+                                 energy_constant);
       IdxType coeff_index = 0;
       IdxType otypeval, spinval, orbital_index;
       Spin spin;
