@@ -9,9 +9,13 @@ if (NOT DEFINED CMAKE_BUILD_TYPE)
 endif()
 
 file(GLOB SOURCEFILES "src/*.cpp")
-add_executable(nwq_vqe ${SOURCEFILES})
+include_directories(BEFORE PRIVATE "include" "../include" ${NLOPT_DIR})
+link_directories(BEFORE  PRIVATE ${NLOPT_DIR})
+link_libraries(nlopt m)
+add_executable(nwq_vqe "main.cpp" ${SOURCEFILES})
+add_library(vqe SHARED ${SOURCEFILES})
 
-target_include_directories(nwq_vqe BEFORE PRIVATE "include" "../include" ${NLOPT_DIR})
-target_link_directories(nwq_vqe BEFORE  PRIVATE ${NLOPT_DIR})
-target_link_libraries(nwq_vqe nlopt m)
+
+
+add_subdirectory("examples")
 

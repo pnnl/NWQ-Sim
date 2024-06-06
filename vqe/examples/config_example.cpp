@@ -26,7 +26,7 @@ void callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fv
 int main(int argc, char** argv) {
   NWQSim::IdxType n_particles = 10; // Set the number of particles
   // Note: path relative to presumed build directory
-  std::string hamiltonian_path = "../vqe/examples/h2O.hamil"; //  Effective Hamiltonian file path
+  std::string hamiltonian_path = "../vqe/example_hamiltonians/h2O.hamil"; //  Effective Hamiltonian file path
 
   Hamiltonian hamil(hamiltonian_path, n_particles); // Build the Hamiltonian object (used for energy calculation)
   Transformer jw_transform = getJordanWignerTransform; // Choose a transformation function
@@ -35,10 +35,25 @@ int main(int argc, char** argv) {
   //      (shared_ptr used to match baseline NWQ-Sim functionality)
   std::shared_ptr<Ansatz> ansatz = std::make_shared<UCCSD>(hamil.getEnv(), jw_transform, 1);
   
+  // Now we get a bit fancier. We can pass an `OptimizerSettings` object to specify termination criteria and optimizer parameters
+  OptimizerSettings settings;
+  settings.abs_tol = 1e-5;  // absolution function value tolerance cutoff
+  settings.rel_tol = 1e-3;  // relative function value tolerance cutoff
+  settings.max_evals = 100; // max number of function calls (circuit simulations)
+  settings.max_time = 1000; // timeout (in seconds)
+  settings.stop_val = -76.387; // ground state for our problem
+  // algorithm-specific parameters, see NLOpt docs for specifics. `inner_maxeval` specifies the maximum number
+  //    of function evalutions for the inner loop of the Method of Moving Averages (MMA) and Conservative Convex Separable Approximation (CCSA)
+  //    gradient-based algorithms
+  settings.parameter_map = {
+    {"inner_maxeval", 20}
+  }; 
+  
+  
   // Build the Quantum State object
   NWQSim::VQE::SV_CPU_VQE state(ansatz, // reference to ansatz
                                 hamil,  // reference to Hamiltonian
-                                nlopt::algorithm::LN_COBYLA, // NLOpt algorithm for optimization
+                                nlopt::algorithm::LD_MMA, // NLOpt algorithm for optimization
                                 callback_function, // Callback function for each energy evaluation
                                 0 // Random seed (passed to the SPSA gradient estimator for random perturbations)
                                 );
