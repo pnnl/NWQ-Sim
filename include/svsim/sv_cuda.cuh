@@ -220,35 +220,58 @@ namespace NWQSim
             sim(circuit);
             return results;
         }
-        
+
         ValType get_exp_z(const std::vector<size_t> &in_bits) override
         {
-            cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, sv_size, cudaMemcpyDeviceToHost));
-            cudaSafeCall(cudaMemcpy(sv_imag_cpu, sv_imag, sv_size, cudaMemcpyDeviceToHost));
-            
-            double result = 0.0;
+            // copy these vectors to device
+            size_t *in_bits_gpu;
 
-            for (unsigned long long i = 0; i < dim; ++i)
-            {
-                result += (hasEvenParity(i, in_bits) ? 1.0 : -1.0) *
-                          (sv_real_cpu[i] * sv_real_cpu[i] + sv_imag_cpu[i] * sv_imag_cpu[i]);
-            }
+            SAFE_ALOC_GPU(in_bits_gpu, in_bits.size() * sizeof(size_t));
+            cudaSafeCall(cudaMemcpy(in_bits_gpu, in_bits.data(), in_bits.size() * sizeof(size_t), cudaMemcpyHostToDevice));
+
+            // result
+            double result = 0.0;
+            double *result_gpu;
+            SAFE_ALOC_GPU(result_gpu, sizeof(ValType));
+            cudaSafeCall(cudaMemcpy(result_gpu, &result, sizeof(double), cudaMemcpyHostToDevice));
+
+            // call kernel
+            int threadsPerBlock = THREADS_CTA_CUDA; // Choose based on your GPU's capability
+            int blocksPerGrid = (dim + threadsPerBlock - 1) / threadsPerBlock;
+            int sharedMemorySize = threadsPerBlock * sizeof(double); // Size of shared memory
+
+            // Launch the kernel
+            gpu_exp_z_bits<<<blocksPerGrid, threadsPerBlock, sharedMemorySize>>>(in_bits_gpu, in_bits.size(), sv_real, sv_imag, result_gpu, dim, 0);
+
+            // copy result back
+            cudaSafeCall(cudaMemcpy(&result, result_gpu, sizeof(ValType), cudaMemcpyDeviceToHost));
+
+            SAFE_FREE_GPU(in_bits_gpu);
+            SAFE_FREE_GPU(result_gpu);
 
             return result;
         }
 
         ValType get_exp_z() override
         {
-            cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, sv_size, cudaMemcpyDeviceToHost));
-            cudaSafeCall(cudaMemcpy(sv_imag_cpu, sv_imag, sv_size, cudaMemcpyDeviceToHost));
-            
+            // result
             double result = 0.0;
+            double *result_gpu;
+            SAFE_ALOC_GPU(result_gpu, sizeof(double));
+            cudaSafeCall(cudaMemcpy(result_gpu, &result, sizeof(double), cudaMemcpyHostToDevice));
 
-            for (unsigned long long i = 0; i < dim; ++i)
-            {
-                bool parity = __builtin_parity(i);
-                result += (parity ? -1.0 : 1.0) * (sv_real_cpu[i] * sv_real_cpu[i] + sv_imag_cpu[i] * sv_imag_cpu[i]);
-            }
+            // call kernel
+            int threadsPerBlock = THREADS_CTA_CUDA; // Choose based on your GPU's capability
+            int blocksPerGrid = (dim + threadsPerBlock - 1) / threadsPerBlock;
+            int sharedMemorySize = threadsPerBlock * sizeof(double); // Size of shared memory
+
+            // Launch the kernel
+            gpu_exp_z<<<blocksPerGrid, threadsPerBlock, sharedMemorySize>>>(sv_real, sv_imag, result_gpu, dim, 0);
+
+            // copy result back
+            cudaSafeCall(cudaMemcpy(&result, result_gpu, sizeof(double), cudaMemcpyDeviceToHost));
+
+            SAFE_FREE_GPU(result_gpu);
 
             return result;
         }
