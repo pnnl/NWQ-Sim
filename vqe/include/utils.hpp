@@ -37,7 +37,7 @@ namespace NWQSim{
     // Defaults (disables all of the settings, except for the max_eval ceiling)
     OptimizerSettings(): rel_tol(-1), 
                          abs_tol(-1),
-                         stop_val(-HUGE),
+                         stop_val(-MAXFLOAT),
                          max_evals(200),
                          max_time(-1) {}
   };
