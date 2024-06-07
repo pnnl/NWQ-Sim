@@ -1,14 +1,16 @@
 file(GLOB SOURCEFILES "src/*.cpp")
 
-add_executable(nwq_vqe "main.cpp" ${SOURCEFILES})
+add_executable(nwq_vqe "main.cpp")
 add_library(vqe SHARED ${SOURCEFILES})
 
 target_compile_features(nwq_vqe PRIVATE cxx_std_17)
 target_compile_features(vqe PRIVATE cxx_std_17)
 
-include_directories(BEFORE PRIVATE "include" "../include" "nlopt/include" "nlopt/build" "/usr/include/c++/12")
-link_directories(BEFORE  PRIVATE "nlopt/build")
-link_libraries(nlopt m)
+include_directories(BEFORE PRIVATE "include" "../include" "nlopt/src/api" "nlopt/build")
+target_link_directories(nwq_vqe BEFORE  PUBLIC "nlopt/build")
+target_link_directories(vqe BEFORE  PUBLIC "nlopt/build")
+target_link_libraries(nwq_vqe PUBLIC vqe)
+target_link_libraries(vqe PUBLIC nlopt m)
 # Link against OpenMP if available
 if(OpenMP_FOUND)
     target_link_libraries(nwq_vqe PUBLIC OpenMP::OpenMP_CXX)

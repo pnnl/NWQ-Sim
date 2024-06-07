@@ -1,0 +1,3 @@
+[submodule "vqe/nlopt"]
+	path = vqe/nlopt
+	url = https://github.com/stevengj/nlopt.git
