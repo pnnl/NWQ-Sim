@@ -1,9 +1,27 @@
-#include "argparse.hpp"
 #include "svsim_vqe/sv_cpu_vqe.hpp"
 #include "private/nlohmann/json.hpp"
 #include "utils.hpp"
+#include <unordered_map>
+#define UNDERLINE "\033[4m"
 
+#define CLOSEUNDERLINE "\033[0m"
 
+int show_help() {
+  std::cout << "NWQ-VQE Options" << std::endl;
+  std::cout << UNDERLINE << "REQUIRED" << CLOSEUNDERLINE << std::endl;
+  std::cout << "--hamiltonian, -f     Path to the input Hamiltonian file (formatted as a sum of Fermionic operators, see examples)" << std::endl;
+  std::cout << "--nparticles, -n      Number of electrons in molecule" << std::endl;
+  std::cout << UNDERLINE << "OPTIONAL" << CLOSEUNDERLINE << std::endl;
+  std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
+  std::cout << "--config              Path to config file for NLOpt optimizer parameters" << std::endl;
+  std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA" << std::endl;
+  std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
+  std::cout << "--abstol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
+  std::cout << "--maxeval             Maximum number of function evaluations for optimizer. Defaults to 200" << std::endl;
+  std::cout << "--maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)" << std::endl;
+  std::cout << "--stopval             Cutoff function value for optimizer. Defaults to -MAXFLOAT (off)" << std::endl;
+  return 1;
+}
 
 using json = nlohmann::json;
 int parse_args(int argc, char** argv,
@@ -12,37 +30,59 @@ int parse_args(int argc, char** argv,
                 nlopt::algorithm& algo,
                 NWQSim::VQE::OptimizerSettings& settings,
                 unsigned& seed) {
-  argparse::ArgumentParser parser("NWQ-VQE");
-  parser.add_argument("--hamiltonian", "-f").help("Path to Fermionic Hamiltonian file");
-  parser.add_argument("--nparticles", "-n").help("Number of particles to model").scan<'i', int>();
-  parser.add_argument("--config", "-c").help("Optimizer configuration file").default_value(std::string(""));
-  parser.add_argument("--maxeval").help("Maximum number of function evaluations").scan<'i', long long>().default_value(settings.max_evals);
-  parser.add_argument("--seed").help("Random seed").scan<'u', unsigned>().default_value((unsigned)time(NULL));
-  parser.add_argument("--reltol").help("Relative function value tolerance cutoff").scan<'g', double>().default_value(settings.rel_tol);
-  parser.add_argument("--abstol").help("Absolute function value tolerance cutoff").scan<'g', double>().default_value(settings.abs_tol);
-  parser.add_argument("--maxtime").help("Optimizer timeout (seconds)").scan<'g', double>().default_value(settings.max_time);
-  parser.add_argument("--stopval").help("Optimizer value cutoff").scan<'g', double>().default_value(settings.stop_val);
-  parser.add_argument("--optimizer").help(
-    "Optimization algorithm name (NLOpt key, see [NLOpt Algorithms](https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/))"
-    ).default_value(std::string("LN_COBYLA"));
-  try {
-    parser.parse_args(argc, argv);
+  std::string config_file = "";
+  std::string algorithm_name = "LN_COBYLA";
+  hamilfile = "";
+  n_particles = -1;
+  settings.max_evals = 200;
+  seed = 0;
+  for (size_t i = 1; i < argc; i++) {
+    std::string argname = argv[i];
+    if (argname == "-h" || argname == "--help") {
+      return show_help();
+    } else
+    if (argname == "-f" || argname == "--hamiltonian") {
+      hamilfile = argv[++i];
+      continue;
+    } else 
+    if (argname == "-n" || argname == "--nparticles") {
+      n_particles = std::atoll(argv[++i]);
+    } else 
+    if (argname == "--seed") {
+      seed = (unsigned)std::atoi(argv[++i]);
+    } else 
+    if (argname == "--config") {
+      config_file = argv[++i];
+    } else 
+    if (argname == "--optimizer") {
+      algorithm_name = argv[++i];
+    } else 
+    if (argname == "--reltol") {
+      settings.rel_tol = std::atof(argv[++i]);
+    } else 
+    if (argname == "--abstol") {
+      settings.abs_tol = std::atof(argv[++i]);
+    } else 
+    if (argname == "--maxeval") {
+      settings.max_evals = std::atoll(argv[++i]);
+    } else if (argname == "--stopval") {
+      settings.stop_val = std::atof(argv[++i]);
+    } else if (argname == "--maxtime") {
+      settings.max_time = std::atof(argv[++i]);
+    } else {
+      fprintf(stderr, "\033[91mERROR:\033[0m Unrecognized option %s, type -h or --help for a list of configurable parameters\n", argv[i]);
+      return show_help();
+    }
   }
-  catch (const std::exception& err) {
-    std::cerr << err.what() << std::endl;
-    std::cerr << parser;
-    return 1;
+  if (hamilfile == "") {
+      fprintf(stderr, "\033[91mERROR:\033[0m Must pass a Hamiltonian file (--hamiltonian, -f)\n");
+
+      return show_help();
   }
-  hamilfile = parser.get<std::string>("--hamiltonian");
-  n_particles = parser.get<int>("--nparticles");
-  seed = parser.get<unsigned>("--seed");
-  std::string config_file = parser.get<std::string>("--config");
-  std::string algorithm_name = parser.get<std::string>("--optimizer");
-  settings.rel_tol = parser.get<double>("--reltol");
-  settings.abs_tol = parser.get<double>("--abstol");
-  settings.max_evals = parser.get<long long>("--maxeval");
-  settings.stop_val = parser.get<double>("--stopval");
-  settings.max_time = parser.get<double>("--maxtime");
+  if (n_particles == -1) {
+      fprintf(stderr, "\033[91mERROR:\033[0m Must pass a particle count (--nparticles, -n)\n");
+      return show_help();
+  }
   algo = (nlopt::algorithm)nlopt_algorithm_from_string(algorithm_name.c_str());
   std::cout << nlopt::algorithm_name(algo) << std::endl;
   if (config_file != "") {
@@ -52,7 +92,7 @@ int parse_args(int argc, char** argv,
       settings.parameter_map[it.key()] = it.value().get<NWQSim::ValType>();
     }
   }
-
+  return 0;
 }
 
 
@@ -71,7 +111,9 @@ int main(int argc, char** argv) {
   NWQSim::VQE::OptimizerSettings settings;
   nlopt::algorithm algo;
   unsigned seed;
-  parse_args(argc, argv, hamil_path, n_part, algo, settings, seed);
+  if (parse_args(argc, argv, hamil_path, n_part, algo, settings, seed)) {
+    return 1;
+  }
   NWQSim::VQE::Hamiltonian hamil(hamil_path, n_part);
 
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
