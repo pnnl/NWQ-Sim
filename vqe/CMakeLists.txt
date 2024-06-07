@@ -7,8 +7,8 @@ target_compile_features(nwq_vqe PRIVATE cxx_std_17)
 target_compile_features(vqe PRIVATE cxx_std_17)
 
 include_directories(BEFORE PRIVATE "include" "../include" "nlopt/src/api" "nlopt/build")
-# target_link_directories(vqe BEFORE  PUBLIC "nlopt/build")
-target_link_directories(nwq_vqe BEFORE  PUBLIC "nlopt/build")
+target_link_directories(vqe BEFORE  PUBLIC "nlopt/build")
+# target_link_directories(nwq_vqe BEFORE  PUBLIC "nlopt/build")
 target_link_libraries(nwq_vqe PUBLIC vqe)
 target_link_libraries(vqe PUBLIC nlopt m)
 
