@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include <iostream>
 #include <complex>
+#include <algorithm>
+#include <memory>
 #include <numeric>
 namespace NWQSim {
   /* Basic data type for indices */
