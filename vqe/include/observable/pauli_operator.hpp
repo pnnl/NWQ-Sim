@@ -243,7 +243,7 @@ namespace NWQSim {
     struct PauliHash {
       std::size_t operator()(const PauliOperator& op) const {
         std::size_t prodval = std::reduce(op.getOps()->begin(), op.getOps()->end(), 1lu, 
-            [] (size_t left, const PauliOp& opval) {return left * (int(opval) + 1lu); });
+            [] (size_t left, PauliOp opval) {return left * (int(opval) + 1lu); });
         return std::hash<int>{} (prodval);
       }
     };
