@@ -8,7 +8,6 @@ else()
     message("Environment variables cc and/or CC are not set, using default settings")
 endif()
 
-project(nwq_vqe)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,8 +18,8 @@ if (NOT DEFINED CMAKE_BUILD_TYPE)
 endif()
 
 file(GLOB SOURCEFILES "src/*.cpp")
-include_directories(BEFORE PRIVATE "include" "../include" ${NLOPT_DIR})
-link_directories(BEFORE  PRIVATE ${NLOPT_DIR})
+include_directories(BEFORE PRIVATE "include" "../include" "nlopt/include" "nlopt/build" "/usr/include/c++/12")
+link_directories(BEFORE  PRIVATE "nlopt/build")
 link_libraries(nlopt m)
 add_executable(nwq_vqe "main.cpp" ${SOURCEFILES})
 add_library(vqe SHARED ${SOURCEFILES})

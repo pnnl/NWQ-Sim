@@ -125,9 +125,9 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 
 # Subdirectories
 add_subdirectory(qasm)
-if(NLOpt_FOUND)
-    add_subdirectory(vqe)
-endif()
+#if(NLOpt_FOUND)
+add_subdirectory(vqe)
+#endif()
 
 
 if(XACC_FOUND)
