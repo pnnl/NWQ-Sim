@@ -230,7 +230,11 @@ source ~/NWQ-Sim/environment/setup_frontier.sh
 ```
 Launch multi-CPU execution for regular or interactive jobs:
 ```bash
-srun -N<nodes> -n<CPUS> ./qasm/nwq_qasm <NWQ-Sim Command> -backend MPI
+srun -N <nodes> -n <CPUS> ./qasm/nwq_qasm <NWQ-Sim Command> -backend MPI
+```
+For example:
+```bash
+srun -N 4 -n 32 ./qasm/nwq_qasm -backend MPI -q ../data/openqasm/adder_n28.qasm
 ```
 
 ### Running on Summit HPC
