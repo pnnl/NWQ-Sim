@@ -1,19 +1,15 @@
 # NWQ-VQE
 VQE simulation based on the NWQ-Sim platform
 ## Dependencies
-- [NLOpt](https://github.com/stevengj/nlopt): NWQ-Sim expects the libraries and header files to be in `$HOME/.nlopt` to allow for non-`sudo` installations. This path can be specified when building NLOpt. The installation steps are (in some arbitrary directory):
+- [NLOpt](https://github.com/stevengj/nlopt): Prior to building NWQ-Sim, the `vqe/nlopt` directory needs to be compiled. NWQ-Sim expects the libraries and header files to be in `vqe/nlopt/build` and `vqe/nlopt/include` to allow for non-`sudo` installations. The installation steps are:
 
 ```shell
-  git clone https://github.com/stevengj/nlopt
-  cd nlopt
+  cd vqe/nlopt
   mkdir build;cd build
-  cmake .. -DCMAKE_INSTALL_LIBDIR=$HOME/.nlopt \
-           -DCMAKE_INSTALL_BINDIR=$HOME/.nlopt \
-           -DCMAKE_INSTALL_INCLUDEDIR=$HOME/.nlopt \
-           -DCMAKE_INSTALL_DATADIR=$HOME/.nlopt \
-           -DCMAKE_INSTALL_MANDIR=$HOME/.nlopt 
-  make install
+  cmake .. -DCMAKE_CXX_COMPILER=/usr/bin/g++ -DCMAKE_C_COMPILER=/usr/bin/gcc 
+  make
 ```
+The specific CXX/C compiler paths can be altered as needed, the main emphasis is to ensure that the optimization code has access to C++ STD libraries.
 
 ## Installation/Configuration Directions
 After installing NLOpt, build NWQ-Sim as normal (see the [User Manual](doc/user_manual.md)).
