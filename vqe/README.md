@@ -1,9 +1,10 @@
 # NWQ-VQE
 VQE simulation based on the NWQ-Sim platform
 ## Dependencies
-- [NLOpt](https://github.com/stevengj/nlopt): Prior to building NWQ-Sim, the `vqe/nlopt` directory needs to be compiled. NWQ-Sim expects the libraries and header files to be in `vqe/nlopt/build` and `vqe/nlopt/include` to allow for non-`sudo` installations. The installation steps are:
+- [NLOpt](https://github.com/stevengj/nlopt): To make simplify installation, NLOpt is a git submodule of NWQ-Sim. After cloning `NWQ-Sim`, we need to sync and build `vqe/nlopt` prior to building NWQ-Sim. The installation steps are:
 
 ```shell
+  git submodule init
   cd vqe/nlopt
   mkdir build;cd build
   cmake .. -DCMAKE_CXX_COMPILER=/usr/bin/g++ -DCMAKE_C_COMPILER=/usr/bin/gcc 
@@ -16,10 +17,6 @@ After installing NLOpt, build NWQ-Sim as normal (see the [User Manual](doc/user_
 
  Note that debug messages showing the Fermionic operator indices and Hamiltonian Pauli strings will be printed *unless* the project is built in `Release` mode (add `-DCMAKE_BUILD_TYPE=Release`). 
 
-If `cmake` succeeded in finding the NLOpt directory, the build process will display:
-```shell
--- NLOpt found: TRUE
-```
 Running `make` from the `build` directory will compile the binary `build/vqe/nwq_vqe`, a shared library `build/vqe/libvqe.dylib`, and the example binaries under `/build/vqe/examples`. 
 
 ## Running the Command Line Solver
