@@ -2,11 +2,14 @@
 #define HAMIL
 #include <vector>
 #include <string>
+#include <algorithm>
+#include <numeric>
 #include "observable/fermionic_operator.hpp"
 #include "observable/pauli_operator.hpp"
 #include "transform/transform.hpp"
 #include "utils.hpp" 
 #include "state.hpp" 
+
 
 
 namespace NWQSim {
