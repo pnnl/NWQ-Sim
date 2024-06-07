@@ -8,6 +8,8 @@
 #include "gradient/sa_gradient.hpp"
 #include "observable/hamiltonian.hpp"
 #include "nlopt.hpp"
+#include <memory>
+#include <cmath>
 
 namespace NWQSim
 {
