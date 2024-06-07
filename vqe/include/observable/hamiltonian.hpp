@@ -4,6 +4,7 @@
 #include <string>
 #include <algorithm>
 #include <numeric>
+#include <memory>
 #include "observable/fermionic_operator.hpp"
 #include "observable/pauli_operator.hpp"
 #include "transform/transform.hpp"
