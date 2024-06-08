@@ -228,3 +228,37 @@ __global__ void gpu_exp_z_bits(const size_t *in_bits, size_t in_bits_size, const
         atomicAdd(result, sdata[0]);
     }
 }
+
+
+// Compute the expectation of a Pauli observable with X, Y, and Z operators (odd number of Y operators)
+__global__ void gpu_exp_xz_bits_phase(const size_t* in_xbits, const size_t* in_zbits, size_t in_bits_size, double sign, const double* sv_real, const double sv_imag, const unsigned long long dim, const int offset) {
+    extern __shared__ double sdata[];
+    int tid = threadIdx.x;
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    double temp_sum = 0.0;
+}
+// Compute the expectation of a Pauli observable with X, Y, and Z operators (even number of Y operators)
+__global__ void gpu_exp_xz_bits_nophase(const size_t* in_xbits, 
+                                        const size_t* in_zbits, 
+                                        size_t in_bits_size, 
+                                        double sign, 
+                                        const double* sv_real, 
+                                        const double sv_imag, 
+                                        const unsigned long long dim, 
+                                        size_t mask_inverse,
+                                        size_t mask_leading,
+                                        size_t xmask,
+                                        const int offset) {
+    extern __shared__ double sdata[];
+    int tid = threadIdx.x;
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    double temp_sum = 0.0;
+    if (index < dim) {
+        size_t index_0 = ((index << 1) & mask_inverse) | (index & mask_leading);
+        size_t index_1 = xmask ^ index_0;
+        double v0 = sv_real[index_1] * sv_real[index_0] + sv_imag[index_1] * sv_imag[index_0]
+        bool parityval
+    }
+
+
+}

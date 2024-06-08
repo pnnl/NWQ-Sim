@@ -1,7 +1,7 @@
 file(GLOB SOURCEFILES "src/*.cpp")
 
 add_executable(nwq_vqe "main.cpp")
-add_library(vqe STATIC ${SOURCEFILES})
+add_library(vqe SHARED ${SOURCEFILES})
 
 target_compile_features(nwq_vqe PRIVATE cxx_std_17)
 target_compile_features(vqe PRIVATE cxx_std_17)

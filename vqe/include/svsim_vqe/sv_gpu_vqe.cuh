@@ -1,6 +1,6 @@
-#ifndef VQE_CPU_STATE
-#define VQE_CPU_STATE
-#include "svsim/sv_cpu.hpp"
+#ifndef VQE_CUDA_STATE
+#define VQE_CUDA_STATE
+#include "svsim/sv_cuda.cuh"
 #include "vqe_state.hpp"
 #include "observable/pauli_operator.hpp"
 #include "utils.hpp"
@@ -15,15 +15,15 @@
 namespace NWQSim
 {
   namespace VQE {
-    class SV_CPU_VQE: public VQEState, public SV_CPU {
+    class SV_CUDA_VQE: public VQEState, public SV_CUDA {
       public:
-        SV_CPU_VQE(std::shared_ptr<Ansatz> a, 
+        SV_CUDA_VQE(std::shared_ptr<Ansatz> a, 
                    const Hamiltonian& h, 
                    nlopt::algorithm optimizer_algorithm,
                    Callback _callback,
                    IdxType seed = 0,
                    OptimizerSettings opt_settings = OptimizerSettings()): 
-                                      SV_CPU(a->num_qubits()),
+                                      SV_CUDA(a->num_qubits()),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {};
       virtual void call_simulator(std::shared_ptr<Ansatz> ansatz) override {        
         reset_state();
