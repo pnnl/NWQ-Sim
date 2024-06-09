@@ -101,7 +101,7 @@ wget https://developer.download.nvidia.com/compute/redist/nvshmem/2.9.0/source/n
 
 tar -xf nvshmem_src_2.9.0-2.tar.xz
 ```
-* Replace the mem.cpp file in nvshmem_src
+* For NVSHMEM version older than 2.10, replace the mem.cpp file in nvshmem_src
 
 ```bash
 cp ~/NWQ-Sim/nvshmem_util/mem.cpp ~/nvshmem_src_2.9.0-2/src/mem/mem.cpp
