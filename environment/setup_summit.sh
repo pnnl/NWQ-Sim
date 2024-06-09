@@ -1,9 +1,8 @@
 #Environment settings for ORNL Summit HPC
 
 module load cmake
-module load gcc/9.3.0
-module load cuda/11.5.2
-module load gdrcopy/2.3
+module load gcc/11.4.0
+module load cuda/12.2.0
 module load spectrum-mpi
 module load openblas
 
