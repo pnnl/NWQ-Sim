@@ -3,7 +3,7 @@
 set -e
 
 module load cmake
-module load gcc/11.4.0
+module load gcc/9.3.0-compiler_only
 module load cuda/12.2.0
 module load spectrum-mpi
 
