@@ -3,15 +3,13 @@
 set -e
 
 module load cmake
-module load gcc/9.3.0
-module load cuda/11.5.2
-module load gdrcopy/2.3
+module load gcc/12.2.0
+module load cuda/12.2.0
 module load spectrum-mpi
 
 export NVSHMEM_HOME=${HOME}/nvshmem
 export NVSHMEM_PREFIX=${NVSHMEM_HOME}
-export NVSHMEM_USE_GDRCOPY=1
-export GDRCOPY_HOME=/usr
+export NVSHMEM_USE_GDRCOPY=0
 
 export NVSHMEM_MPI_SUPPORT=1
 export MPI_HOME=${MPI_ROOT}
