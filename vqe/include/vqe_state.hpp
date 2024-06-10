@@ -114,6 +114,7 @@ namespace NWQSim
         IdxType index = 0;
         for (auto& pauli_list: pauli_operators) {
           for (const PauliOperator& pauli: pauli_list) {
+            std::cout<< pauli.pauliToString() << " " << expvals[index] << std::endl;
             emap[pauli] = expvals[index++];
           }
         }

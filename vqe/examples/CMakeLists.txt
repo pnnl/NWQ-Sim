@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 
-file(GLOB SOURCE "../src/*.cpp")
+file(GLOB SOURCE "../src/*.c*")
 
 include_directories(BEFORE PRIVATE "include" "../include" ${NLOPT_DIR})
 link_directories(BEFORE  PRIVATE ${NLOPT_DIR})
 link_libraries(vqe)
 
-add_executable(basic_example "basic_example.cpp" ${SOURCE})
+add_executable(basic_example "basic_example.cu" ${SOURCE})

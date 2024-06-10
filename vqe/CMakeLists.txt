@@ -1,6 +1,6 @@
 file(GLOB SOURCEFILES "src/*.cpp")
 
-add_executable(nwq_vqe "main.cpp")
+add_executable(nwq_vqe "main.cu")
 add_library(vqe SHARED ${SOURCEFILES})
 
 target_compile_features(nwq_vqe PRIVATE cxx_std_17)
@@ -37,6 +37,7 @@ endif()
 # If CUDA Toolkit is available, set the CUDA standard and definitions
 if(CUDAToolkit_FOUND)
     enable_language(CUDA)
+    message("CUDA FOUND")
     set_source_files_properties(${SOURCEFILES} PROPERTIES LANGUAGE CUDA)
 
     target_compile_features(nwq_vqe PRIVATE cuda_std_17)

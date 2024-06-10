@@ -1,6 +1,6 @@
-#ifndef VQE_CPU_STATE
-#define VQE_CPU_STATE
-#include "svsim/sv_cuda.hpp"
+#ifndef VQE_CUDA_STATE
+#define VQE_CUDA_STATE
+#include "svsim/sv_cuda.cuh"
 #include "vqe_state.hpp"
 #include "observable/pauli_operator.hpp"
 #include "utils.hpp"
@@ -9,6 +9,7 @@
 #include "gradient/sa_gradient.hpp"
 #include "observable/hamiltonian.hpp"
 #include "nlopt.hpp"
+#include "private/cuda_util.cuh"
 #include <memory>
 #include <cmath>
 
@@ -17,7 +18,7 @@ namespace NWQSim
   namespace VQE {
     class SV_CUDA_VQE: public VQEState, public SV_CUDA {
       public:
-        SV_CPU_VQE(std::shared_ptr<Ansatz> a, 
+        SV_CUDA_VQE(std::shared_ptr<Ansatz> a, 
                    const Hamiltonian& h, 
                    nlopt::algorithm optimizer_algorithm,
                    Callback _callback,
@@ -46,10 +47,40 @@ namespace NWQSim
         SAFE_ALOC_GPU(obs_device, sizeof(ObservableList));
         ansatz->EXPECT(obs_device);
       };
+
+      ~SV_CUDA_VQE()
+        {
+            // Release for CPU side
+            SAFE_FREE_HOST_CUDA(sv_real_cpu);
+            SAFE_FREE_HOST_CUDA(sv_imag_cpu);
+            SAFE_FREE_HOST_CUDA(randoms);
+            SAFE_FREE_HOST_CUDA(results);
+
+            // Release for GPU side
+            SAFE_FREE_GPU(sv_real);
+            SAFE_FREE_GPU(sv_imag);
+            SAFE_FREE_GPU(m_real);
+            SAFE_FREE_GPU(m_imag);
+
+            SAFE_FREE_GPU(gates_gpu);
+
+            SAFE_FREE_GPU(randoms_gpu);
+            SAFE_FREE_GPU(results_gpu);
+
+            SAFE_FREE_GPU(obs.xmasks);
+            SAFE_FREE_GPU(obs.zmasks);
+            SAFE_FREE_GPU(obs.x_index_sizes);
+            SAFE_FREE_GPU(obs.x_indices);
+            SAFE_FREE_GPU(obs.exp_output);
+            SAFE_FREE_GPU(ansatz->gates->back().data);
+        }
       virtual void call_simulator(std::shared_ptr<Ansatz> ansatz) override {        
         reset_state();
         sim(ansatz);
-
+        cudaDeviceSynchronize();
+        fflush(stdout);
+        std::cout << expvals.size() << std::endl;
+        getchar();
         cudaSafeCall(cudaMemcpy(expvals.data(), obs.exp_output, expvals.size() * sizeof(ValType),
                                     cudaMemcpyDeviceToHost));
       };
