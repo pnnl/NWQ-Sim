@@ -24,7 +24,15 @@ namespace NWQSim
                    IdxType seed = 0,
                    OptimizerSettings opt_settings = OptimizerSettings()): 
                                       SV_CPU(a->num_qubits()),
-                                      VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {};
+                                      VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
+        obs.xmasks = xmasks.data();
+        obs.zmasks = zmasks.data();
+        obs.numterms = xmasks.size();
+        obs.exp_output = expvals.data();
+        obs.x_indices = x_indices.data();
+        obs.x_index_sizes = x_index_sizes.data();
+        ansatz->EXPECT(&obs);
+      };
       virtual void call_simulator(std::shared_ptr<Ansatz> ansatz) override {        
         reset_state();
         sim(ansatz);

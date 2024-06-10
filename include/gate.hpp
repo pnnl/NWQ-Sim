@@ -254,7 +254,7 @@ namespace NWQSim
         /************
          * Expectation
          ***********/
-        EXP
+        EXPECT
     };
 
     // Name of the gate for tracing purpose

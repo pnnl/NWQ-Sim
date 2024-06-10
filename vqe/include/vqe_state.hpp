@@ -63,7 +63,7 @@ namespace NWQSim
           auto& pauli_operators = hamil.getPauliOperators();
           for (auto& pauli_list: pauli_operators) {
             for (const PauliOperator& pauli: pauli_list) {
-              std::vector<IdxType>& xinds = pauli.get_xindices();
+              const std::vector<IdxType>& xinds = pauli.get_xindices();
               xmasks.push_back(pauli.get_xmask());
               zmasks.push_back(pauli.get_zmask());
               x_index_sizes.push_back(xinds.size());
@@ -72,8 +72,7 @@ namespace NWQSim
               }
             }
           }
-          ObservableList o;
-          o.
+          expvals.resize(hamil.num_ops());
           // Check if the chosen algorithm requires derivatives
           compute_gradient = std::string(optimizer.get_algorithm_name()).find("no-derivative") == std::string::npos;
           optimizer.set_min_objective(nl_opt_function, (void*)this);
@@ -102,7 +101,8 @@ namespace NWQSim
           if (parameters.size() == 0) {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }
-          nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
+          energy(parameters);
+          // nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
         }
       virtual void call_simulator(std::shared_ptr<Ansatz> ansatz) {};
       ValType energy(const std::vector<double>& x) {
@@ -111,10 +111,10 @@ namespace NWQSim
 
         ExpectationMap emap;
         auto& pauli_operators = hamil.getPauliOperators();
+        IdxType index = 0;
         for (auto& pauli_list: pauli_operators) {
           for (const PauliOperator& pauli: pauli_list) {
-            ValType expectation = getPauliExpectation(pauli);
-            emap[pauli] = expectation;
+            emap[pauli] = expvals[index++];
           }
         }
         ValType energy = hamil.expectation(emap);
@@ -130,10 +130,11 @@ namespace NWQSim
         OptimizerSettings optimizer_settings;
         IdxType iteration;
         ObservableList obs;
-        std::vector<IdxType> xval_sizes;
+        std::vector<IdxType> x_index_sizes;
         std::vector<IdxType> xmasks;
         std::vector<IdxType> zmasks;
         std::vector<IdxType> x_indices;
+        std::vector<ValType> expvals;
 
       
 

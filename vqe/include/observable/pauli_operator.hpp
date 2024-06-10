@@ -143,6 +143,7 @@ namespace NWQSim {
           zmask = other.zmask;
           phase = other.phase;
           sign = other.sign;
+          x_indices = other.x_indices;
 
           // assert(coeff. > 0.0);
           return *this;
@@ -157,6 +158,7 @@ namespace NWQSim {
           zmask = other.zmask;
           phase = other.phase;
           sign = other.sign;
+          x_indices = other.x_indices;
           // assert(coeff.real() > 0.0 || coeff.imag() > 0.0);
         }
         PauliOperator conj() const {
@@ -201,6 +203,12 @@ namespace NWQSim {
         }
         const std::vector<IdxType>& get_xindices() const {
           return x_indices;
+        }
+        const IdxType get_xmask() const {
+          return xmask;
+        }
+        const IdxType get_zmask() const {
+          return zmask;
         }
         // Dump the Pauli operator to string
         std::string pauliToString() const {

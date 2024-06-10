@@ -598,8 +598,76 @@ namespace NWQSim
             BARR_CUDA;
         }
         
-        __device__ __inline__ void EXP1_2q_GATE(const ValType* gm_real, const ValType* gm_imag, ValType* thread_out, IdxType qubit0, IdxType qubit1, IdxType mask)
-        {
+        
+        __device__ inline void 
+        Expect_C4(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask) {
+            grid_group grid = this_grid();
+            const int tid = blockDim.x * blockIdx.x + threadIdx.x;
+            const IdxType per_pe_work = ((dim) >> 4);
+            assert(qubit0 != qubit1); // Non-cloning
+            assert(qubit0 != qubit2); // Non-cloning
+            assert(qubit0 != qubit3); // Non-cloning
+            assert(qubit1 != qubit2); // Non-cloning
+            assert(qubit1 != qubit3); // Non-cloning
+            assert(qubit2 != qubit3); // Non-cloning
+            // need to sort qubits: min->max: p, q, r, s
+            const IdxType v0 = std::min(qubit0, qubit1);
+            const IdxType v1 = std::min(qubit2, qubit3);
+            const IdxType v2 = std::max(qubit0, qubit1);
+            const IdxType v3 = std::max(qubit2, qubit3);
+            const IdxType p = std::min(v0, v1);
+            const IdxType q = std::min(std::min(v2, v3), std::max(v0, v1));
+            const IdxType r = std::max(std::min(v2, v3), std::max(v0, v1));
+            const IdxType s = std::max(v2, v3);
+            ValType exp_val = 0.0;
+            for (IdxType i = tid; i < per_pe_work; i += blockDim.x * gridDim.x)
+            {
+                const IdxType term0 = MOD2E(i, p);
+                const IdxType term1 = MOD2E(DIV2E(i, p), q - p - 1) * EXP2E(p + 1);
+                const IdxType term2 = MOD2E(DIV2E(DIV2E(i, p), q - p - 1), r - q - 1) * EXP2E(q + 1);
+                const IdxType term3 = MOD2E(DIV2E(DIV2E(DIV2E(i, p), q - p - 1), r - q - 1), s - r - 1) * EXP2E(r + 1);
+                const IdxType term4 = DIV2E(DIV2E(DIV2E(DIV2E(i, p), q - p - 1), r - q - 1), s - r - 1) * EXP2E(s + 1);
+                const IdxType term = term4 + term3 + term2 + term1 + term0;
+                const ValType el_real[16] = {
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(0)), LOCAL_G_CUDA(sv_real, term + SV16IDX(1)),
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(2)), LOCAL_G_CUDA(sv_real, term + SV16IDX(3)),
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(4)), LOCAL_G_CUDA(sv_real, term + SV16IDX(5)),
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(6)), LOCAL_G_CUDA(sv_real, term + SV16IDX(7)),
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(8)), LOCAL_G_CUDA(sv_real, term + SV16IDX(9)),
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(10)), LOCAL_G_CUDA(sv_real, term + SV16IDX(11)),
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(12)), LOCAL_G_CUDA(sv_real, term + SV16IDX(13)),
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(14)), LOCAL_G_CUDA(sv_real, term + SV16IDX(15))};
+                const ValType el_imag[16] = {
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(0)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(1)),
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(2)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(3)),
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(4)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(5)),
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(6)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(7)),
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(8)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(9)),
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(10)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(11)),
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(12)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(13)),
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(14)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(15))};
+                // #pragma unroll
+                for (unsigned j = 0; j < 16; j++)
+                {
+                    ValType res_real = 0;
+                    ValType res_imag = 0;
+                    // #pragma unroll
+                    for (unsigned k = 0; k < 16; k++)
+                    {
+                        res_real += (el_real[k] * gm_real[j * 16 + k]) - (el_imag[k] * gm_imag[j * 16 + k]);
+                        res_imag += (el_real[k] * gm_imag[j * 16 + k]) + (el_imag[k] * gm_real[j * 16 + k]);
+                    }
+
+                    ValType val = res_real * res_real + res_imag * res_imag;
+                
+                    exp_val += hasEvenParity(term + SV16IDX(j) & mask, n_qubits) ? val : -val;
+            
+                }
+            }
+            m_real[tid] = exp_val;
+        }
+        __device__ inline void 
+        Expect_C2(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType mask) {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType per_pe_work = ((dim) >> 2);
@@ -612,7 +680,8 @@ namespace NWQSim
             const IdxType inner_factor = q1dim;
             const IdxType qubit0_dim = ((IdxType)1 << qubit0);
             const IdxType qubit1_dim = ((IdxType)1 << qubit1);
-            ValType expval = 0;
+            double exp_val = 0.0;
+
             for (IdxType i = tid; i < per_pe_work; i += blockDim.x * gridDim.x)
             {
                 IdxType outer = ((i / inner_factor) / (mider_factor)) * (q0dim + q0dim);
@@ -636,130 +705,36 @@ namespace NWQSim
                 ValType sv_real_pos1 = (gm_real[4] * el0_real) - (gm_imag[4] * el0_imag) + (gm_real[5] * el1_real) - (gm_imag[5] * el1_imag) + (gm_real[6] * el2_real) - (gm_imag[6] * el2_imag) + (gm_real[7] * el3_real) - (gm_imag[7] * el3_imag);
                 ValType sv_real_pos2 = (gm_real[8] * el0_real) - (gm_imag[8] * el0_imag) + (gm_real[9] * el1_real) - (gm_imag[9] * el1_imag) + (gm_real[10] * el2_real) - (gm_imag[10] * el2_imag) + (gm_real[11] * el3_real) - (gm_imag[11] * el3_imag);
                 ValType sv_real_pos3 = (gm_real[12] * el0_real) - (gm_imag[12] * el0_imag) + (gm_real[13] * el1_real) - (gm_imag[13] * el1_imag) + (gm_real[14] * el2_real) - (gm_imag[14] * el2_imag) + (gm_real[15] * el3_real) - (gm_imag[15] * el3_imag);
-
                 // Imag part
                 ValType sv_imag_pos0 = (gm_real[0] * el0_imag) + (gm_imag[0] * el0_real) + (gm_real[1] * el1_imag) + (gm_imag[1] * el1_real) + (gm_real[2] * el2_imag) + (gm_imag[2] * el2_real) + (gm_real[3] * el3_imag) + (gm_imag[3] * el3_real);
                 ValType sv_imag_pos1 = (gm_real[4] * el0_imag) + (gm_imag[4] * el0_real) + (gm_real[5] * el1_imag) + (gm_imag[5] * el1_real) + (gm_real[6] * el2_imag) + (gm_imag[6] * el2_real) + (gm_real[7] * el3_imag) + (gm_imag[7] * el3_real);
                 ValType sv_imag_pos2 = (gm_real[8] * el0_imag) + (gm_imag[8] * el0_real) + (gm_real[9] * el1_imag) + (gm_imag[9] * el1_real) + (gm_real[10] * el2_imag) + (gm_imag[10] * el2_real) + (gm_real[11] * el3_imag) + (gm_imag[11] * el3_real);
                 ValType sv_imag_pos3 = (gm_real[12] * el0_imag) + (gm_imag[12] * el0_real) + (gm_real[13] * el1_imag) + (gm_imag[13] * el1_real) + (gm_real[14] * el2_imag) + (gm_imag[14] * el2_real) + (gm_real[15] * el3_imag) + (gm_imag[15] * el3_real);
 
-                ValType v0, v1, v2, v3;
-                v0 = sv_real_pos0 * sv_real_pos0 + sv_imag_pos0 * sv_imag_pos0;
-                v1 = sv_real_pos1 * sv_real_pos1 + sv_imag_pos1 * sv_imag_pos1;
-                v2 = sv_real_pos2 * sv_real_pos2 + sv_imag_pos2 * sv_imag_pos2;
-                v3 = sv_real_pos3 * sv_real_pos3 + sv_imag_pos3 * sv_imag_pos3;
-
-                v0 = (parity(pos0 & mask) == 1) ? -v0 : v0;
-                v1 += (parity(pos0 & mask) == 1) ? -v1 : v1;
-                v2 += (parity(pos0 & mask) == 1) ? -v2 : v2;
-                v3 += (parity(pos0 & mask) == 1) ? -v3 : v3;
-                expval += v0 + v1 + v2 + v3;
+                ValType v0 = sv_real_pos0 * sv_real_pos0 + sv_imag_pos0 * sv_imag_pos0;
+                ValType v1 = sv_real_pos1 * sv_real_pos1 + sv_imag_pos1 * sv_imag_pos1;
+                ValType v2 = sv_real_pos2 * sv_real_pos2 + sv_imag_pos2 * sv_imag_pos2;
+                ValType v3 = sv_real_pos3 * sv_real_pos3 + sv_imag_pos3 * sv_imag_pos3;
+                exp_val += hasEvenParity(pos0 & mask, n_qubits) ? v0 : -v0;
+                exp_val += hasEvenParity(pos1 & mask, n_qubits) ? v1 : -v1;
+                exp_val += hasEvenParity(pos2 & mask, n_qubits) ? v2 : -v2;
+                exp_val += hasEvenParity(pos3 & mask, n_qubits) ? v3 : -v3;
             }
-            LOCAL_P_CUDA(thread_out, tid, expval);
-            // BARR_CUDA;
+            m_real[tid] = exp_val;
         }
-        __device__ __inline__ void EXP1_4q_GATE(const ValType* gm_real, const  ValType* gm_imag, ValType* thread_out, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask)
-        {
+        virtual double Expect_C0(IdxType mask) {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
-            const IdxType per_pe_work = ((dim) >> 4);
-            assert(qubit0 != qubit1); // Non-cloning
-            assert(qubit0 != qubit2); // Non-cloning
-            assert(qubit0 != qubit3); // Non-cloning
-            assert(qubit1 != qubit2); // Non-cloning
-            assert(qubit1 != qubit3); // Non-cloning
-            assert(qubit2 != qubit3); // Non-cloning
-
-            // need to sort qubits: min->max: p, q, r, s
-            const IdxType v0 = min(qubit0, qubit1);
-            const IdxType v1 = min(qubit2, qubit3);
-            const IdxType v2 = max(qubit0, qubit1);
-            const IdxType v3 = max(qubit2, qubit3);
-            const IdxType p = min(v0, v1);
-            const IdxType q = min(min(v2, v3), max(v0, v1));
-            const IdxType r = max(min(v2, v3), max(v0, v1));
-            const IdxType s = max(v2, v3);
-
-            const IdxType sdim = ((IdxType)1 << s);
-            const IdxType rdim = ((IdxType)1 << r);
-            const IdxType qdim = ((IdxType)1 << q);
-            const IdxType pdim = ((IdxType)1 << p);
-            const IdxType factor1 = ((dim) + rdim + qdim + pdim - 1) >> (s + 1);
-            const IdxType factor2 = (sdim + rdim + qdim + pdim - 1) >> (r + 1);
-            const IdxType factor3 = (rdim + qdim + pdim - 1) >> (q + 1);
-            const IdxType factor4 = (qdim + pdim - 1) >> (p + 1);
-            const IdxType factor5 = pdim;
-            const IdxType dimsum = sdim + rdim + qdim + pdim;
-
-            ValType expval = 0;
-            for (IdxType i = tid; i < per_pe_work; i += blockDim.x * gridDim.x)
-            {
-                const IdxType outer_s = (((i / factor5) / factor4) / factor3 / factor2) * (sdim + sdim);
-                const IdxType outer_r = (((i / factor5) / factor4) / factor3 % factor2) * (rdim + rdim);
-                const IdxType outer_q = (((i / factor5) / factor4) % factor3) * (qdim + qdim);
-                const IdxType outer_p = (((i / factor5) % factor4)) * (pdim + pdim);
-                const IdxType inner = i % factor5; 
-
-                IdxType pos[16]{0.0};
-                pos[0] = outer_s + outer_r + outer_q + outer_p + inner; // 0000
-                pos[1] = outer_s + outer_r + outer_q + outer_p + inner + pdim; // 0001
-                pos[2] = outer_s + outer_r + outer_q + outer_p + inner + pdim + qdim; // 0011
-                pos[3] = outer_s + outer_r + outer_q + outer_p + inner + qdim; // 0010
-                pos[4] = outer_s + outer_r + outer_q + outer_p + inner + pdim + qdim + rdim; // 0111
-                pos[5] = outer_s + outer_r + outer_q + outer_p + inner + qdim + rdim; // 0110
-                pos[6] = outer_s + outer_r + outer_q + outer_p + inner + rdim; // 0100
-                pos[7] = outer_s + outer_r + outer_q + outer_p + inner + rdim + pdim; // 0101
-
-
-                pos[8] = outer_s + outer_r + outer_q + outer_p + inner + sdim; // 1000
-                pos[9] = outer_s + outer_r + outer_q + outer_p + inner + pdim + sdim; // 1001
-                pos[10] = outer_s + outer_r + outer_q + outer_p + inner + pdim + qdim + sdim; // 1011
-                pos[11] = outer_s + outer_r + outer_q + outer_p + inner + qdim + sdim; // 1010
-                pos[12] = outer_s + outer_r + outer_q + outer_p + inner + pdim + qdim + rdim + sdim; // 1111
-                pos[13] = outer_s + outer_r + outer_q + outer_p + inner + qdim + rdim + sdim; // 1110
-                pos[14] = outer_s + outer_r + outer_q + outer_p + inner + rdim + sdim; // 1100
-                pos[15] = outer_s + outer_r + outer_q + outer_p + inner + rdim + pdim + sdim; // 1101
-
-
-                const ValType el_real[16] = {
-                    LOCAL_G_CUDA(sv_real, pos[0]), LOCAL_G_CUDA(sv_real, pos[1]),
-                    LOCAL_G_CUDA(sv_real, pos[2]), LOCAL_G_CUDA(sv_real, pos[3]),
-                    LOCAL_G_CUDA(sv_real, pos[4]), LOCAL_G_CUDA(sv_real, pos[5]),
-                    LOCAL_G_CUDA(sv_real, pos[6]), LOCAL_G_CUDA(sv_real, pos[7]),
-                    LOCAL_G_CUDA(sv_real, pos[8]), LOCAL_G_CUDA(sv_real, pos[9]),
-                    LOCAL_G_CUDA(sv_real, pos[10]), LOCAL_G_CUDA(sv_real, pos[11]),
-                    LOCAL_G_CUDA(sv_real, pos[12]), LOCAL_G_CUDA(sv_real, pos[13]),
-                    LOCAL_G_CUDA(sv_real, pos[14]), LOCAL_G_CUDA(sv_real, pos[15])};
-                const ValType el_imag[16] = {
-                    LOCAL_G_CUDA(sv_imag, pos[0]), LOCAL_G_CUDA(sv_imag, pos[1]),
-                    LOCAL_G_CUDA(sv_imag, pos[2]), LOCAL_G_CUDA(sv_imag, pos[3]),
-                    LOCAL_G_CUDA(sv_imag, pos[4]), LOCAL_G_CUDA(sv_imag, pos[5]),
-                    LOCAL_G_CUDA(sv_imag, pos[6]), LOCAL_G_CUDA(sv_imag, pos[7]),
-                    LOCAL_G_CUDA(sv_imag, pos[8]), LOCAL_G_CUDA(sv_imag, pos[9]),
-                    LOCAL_G_CUDA(sv_imag, pos[10]), LOCAL_G_CUDA(sv_imag, pos[11]),
-                    LOCAL_G_CUDA(sv_imag, pos[12]), LOCAL_G_CUDA(sv_imag, pos[13]),
-                    LOCAL_G_CUDA(sv_imag, pos[14]), LOCAL_G_CUDA(sv_imag, pos[15])};
-#pragma unroll
-                for (unsigned j = 0; j < 16; j++)
-                {
-                    ValType res_real = 0;
-                    ValType res_imag = 0;
-#pragma unroll
-                    for (unsigned k = 0; k < 16; k++)
-                    {
-                        res_real += (el_real[k] * gm_real[j * 16 + k]) - (el_imag[k] * gm_imag[j * 16 + k]);
-                        res_imag += (el_real[k] * gm_imag[j * 16 + k]) + (el_imag[k] * gm_real[j * 16 + k]);
-                    }
-                    ValType val = res_real * res_real + res_imag * res_imag;
-                    val = (parity(pos[i] & mask) == 1) ? -val : val;
-                    expval += val;
-                }
+            double exp_val = 0.0;
+            for (IdxType i = 0; i < dim; i++) {
+                double val = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
+                exp_val += hasEvenParity(i & mask, n_qubits) ? val : -val;
             }
-            LOCAL_P_CUDA(thread_out, tid, expval);
-            // BARR_CUDA;
+            m_real[tid] = exp_val;
         }
         
-        __device__ __inline__ void EXP_REDUCE_GATE(ValType* exp_cache, const IdxType output_index, ValType* output)
+        
+        __device__ __inline__ void EXP_REDUCE_GATE(const IdxType output_index, ValType* output)
         {
             grid_group grid = this_grid();
             const IdxType n_size = (IdxType)1 << (n_qubits);
@@ -777,51 +752,49 @@ namespace NWQSim
 
             if (tid == 0)
             {
-                ValType expectation = exp_cache[0];
+                ValType expectation = m_real[0];
                 LOCAL_P_CUDA(output, output_index, expectation);
             }
 
             BARR_CUDA;
 
         }
-        __device__ __inline__ void EXP_GATE(IdxType* indices, IdxType* index_sizes, IdxType* zmasks, IdxType* xmasks, ValType* expectation_cache, ValType* outputs, const IdxType num_terms)
-        {
+        __device__ __inline__ void Expect_GATE(IdxType* x_indices, 
+                                 IdxType num_x_indices, 
+                                 IdxType xmask, 
+                                 IdxType zmask, 
+                                 ValType* output,
+                                 IdxType output_index)  {
             grid_group grid = this_grid();
             const IdxType n_size = (IdxType)1 << (n_qubits);
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType local_tid = threadIdx.x; // thread_id in warp
-            // ValType *m_real = m_real;
-            for (IdxType i = 0; i < num_terms; i++) {
-                IdxType num_non_z = index_sizes[i];
-                IdxType q0, q1, q2, q3;
-                if (num_non_z == 2) {
-                    q0 = indices[0];
-                    q1 = indices[1];
-                    IdxType mask = zmasks[i] | xmasks[i];
-                    IdxType zbit0 = (zmasks[i] & (1 << q0)) >> q0;
-                    IdxType zbit1 = ((zmasks[i] & (1 << q1)) >> q1) << 1;
-                    const ValType* gm_real = exp_gate_perms_2q[zbit0 + zbit1];
-                    const ValType* gm_imag = exp_gate_perms_2q[zbit0 + zbit1] + 16;
-                    EXP1_2q_GATE(gm_real, gm_imag, expectation_cache,  q0, q1, mask);
-                    EXP_REDUCE_GATE(expectation_cache, i, outputs);
-                } else if (num_non_z == 4) {q0 = indices[0];
-                    q0 = indices[0];
-                    q1 = indices[1];
-                    q2 = indices[2];
-                    q3 = indices[3];
-                    IdxType mask = zmasks[i] | xmasks[i];
-                    IdxType zbit0 = (zmasks[i] & (1 << q0)) >> q0;
-                    IdxType zbit1 = ((zmasks[i] & (1 << q1)) >> q1) << 1;
-                    IdxType zbit2 = ((zmasks[i] & (1 << q2)) >> q2) << 2;
-                    IdxType zbit3 = ((zmasks[i] & (1 << q3)) >> q3) << 3;
-                    const ValType* gm_real = exp_gate_perms_2q[zbit0 + zbit1 + zbit2 + zbit3];
-                    const ValType* gm_imag = exp_gate_perms_2q[zbit0 + zbit1 + zbit2 + zbit3] + 256;
-                    EXP1_4q_GATE(gm_real, gm_imag, expectation_cache, q0, q1, q2, q3, mask);
-                    EXP_REDUCE_GATE(expectation_cache, i, outputs);
-                }
-                indices += num_non_z;
+            if (num_x_indices == 2) {
+                IdxType q0 = x_indices[0];
+                IdxType q1 = x_indices[1];
+                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
+                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
+                const ValType* gm_real = exp_gate_perms_2q[zind0 + zind1];
+                const ValType* gm_imag = exp_gate_perms_2q[zind0 + zind1] + 16;
+                Expect_C2(gm_real, gm_imag, q0, q1, xmask | zmask);
+            } else if (num_x_indices == 4) {
+                IdxType q0 = x_indices[0];
+                IdxType q1 = x_indices[1];
+                IdxType q2 = x_indices[2];
+                IdxType q3 = x_indices[3];
+                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
+                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
+                IdxType zind2 = ((zmask & (1 << q2)) >> q2) << 2;
+                IdxType zind3 = ((zmask & (1 << q3)) >> q3) << 3;
+                const ValType* gm_real = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3];
+                const ValType* gm_imag = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3] + 256;
+                Expect_C4(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
+            } else if (num_x_indices == 0) {
+                Expect_C0(zmask);
             }
+
             BARR_CUDA;
+            EXP_REDUCE_GATE(m_real, output_index, output);
         }
 
         __device__ __inline__ void RESET_GATE(const IdxType qubit)
@@ -980,7 +953,7 @@ namespace NWQSim
                 sv_gpu->MA_GATE(qubit, cur_index);
                 cur_index += qubit;
             }
-            else if (op_name == OP::EXP)
+            else if (op_name == OP::EXPECT)
             {
                 ObservableList o = *(ObservableList*)((sv_gpu->gates_gpu)[t].data);
                 sv_gpu->EXP_GATE(o.x_indices, o.x_index_sizes, o.zmasks, o.xmasks, m_real, o.exp_output, o.numterms);

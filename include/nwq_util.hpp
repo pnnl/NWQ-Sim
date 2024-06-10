@@ -81,6 +81,18 @@ namespace NWQSim
         }
         return (count % 2) == 0;
     }
+    inline bool hasEvenParity(unsigned long long x, size_t maxsize)
+    {
+        size_t count = 0;
+        for (size_t bitIdx = 0; bitIdx < maxsize; bitIdx++)
+        {
+            if (x & (1ULL << bitIdx))
+            {
+                count++;
+            }
+        }
+        return (count % 2) == 0;
+    }
 
     /***********************************************
      * CPU Timer based on Linux sys/time.h

@@ -32,6 +32,6 @@ namespace NWQSim
       };
    
   };
-} // namespace NWQSim
-
+}; // namespace NWQSim
+};
 #endif
