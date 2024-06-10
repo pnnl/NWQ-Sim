@@ -250,7 +250,11 @@ namespace NWQSim
         /************
          * C4 Gate
          ***********/
-        C4
+        C4,
+        /************
+         * Expectation
+         ***********/
+        EXP
     };
 
     // Name of the gate for tracing purpose
@@ -299,7 +303,8 @@ namespace NWQSim
         "RESET",
         "C1",
         "C2",
-        "C4"};
+        "C4",
+        "EXPECT"};
     /***********************************************
      * Gate Definition
      ***********************************************/
@@ -316,6 +321,7 @@ namespace NWQSim
         ValType lam;
         ValType gamma = 0;
         IdxType repetition;
+        void* data; // extra data (e.g. Pauli operators)
 
         Gate(enum OP _op_name,
              IdxType _qubit,
@@ -324,14 +330,16 @@ namespace NWQSim
              ValType _theta = 0,
              ValType _phi = 0,
              ValType _lam = 0,
-             IdxType _repetition = 0) : op_name(_op_name),
+             IdxType _repetition = 0,
+             void* _data = NULL) : op_name(_op_name),
                                         qubit(_qubit),
                                         ctrl(_ctrl),
                                         n_qubits(_n_qubits),
                                         theta(_theta),
                                         phi(_phi),
                                         lam(_lam),
-                                        repetition(_repetition) {}
+                                        repetition(_repetition),
+                                        data(_data) {}
         Gate(const Gate &g) : op_name(g.op_name),
                               qubit(g.qubit),
                               ctrl(g.ctrl),
@@ -339,7 +347,8 @@ namespace NWQSim
                               theta(g.theta),
                               phi(g.phi),
                               lam(g.lam),
-                              repetition(g.repetition) {}
+                              repetition(g.repetition),
+                              data(g.data) {}
         ~Gate() {}
 
         // for dumping the gate
