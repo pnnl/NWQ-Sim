@@ -21,6 +21,7 @@ namespace NWQSim {
         MolecularEnvironment env;
         std::vector<std::vector<FermionOperator> > fermi_operators;
         std::vector<std::vector<PauliOperator> > pauli_operators;
+        IdxType n_ops;
       
       public:
         Hamiltonian(std::string input_path, IdxType n_particles, 
@@ -28,7 +29,11 @@ namespace NWQSim {
         Hamiltonian(MolecularEnvironment _env,
                     const std::vector<std::vector<FermionOperator> > _fermion_operators, 
                     Transformer transform = getJordanWignerTransform): env(_env), fermi_operators(_fermion_operators) {
+          n_ops = 0;
           transform(env, fermi_operators, pauli_operators, false);
+          for (auto& i : pauli_operators) {
+            n_ops += i.size();
+          }
         }
         ValType expectation(const ExpectationMap& expectations) const {
           ValType expect = env.constant;
@@ -41,6 +46,9 @@ namespace NWQSim {
             }
           }
           return expect;
+        }
+        IdxType num_ops () const {
+          return n_ops;
         }
         const MolecularEnvironment& getEnv () const {return env;}
         const std::vector<std::vector<PauliOperator> >& getPauliOperators() const {return pauli_operators;};

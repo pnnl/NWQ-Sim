@@ -116,7 +116,20 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-
+        dim3 get_dims () {
+            dim3 gridDim(1, 1, 1);
+            cudaDeviceProp deviceProp;
+            cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
+            // 8*16 is per warp shared-memory usage for C4 TC, with real and imag
+            // unsigned smem_size = THREADS_CTA_CUDA/32*8*16*2*sizeof(ValType);
+            unsigned smem_size = 0 * sizeof(ValType);
+            int numBlocksPerSm;
+            cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
+                                                                       simulation_kernel_cuda, THREADS_CTA_CUDA, smem_size));
+            
+            gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
+            return gridDim
+        }
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
             IdxType origional_gates = circuit->num_gates();
@@ -144,16 +157,7 @@ namespace NWQSim
                 printf("SVSim_gpu is running! Requesting %lld qubits.\n", n_qubits);
             }
 
-            dim3 gridDim(1, 1, 1);
-            cudaDeviceProp deviceProp;
-            cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
-            // 8*16 is per warp shared-memory usage for C4 TC, with real and imag
-            // unsigned smem_size = THREADS_CTA_CUDA/32*8*16*2*sizeof(ValType);
-            unsigned smem_size = 0 * sizeof(ValType);
-            int numBlocksPerSm;
-            cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
-                                                                       simulation_kernel_cuda, THREADS_CTA_CUDA, smem_size));
-            gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
+            dim3 gridDim = get_dims();
             void *args[] = {&sv_gpu, &n_gates};
             cudaSafeCall(cudaDeviceSynchronize());
 
@@ -594,7 +598,7 @@ namespace NWQSim
             BARR_CUDA;
         }
         
-        __device__ __inline__ void EXP1_2q_GATE(ValType* gm_real, ValType* gm_imag, ValType* thread_out, IdxType q0, IdxType q1, IdxType mask)
+        __device__ __inline__ void EXP1_2q_GATE(const ValType* gm_real, const ValType* gm_imag, ValType* thread_out, IdxType qubit0, IdxType qubit1, IdxType mask)
         {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -654,7 +658,7 @@ namespace NWQSim
             LOCAL_P_CUDA(thread_out, tid, expval);
             // BARR_CUDA;
         }
-        __device__ __inline__ void EXP1_4q_GATE(ValType* gm_real, ValType* gm_imag, ValType* thread_out, IdxType q0, IdxType q1, IdxType q2, IdxType q3, IdxType mask)
+        __device__ __inline__ void EXP1_4q_GATE(const ValType* gm_real, const  ValType* gm_imag, ValType* thread_out, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask)
         {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -667,10 +671,10 @@ namespace NWQSim
             assert(qubit2 != qubit3); // Non-cloning
 
             // need to sort qubits: min->max: p, q, r, s
-            const IdxType v0 = min(q0, q1);
-            const IdxType v1 = min(q2, q3);
-            const IdxType v2 = max(q0, q1);
-            const IdxType v3 = max(q2, q3);
+            const IdxType v0 = min(qubit0, qubit1);
+            const IdxType v1 = min(qubit2, qubit3);
+            const IdxType v2 = max(qubit0, qubit1);
+            const IdxType v3 = max(qubit2, qubit3);
             const IdxType p = min(v0, v1);
             const IdxType q = min(min(v2, v3), max(v0, v1));
             const IdxType r = max(min(v2, v3), max(v0, v1));
@@ -696,25 +700,25 @@ namespace NWQSim
                 const IdxType outer_p = (((i / factor5) % factor4)) * (pdim + pdim);
                 const IdxType inner = i % factor5; 
 
-                const IdxType pos[16];
-                const IdxType pos[0] = outer_s + outer_r + outer_q + outer_p + inner; // 0000
-                const IdxType pos[1] = outer_s + outer_r + outer_q + outer_p + inner + pdim; // 0001
-                const IdxType pos[2] = outer_s + outer_r + outer_q + outer_p + inner + pdim + qdim; // 0011
-                const IdxType pos[3] = outer_s + outer_r + outer_q + outer_p + inner + qdim; // 0010
-                const IdxType pos[4] = outer_s + outer_r + outer_q + outer_p + inner + pdim + qdim + rdim; // 0111
-                const IdxType pos[5] = outer_s + outer_r + outer_q + outer_p + inner + qdim + rdim; // 0110
-                const IdxType pos[6] = outer_s + outer_r + outer_q + outer_p + inner + rdim; // 0100
-                const IdxType pos[7] = outer_s + outer_r + outer_q + outer_p + inner + rdim + pdim; // 0101
+                IdxType pos[16]{0.0};
+                pos[0] = outer_s + outer_r + outer_q + outer_p + inner; // 0000
+                pos[1] = outer_s + outer_r + outer_q + outer_p + inner + pdim; // 0001
+                pos[2] = outer_s + outer_r + outer_q + outer_p + inner + pdim + qdim; // 0011
+                pos[3] = outer_s + outer_r + outer_q + outer_p + inner + qdim; // 0010
+                pos[4] = outer_s + outer_r + outer_q + outer_p + inner + pdim + qdim + rdim; // 0111
+                pos[5] = outer_s + outer_r + outer_q + outer_p + inner + qdim + rdim; // 0110
+                pos[6] = outer_s + outer_r + outer_q + outer_p + inner + rdim; // 0100
+                pos[7] = outer_s + outer_r + outer_q + outer_p + inner + rdim + pdim; // 0101
 
 
-                const IdxType pos[8] = outer_s + outer_r + outer_q + outer_p + inner + sdim; // 1000
-                const IdxType pos[9] = outer_s + outer_r + outer_q + outer_p + inner + pdim + sdim; // 1001
-                const IdxType pos[10] = outer_s + outer_r + outer_q + outer_p + inner + pdim + qdim + sdim; // 1011
-                const IdxType pos[11] = outer_s + outer_r + outer_q + outer_p + inner + qdim + sdim; // 1010
-                const IdxType pos[12] = outer_s + outer_r + outer_q + outer_p + inner + pdim + qdim + rdim + sdim; // 1111
-                const IdxType pos[13] = outer_s + outer_r + outer_q + outer_p + inner + qdim + rdim + sdim; // 1110
-                const IdxType pos[14] = outer_s + outer_r + outer_q + outer_p + inner + rdim + sdim; // 1100
-                const IdxType pos[15] = outer_s + outer_r + outer_q + outer_p + inner + rdim + pdim + sdim; // 1101
+                pos[8] = outer_s + outer_r + outer_q + outer_p + inner + sdim; // 1000
+                pos[9] = outer_s + outer_r + outer_q + outer_p + inner + pdim + sdim; // 1001
+                pos[10] = outer_s + outer_r + outer_q + outer_p + inner + pdim + qdim + sdim; // 1011
+                pos[11] = outer_s + outer_r + outer_q + outer_p + inner + qdim + sdim; // 1010
+                pos[12] = outer_s + outer_r + outer_q + outer_p + inner + pdim + qdim + rdim + sdim; // 1111
+                pos[13] = outer_s + outer_r + outer_q + outer_p + inner + qdim + rdim + sdim; // 1110
+                pos[14] = outer_s + outer_r + outer_q + outer_p + inner + rdim + sdim; // 1100
+                pos[15] = outer_s + outer_r + outer_q + outer_p + inner + rdim + pdim + sdim; // 1101
 
 
                 const ValType el_real[16] = {
@@ -786,23 +790,20 @@ namespace NWQSim
             const IdxType n_size = (IdxType)1 << (n_qubits);
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType local_tid = threadIdx.x; // thread_id in warp
-            __shared__ ValType local_expectations[blockDim.x];
             // ValType *m_real = m_real;
             for (IdxType i = 0; i < num_terms; i++) {
-                local_expectations[local_tid] = 0;
                 IdxType num_non_z = index_sizes[i];
                 IdxType q0, q1, q2, q3;
-                ValType *gm_real, *gm_imag;
                 if (num_non_z == 2) {
                     q0 = indices[0];
                     q1 = indices[1];
                     IdxType mask = zmasks[i] | xmasks[i];
                     IdxType zbit0 = (zmasks[i] & (1 << q0)) >> q0;
                     IdxType zbit1 = ((zmasks[i] & (1 << q1)) >> q1) << 1;
-                    gm_real = exp_gate_perms_2q[zbit0 + zbit1];
-                    gm_imag = exp_gate_perms_2q[zbit0 + zbit1] + 16;
-                    m_real[tid] = EXP1_2q_GATE(gm_real, gm_imag, expectation_cache,  q0, q1, mask);
-                    EXP_REDUCE_GATE(output_index, output, i);
+                    const ValType* gm_real = exp_gate_perms_2q[zbit0 + zbit1];
+                    const ValType* gm_imag = exp_gate_perms_2q[zbit0 + zbit1] + 16;
+                    EXP1_2q_GATE(gm_real, gm_imag, expectation_cache,  q0, q1, mask);
+                    EXP_REDUCE_GATE(expectation_cache, i, outputs);
                 } else if (num_non_z == 4) {q0 = indices[0];
                     q0 = indices[0];
                     q1 = indices[1];
@@ -813,12 +814,12 @@ namespace NWQSim
                     IdxType zbit1 = ((zmasks[i] & (1 << q1)) >> q1) << 1;
                     IdxType zbit2 = ((zmasks[i] & (1 << q2)) >> q2) << 2;
                     IdxType zbit3 = ((zmasks[i] & (1 << q3)) >> q3) << 3;
-                    gm_real = exp_gate_perms_2q[zbit0 + zbit1 + zbit2 + zbit3];
-                    gm_imag = exp_gate_perms_2q[zbit0 + zbit1 + zbit2 + zbit3] + 256;
-                    m_real[tid] = EXP1_4q_GATE(gm_real, gm_imag, expectation_cache, q0, q1, q2, q3, mask);
-                    EXP_REDUCE_GATE(expectation_cache, output_index, output, i);
-
+                    const ValType* gm_real = exp_gate_perms_2q[zbit0 + zbit1 + zbit2 + zbit3];
+                    const ValType* gm_imag = exp_gate_perms_2q[zbit0 + zbit1 + zbit2 + zbit3] + 256;
+                    EXP1_4q_GATE(gm_real, gm_imag, expectation_cache, q0, q1, q2, q3, mask);
+                    EXP_REDUCE_GATE(expectation_cache, i, outputs);
                 }
+                indices += num_non_z;
             }
             BARR_CUDA;
         }
@@ -978,6 +979,11 @@ namespace NWQSim
             {
                 sv_gpu->MA_GATE(qubit, cur_index);
                 cur_index += qubit;
+            }
+            else if (op_name == OP::EXP)
+            {
+                ObservableList o = *(ObservableList*)((sv_gpu->gates_gpu)[t].data);
+                sv_gpu->EXP_GATE(o.x_indices, o.x_index_sizes, o.zmasks, o.xmasks, m_real, o.exp_output, o.numterms);
             }
             grid.sync();
         }

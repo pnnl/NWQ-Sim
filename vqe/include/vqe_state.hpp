@@ -60,7 +60,20 @@ namespace NWQSim
           for (auto& kv_pair: optimizer_settings.parameter_map) {
               optimizer.set_param(kv_pair.first.c_str(), kv_pair.second);
           }
-
+          auto& pauli_operators = hamil.getPauliOperators();
+          for (auto& pauli_list: pauli_operators) {
+            for (const PauliOperator& pauli: pauli_list) {
+              std::vector<IdxType>& xinds = pauli.get_xindices();
+              xmasks.push_back(pauli.get_xmask());
+              zmasks.push_back(pauli.get_zmask());
+              x_index_sizes.push_back(xinds.size());
+              for (auto i: xinds) {
+                x_indices.push_back(i);
+              }
+            }
+          }
+          ObservableList o;
+          o.
           // Check if the chosen algorithm requires derivatives
           compute_gradient = std::string(optimizer.get_algorithm_name()).find("no-derivative") == std::string::npos;
           optimizer.set_min_objective(nl_opt_function, (void*)this);
@@ -116,7 +129,11 @@ namespace NWQSim
         Callback callback;
         OptimizerSettings optimizer_settings;
         IdxType iteration;
-
+        ObservableList obs;
+        std::vector<IdxType> xval_sizes;
+        std::vector<IdxType> xmasks;
+        std::vector<IdxType> zmasks;
+        std::vector<IdxType> x_indices;
 
       
 

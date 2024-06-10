@@ -12,6 +12,14 @@
 
 namespace NWQSim
 {
+    struct ObservableList {
+        IdxType* x_indices;
+        IdxType* x_index_sizes;
+        IdxType* xmasks;
+        IdxType* zmasks;
+        ValType* exp_output;
+        IdxType numterms;
+    };
     // Base class
     class QuantumState
     {

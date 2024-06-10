@@ -60,6 +60,7 @@ namespace NWQSim {
         IdxType xmask;
         IdxType zmask;
         ValType sign;
+        std::vector<IdxType> x_indices;
         bool phase;
         std::shared_ptr<std::vector<PauliOp> > ops; // Store in big-endian order v, i.e. qubit 0 is in position 0
       public:
@@ -79,10 +80,12 @@ namespace NWQSim {
             {
             case X:
               xmask |= 1 << index;
+              x_indices.push_back(index);
               break;
             case Y:
               xmask |= 1 << index;
               zmask |= 1 << index;
+              x_indices.push_back(index);
               phase += 1;
               break;
             case Z:
@@ -195,6 +198,9 @@ namespace NWQSim {
           PauliOperator newop (*this);
           newop.coeff *= scalar;
           return newop;
+        }
+        const std::vector<IdxType>& get_xindices() const {
+          return x_indices;
         }
         // Dump the Pauli operator to string
         std::string pauliToString() const {
