@@ -298,7 +298,7 @@ namespace NWQSim
 
                 if (Config::PRINT_SIM_TRACE && i_proc == 0)
                     printProgressBar(i, n_gates, start);
-
+            
                 auto g = gates[i];
 
                 // only need sync when operating on remote qubits
