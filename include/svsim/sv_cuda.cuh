@@ -606,6 +606,7 @@ namespace NWQSim
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType per_pe_work = ((dim) >> 4);
+            
             assert(qubit0 != qubit1); // Non-cloning
             assert(qubit0 != qubit2); // Non-cloning
             assert(qubit0 != qubit3); // Non-cloning
@@ -666,7 +667,9 @@ namespace NWQSim
             
                 }
             }
-            m_real[tid] = exp_val;
+            if (tid < per_pe_work) {
+                m_real[tid] = exp_val;
+            }
         }
         __device__ inline void 
         Expect_C2(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType mask) {
@@ -722,28 +725,33 @@ namespace NWQSim
                 exp_val += hasEvenParity_cu(pos2 & mask, n_qubits) ? v2 : -v2;
                 exp_val += hasEvenParity_cu(pos3 & mask, n_qubits) ? v3 : -v3;
             }
-            m_real[tid] = exp_val;
+            if (tid < per_pe_work) {
+                m_real[tid] = exp_val;
+            }
         }
         __device__ inline void Expect_C0(IdxType mask) {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             double exp_val = 0.0;
-            for (IdxType i = 0; i < dim; i++) {
+            for (IdxType i = tid; i < dim; i += blockDim.x * gridDim.x) {
                 double val = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
                 exp_val += hasEvenParity_cu(i & mask, n_qubits) ? val : -val;
             }
-            m_real[tid] = exp_val;
+            if (tid < dim) {
+                m_real[tid] = exp_val;
+            }
         }
         
         
         __device__ __inline__ void EXP_REDUCE_GATE(const IdxType output_index, ValType* output)
         {
             grid_group grid = this_grid();
-            const IdxType n_size = (IdxType)1 << (n_qubits);
+            const IdxType n_size = min((IdxType)((blockDim.x * gridDim.x) >> 1), (IdxType)1 << (n_qubits - 1));
+            
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             // ValType *m_real = m_real;
             // Parallel reduction
-            for (IdxType k = (blockDim.x * gridDim.x) >> 1; k > 0; k >>= 1)
+            for (IdxType k = n_size; k > 0; k >>= 1)
             {
                 if (tid < k) {
                     m_real[tid] += m_real[tid + k];
@@ -755,7 +763,6 @@ namespace NWQSim
             if (tid == 0)
             {
                 ValType expectation = m_real[0];
-                printf("%f\n", expectation);
                 LOCAL_P_CUDA(output, output_index, expectation);
             }
 
@@ -798,6 +805,7 @@ namespace NWQSim
 
             BARR_CUDA;
             EXP_REDUCE_GATE(output_index, output);
+            BARR_CUDA;
         }
 
         __device__ __inline__ void RESET_GATE(const IdxType qubit)
@@ -959,17 +967,18 @@ namespace NWQSim
             else if (op_name == OP::EXPECT)
             {
 
-                // ObservableList o = *(ObservableList*)((sv_gpu->gates_gpu)[t].data);
-                // IdxType* xinds = o.x_indices;
-                // for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
-                //     sv_gpu->Expect_GATE(xinds, 
-                //                 o.x_index_sizes[obs_ind],
-                //                 o.xmasks[obs_ind],
-                //                 o.zmasks[obs_ind],
-                //                 o.exp_output,
-                //                 obs_ind);
-                //     xinds += o.x_index_sizes[obs_ind];
-                // }
+                ObservableList o = *(ObservableList*)((sv_gpu->gates_gpu)[t].data);
+                IdxType* xinds = o.x_indices;
+                for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
+                    sv_gpu->Expect_GATE(xinds, 
+                                o.x_index_sizes[obs_ind],
+                                o.xmasks[obs_ind],
+                                o.zmasks[obs_ind],
+                                o.exp_output,
+                                obs_ind);
+                    xinds += o.x_index_sizes[obs_ind];
+                    grid.sync();
+                }
             }
             grid.sync();
         }

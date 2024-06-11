@@ -27,6 +27,7 @@ namespace NWQSim
                                       SV_CUDA(a->num_qubits()),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
         IdxType nterms = xmasks.size();
+        obs.numterms = nterms;
         IdxType isize = nterms * sizeof(IdxType);
         IdxType vsize = nterms * sizeof(ValType);
         SAFE_ALOC_GPU(obs.xmasks, isize);
@@ -34,7 +35,6 @@ namespace NWQSim
         SAFE_ALOC_GPU(obs.x_index_sizes, isize);
         SAFE_ALOC_GPU(obs.x_indices, x_indices.size() * sizeof(IdxType));
         SAFE_ALOC_GPU(obs.exp_output, vsize);
-
         cudaSafeCall(cudaMemcpy(obs.xmasks, xmasks.data(), isize,
                                     cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(obs.zmasks, zmasks.data(), isize,
@@ -45,6 +45,8 @@ namespace NWQSim
                                     cudaMemcpyHostToDevice));
         ObservableList* obs_device;
         SAFE_ALOC_GPU(obs_device, sizeof(ObservableList));
+        cudaSafeCall(cudaMemcpy(obs_device, &obs, sizeof(ObservableList),
+                                    cudaMemcpyHostToDevice));
         ansatz->EXPECT(obs_device);
       };
 
