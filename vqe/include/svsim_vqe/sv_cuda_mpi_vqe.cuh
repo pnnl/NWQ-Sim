@@ -55,27 +55,6 @@ namespace NWQSim
                                     cudaMemcpyHostToDevice));
         ansatz->EXPECT(obs_device);
       };
-      virtual void call_simulator(std::shared_ptr<Ansatz> ansatz) override {        
-        std::vector<ValType> xparams;  
-        if (i_proc == 0) {
-          std::vector<double>* ansatz_params = ansatz->getParams();
-          stat = CALL_SIMULATOR;
-          for(IdxType i = 1; i < n_cpus; i++) {
-            MPI_Send(&stat, 1, MPI_INT, i, 3, MPI_COMM_WORLD);
-            MPI_Send(ansatz_params->data(), ansatz->numParams(), MPI_DOUBLE, i, 1, MPI_COMM_WORLD);
-          }
-        } else {
-          xparams.resize(ansatz->numParams());
-          MPI_Recv(xparams.data(), ansatz->numParams(), MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-          ansatz->setParams(xparams);
-        }
-        BARR_MPI;
-        reset_state();
-        sim(ansatz);
-        if (i_proc != 0) {
-          stat = WAIT;
-        }
-      };
       virtual void call_simulator() override {  
         std::vector<ValType> xparams;  
         if (i_proc == 0) {
