@@ -211,7 +211,7 @@ namespace NWQSim
                     ObservableList o = *(ObservableList*)(g.data);
                     IdxType* xinds = o.x_indices;
                     for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
-                        Expect_GATE(xinds, 
+                        EXPECT_GATE(xinds, 
                                     o.x_index_sizes[obs_ind],
                                     o.xmasks[obs_ind],
                                     o.zmasks[obs_ind],
@@ -473,7 +473,7 @@ namespace NWQSim
                 results[i] = lo;
             }
         }
-        virtual double Expect_C4(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask) {
+        virtual double EXPECT_C4_GATE(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask) {
             assert(qubit0 != qubit1); // Non-cloning
             assert(qubit0 != qubit2); // Non-cloning
             assert(qubit0 != qubit3); // Non-cloning
@@ -536,7 +536,7 @@ namespace NWQSim
             }
             return exp_val;
         }
-        virtual double Expect_C2(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType mask) {
+        virtual double EXPECT_C2_GATE(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType mask) {
             const IdxType per_pe_work = (dim >> 2);
             assert(qubit0 != qubit1); // Non-cloning
 
@@ -596,7 +596,7 @@ namespace NWQSim
             }
             return exp_val;
         }
-        virtual void Expect_GATE(IdxType* x_indices, 
+        virtual void EXPECT_GATE(IdxType* x_indices, 
                                  IdxType num_x_indices, 
                                  IdxType xmask, 
                                  IdxType zmask, 
@@ -609,7 +609,7 @@ namespace NWQSim
                 IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
                 const ValType* gm_real = exp_gate_perms_2q[zind0 + zind1];
                 const ValType* gm_imag = exp_gate_perms_2q[zind0 + zind1] + 16;
-                output[output_index] = Expect_C2(gm_real, gm_imag, q0, q1, xmask | zmask);
+                output[output_index] = EXPECT_C2_GATE(gm_real, gm_imag, q0, q1, xmask | zmask);
             } else if (num_x_indices == 4) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
@@ -621,7 +621,7 @@ namespace NWQSim
                 IdxType zind3 = ((zmask & (1 << q3)) >> q3) << 3;
                 const ValType* gm_real = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3];
                 const ValType* gm_imag = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3] + 256;
-                output[output_index] = Expect_C4(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
+                output[output_index] = EXPECT_C4_GATE(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
             } else if (num_x_indices == 0) {
                 output[output_index] = Expect_C0(zmask);
             }

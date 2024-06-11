@@ -1,5 +1,5 @@
-#ifndef VQE_CPU_STATE
-#define VQE_CPU_STATE
+#ifndef VQE_MPI_STATE
+#define VQE_MPI_STATE
 #include "svsim/sv_mpi.hpp"
 #include "vqe_state.hpp"
 #include "observable/pauli_operator.hpp"
@@ -14,10 +14,15 @@
 
 namespace NWQSim
 {
+  enum STATUS {
+    CALL_SIMULATOR,
+    WAIT,
+    EXIT_LOOP
+  };
   namespace VQE {
-    class SV_CPU_VQE: public VQEState, public SV_MPI {
+    class SV_MPI_VQE: public VQEState, public SV_MPI {
       public:
-        SV_CPU_VQE(std::shared_ptr<Ansatz> a, 
+        SV_MPI_VQE(std::shared_ptr<Ansatz> a, 
                    const Hamiltonian& h, 
                    nlopt::algorithm optimizer_algorithm,
                    Callback _callback,
@@ -25,80 +30,57 @@ namespace NWQSim
                    OptimizerSettings opt_settings = OptimizerSettings()): 
                                       SV_MPI(a->num_qubits()),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {};
-      virtual void call_simulator(std::shared_ptr<Ansatz> ansatz) override {        
+      virtual void call_simulator(std::shared_ptr<Ansatz> _ansatz) override {  
+        std::vector<ValType> xparams;  
+        if (i_proc == 0) {
+          const std::vector<ValType>* ansatz_params = _ansatz->getParams();
+          stat = CALL_SIMULATOR;
+          for(IdxType i = 1; i < n_cpus; i++) {
+            MPI_Send(&stat, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            MPI_Send(ansatz_params, _ansatz->numParams(), MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+          }
+        } else {
+          xparams.resize(_ansatz->numParams());
+          MPI_Recv(xparams.data(), _ansatz->numParams(), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+          _ansatz->setParams(xparams);
+        }
         reset_state();
-        sim(ansatz);
+        sim(_ansatz);
+        if (i_proc != 0) {
+          stat = WAIT;
+        }
       };
+      virtual void process_loop(std::shared_ptr<Ansatz> _ansatz) {
+        assert(i_proc != 0);
+        while(stat != EXIT_LOOP) {
+          MPI_Recv(&stat, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+          if (stat == CALL_SIMULATOR) {
+            call_simulator(_ansatz);
+          }
+        }
 
-      virtual ValType getPauliExpectation(const PauliOperator& op) override {
-          IdxType qubit = 0;
-          IdxType xmask = 0;
-          IdxType zmask = 0;
-          IdxType y_phase = 0;
-          IdxType max_x = 0;
-          for (auto pauli_op: *op.getOps()) {
-            switch (pauli_op)
-            {
-              case PauliOp::X:
-                xmask = xmask | (1 << qubit);
-                max_x = qubit;
-                break;
-              case PauliOp::Y:
-                xmask = xmask | (1 << qubit);
-                zmask = zmask | (1 << qubit);
-                max_x = qubit;
-                y_phase += 1;
-                break;
-              case PauliOp::Z:
-                zmask = zmask | (1ll << qubit);
-                break;
-              default:
-                break;
-            }
-            qubit++;
+      }
+      virtual void optimize(std::vector<ValType>& parameters, ValType& final_ene) {
+          iteration = 0;
+          Config::PRINT_SIM_TRACE = false;
+          if (parameters.size() == 0) {
+            parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }
-          ValType expectation = 0.0;
-          if (xmask == 0) {
-            for (IdxType i = 0; i < dim; i++) {
-              ValType local_exp = sv_real[i] * sv_real[i] - sv_imag[i] * sv_imag[i];
-              if (count_ones(zmask & i) & 1) {
-                local_exp *= -1;
-              }
-              expectation += local_exp;
+          if (i_proc == 0) {
+            nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
+            stat = EXIT_LOOP;
+            for(IdxType i = 1; i < n_cpus; i++) {
+              MPI_Send(&stat, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
             }
-            return expectation;
-          }
-          ValType sign = (y_phase / 2) % 2 ? -1: 1;
-          ValType phase = y_phase % 2;
-          size_t mask_u = ~((1lu << (max_x + 1)) - 1);
-          size_t mask_l = (1lu << (max_x)) - 1;
-          for (IdxType i = 0; i < half_dim; i++) {
-            IdxType idx0 = ((i << 1) & mask_u) | (i & mask_l);
-            IdxType idx1 = xmask ^ idx0;
-            ValType v0, v1;
-            if (phase) {
-              v0 = -sv_imag[idx1] * sv_real[idx0] + sv_imag[idx0] * sv_real[idx1];
-              v1 = -sv_imag[idx0] * sv_real[idx1] + sv_imag[idx1] * sv_real[idx0];
-            } else {
-              v0 = sv_real[idx1] * sv_real[idx0] + sv_imag[idx1] * sv_imag[idx0];
-              v1 = sv_real[idx1] * sv_real[idx0] + sv_imag[idx0] * sv_imag[idx1];
-            }
-            v0 *= sign;
-            v1 *= sign;
-            ValType thisval = v0;
-            if ((count_ones(idx0 & zmask) & 1) != 0) {
-              thisval *= -1;
-            }
-            if ((count_ones(idx1 & zmask) & 1) != 0) {
-              thisval -= v1;
-            } else {
-              thisval += v1;
-            }
-            expectation += thisval;
-          }
-          return expectation;
-        }       
 
+          } else {
+            process_loop(ansatz);
+          }
+      }
+      
+      protected:
+        std::vector<ValType> current_params;
+        STATUS stat;
     };
   };
 } // namespace NWQSim
