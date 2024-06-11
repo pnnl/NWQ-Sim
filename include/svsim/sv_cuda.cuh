@@ -743,15 +743,14 @@ namespace NWQSim
         }
         
         
-        __device__ __inline__ void EXP_REDUCE_GATE(const IdxType output_index, ValType* output)
+        __device__ __inline__ void EXP_REDUCE_GATE(const IdxType output_index, ValType* output, IdxType reduce_dim)
         {
             grid_group grid = this_grid();
-            const IdxType n_size = min((IdxType)((blockDim.x * gridDim.x) >> 1), (IdxType)1 << (n_qubits - 1));
             
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             // ValType *m_real = m_real;
             // Parallel reduction
-            for (IdxType k = n_size; k > 0; k >>= 1)
+            for (IdxType k = (reduce_dim >> 1); k > 0; k >>= 1)
             {
                 if (tid < k) {
                     m_real[tid] += m_real[tid + k];
@@ -779,6 +778,7 @@ namespace NWQSim
             const IdxType n_size = (IdxType)1 << (n_qubits);
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType local_tid = threadIdx.x; // thread_id in warp
+            IdxType reduce_dim;
             if (num_x_indices == 2) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
@@ -787,6 +787,7 @@ namespace NWQSim
                 const ValType* gm_real = exp_gate_perms_2q_d[zind0 + zind1];
                 const ValType* gm_imag = exp_gate_perms_2q_d[zind0 + zind1] + 16;
                 Expect_C2(gm_real, gm_imag, q0, q1, xmask | zmask);
+                reduce_dim = (dim) >> 2;
             } else if (num_x_indices == 4) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
@@ -799,12 +800,14 @@ namespace NWQSim
                 const ValType* gm_real = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3];
                 const ValType* gm_imag = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3] + 256;
                 Expect_C4(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
+                reduce_dim = (dim) >> 4;
             } else if (num_x_indices == 0) {
                 Expect_C0(zmask);
+                reduce_dim = dim;
             }
 
             BARR_CUDA;
-            EXP_REDUCE_GATE(output_index, output);
+            EXP_REDUCE_GATE(output_index, output, reduce_dim);
             BARR_CUDA;
         }
 

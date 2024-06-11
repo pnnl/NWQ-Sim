@@ -80,9 +80,6 @@ namespace NWQSim
         reset_state();
         sim(ansatz);
         cudaDeviceSynchronize();
-        fflush(stdout);
-        std::cout << expvals.size() << std::endl;
-        getchar();
         cudaSafeCall(cudaMemcpy(expvals.data(), obs.exp_output, expvals.size() * sizeof(ValType),
                                     cudaMemcpyDeviceToHost));
       };

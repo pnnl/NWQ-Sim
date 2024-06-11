@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
   // Build the Quantum State object
   NWQSim::VQE::SV_CUDA_VQE state(ansatz, // reference to ansatz
                                 hamil,  // reference to Hamiltonian
-                                nlopt::algorithm::LD_CCSAQ, // NLOpt algorithm for optimization
+                                nlopt::algorithm::LN_COBYLA, // NLOpt algorithm for optimization
                                 callback_function, // Callback function for each energy evaluation
                                 0 // Random seed (passed to the SPSA gradient estimator for random perturbations)
                                 );

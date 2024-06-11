@@ -101,8 +101,8 @@ namespace NWQSim
           if (parameters.size() == 0) {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }
-          energy(parameters);
-          // nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
+          // energy(parameters);
+          nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
         }
       virtual void call_simulator(std::shared_ptr<Ansatz> ansatz) {};
       ValType energy(const std::vector<double>& x) {
@@ -114,7 +114,6 @@ namespace NWQSim
         IdxType index = 0;
         for (auto& pauli_list: pauli_operators) {
           for (const PauliOperator& pauli: pauli_list) {
-            std::cout<< pauli.pauliToString() << " " << expvals[index] << std::endl;
             emap[pauli] = expvals[index++];
           }
         }
