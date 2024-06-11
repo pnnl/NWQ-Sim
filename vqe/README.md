@@ -135,3 +135,8 @@ The same example can be run with the command line-configurable `nwq_vqe` executa
 ```shell
 ./vqe/nwq_vqe -f ../vqe/example_hamiltonians/h2O.hamil -n 10
 ```
+To run the example CUDA and MPI examples respectively, run (from `NWQ-Sim/build`):
+```shell
+./vqe/examples/vqe/examples/basic_example_cuda
+./vqe/examples/vqe/examples/basic_example_mpi
+```
