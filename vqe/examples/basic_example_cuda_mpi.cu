@@ -6,7 +6,7 @@
 #include <fstream>
 #include "utils.hpp"
 #include "state.hpp"
-#include "svsim_vqe/sv_cuda_mpi_vqe.hpp"
+#include "svsim_vqe/sv_cuda_mpi_vqe.cuh"
 #include "gradient/sa_gradient.hpp"
 
 

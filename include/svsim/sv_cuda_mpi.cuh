@@ -790,10 +790,10 @@ namespace NWQSim
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType per_pe_work = ((dim) >> (gpu_scale + 2));
             assert(qubit0 != qubit1); // Non-cloning
-            const IdxType q0dim = ((IdxType)1 << std::max(qubit0, qubit1));
-            const IdxType q1dim = ((IdxType)1 << std::min(qubit0, qubit1));
-            // const IdxType outer_factor = ((dim) + q0dim + q0dim - 1) >> (std::max(qubit0, qubit1) + 1);
-            const IdxType mider_factor = (q0dim + q1dim + q1dim - 1) >> (std::min(qubit0, qubit1) + 1);
+            const IdxType q0dim = ((IdxType)1 << max(qubit0, qubit1));
+            const IdxType q1dim = ((IdxType)1 << min(qubit0, qubit1));
+            // const IdxType outer_factor = ((dim) + q0dim + q0dim - 1) >> (max(qubit0, qubit1) + 1);
+            const IdxType mider_factor = (q0dim + q1dim + q1dim - 1) >> (min(qubit0, qubit1) + 1);
             const IdxType inner_factor = q1dim;
             const IdxType qubit0_dim = ((IdxType)1 << qubit0);
             const IdxType qubit1_dim = ((IdxType)1 << qubit1);
@@ -834,10 +834,10 @@ namespace NWQSim
                 ValType v2 = sv_real_pos2 * sv_real_pos2 + sv_imag_pos2 * sv_imag_pos2;
                 ValType v3 = sv_real_pos3 * sv_real_pos3 + sv_imag_pos3 * sv_imag_pos3;
 
-                exp_val += hasEvenParity(pos0 & mask, n_qubits) ? v0 : -v0;
-                exp_val += hasEvenParity(pos1 & mask, n_qubits) ? v1 : -v1;
-                exp_val += hasEvenParity(pos2 & mask, n_qubits) ? v2 : -v2;
-                exp_val += hasEvenParity(pos3 & mask, n_qubits) ? v3 : -v3;
+                exp_val += hasEvenParity_cu(pos0 & mask, n_qubits) ? v0 : -v0;
+                exp_val += hasEvenParity_cu(pos1 & mask, n_qubits) ? v1 : -v1;
+                exp_val += hasEvenParity_cu(pos2 & mask, n_qubits) ? v2 : -v2;
+                exp_val += hasEvenParity_cu(pos3 & mask, n_qubits) ? v3 : -v3;
             }
             // BARR_MPI;
             if (tid < per_pe_work) {
@@ -853,7 +853,7 @@ namespace NWQSim
             assert(qubit0 != qubit1); // Non-cloning
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
-            if (qubit0 < lg2_m_cpu && qubit1 < lg2_m_cpu)
+            if (qubit0 < lg2_m_gpu && qubit1 < lg2_m_gpu)
             {
                 EXPECT_C2_GATE(gm_real, gm_imag, qubit0, qubit1, mask);
             }
@@ -862,8 +862,8 @@ namespace NWQSim
                 ValType exp_val = 0.0;
                 const IdxType per_pe_work = ((dim) >> (gpu_scale + 1));
                 const IdxType per_pe_num = ((dim) >> (gpu_scale));
-                const IdxType p = std::min(qubit0, qubit1);
-                const IdxType q = std::max(qubit0, qubit1);
+                const IdxType p = min(qubit0, qubit1);
+                const IdxType q = max(qubit0, qubit1);
 
                 // load data from pair node
                 IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (q - (lg2_m_gpu)));
@@ -929,7 +929,7 @@ namespace NWQSim
                             r_imag += (el_real[k] * gm_imag[j * 4 + k]) + (el_imag[k] * gm_real[j * 4 + k]);
                         }
                         ValType val = r_real * r_real + r_imag * r_imag;
-                        exp_val += hasEvenParity(indices[j] & mask, n_qubits) ? val: -val;
+                        exp_val += hasEvenParity_cu(indices[j] & mask, n_qubits) ? val: -val;
                     }
                 }
                 if (tid < per_pe_work) {
@@ -950,14 +950,14 @@ namespace NWQSim
             assert(qubit1 != qubit3); // Non-cloning
             assert(qubit2 != qubit3); // Non-cloning
             // need to sort qubits: min->max: p, q, r, s
-            const IdxType v0 = std::min(qubit0, qubit1);
-            const IdxType v1 = std::min(qubit2, qubit3);
-            const IdxType v2 = std::max(qubit0, qubit1);
-            const IdxType v3 = std::max(qubit2, qubit3);
-            const IdxType p = std::min(v0, v1);
-            const IdxType q = std::min(std::min(v2, v3), std::max(v0, v1));
-            const IdxType r = std::max(std::min(v2, v3), std::max(v0, v1));
-            const IdxType s = std::max(v2, v3);
+            const IdxType v0 = min(qubit0, qubit1);
+            const IdxType v1 = min(qubit2, qubit3);
+            const IdxType v2 = max(qubit0, qubit1);
+            const IdxType v3 = max(qubit2, qubit3);
+            const IdxType p = min(v0, v1);
+            const IdxType q = min(min(v2, v3), max(v0, v1));
+            const IdxType r = max(min(v2, v3), max(v0, v1));
+            const IdxType s = max(v2, v3);
             ValType exp_val = 0.0;
             const IdxType per_pe_work = ((dim) >> (gpu_scale + 4));
             
@@ -1006,7 +1006,7 @@ namespace NWQSim
 
                     ValType val = res_real * res_real + res_imag * res_imag;
                 
-                    exp_val += hasEvenParity((term + SV16IDX(j)) & mask, n_qubits) ? val : -val;
+                    exp_val += hasEvenParity_cu((term + SV16IDX(j)) & mask, n_qubits) ? val : -val;
                     // printf("val %f %lld\n", val, term + SV16IDX(j));
             
                 }
@@ -1027,14 +1027,14 @@ namespace NWQSim
             assert(qubit1 != qubit3); // Non-cloning
             assert(qubit2 != qubit3); // Non-cloning
             // need to sort qubits: min->max: p, q, r, s
-            const IdxType v0 = std::min(qubit0, qubit1);
-            const IdxType v1 = std::min(qubit2, qubit3);
-            const IdxType v2 = std::max(qubit0, qubit1);
-            const IdxType v3 = std::max(qubit2, qubit3);
-            const IdxType p = std::min(v0, v1);
-            const IdxType q = std::min(std::min(v2, v3), std::max(v0, v1));
-            const IdxType r = std::max(std::min(v2, v3), std::max(v0, v1));
-            const IdxType s = std::max(v2, v3);                
+            const IdxType v0 = min(qubit0, qubit1);
+            const IdxType v1 = min(qubit2, qubit3);
+            const IdxType v2 = max(qubit0, qubit1);
+            const IdxType v3 = max(qubit2, qubit3);
+            const IdxType p = min(v0, v1);
+            const IdxType q = min(min(v2, v3), max(v0, v1));
+            const IdxType r = max(min(v2, v3), max(v0, v1));
+            const IdxType s = max(v2, v3);                
             const IdxType per_pe_work = ((dim) >> (gpu_scale + 3));
             const IdxType per_pe_num = ((dim) >> (gpu_scale));
             if (s < lg2_m_gpu)
@@ -1163,7 +1163,7 @@ namespace NWQSim
                         }
                         ValType val = res_real * res_real + res_imag * res_imag;
 
-                        exp_val += hasEvenParity((term + SV16IDX(j)) & mask, n_qubits) ? val : -val;
+                        exp_val += hasEvenParity_cu((term + SV16IDX(j)) & mask, n_qubits) ? val : -val;
                         
                     }
                 }
@@ -1173,12 +1173,10 @@ namespace NWQSim
             }
         }
 
-        __device__ inline void Expect_C0(IdxType mask) {
+        __device__ inline void EXPECT_C0_GATE(IdxType mask) {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             double exp_val = 0.0;
-            grid_group grid = this_grid();
-            const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType per_pe_work = ((dim) >> (gpu_scale));
 
             for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work; i += blockDim.x * gridDim.x)
@@ -1194,6 +1192,8 @@ namespace NWQSim
 
         __device__ inline
         void EXPECT_REDUCE(ValType* output, IdxType index, IdxType reduce_dim) {
+            grid_group grid = this_grid();
+            const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             // Parallel reduction
             for (IdxType k = (reduce_dim >> 1); k > 0; k >>= 1)
             {
