@@ -144,7 +144,18 @@ __device__ bool hasEvenParity(unsigned long long x, const size_t *in_bits, const
     }
     return (count % 2) == 0;
 }
-
+__device__ bool hasEvenParity_cu(unsigned long long x, const size_t in_bits_size)
+{
+    size_t count = 0;
+    for (size_t i = 0; i < in_bits_size; ++i)
+    {
+        if (x & (1ULL << i))
+        {
+            count++;
+        }
+    }
+    return (count % 2) == 0;
+}
 __device__ double parity(unsigned long long num)
 {
     num ^= num >> 32;
@@ -155,6 +166,8 @@ __device__ double parity(unsigned long long num)
     num ^= num >> 1;
     return num & 1; // Return the last bit, which is the parity of the original number
 }
+
+
 
 __global__ void gpu_exp_z(const double *sv_real, const double *sv_imag, double *result, const unsigned long long dim, const int offset)
 {

@@ -57,19 +57,57 @@ namespace NWQSim {
         IdxType dim;
         bool non_trivial;
         std::complex<ValType> coeff;
+        IdxType xmask;
+        IdxType zmask;
+        ValType sign;
+        std::vector<IdxType> x_indices;
+        bool phase;
         std::shared_ptr<std::vector<PauliOp> > ops; // Store in big-endian order v, i.e. qubit 0 is in position 0
       public:
         PauliOperator() {};
         PauliOperator(const std::vector<PauliOp>& _ops,
                       std::complex<ValType> _coeff = 1.0): dim(_ops.size()), coeff(_coeff) {
           ops = std::make_shared<std::vector<PauliOp> >(_ops);
-
-          non_trivial = std::accumulate(ops->begin(), ops->end(), 0) > 0;
+          setExpectationVariables();
         } 
+        void setExpectationVariables() {
+          xmask = 0;
+          zmask = 0;
+          phase = 0;
+          IdxType index = 0;
+          for (auto op: *ops) {
+            switch (op)
+            {
+            case X:
+              xmask |= 1 << index;
+              x_indices.push_back(index);
+              break;
+            case Y:
+              xmask |= 1 << index;
+              zmask |= 1 << index;
+              x_indices.push_back(index);
+              phase += 1;
+              break;
+            case Z:
+              zmask |= 1 << index;
+              break;
+            
+            default:
+              break;
+            }
+            index++;
+          }
+          // if even number of imaginary contributions, sign is negative
+          sign = (phase >> 1) & 1 ? 1 : -1;
+          // either i or 0
+          phase = phase & 1;
+          non_trivial = (xmask | zmask) > 0;
+        }
         PauliOperator(std::string _opstring,
                       std::complex<ValType> _coeff = 1.0): dim(_opstring.length()), coeff(_coeff) {
           ops = std::make_shared<std::vector<PauliOp> >(dim);
           size_t index = 0;
+          non_trivial = false;
           for (char i: _opstring) {
             assert(index < dim);
             switch (i)
@@ -92,13 +130,20 @@ namespace NWQSim {
               break;
             }
           }
+          setExpectationVariables();
         } 
+
         PauliOperator& operator=(const PauliOperator& other) {
           dim = other.dim;
           ops = std::make_shared<std::vector<PauliOp> >(
             other.ops.get()->begin(), other.ops.get()->end()); 
           coeff = other.coeff;
           non_trivial = other.non_trivial;
+          xmask = other.xmask;
+          zmask = other.zmask;
+          phase = other.phase;
+          sign = other.sign;
+          x_indices = other.x_indices;
 
           // assert(coeff. > 0.0);
           return *this;
@@ -109,6 +154,11 @@ namespace NWQSim {
             other.ops.get()->begin(), other.ops.get()->end()); 
           coeff = other.coeff;
           non_trivial = other.non_trivial;
+          xmask = other.xmask;
+          zmask = other.zmask;
+          phase = other.phase;
+          sign = other.sign;
+          x_indices = other.x_indices;
           // assert(coeff.real() > 0.0 || coeff.imag() > 0.0);
         }
         PauliOperator conj() const {
@@ -150,6 +200,15 @@ namespace NWQSim {
           PauliOperator newop (*this);
           newop.coeff *= scalar;
           return newop;
+        }
+        const std::vector<IdxType>& get_xindices() const {
+          return x_indices;
+        }
+        const IdxType get_xmask() const {
+          return xmask;
+        }
+        const IdxType get_zmask() const {
+          return zmask;
         }
         // Dump the Pauli operator to string
         std::string pauliToString() const {

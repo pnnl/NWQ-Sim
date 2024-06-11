@@ -195,6 +195,12 @@ namespace NWQSim
             Gate G(OP::S, qubit);
             gates->push_back(G);
         }
+        void EXPECT(void* obsptr)
+        {
+            // Compute the expectation value of a list of observables (data stored in the ObservableList struct)
+            Gate G(OP::EXPECT, 0, -1, 1, 0, 0, 0, 0, obsptr);
+            gates->push_back(G);
+        }
         void SDG(IdxType qubit)
         {
             // Clifford gate: conjugate of sqrt(Z) phase gate

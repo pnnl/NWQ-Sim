@@ -12,6 +12,7 @@
 
 #include "../circuit_pass/fusion.hpp"
 
+#include "private/exp_gate_declarations.cuh"
 #include <assert.h>
 #include <random>
 #include <complex.h>
@@ -116,7 +117,20 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-
+        dim3 get_dims () {
+            dim3 gridDim(1, 1, 1);
+            cudaDeviceProp deviceProp;
+            cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
+            // 8*16 is per warp shared-memory usage for C4 TC, with real and imag
+            // unsigned smem_size = THREADS_CTA_CUDA/32*8*16*2*sizeof(ValType);
+            unsigned smem_size = 0 * sizeof(ValType);
+            int numBlocksPerSm;
+            cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
+                                                                       simulation_kernel_cuda, THREADS_CTA_CUDA, smem_size));
+            
+            gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
+            return gridDim;
+        }
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
             IdxType origional_gates = circuit->num_gates();
@@ -144,21 +158,13 @@ namespace NWQSim
                 printf("SVSim_gpu is running! Requesting %lld qubits.\n", n_qubits);
             }
 
-            dim3 gridDim(1, 1, 1);
-            cudaDeviceProp deviceProp;
-            cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
-            // 8*16 is per warp shared-memory usage for C4 TC, with real and imag
-            // unsigned smem_size = THREADS_CTA_CUDA/32*8*16*2*sizeof(ValType);
-            unsigned smem_size = 0 * sizeof(ValType);
-            int numBlocksPerSm;
-            cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
-                                                                       simulation_kernel_cuda, THREADS_CTA_CUDA, smem_size));
-            gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
+            dim3 gridDim = get_dims();
             void *args[] = {&sv_gpu, &n_gates};
             cudaSafeCall(cudaDeviceSynchronize());
 
             sim_timer.start_timer();
 
+            unsigned smem_size = 0 * sizeof(ValType);
             cudaLaunchCooperativeKernel((void *)simulation_kernel_cuda, gridDim,
                                         THREADS_CTA_CUDA, args, smem_size);
             cudaSafeCall(cudaDeviceSynchronize());
@@ -593,6 +599,217 @@ namespace NWQSim
             }
             BARR_CUDA;
         }
+        
+        
+        __device__ inline void 
+        Expect_C4(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask) {
+            grid_group grid = this_grid();
+            const int tid = blockDim.x * blockIdx.x + threadIdx.x;
+            const IdxType per_pe_work = ((dim) >> 4);
+            
+            assert(qubit0 != qubit1); // Non-cloning
+            assert(qubit0 != qubit2); // Non-cloning
+            assert(qubit0 != qubit3); // Non-cloning
+            assert(qubit1 != qubit2); // Non-cloning
+            assert(qubit1 != qubit3); // Non-cloning
+            assert(qubit2 != qubit3); // Non-cloning
+            // need to sort qubits: min->max: p, q, r, s
+            const IdxType v0 = min(qubit0, qubit1);
+            const IdxType v1 = min(qubit2, qubit3);
+            const IdxType v2 = max(qubit0, qubit1);
+            const IdxType v3 = max(qubit2, qubit3);
+            const IdxType p = min(v0, v1);
+            const IdxType q = min(min(v2, v3), max(v0, v1));
+            const IdxType r = max(min(v2, v3), max(v0, v1));
+            const IdxType s = max(v2, v3);
+            ValType exp_val = 0.0;
+            for (IdxType i = tid; i < per_pe_work; i += blockDim.x * gridDim.x)
+            {
+                const IdxType term0 = MOD2E(i, p);
+                const IdxType term1 = MOD2E(DIV2E(i, p), q - p - 1) * EXP2E(p + 1);
+                const IdxType term2 = MOD2E(DIV2E(DIV2E(i, p), q - p - 1), r - q - 1) * EXP2E(q + 1);
+                const IdxType term3 = MOD2E(DIV2E(DIV2E(DIV2E(i, p), q - p - 1), r - q - 1), s - r - 1) * EXP2E(r + 1);
+                const IdxType term4 = DIV2E(DIV2E(DIV2E(DIV2E(i, p), q - p - 1), r - q - 1), s - r - 1) * EXP2E(s + 1);
+                const IdxType term = term4 + term3 + term2 + term1 + term0;
+                const ValType el_real[16] = {
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(0)), LOCAL_G_CUDA(sv_real, term + SV16IDX(1)),
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(2)), LOCAL_G_CUDA(sv_real, term + SV16IDX(3)),
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(4)), LOCAL_G_CUDA(sv_real, term + SV16IDX(5)),
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(6)), LOCAL_G_CUDA(sv_real, term + SV16IDX(7)),
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(8)), LOCAL_G_CUDA(sv_real, term + SV16IDX(9)),
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(10)), LOCAL_G_CUDA(sv_real, term + SV16IDX(11)),
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(12)), LOCAL_G_CUDA(sv_real, term + SV16IDX(13)),
+                    LOCAL_G_CUDA(sv_real, term + SV16IDX(14)), LOCAL_G_CUDA(sv_real, term + SV16IDX(15))};
+                const ValType el_imag[16] = {
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(0)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(1)),
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(2)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(3)),
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(4)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(5)),
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(6)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(7)),
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(8)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(9)),
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(10)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(11)),
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(12)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(13)),
+                    LOCAL_G_CUDA(sv_imag, term + SV16IDX(14)), LOCAL_G_CUDA(sv_imag, term + SV16IDX(15))};
+                // #pragma unroll
+                for (unsigned j = 0; j < 16; j++)
+                {
+                    ValType res_real = 0;
+                    ValType res_imag = 0;
+                    // #pragma unroll
+                    for (unsigned k = 0; k < 16; k++)
+                    {
+                        res_real += (el_real[k] * gm_real[j * 16 + k]) - (el_imag[k] * gm_imag[j * 16 + k]);
+                        res_imag += (el_real[k] * gm_imag[j * 16 + k]) + (el_imag[k] * gm_real[j * 16 + k]);
+                    }
+
+                    ValType val = res_real * res_real + res_imag * res_imag;
+                
+                    exp_val += hasEvenParity_cu(term + SV16IDX(j) & mask, n_qubits) ? val : -val;
+            
+                }
+            }
+            if (tid < per_pe_work) {
+                m_real[tid] = exp_val;
+            }
+        }
+        __device__ inline void 
+        Expect_C2(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType mask) {
+            grid_group grid = this_grid();
+            const int tid = blockDim.x * blockIdx.x + threadIdx.x;
+            const IdxType per_pe_work = ((dim) >> 2);
+            assert(qubit0 != qubit1); // Non-cloning
+
+            const IdxType q0dim = ((IdxType)1 << max(qubit0, qubit1));
+            const IdxType q1dim = ((IdxType)1 << min(qubit0, qubit1));
+            const IdxType outer_factor = ((dim) + q0dim + q0dim - 1) >> (max(qubit0, qubit1) + 1);
+            const IdxType mider_factor = (q0dim + q1dim + q1dim - 1) >> (min(qubit0, qubit1) + 1);
+            const IdxType inner_factor = q1dim;
+            const IdxType qubit0_dim = ((IdxType)1 << qubit0);
+            const IdxType qubit1_dim = ((IdxType)1 << qubit1);
+            double exp_val = 0.0;
+
+            for (IdxType i = tid; i < per_pe_work; i += blockDim.x * gridDim.x)
+            {
+                IdxType outer = ((i / inner_factor) / (mider_factor)) * (q0dim + q0dim);
+                IdxType mider = ((i / inner_factor) % (mider_factor)) * (q1dim + q1dim);
+                IdxType inner = i % inner_factor;
+                IdxType pos0 = outer + mider + inner;
+                IdxType pos1 = outer + mider + inner + qubit1_dim;
+                IdxType pos2 = outer + mider + inner + qubit0_dim;
+                IdxType pos3 = outer + mider + inner + q0dim + q1dim;
+
+                const ValType el0_real = LOCAL_G_CUDA(sv_real, pos0);
+                const ValType el0_imag = LOCAL_G_CUDA(sv_imag, pos0);
+                const ValType el1_real = LOCAL_G_CUDA(sv_real, pos1);
+                const ValType el1_imag = LOCAL_G_CUDA(sv_imag, pos1);
+                const ValType el2_real = LOCAL_G_CUDA(sv_real, pos2);
+                const ValType el2_imag = LOCAL_G_CUDA(sv_imag, pos2);
+                const ValType el3_real = LOCAL_G_CUDA(sv_real, pos3);
+                const ValType el3_imag = LOCAL_G_CUDA(sv_imag, pos3);
+                // Real part
+                ValType sv_real_pos0 = (gm_real[0] * el0_real) - (gm_imag[0] * el0_imag) + (gm_real[1] * el1_real) - (gm_imag[1] * el1_imag) + (gm_real[2] * el2_real) - (gm_imag[2] * el2_imag) + (gm_real[3] * el3_real) - (gm_imag[3] * el3_imag);
+                ValType sv_real_pos1 = (gm_real[4] * el0_real) - (gm_imag[4] * el0_imag) + (gm_real[5] * el1_real) - (gm_imag[5] * el1_imag) + (gm_real[6] * el2_real) - (gm_imag[6] * el2_imag) + (gm_real[7] * el3_real) - (gm_imag[7] * el3_imag);
+                ValType sv_real_pos2 = (gm_real[8] * el0_real) - (gm_imag[8] * el0_imag) + (gm_real[9] * el1_real) - (gm_imag[9] * el1_imag) + (gm_real[10] * el2_real) - (gm_imag[10] * el2_imag) + (gm_real[11] * el3_real) - (gm_imag[11] * el3_imag);
+                ValType sv_real_pos3 = (gm_real[12] * el0_real) - (gm_imag[12] * el0_imag) + (gm_real[13] * el1_real) - (gm_imag[13] * el1_imag) + (gm_real[14] * el2_real) - (gm_imag[14] * el2_imag) + (gm_real[15] * el3_real) - (gm_imag[15] * el3_imag);
+                // Imag part
+                ValType sv_imag_pos0 = (gm_real[0] * el0_imag) + (gm_imag[0] * el0_real) + (gm_real[1] * el1_imag) + (gm_imag[1] * el1_real) + (gm_real[2] * el2_imag) + (gm_imag[2] * el2_real) + (gm_real[3] * el3_imag) + (gm_imag[3] * el3_real);
+                ValType sv_imag_pos1 = (gm_real[4] * el0_imag) + (gm_imag[4] * el0_real) + (gm_real[5] * el1_imag) + (gm_imag[5] * el1_real) + (gm_real[6] * el2_imag) + (gm_imag[6] * el2_real) + (gm_real[7] * el3_imag) + (gm_imag[7] * el3_real);
+                ValType sv_imag_pos2 = (gm_real[8] * el0_imag) + (gm_imag[8] * el0_real) + (gm_real[9] * el1_imag) + (gm_imag[9] * el1_real) + (gm_real[10] * el2_imag) + (gm_imag[10] * el2_real) + (gm_real[11] * el3_imag) + (gm_imag[11] * el3_real);
+                ValType sv_imag_pos3 = (gm_real[12] * el0_imag) + (gm_imag[12] * el0_real) + (gm_real[13] * el1_imag) + (gm_imag[13] * el1_real) + (gm_real[14] * el2_imag) + (gm_imag[14] * el2_real) + (gm_real[15] * el3_imag) + (gm_imag[15] * el3_real);
+
+                ValType v0 = sv_real_pos0 * sv_real_pos0 + sv_imag_pos0 * sv_imag_pos0;
+                ValType v1 = sv_real_pos1 * sv_real_pos1 + sv_imag_pos1 * sv_imag_pos1;
+                ValType v2 = sv_real_pos2 * sv_real_pos2 + sv_imag_pos2 * sv_imag_pos2;
+                ValType v3 = sv_real_pos3 * sv_real_pos3 + sv_imag_pos3 * sv_imag_pos3;
+                exp_val += hasEvenParity_cu(pos0 & mask, n_qubits) ? v0 : -v0;
+                exp_val += hasEvenParity_cu(pos1 & mask, n_qubits) ? v1 : -v1;
+                exp_val += hasEvenParity_cu(pos2 & mask, n_qubits) ? v2 : -v2;
+                exp_val += hasEvenParity_cu(pos3 & mask, n_qubits) ? v3 : -v3;
+            }
+            if (tid < per_pe_work) {
+                m_real[tid] = exp_val;
+            }
+        }
+        __device__ inline void Expect_C0(IdxType mask) {
+            grid_group grid = this_grid();
+            const int tid = blockDim.x * blockIdx.x + threadIdx.x;
+            double exp_val = 0.0;
+            for (IdxType i = tid; i < dim; i += blockDim.x * gridDim.x) {
+                double val = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
+                exp_val += hasEvenParity_cu(i & mask, n_qubits) ? val : -val;
+            }
+            if (tid < dim) {
+                m_real[tid] = exp_val;
+            }
+        }
+        
+        
+        __device__ __inline__ void EXP_REDUCE_GATE(const IdxType output_index, ValType* output, IdxType reduce_dim)
+        {
+            grid_group grid = this_grid();
+            
+            const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
+            // ValType *m_real = m_real;
+            // Parallel reduction
+            for (IdxType k = (reduce_dim >> 1); k > 0; k >>= 1)
+            {
+                if (tid < k) {
+                    m_real[tid] += m_real[tid + k];
+                }
+                BARR_CUDA;
+            }
+            grid.sync();
+
+            if (tid == 0)
+            {
+                ValType expectation = m_real[0];
+                LOCAL_P_CUDA(output, output_index, expectation);
+            }
+
+            BARR_CUDA;
+
+        }
+        __device__ __inline__ void Expect_GATE(IdxType* x_indices, 
+                                 IdxType num_x_indices, 
+                                 IdxType xmask, 
+                                 IdxType zmask, 
+                                 ValType* output,
+                                 IdxType output_index)  {
+            grid_group grid = this_grid();
+            const IdxType n_size = (IdxType)1 << (n_qubits);
+            const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
+            const IdxType local_tid = threadIdx.x; // thread_id in warp
+            IdxType reduce_dim;
+            if (num_x_indices == 2) {
+                IdxType q0 = x_indices[0];
+                IdxType q1 = x_indices[1];
+                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
+                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
+                const ValType* gm_real = exp_gate_perms_2q_d[zind0 + zind1];
+                const ValType* gm_imag = exp_gate_perms_2q_d[zind0 + zind1] + 16;
+                Expect_C2(gm_real, gm_imag, q0, q1, xmask | zmask);
+                reduce_dim = (dim) >> 2;
+            } else if (num_x_indices == 4) {
+                IdxType q0 = x_indices[0];
+                IdxType q1 = x_indices[1];
+                IdxType q2 = x_indices[2];
+                IdxType q3 = x_indices[3];
+                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
+                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
+                IdxType zind2 = ((zmask & (1 << q2)) >> q2) << 2;
+                IdxType zind3 = ((zmask & (1 << q3)) >> q3) << 3;
+                const ValType* gm_real = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3];
+                const ValType* gm_imag = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3] + 256;
+                Expect_C4(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
+                reduce_dim = (dim) >> 4;
+            } else if (num_x_indices == 0) {
+                Expect_C0(zmask);
+                reduce_dim = dim;
+            }
+
+            BARR_CUDA;
+            EXP_REDUCE_GATE(output_index, output, reduce_dim);
+            BARR_CUDA;
+        }
 
         __device__ __inline__ void RESET_GATE(const IdxType qubit)
         {
@@ -749,6 +966,22 @@ namespace NWQSim
             {
                 sv_gpu->MA_GATE(qubit, cur_index);
                 cur_index += qubit;
+            }
+            else if (op_name == OP::EXPECT)
+            {
+
+                ObservableList o = *(ObservableList*)((sv_gpu->gates_gpu)[t].data);
+                IdxType* xinds = o.x_indices;
+                for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
+                    sv_gpu->Expect_GATE(xinds, 
+                                o.x_index_sizes[obs_ind],
+                                o.xmasks[obs_ind],
+                                o.zmasks[obs_ind],
+                                o.exp_output,
+                                obs_ind);
+                    xinds += o.x_index_sizes[obs_ind];
+                    grid.sync();
+                }
             }
             grid.sync();
         }

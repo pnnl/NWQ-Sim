@@ -1,6 +1,6 @@
 #ifndef VQE_CPU_STATE
 #define VQE_CPU_STATE
-#include "svsim/sv_cpu.hpp"
+#include "svsim/sv_mpi.hpp"
 #include "vqe_state.hpp"
 #include "observable/pauli_operator.hpp"
 #include "utils.hpp"
@@ -15,7 +15,7 @@
 namespace NWQSim
 {
   namespace VQE {
-    class SV_CPU_VQE: public VQEState, public SV_CPU {
+    class SV_CPU_VQE: public VQEState, public SV_MPI {
       public:
         SV_CPU_VQE(std::shared_ptr<Ansatz> a, 
                    const Hamiltonian& h, 
@@ -23,16 +23,8 @@ namespace NWQSim
                    Callback _callback,
                    IdxType seed = 0,
                    OptimizerSettings opt_settings = OptimizerSettings()): 
-                                      SV_CPU(a->num_qubits()),
-                                      VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
-        obs.xmasks = xmasks.data();
-        obs.zmasks = zmasks.data();
-        obs.numterms = xmasks.size();
-        obs.exp_output = expvals.data();
-        obs.x_indices = x_indices.data();
-        obs.x_index_sizes = x_index_sizes.data();
-        ansatz->EXPECT(&obs);
-      };
+                                      SV_MPI(a->num_qubits()),
+                                      VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {};
       virtual void call_simulator(std::shared_ptr<Ansatz> ansatz) override {        
         reset_state();
         sim(ansatz);
