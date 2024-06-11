@@ -6,6 +6,7 @@
 #include "../gate.hpp"
 #include "../circuit.hpp"
 #include "../private/config.hpp"
+#include "private/exp_gate_declarations_host.hpp"
 
 #include "../circuit_pass/fusion.hpp"
 #include "../private/macros.hpp"

@@ -1,4 +1,5 @@
 #include "svsim_vqe/sv_cpu_vqe.hpp"
+#include "svsim_vqe/sv_cuda_vqe.cuh"
 #include "private/nlohmann/json.hpp"
 #include "utils.hpp"
 #include <unordered_map>

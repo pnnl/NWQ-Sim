@@ -5,7 +5,6 @@
 
 #include "private/config.hpp"
 #include "private/gate_factory/sv_gates.hpp"
-#include "private/exp_gate_declarations.h"
 #include <stdexcept> // For std::runtime_error
 #include <vector>
 #include <string>

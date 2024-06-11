@@ -7,6 +7,7 @@
 #include "utils.hpp"
 #include "state.hpp"
 #include "svsim_vqe/sv_cpu_vqe.hpp"
+#include "svsim_vqe/sv_cuda_vqe.cuh"
 #include "gradient/sa_gradient.hpp"
 
 
@@ -35,9 +36,9 @@ int main(int argc, char** argv) {
   //      (shared_ptr used to match baseline NWQ-Sim functionality)
   std::shared_ptr<Ansatz> ansatz = std::make_shared<UCCSD>(hamil.getEnv(), jw_transform, 1);
   // Build the Quantum State object
-  NWQSim::VQE::SV_CPU_VQE state(ansatz, // reference to ansatz
+  NWQSim::VQE::SV_CUDA_VQE state(ansatz, // reference to ansatz
                                 hamil,  // reference to Hamiltonian
-                                nlopt::algorithm::LD_CCSAQ, // NLOpt algorithm for optimization
+                                nlopt::algorithm::LN_COBYLA, // NLOpt algorithm for optimization
                                 callback_function, // Callback function for each energy evaluation
                                 0 // Random seed (passed to the SPSA gradient estimator for random perturbations)
                                 );

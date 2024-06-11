@@ -12,6 +12,7 @@
 
 #include "../circuit_pass/fusion.hpp"
 
+#include "private/exp_gate_declarations.cuh"
 #include <assert.h>
 #include <random>
 #include <complex.h>
@@ -128,7 +129,7 @@ namespace NWQSim
                                                                        simulation_kernel_cuda, THREADS_CTA_CUDA, smem_size));
             
             gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
-            return gridDim
+            return gridDim;
         }
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
@@ -163,6 +164,7 @@ namespace NWQSim
 
             sim_timer.start_timer();
 
+            unsigned smem_size = 0 * sizeof(ValType);
             cudaLaunchCooperativeKernel((void *)simulation_kernel_cuda, gridDim,
                                         THREADS_CTA_CUDA, args, smem_size);
             cudaSafeCall(cudaDeviceSynchronize());
@@ -604,6 +606,7 @@ namespace NWQSim
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType per_pe_work = ((dim) >> 4);
+            
             assert(qubit0 != qubit1); // Non-cloning
             assert(qubit0 != qubit2); // Non-cloning
             assert(qubit0 != qubit3); // Non-cloning
@@ -611,14 +614,14 @@ namespace NWQSim
             assert(qubit1 != qubit3); // Non-cloning
             assert(qubit2 != qubit3); // Non-cloning
             // need to sort qubits: min->max: p, q, r, s
-            const IdxType v0 = std::min(qubit0, qubit1);
-            const IdxType v1 = std::min(qubit2, qubit3);
-            const IdxType v2 = std::max(qubit0, qubit1);
-            const IdxType v3 = std::max(qubit2, qubit3);
-            const IdxType p = std::min(v0, v1);
-            const IdxType q = std::min(std::min(v2, v3), std::max(v0, v1));
-            const IdxType r = std::max(std::min(v2, v3), std::max(v0, v1));
-            const IdxType s = std::max(v2, v3);
+            const IdxType v0 = min(qubit0, qubit1);
+            const IdxType v1 = min(qubit2, qubit3);
+            const IdxType v2 = max(qubit0, qubit1);
+            const IdxType v3 = max(qubit2, qubit3);
+            const IdxType p = min(v0, v1);
+            const IdxType q = min(min(v2, v3), max(v0, v1));
+            const IdxType r = max(min(v2, v3), max(v0, v1));
+            const IdxType s = max(v2, v3);
             ValType exp_val = 0.0;
             for (IdxType i = tid; i < per_pe_work; i += blockDim.x * gridDim.x)
             {
@@ -660,11 +663,13 @@ namespace NWQSim
 
                     ValType val = res_real * res_real + res_imag * res_imag;
                 
-                    exp_val += hasEvenParity(term + SV16IDX(j) & mask, n_qubits) ? val : -val;
+                    exp_val += hasEvenParity_cu(term + SV16IDX(j) & mask, n_qubits) ? val : -val;
             
                 }
             }
-            m_real[tid] = exp_val;
+            if (tid < per_pe_work) {
+                m_real[tid] = exp_val;
+            }
         }
         __device__ inline void 
         Expect_C2(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType mask) {
@@ -715,36 +720,40 @@ namespace NWQSim
                 ValType v1 = sv_real_pos1 * sv_real_pos1 + sv_imag_pos1 * sv_imag_pos1;
                 ValType v2 = sv_real_pos2 * sv_real_pos2 + sv_imag_pos2 * sv_imag_pos2;
                 ValType v3 = sv_real_pos3 * sv_real_pos3 + sv_imag_pos3 * sv_imag_pos3;
-                exp_val += hasEvenParity(pos0 & mask, n_qubits) ? v0 : -v0;
-                exp_val += hasEvenParity(pos1 & mask, n_qubits) ? v1 : -v1;
-                exp_val += hasEvenParity(pos2 & mask, n_qubits) ? v2 : -v2;
-                exp_val += hasEvenParity(pos3 & mask, n_qubits) ? v3 : -v3;
+                exp_val += hasEvenParity_cu(pos0 & mask, n_qubits) ? v0 : -v0;
+                exp_val += hasEvenParity_cu(pos1 & mask, n_qubits) ? v1 : -v1;
+                exp_val += hasEvenParity_cu(pos2 & mask, n_qubits) ? v2 : -v2;
+                exp_val += hasEvenParity_cu(pos3 & mask, n_qubits) ? v3 : -v3;
             }
-            m_real[tid] = exp_val;
+            if (tid < per_pe_work) {
+                m_real[tid] = exp_val;
+            }
         }
-        virtual double Expect_C0(IdxType mask) {
+        __device__ inline void Expect_C0(IdxType mask) {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             double exp_val = 0.0;
-            for (IdxType i = 0; i < dim; i++) {
+            for (IdxType i = tid; i < dim; i += blockDim.x * gridDim.x) {
                 double val = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
-                exp_val += hasEvenParity(i & mask, n_qubits) ? val : -val;
+                exp_val += hasEvenParity_cu(i & mask, n_qubits) ? val : -val;
             }
-            m_real[tid] = exp_val;
+            if (tid < dim) {
+                m_real[tid] = exp_val;
+            }
         }
         
         
-        __device__ __inline__ void EXP_REDUCE_GATE(const IdxType output_index, ValType* output)
+        __device__ __inline__ void EXP_REDUCE_GATE(const IdxType output_index, ValType* output, IdxType reduce_dim)
         {
             grid_group grid = this_grid();
-            const IdxType n_size = (IdxType)1 << (n_qubits);
+            
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             // ValType *m_real = m_real;
             // Parallel reduction
-            for (IdxType k = (blockDim.x * gridDim.x) >> 1; k > 0; k >>= 1)
+            for (IdxType k = (reduce_dim >> 1); k > 0; k >>= 1)
             {
                 if (tid < k) {
-                    exp_cache[tid] += m_real[tid + k];
+                    m_real[tid] += m_real[tid + k];
                 }
                 BARR_CUDA;
             }
@@ -769,14 +778,16 @@ namespace NWQSim
             const IdxType n_size = (IdxType)1 << (n_qubits);
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType local_tid = threadIdx.x; // thread_id in warp
+            IdxType reduce_dim;
             if (num_x_indices == 2) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
                 IdxType zind0 = ((zmask & (1 << q0)) >> q0);
                 IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
-                const ValType* gm_real = exp_gate_perms_2q[zind0 + zind1];
-                const ValType* gm_imag = exp_gate_perms_2q[zind0 + zind1] + 16;
+                const ValType* gm_real = exp_gate_perms_2q_d[zind0 + zind1];
+                const ValType* gm_imag = exp_gate_perms_2q_d[zind0 + zind1] + 16;
                 Expect_C2(gm_real, gm_imag, q0, q1, xmask | zmask);
+                reduce_dim = (dim) >> 2;
             } else if (num_x_indices == 4) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
@@ -786,15 +797,18 @@ namespace NWQSim
                 IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
                 IdxType zind2 = ((zmask & (1 << q2)) >> q2) << 2;
                 IdxType zind3 = ((zmask & (1 << q3)) >> q3) << 3;
-                const ValType* gm_real = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3];
-                const ValType* gm_imag = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3] + 256;
+                const ValType* gm_real = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3];
+                const ValType* gm_imag = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3] + 256;
                 Expect_C4(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
+                reduce_dim = (dim) >> 4;
             } else if (num_x_indices == 0) {
                 Expect_C0(zmask);
+                reduce_dim = dim;
             }
 
             BARR_CUDA;
-            EXP_REDUCE_GATE(m_real, output_index, output);
+            EXP_REDUCE_GATE(output_index, output, reduce_dim);
+            BARR_CUDA;
         }
 
         __device__ __inline__ void RESET_GATE(const IdxType qubit)
@@ -955,8 +969,19 @@ namespace NWQSim
             }
             else if (op_name == OP::EXPECT)
             {
+
                 ObservableList o = *(ObservableList*)((sv_gpu->gates_gpu)[t].data);
-                sv_gpu->EXP_GATE(o.x_indices, o.x_index_sizes, o.zmasks, o.xmasks, m_real, o.exp_output, o.numterms);
+                IdxType* xinds = o.x_indices;
+                for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
+                    sv_gpu->Expect_GATE(xinds, 
+                                o.x_index_sizes[obs_ind],
+                                o.xmasks[obs_ind],
+                                o.zmasks[obs_ind],
+                                o.exp_output,
+                                obs_ind);
+                    xinds += o.x_index_sizes[obs_ind];
+                    grid.sync();
+                }
             }
             grid.sync();
         }
