@@ -33,7 +33,7 @@ namespace NWQSim
         obs.x_index_sizes = x_index_sizes.data();
         ansatz->EXPECT(&obs);
       };
-      virtual void call_simulator(std::shared_ptr<Ansatz> ansatz) override {        
+      virtual void call_simulator() override {        
         reset_state();
         sim(ansatz);
       };

@@ -76,7 +76,7 @@ namespace NWQSim
             SAFE_FREE_GPU(obs.exp_output);
             SAFE_FREE_GPU(ansatz->gates->back().data);
         }
-      virtual void call_simulator(std::shared_ptr<Ansatz> ansatz) override {        
+      virtual void call_simulator() override {        
         reset_state();
         sim(ansatz);
         cudaDeviceSynchronize();

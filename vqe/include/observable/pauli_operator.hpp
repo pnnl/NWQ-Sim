@@ -213,7 +213,6 @@ namespace NWQSim {
         // Dump the Pauli operator to string
         std::string pauliToString() const {
           std::stringstream ss;
-          std::vector<PauliOp> reversed(dim);
           if (coeff != 1.0) {
             ss << "(" << coeff.real() << " ";
             if (coeff.imag() >= 0) {
@@ -223,10 +222,9 @@ namespace NWQSim {
             }
             // ss
           }
-          // ss << "*";
           // Reverse to ensure correct order (little endian)
-          std::reverse_copy(ops->begin(), ops->end(), reversed.begin());
-          for (int pauli_index: reversed) {
+          for (int i = dim-1; i >= 0; i--) {
+            int pauli_index = (int)ops->at(i);  
             ss << PAULI_OP_NAMES[pauli_index];
           }
           return ss.str();
