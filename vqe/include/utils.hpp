@@ -21,7 +21,6 @@ std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
   out << "]";
   return out;
 }
-
 namespace NWQSim{
   namespace VQE{
   using IdxType = long long;

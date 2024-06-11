@@ -12,12 +12,12 @@ namespace NWQSim {
           FermionOperator virtual_creation_up (q, Virtual, Up, Creation);
           fermion_operators.push_back({virtual_creation_down, occupied_annihilation_down});
           fermion_operators.push_back({virtual_creation_up, occupied_annihilation_up});
-#ifndef NDEBUG
-                std::cout << "SE: " << virtual_creation_down.qubitIndex(env.n_occ, env.n_virt) << " " << 
-                             occupied_annihilation_down.qubitIndex(env.n_occ, env.n_virt) << std::endl;
-                std::cout << "SE: " <<  virtual_creation_up.qubitIndex(env.n_occ, env.n_virt) << " " << 
-                             occupied_annihilation_up.qubitIndex(env.n_occ, env.n_virt) << std::endl;
-#endif
+// #ifndef NDEBUG
+//                 std::cout << "SE: " << virtual_creation_down.qubitIndex(env.n_occ, env.n_virt) << " " << 
+//                              occupied_annihilation_down.qubitIndex(env.n_occ, env.n_virt) << std::endl;
+//                 std::cout << "SE: " <<  virtual_creation_up.qubitIndex(env.n_occ, env.n_virt) << " " << 
+//                              occupied_annihilation_up.qubitIndex(env.n_occ, env.n_virt) << std::endl;
+// #endif
         }
       }
 
@@ -45,12 +45,12 @@ namespace NWQSim {
                                              virt_down_2,
                                              occ_down_1,
                                              occ_down_2});
-#ifndef NDEBUG
-                std::cout <<  "DE: " << virt_up_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
-                             virt_up_2.qubitIndex(env.n_occ, env.n_virt) << " " << 
-                             occ_up_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
-                             occ_up_2.qubitIndex(env.n_occ, env.n_virt) << std::endl;
-#endif
+// #ifndef NDEBUG
+//                 std::cout <<  "DE: " << virt_up_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
+//                              virt_up_2.qubitIndex(env.n_occ, env.n_virt) << " " << 
+//                              occ_up_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
+//                              occ_up_2.qubitIndex(env.n_occ, env.n_virt) << std::endl;
+// #endif
                 // Up spin all together
                 fermion_operators.push_back({virt_up_1,
                                              virt_up_2,
@@ -58,12 +58,12 @@ namespace NWQSim {
                                              occ_up_2});
               }
 
-#ifndef NDEBUG
-              std::cout <<  "DE: " << virt_down_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
-                            virt_up_2.qubitIndex(env.n_occ, env.n_virt) << " " << 
-                            occ_up_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
-                            occ_down_2.qubitIndex(env.n_occ, env.n_virt) << std::endl;
-#endif
+// #ifndef NDEBUG
+//               std::cout <<  "DE: " << virt_down_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
+//                             virt_up_2.qubitIndex(env.n_occ, env.n_virt) << " " << 
+//                             occ_up_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
+//                             occ_down_2.qubitIndex(env.n_occ, env.n_virt) << std::endl;
+// #endif
               fermion_operators.push_back({virt_down_1,
                                            virt_up_2,
                                            occ_up_1,

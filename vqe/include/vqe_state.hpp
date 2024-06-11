@@ -103,10 +103,10 @@ namespace NWQSim
           }
           nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
       }
-      virtual void call_simulator(std::shared_ptr<Ansatz> ansatz) {};
+      virtual void call_simulator() {};
       virtual ValType energy(const std::vector<double>& x) {
         ansatz->setParams(x);
-        call_simulator(ansatz);
+        call_simulator();
 
         ExpectationMap emap;
         auto& pauli_operators = hamil.getPauliOperators();

@@ -10,7 +10,7 @@
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
 #include "../private/config.hpp"
-
+#include "../private/exp_gate_declarations_host.hpp"
 #include <random>
 #include <cstring>
 #include <algorithm>
@@ -340,6 +340,7 @@ namespace NWQSim
                 }
                 else if (g.op_name == OP::EXPECT)
                 {
+                    BARR_MPI;
                     ObservableList o = *(ObservableList*)(g.data);
                     IdxType* xinds = o.x_indices;
                     for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
@@ -625,7 +626,8 @@ namespace NWQSim
             const IdxType r = std::max(std::min(v2, v3), std::max(v0, v1));
             const IdxType s = std::max(v2, v3);
             ValType exp_val = 0.0;
-            const IdxType per_pe_work = ((dim) >> (cpu_scale + 3));
+            const IdxType per_pe_work = ((dim) >> (cpu_scale + 4));
+            
             for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
             {
                 const IdxType term0 = MOD2E(i, p);
@@ -635,23 +637,23 @@ namespace NWQSim
                 const IdxType term4 = DIV2E(DIV2E(DIV2E(DIV2E(i, p), q - p - 1), r - q - 1), s - r - 1) * EXP2E(s + 1);
                 const IdxType term = term4 + term3 + term2 + term1 + term0;
                 const ValType el_real[16] = {
-                    GET(sv_real, term + SV16IDX(0)), GET(sv_real, term + SV16IDX(1)),
-                    GET(sv_real, term + SV16IDX(2)), GET(sv_real, term + SV16IDX(3)),
-                    GET(sv_real, term + SV16IDX(4)), GET(sv_real, term + SV16IDX(5)),
-                    GET(sv_real, term + SV16IDX(6)), GET(sv_real, term + SV16IDX(7)),
-                    GET(sv_real, term + SV16IDX(8)), GET(sv_real, term + SV16IDX(9)),
-                    GET(sv_real, term + SV16IDX(10)), GET(sv_real, term + SV16IDX(11)),
-                    GET(sv_real, term + SV16IDX(12)), GET(sv_real, term + SV16IDX(13)),
-                    GET(sv_real, term + SV16IDX(14)), GET(sv_real, term + SV16IDX(15))};
+                    LOCAL_G(sv_real, term + SV16IDX(0)), LOCAL_G(sv_real, term + SV16IDX(1)),
+                    LOCAL_G(sv_real, term + SV16IDX(2)), LOCAL_G(sv_real, term + SV16IDX(3)),
+                    LOCAL_G(sv_real, term + SV16IDX(4)), LOCAL_G(sv_real, term + SV16IDX(5)),
+                    LOCAL_G(sv_real, term + SV16IDX(6)), LOCAL_G(sv_real, term + SV16IDX(7)),
+                    LOCAL_G(sv_real, term + SV16IDX(8)), LOCAL_G(sv_real, term + SV16IDX(9)),
+                    LOCAL_G(sv_real, term + SV16IDX(10)), LOCAL_G(sv_real, term + SV16IDX(11)),
+                    LOCAL_G(sv_real, term + SV16IDX(12)), LOCAL_G(sv_real, term + SV16IDX(13)),
+                    LOCAL_G(sv_real, term + SV16IDX(14)), LOCAL_G(sv_real, term + SV16IDX(15))};
                 const ValType el_imag[16] = {
-                    GET(sv_imag, term + SV16IDX(0)), GET(sv_imag, term + SV16IDX(1)),
-                    GET(sv_imag, term + SV16IDX(2)), GET(sv_imag, term + SV16IDX(3)),
-                    GET(sv_imag, term + SV16IDX(4)), GET(sv_imag, term + SV16IDX(5)),
-                    GET(sv_imag, term + SV16IDX(6)), GET(sv_imag, term + SV16IDX(7)),
-                    GET(sv_imag, term + SV16IDX(8)), GET(sv_imag, term + SV16IDX(9)),
-                    GET(sv_imag, term + SV16IDX(10)), GET(sv_imag, term + SV16IDX(11)),
-                    GET(sv_imag, term + SV16IDX(12)), GET(sv_imag, term + SV16IDX(13)),
-                    GET(sv_imag, term + SV16IDX(14)), GET(sv_imag, term + SV16IDX(15))};
+                    LOCAL_G(sv_imag, term + SV16IDX(0)), LOCAL_G(sv_imag, term + SV16IDX(1)),
+                    LOCAL_G(sv_imag, term + SV16IDX(2)), LOCAL_G(sv_imag, term + SV16IDX(3)),
+                    LOCAL_G(sv_imag, term + SV16IDX(4)), LOCAL_G(sv_imag, term + SV16IDX(5)),
+                    LOCAL_G(sv_imag, term + SV16IDX(6)), LOCAL_G(sv_imag, term + SV16IDX(7)),
+                    LOCAL_G(sv_imag, term + SV16IDX(8)), LOCAL_G(sv_imag, term + SV16IDX(9)),
+                    LOCAL_G(sv_imag, term + SV16IDX(10)), LOCAL_G(sv_imag, term + SV16IDX(11)),
+                    LOCAL_G(sv_imag, term + SV16IDX(12)), LOCAL_G(sv_imag, term + SV16IDX(13)),
+                    LOCAL_G(sv_imag, term + SV16IDX(14)), LOCAL_G(sv_imag, term + SV16IDX(15))};
                 // #pragma unroll
                 for (unsigned j = 0; j < 16; j++)
                 {
@@ -662,11 +664,17 @@ namespace NWQSim
                     {
                         res_real += (el_real[k] * gm_real[j * 16 + k]) - (el_imag[k] * gm_imag[j * 16 + k]);
                         res_imag += (el_real[k] * gm_imag[j * 16 + k]) + (el_imag[k] * gm_real[j * 16 + k]);
+                    
+                        if (term + SV16IDX(j) == 4030) {
+                            // printf("val %f %f\n", el_real[k], el_imag[k]);
+
+                        }
                     }
 
                     ValType val = res_real * res_real + res_imag * res_imag;
                 
                     exp_val += hasEvenParity((term + SV16IDX(j)) & mask, n_qubits) ? val : -val;
+                    // printf("val %f %lld\n", val, term + SV16IDX(j));
             
                 }
             }
@@ -690,7 +698,6 @@ namespace NWQSim
             const IdxType s = std::max(v2, v3);                
             const IdxType per_pe_work = ((dim) >> (cpu_scale + 3));
             const IdxType per_pe_num = ((dim) >> (cpu_scale));
-
             if (s < lg2_m_cpu)
             {
                 return EXPECT_C4_GATE(gm_real, gm_imag, qubit0, qubit1, qubit2, qubit3, mask);
@@ -706,10 +713,7 @@ namespace NWQSim
                     // Send own partial statevector to remote nodes
                     MPI_Send(sv_real, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD);
                     MPI_Send(sv_imag, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD);
-                    // Recevive partial statevector back
-                    MPI_Recv(sv_real, per_pe_num, MPI_DOUBLE, pair_cpu, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    MPI_Recv(sv_imag, per_pe_num, MPI_DOUBLE, pair_cpu, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    return exp_val;
+                    size_t index = 0;
                 }
                 else
                 {
@@ -717,6 +721,8 @@ namespace NWQSim
                     ValType *sv_imag_remote = m_imag;
                     MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     MPI_Recv(sv_imag_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    size_t index = 0;
+                    
                     for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
                     {
                         ValType el_real[16];
@@ -729,98 +735,106 @@ namespace NWQSim
                         const IdxType term = term4 + term3 + term2 + term1 + term0;
                         if (qubit3 == s) // qubit3 is remote qubit
                     {
-                        el_real[0] = GET(sv_real, term + SV16IDX(0));
-                        el_real[1] = GET(sv_real_remote, term + SV16IDX(1));
-                        el_real[2] = GET(sv_real, term + SV16IDX(2));
-                        el_real[3] = GET(sv_real_remote, term + SV16IDX(3));
-                        el_real[4] = GET(sv_real, term + SV16IDX(4));
-                        el_real[5] = GET(sv_real_remote, term + SV16IDX(5));
-                        el_real[6] = GET(sv_real, term + SV16IDX(6));
-                        el_real[7] = GET(sv_real_remote, term + SV16IDX(7));
-                        el_real[8] = GET(sv_real, term + SV16IDX(8));
-                        el_real[9] = GET(sv_real_remote, term + SV16IDX(9));
-                        el_real[10] = GET(sv_real, term + SV16IDX(10));
-                        el_real[11] = GET(sv_real_remote, term + SV16IDX(11));
-                        el_real[12] = GET(sv_real, term + SV16IDX(12));
-                        el_real[13] = GET(sv_real_remote, term + SV16IDX(13));
-                        el_real[14] = GET(sv_real, term + SV16IDX(14));
-                        el_real[15] = GET(sv_real_remote, term + SV16IDX(15));
+                        // printf("Qubit 3");
+                        el_real[0] = LOCAL_G(sv_real, term + SV16IDX(0));
+                        el_real[1] = LOCAL_G(sv_real_remote, term + SV16IDX(1));
+                        el_real[2] = LOCAL_G(sv_real, term + SV16IDX(2));
+                        el_real[3] = LOCAL_G(sv_real_remote, term + SV16IDX(3));
+                        el_real[4] = LOCAL_G(sv_real, term + SV16IDX(4));
+                        el_real[5] = LOCAL_G(sv_real_remote, term + SV16IDX(5));
+                        el_real[6] = LOCAL_G(sv_real, term + SV16IDX(6));
+                        el_real[7] = LOCAL_G(sv_real_remote, term + SV16IDX(7));
+                        el_real[8] = LOCAL_G(sv_real, term + SV16IDX(8));
+                        el_real[9] = LOCAL_G(sv_real_remote, term + SV16IDX(9));
+                        el_real[10] = LOCAL_G(sv_real, term + SV16IDX(10));
+                        el_real[11] = LOCAL_G(sv_real_remote, term + SV16IDX(11));
+                        el_real[12] = LOCAL_G(sv_real, term + SV16IDX(12));
+                        el_real[13] = LOCAL_G(sv_real_remote, term + SV16IDX(13));
+                        el_real[14] = LOCAL_G(sv_real, term + SV16IDX(14));
+                        el_real[15] = LOCAL_G(sv_real_remote, term + SV16IDX(15));
 
-                        el_imag[0] = GET(sv_imag, term + SV16IDX(0));
-                        el_imag[1] = GET(sv_imag_remote, term + SV16IDX(1));
-                        el_imag[2] = GET(sv_imag, term + SV16IDX(2));
-                        el_imag[3] = GET(sv_imag_remote, term + SV16IDX(3));
-                        el_imag[4] = GET(sv_imag, term + SV16IDX(4));
-                        el_imag[5] = GET(sv_imag_remote, term + SV16IDX(5));
-                        el_imag[6] = GET(sv_imag, term + SV16IDX(6));
-                        el_imag[7] = GET(sv_imag_remote, term + SV16IDX(7));
-                        el_imag[8] = GET(sv_imag, term + SV16IDX(8));
-                        el_imag[9] = GET(sv_imag_remote, term + SV16IDX(9));
-                        el_imag[10] = GET(sv_imag, term + SV16IDX(10));
-                        el_imag[11] = GET(sv_imag_remote, term + SV16IDX(11));
-                        el_imag[12] = GET(sv_imag, term + SV16IDX(12));
-                        el_imag[13] = GET(sv_imag_remote, term + SV16IDX(13));
-                        el_imag[14] = GET(sv_imag, term + SV16IDX(14));
-                        el_imag[15] = GET(sv_imag_remote, term + SV16IDX(15));
+                        el_imag[0] = LOCAL_G(sv_imag, term + SV16IDX(0));
+                        el_imag[1] = LOCAL_G(sv_imag_remote, term + SV16IDX(1));
+                        el_imag[2] = LOCAL_G(sv_imag, term + SV16IDX(2));
+                        el_imag[3] = LOCAL_G(sv_imag_remote, term + SV16IDX(3));
+                        el_imag[4] = LOCAL_G(sv_imag, term + SV16IDX(4));
+                        el_imag[5] = LOCAL_G(sv_imag_remote, term + SV16IDX(5));
+                        el_imag[6] = LOCAL_G(sv_imag, term + SV16IDX(6));
+                        el_imag[7] = LOCAL_G(sv_imag_remote, term + SV16IDX(7));
+                        el_imag[8] = LOCAL_G(sv_imag, term + SV16IDX(8));
+                        el_imag[9] = LOCAL_G(sv_imag_remote, term + SV16IDX(9));
+                        el_imag[10] = LOCAL_G(sv_imag, term + SV16IDX(10));
+                        el_imag[11] = LOCAL_G(sv_imag_remote, term + SV16IDX(11));
+                        el_imag[12] = LOCAL_G(sv_imag, term + SV16IDX(12));
+                        el_imag[13] = LOCAL_G(sv_imag_remote, term + SV16IDX(13));
+                        el_imag[14] = LOCAL_G(sv_imag, term + SV16IDX(14));
+                        el_imag[15] = LOCAL_G(sv_imag_remote, term + SV16IDX(15));
                     }
                     else // qubit2 is remote (not possible qubit0 or 1 is remote)
                     {
-                        // if (( (laneid>>1)&1)!=0) el_real_s[j*16+laneid] = GET(sv_real_remote,addr);
-                        // else el_real_s[j*16+laneid] = GET(sv_real, addr);
+                        // if (( (laneid>>1)&1)!=0) el_real_s[j*16+laneid] = LOCAL_G(sv_real_remote,addr);
+                        // else el_real_s[j*16+laneid] = LOCAL_G(sv_real, addr);
                         // laneid = 2,3,6,7,10,11,14,15;
 
-                        el_real[0] = GET(sv_real, term + SV16IDX(0));
-                        el_real[1] = GET(sv_real, term + SV16IDX(1));
-                        el_real[2] = GET(sv_real_remote, term + SV16IDX(2));
-                        el_real[3] = GET(sv_real_remote, term + SV16IDX(3));
-                        el_real[4] = GET(sv_real, term + SV16IDX(4));
-                        el_real[5] = GET(sv_real, term + SV16IDX(5));
-                        el_real[6] = GET(sv_real_remote, term + SV16IDX(6));
-                        el_real[7] = GET(sv_real_remote, term + SV16IDX(7));
-                        el_real[8] = GET(sv_real, term + SV16IDX(8));
-                        el_real[9] = GET(sv_real, term + SV16IDX(9));
-                        el_real[10] = GET(sv_real_remote, term + SV16IDX(10));
-                        el_real[11] = GET(sv_real_remote, term + SV16IDX(11));
-                        el_real[12] = GET(sv_real, term + SV16IDX(12));
-                        el_real[13] = GET(sv_real, term + SV16IDX(13));
-                        el_real[14] = GET(sv_real_remote, term + SV16IDX(14));
-                        el_real[15] = GET(sv_real_remote, term + SV16IDX(15));
+                        el_real[0] = LOCAL_G(sv_real, term + SV16IDX(0));
+                        el_real[1] = LOCAL_G(sv_real, term + SV16IDX(1));
+                        el_real[2] = LOCAL_G(sv_real_remote, term + SV16IDX(2));
+                        el_real[3] = LOCAL_G(sv_real_remote, term + SV16IDX(3));
+                        el_real[4] = LOCAL_G(sv_real, term + SV16IDX(4));
+                        el_real[5] = LOCAL_G(sv_real, term + SV16IDX(5));
+                        el_real[6] = LOCAL_G(sv_real_remote, term + SV16IDX(6));
+                        el_real[7] = LOCAL_G(sv_real_remote, term + SV16IDX(7));
+                        el_real[8] = LOCAL_G(sv_real, term + SV16IDX(8));
+                        el_real[9] = LOCAL_G(sv_real, term + SV16IDX(9));
+                        el_real[10] = LOCAL_G(sv_real_remote, term + SV16IDX(10));
+                        el_real[11] = LOCAL_G(sv_real_remote, term + SV16IDX(11));
+                        el_real[12] = LOCAL_G(sv_real, term + SV16IDX(12));
+                        el_real[13] = LOCAL_G(sv_real, term + SV16IDX(13));
+                        el_real[14] = LOCAL_G(sv_real_remote, term + SV16IDX(14));
+                        el_real[15] = LOCAL_G(sv_real_remote, term + SV16IDX(15));
 
-                        el_imag[0] = GET(sv_imag, term + SV16IDX(0));
-                        el_imag[1] = GET(sv_imag, term + SV16IDX(1));
-                        el_imag[2] = GET(sv_imag_remote, term + SV16IDX(2));
-                        el_imag[3] = GET(sv_imag_remote, term + SV16IDX(3));
-                        el_imag[4] = GET(sv_imag, term + SV16IDX(4));
-                        el_imag[5] = GET(sv_imag, term + SV16IDX(5));
-                        el_imag[6] = GET(sv_imag_remote, term + SV16IDX(6));
-                        el_imag[7] = GET(sv_imag_remote, term + SV16IDX(7));
-                        el_imag[8] = GET(sv_imag, term + SV16IDX(8));
-                        el_imag[9] = GET(sv_imag, term + SV16IDX(9));
-                        el_imag[10] = GET(sv_imag_remote, term + SV16IDX(10));
-                        el_imag[11] = GET(sv_imag_remote, term + SV16IDX(11));
-                        el_imag[12] = GET(sv_imag, term + SV16IDX(12));
-                        el_imag[13] = GET(sv_imag, term + SV16IDX(13));
-                        el_imag[14] = GET(sv_imag_remote, term + SV16IDX(14));
-                        el_imag[15] = GET(sv_imag_remote, term + SV16IDX(15));
+                        el_imag[0] = LOCAL_G(sv_imag, term + SV16IDX(0));
+                        el_imag[1] = LOCAL_G(sv_imag, term + SV16IDX(1));
+                        el_imag[2] = LOCAL_G(sv_imag_remote, term + SV16IDX(2));
+                        el_imag[3] = LOCAL_G(sv_imag_remote, term + SV16IDX(3));
+                        el_imag[4] = LOCAL_G(sv_imag, term + SV16IDX(4));
+                        el_imag[5] = LOCAL_G(sv_imag, term + SV16IDX(5));
+                        el_imag[6] = LOCAL_G(sv_imag_remote, term + SV16IDX(6));
+                        el_imag[7] = LOCAL_G(sv_imag_remote, term + SV16IDX(7));
+                        el_imag[8] = LOCAL_G(sv_imag, term + SV16IDX(8));
+                        el_imag[9] = LOCAL_G(sv_imag, term + SV16IDX(9));
+                        el_imag[10] = LOCAL_G(sv_imag_remote, term + SV16IDX(10));
+                        el_imag[11] = LOCAL_G(sv_imag_remote, term + SV16IDX(11));
+                        el_imag[12] = LOCAL_G(sv_imag, term + SV16IDX(12));
+                        el_imag[13] = LOCAL_G(sv_imag, term + SV16IDX(13));
+                        el_imag[14] = LOCAL_G(sv_imag_remote, term + SV16IDX(14));
+                        el_imag[15] = LOCAL_G(sv_imag_remote, term + SV16IDX(15));
                     }
                         
                         // #pragma unroll
                         for (unsigned j = 0; j < 16; j++)
                         {
-                            ValType res_real, res_imag;
+                            ValType res_real = 0.0;
+                            ValType res_imag = 0.0;
                             // #pragma unroll
                             for (unsigned k = 0; k < 16; k++)
                             {
-                                res_real += (el_real[k] * gm_real[j * 4 + k]) - (el_imag[k] * gm_imag[j * 4 + k]);
-                                res_imag += (el_real[k] * gm_imag[j * 4 + k]) + (el_imag[k] * gm_real[j * 4 + k]);
+                                if (term + SV16IDX(j) == 4030) {
+                                    // printf("val %f %f\n", el_real[k], el_imag[k]);
+
+                                }
+                                res_real += (el_real[k] * gm_real[j * 16 + k]) - (el_imag[k] * gm_imag[j * 16 + k]);
+                                res_imag += (el_real[k] * gm_imag[j * 16 + k]) + (el_imag[k] * gm_real[j * 16 + k]);
                             }
                             ValType val = res_real * res_real + res_imag * res_imag;
-                        
+
                             exp_val += hasEvenParity((term + SV16IDX(j)) & mask, n_qubits) ? val : -val;
+                            
                         }
                        
                     }
                 }
+                BARR_MPI;
                 return exp_val;
             }
         }
@@ -912,8 +926,6 @@ namespace NWQSim
                     MPI_Send(sv_real, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD);
                     MPI_Send(sv_imag, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD);
                     // Recevive partial statevector back
-                    MPI_Recv(sv_real, per_pe_num, MPI_DOUBLE, pair_cpu, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    MPI_Recv(sv_imag, per_pe_num, MPI_DOUBLE, pair_cpu, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     return 0.0;
                 }
                 else
@@ -960,7 +972,8 @@ namespace NWQSim
                         // #pragma unroll
                         for (unsigned j = 0; j < 4; j++)
                         {
-                            ValType r_real, r_imag;
+                            ValType r_real = 0.0;
+                            ValType r_imag = 0.0;
                             // #pragma unroll
                             for (unsigned k = 0; k < 4; k++)
                             {
@@ -1042,7 +1055,7 @@ namespace NWQSim
             ValType exp_val = 0;
             for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
             {
-                ValType val = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
+                ValType val = LOCAL_G(sv_real, i) * LOCAL_G(sv_real, i) + LOCAL_G(sv_imag, i) * LOCAL_G(sv_imag, i);
                 exp_val += hasEvenParity(i & zmask, n_qubits) ? val : -val;
             }
             return exp_val;
@@ -1055,6 +1068,7 @@ namespace NWQSim
                                  ValType* output,
                                  IdxType output_index)  {
             ValType result = 0.0;
+
             if (num_x_indices == 2) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
@@ -1062,7 +1076,7 @@ namespace NWQSim
                 IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
                 const ValType* gm_real = exp_gate_perms_2q[zind0 + zind1];
                 const ValType* gm_imag = exp_gate_perms_2q[zind0 + zind1] + 16;
-                result = EXPECT_C2_GATE(gm_real, gm_imag, q0, q1, xmask | zmask);
+                result = EXPECT_C2V1_GATE(gm_real, gm_imag, q0, q1, xmask | zmask);
             } else if (num_x_indices == 4) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
@@ -1074,16 +1088,18 @@ namespace NWQSim
                 IdxType zind3 = ((zmask & (1 << q3)) >> q3) << 3;
                 const ValType* gm_real = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3];
                 const ValType* gm_imag = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3] + 256;
-                result = EXPECT_C4_GATE(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
+                result = EXPECT_C4V1_GATE(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
             } else if (num_x_indices == 0) {
                 result = EXPECT_C0_GATE(zmask);
             }
             ValType expect = 0;
+            BARR_MPI;
             MPI_Allreduce(&result, &expect, 1,  MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
             BARR_MPI;
             if (i_proc == 0) {
-                output[output_index] = result;
+                output[output_index] = expect;
             }
+           
         }
         // We first do a local reduction, then we do a MPI scan, then update local vector
         void MA_GATE(const IdxType repetition)
