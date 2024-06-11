@@ -105,6 +105,12 @@ namespace NWQSim
       virtual void call_simulator() {};
       virtual ValType energy(const std::vector<double>& x) {
         ansatz->setParams(x);
+
+        if (iteration > 0){
+          Config::PRINT_SIM_TRACE = false;
+        } else {
+          Config::PRINT_SIM_TRACE = true;
+        }
         call_simulator();
 
         ExpectationMap emap;
