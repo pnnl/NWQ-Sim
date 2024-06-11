@@ -95,17 +95,16 @@ namespace NWQSim
         iteration++;
         return ene;
       }
-        void optimize(std::vector<ValType>& parameters, ValType& final_ene) {
+      virtual void optimize(std::vector<ValType>& parameters, ValType& final_ene) {
           iteration = 0;
           Config::PRINT_SIM_TRACE = false;
           if (parameters.size() == 0) {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }
-          // energy(parameters);
           nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
-        }
+      }
       virtual void call_simulator(std::shared_ptr<Ansatz> ansatz) {};
-      ValType energy(const std::vector<double>& x) {
+      virtual ValType energy(const std::vector<double>& x) {
         ansatz->setParams(x);
         call_simulator(ansatz);
 
