@@ -12,25 +12,27 @@ namespace NWQSim
         OP op_name;
         IdxType qubit;
         IdxType ctrl;
+        void* data;
 
-        SimGate(OP _op, IdxType _qubit, IdxType _ctrl)
+        SimGate(OP _op, IdxType _qubit, IdxType _ctrl, void* _data)
         {
             op_name = _op;
             qubit = _qubit;
             ctrl = _ctrl;
+            data = _data;
         }
     };
 
     class SVGate : public SimGate
     {
     public:
-        SVGate(OP _op, IdxType _qubit0, IdxType _qubit1) : SimGate(_op, _qubit0, _qubit1)
+        SVGate(OP _op, IdxType _qubit0, IdxType _qubit1, void* _data = NULL) : SimGate(_op, _qubit0, _qubit1, _data)
         {
             memset(gm_real, 0, sizeof(ValType) * 16);
             memset(gm_imag, 0, sizeof(ValType) * 16);
         }
 
-        SVGate(const SVGate &gate) : SimGate(gate.op_name, gate.qubit, gate.ctrl)
+        SVGate(const SVGate &gate) : SimGate(gate.op_name, gate.qubit, gate.ctrl, gate.data)
         {
             memcpy(gm_real, gate.gm_real, sizeof(ValType) * 16);
             memcpy(gm_imag, gate.gm_imag, sizeof(ValType) * 16);
@@ -44,13 +46,13 @@ namespace NWQSim
     class DMGate : public SimGate
     {
     public:
-        DMGate(OP _op, IdxType _qubit0, IdxType _qubit1) : SimGate(_op, _qubit0, _qubit1)
+        DMGate(OP _op, IdxType _qubit0, IdxType _qubit1, void* _data = NULL) : SimGate(_op, _qubit0, _qubit1, _data)
         {
             memset(gm_real, 0, sizeof(ValType) * 256);
             memset(gm_imag, 0, sizeof(ValType) * 256);
         }
 
-        DMGate(const DMGate &gate) : SimGate(gate.op_name, gate.qubit, gate.ctrl)
+        DMGate(const DMGate &gate) : SimGate(gate.op_name, gate.qubit, gate.ctrl, gate.data)
         {
             memcpy(gm_real, gate.gm_real, sizeof(ValType) * 256);
             memcpy(gm_imag, gate.gm_imag, sizeof(ValType) * 256);

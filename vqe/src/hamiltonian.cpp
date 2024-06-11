@@ -104,6 +104,10 @@ namespace NWQSim{
                           args.coeff));
       };
       transform(env, fermi_operators, pauli_operators, false);
+      n_ops = 0;
+      for (auto& i : pauli_operators) {
+        n_ops += i.size();
+      }
 #ifndef NDEBUG
       std::cout << "Hamiltonian Pauli Strings:" << std::endl;
       for (auto& plist: pauli_operators) {
