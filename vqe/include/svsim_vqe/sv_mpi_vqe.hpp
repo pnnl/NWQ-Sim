@@ -43,8 +43,6 @@ namespace NWQSim
       virtual void call_simulator() override {  
         if (iteration > 0){
           Config::PRINT_SIM_TRACE = false;
-        } else {
-          Config::PRINT_SIM_TRACE = true;
         }
         std::vector<ValType> xparams;  
         if (i_proc == 0) {
