@@ -14,6 +14,12 @@ VQE simulation based on the NWQ-Sim platform
 On OLCF Frontier, you may need to load the cray-python module before using cmake for NLOpt.
 
 The specific CXX/C compiler paths can be altered as needed, the main emphasis is to ensure that the optimization code has access to C++ STD libraries.
+On OLCF Summit, you may use gcc/9.3 for the compilation of NLOpt:
+```shell
+  module load gcc/9.3.0-compiler_only
+  cmake .. -DCMAKE_CXX_COMPILER=/sw/summit/gcc/9.3.0-2/bin/g++ -DCMAKE_C_COMPILER=/sw/summit/gcc/9.3.0-2/bin/gcc
+```
+
 
 ## Installation/Configuration Directions
 After installing NLOpt, build NWQ-Sim as normal (see the [User Manual](doc/user_manual.md)).
@@ -155,4 +161,9 @@ salloc -N 4 -A CSC528 -t 30 -q debug
 source ../environment/setup_frontier.sh
 srun -N4 -n128 ./vqe/examples/basic_example_mpi
 ```
-
+To test on OLCF Summit for the CPU MPI version using 4 nodes, 16 cores per node:
+```shell
+bsub -W 60 -nnodes 4 -P CHP125 -Is /bin/bash
+source ../environment/setup_summit.sh
+jsrun -n 64 -a1 -g0 -c1 -r16 ./vqe/examples/basic_example_mpi
+```
