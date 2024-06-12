@@ -12,7 +12,7 @@
 
 #include "../circuit_pass/fusion.hpp"
 
-#include "private/exp_gate_declarations.cuh"
+#include "../private/exp_gate_declarations.cuh"
 #include <assert.h>
 #include <random>
 #include <complex.h>

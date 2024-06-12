@@ -42,6 +42,9 @@ namespace NWQSim
       };
       virtual void call_simulator() override {  
         std::vector<ValType> xparams;  
+        if (iteration > 0){
+          Config::PRINT_SIM_TRACE = false;
+        }
         if (i_proc == 0) {
           std::vector<double>* ansatz_params = ansatz->getParams();
           stat = CALL_SIMULATOR;
@@ -67,6 +70,7 @@ namespace NWQSim
           MPI_Recv(&stat, 1, MPI_INT, 0, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
           if (stat == CALL_SIMULATOR) {
             call_simulator();
+              iteration++;
           }
         }
 
@@ -74,7 +78,6 @@ namespace NWQSim
 
       virtual void optimize(std::vector<ValType>& parameters, ValType& final_ene) override {
           iteration = 0;
-          Config::PRINT_SIM_TRACE = false;
           if (parameters.size() == 0) {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }

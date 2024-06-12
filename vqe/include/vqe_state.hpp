@@ -97,7 +97,6 @@ namespace NWQSim
       }
       virtual void optimize(std::vector<ValType>& parameters, ValType& final_ene) {
           iteration = 0;
-          Config::PRINT_SIM_TRACE = false;
           if (parameters.size() == 0) {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }

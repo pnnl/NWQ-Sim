@@ -9,6 +9,7 @@
 #include "../private/cuda_util.cuh"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
+#include "../private/exp_gate_declarations.cuh"
 
 #include "../circuit_pass/fusion.hpp"
 
@@ -120,6 +121,7 @@ namespace NWQSim
             // SAFE_FREE_HOST_CUDA(randoms);
             // SAFE_FREE_HOST_CUDA(results);
             nvshmem_finalize();
+            std::cout << "Finalizing" << std::endl;
         }
 
         void reset_state() override
@@ -1209,7 +1211,7 @@ namespace NWQSim
                 BARR_NVSHMEM;
             }
 
-            if (tid == 0 && i_proc != 0)
+            if (tid == 0 && i_proc == 0)
                 output[index] = PGAS_G(m_real, 0);
             grid.sync();
         }
@@ -1230,8 +1232,8 @@ namespace NWQSim
                 IdxType q1 = x_indices[1];
                 IdxType zind0 = ((zmask & (1 << q0)) >> q0);
                 IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
-                const ValType* gm_real = exp_gate_perms_2q[zind0 + zind1];
-                const ValType* gm_imag = exp_gate_perms_2q[zind0 + zind1] + 16;
+                const ValType* gm_real = exp_gate_perms_2q_d[zind0 + zind1];
+                const ValType* gm_imag = exp_gate_perms_2q_d[zind0 + zind1] + 16;
                 EXPECT_C2V1_GATE(gm_real, gm_imag, q0, q1, xmask | zmask);
                 reduce_dim = (dim) >> 2;
             } else if (num_x_indices == 4) {
@@ -1243,8 +1245,8 @@ namespace NWQSim
                 IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
                 IdxType zind2 = ((zmask & (1 << q2)) >> q2) << 2;
                 IdxType zind3 = ((zmask & (1 << q3)) >> q3) << 3;
-                const ValType* gm_real = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3];
-                const ValType* gm_imag = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3] + 256;
+                const ValType* gm_real = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3];
+                const ValType* gm_imag = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3] + 256;
                 EXPECT_C4V1_GATE(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
                 reduce_dim = (dim) >> 4;
             } else if (num_x_indices == 0) {
@@ -1715,7 +1717,6 @@ namespace NWQSim
         IdxType lg2_m_gpu = sv_gpu->lg2_m_gpu;
         grid_group grid = this_grid();
         bool already_sync = false;
-
         for (IdxType t = 0; t < n_gates; t++)
         {
             OP op_name = (sv_gpu->gates_gpu)[t].op_name;
@@ -1774,7 +1775,25 @@ namespace NWQSim
                 sv_gpu->MA_GATE(repetition, cur_index);
                 cur_index += repetition;
             }
+            else if (op_name == OP::EXPECT)
+            {
 
+                ObservableList o = *(ObservableList*)((sv_gpu->gates_gpu)[t].data);
+                IdxType* xinds = o.x_indices;
+                for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
+                    sv_gpu->EXPECT_GATE(xinds, 
+                                o.x_index_sizes[obs_ind],
+                                o.xmasks[obs_ind],
+                                o.zmasks[obs_ind],
+                                o.exp_output,
+                                obs_ind);
+                    xinds += o.x_index_sizes[obs_ind];
+                    if (threadIdx.x == 0 && blockIdx.x == 0)
+                        nvshmem_barrier_all();
+                    grid.sync();
+                    already_sync = true;
+                }
+            }
             // only need sync when operating on remote qubits
             if ((ctrl >= lg2_m_gpu) || (qubit >= lg2_m_gpu))
             {

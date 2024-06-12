@@ -14,10 +14,15 @@
 
 namespace NWQSim
 {
+  enum STATUS {
+    CALL_SIMULATOR,
+    WAIT,
+    EXIT_LOOP
+  };
   namespace VQE {
-    class SV_CUDA_VQE: public VQEState, public SV_CUDA_MPI {
+    class SV_CUDA_MPI_VQE: public VQEState, public SV_CUDA_MPI {
       public:
-        SV_CUDA_VQE(std::shared_ptr<Ansatz> a, 
+        SV_CUDA_MPI_VQE(std::shared_ptr<Ansatz> a, 
                    const Hamiltonian& h, 
                    nlopt::algorithm optimizer_algorithm,
                    Callback _callback,
@@ -54,13 +59,20 @@ namespace NWQSim
         cudaSafeCall(cudaMemcpy(obs_device, &obs, sizeof(ObservableList),
                                     cudaMemcpyHostToDevice));
         ansatz->EXPECT(obs_device);
+        int size;
+        MPI_Comm_size(MPI_COMM_WORLD, &size);
+        n_cpus = size;
+
       };
       virtual void call_simulator() override {  
-        std::vector<ValType> xparams;  
+        std::vector<ValType> xparams;   
+        if (iteration > 0){
+          Config::PRINT_SIM_TRACE = false;
+        }
         if (i_proc == 0) {
           std::vector<double>* ansatz_params = ansatz->getParams();
           stat = CALL_SIMULATOR;
-          for(IdxType i = 1; i < n_cpus; i++) {
+          for(IdxType i = 1; i < n_gpus; i++) {
             MPI_Send(&stat, 1, MPI_INT, i, 3, MPI_COMM_WORLD);
             MPI_Send(ansatz_params->data(), ansatz->numParams(), MPI_DOUBLE, i, 1, MPI_COMM_WORLD);
           }
@@ -74,6 +86,10 @@ namespace NWQSim
         sim(ansatz);
         if (i_proc != 0) {
           stat = WAIT;
+        } else {
+            cudaDeviceSynchronize();
+            cudaSafeCall(cudaMemcpy(expvals.data(), obs.exp_output, expvals.size() * sizeof(ValType),
+                                        cudaMemcpyDeviceToHost));
         }
       };
       virtual void process_loop() {
@@ -82,13 +98,13 @@ namespace NWQSim
           MPI_Recv(&stat, 1, MPI_INT, 0, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
           if (stat == CALL_SIMULATOR) {
             call_simulator();
+            iteration++;
           }
         }
 
       }
       virtual void optimize(std::vector<ValType>& parameters, ValType& final_ene) override {
           iteration = 0;
-          Config::PRINT_SIM_TRACE = false;
           if (parameters.size() == 0) {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }
@@ -129,6 +145,9 @@ namespace NWQSim
             // SAFE_FREE_HOST_CUDA(results);
             nvshmem_finalize();
         }
+    protected:
+        IdxType n_cpus;
+        STATUS stat; 
    
   };
 }; // namespace NWQSim
