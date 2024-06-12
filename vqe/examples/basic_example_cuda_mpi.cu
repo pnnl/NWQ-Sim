@@ -22,10 +22,10 @@ void callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fv
 }
 
 
-// H2O Example
-int main(int argc, char** argv) {
+
+void example () {
   int i_proc;
-  MPI_Init(&argc, &argv);
+
   MPI_Comm_rank(MPI_COMM_WORLD, &i_proc);
   NWQSim::IdxType n_particles = 10; // Set the number of particles
   // Note: path relative to presumed build directory
@@ -61,6 +61,12 @@ int main(int argc, char** argv) {
     std::cout << "Final Parameters: " << parameters << std::endl;
     std::cout << "Final Energy: " << fval << std::endl;
   }
+}
+
+// H2O Example
+int main(int argc, char** argv) {
+  MPI_Init(&argc, &argv);
+  example();
   MPI_Finalize();
   return 0;
 }

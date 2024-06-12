@@ -84,13 +84,17 @@ namespace NWQSim
         BARR_MPI;
         reset_state();
         sim(ansatz);
+        cudaDeviceSynchronize();
+        cudaSafeCall(cudaMemcpy(expvals.data(), obs.exp_output, expvals.size() * sizeof(ValType),
+                                    cudaMemcpyDeviceToHost));
+        MPI_Barrier(MPI_COMM_WORLD);
         if (i_proc != 0) {
+          MPI_Reduce(expvals.data(), NULL, expvals.size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
           stat = WAIT;
         } else {
-            cudaDeviceSynchronize();
-            cudaSafeCall(cudaMemcpy(expvals.data(), obs.exp_output, expvals.size() * sizeof(ValType),
-                                        cudaMemcpyDeviceToHost));
+            MPI_Reduce(MPI_IN_PLACE, expvals.data(), expvals.size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
         }
+        MPI_Barrier(MPI_COMM_WORLD);          
       };
       virtual void process_loop() {
         assert(i_proc != 0);
@@ -110,7 +114,6 @@ namespace NWQSim
           }
           if (i_proc == 0) {
             nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
-            // energy(parameters);
             stat = EXIT_LOOP;
             for(IdxType i = 1; i < n_cpus; i++) {
               MPI_Send(&stat, 1, MPI_INT, i, 3, MPI_COMM_WORLD);
@@ -122,17 +125,6 @@ namespace NWQSim
       }
       ~SV_CUDA_MPI_VQE()
         {
-            // Release for CPU side
-            SAFE_FREE_HOST_CUDA(sv_real_cpu);
-            SAFE_FREE_HOST_CUDA(sv_imag_cpu);
-
-            // Release for GPU side
-            nvshmem_free(sv_real);
-            nvshmem_free(sv_imag);
-            nvshmem_free(m_real);
-            nvshmem_free(m_imag);
-
-            SAFE_FREE_HOST_CUDA(results);
             SAFE_FREE_GPU(obs.xmasks);
             SAFE_FREE_GPU(obs.zmasks);
             SAFE_FREE_GPU(obs.x_index_sizes);
@@ -143,7 +135,6 @@ namespace NWQSim
             // SAFE_FREE_GPU(gates_gpu);
             // SAFE_FREE_HOST_CUDA(randoms);
             // SAFE_FREE_HOST_CUDA(results);
-            nvshmem_finalize();
         }
     protected:
         IdxType n_cpus;

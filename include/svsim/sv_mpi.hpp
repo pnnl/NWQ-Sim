@@ -1094,7 +1094,7 @@ namespace NWQSim
             }
             ValType expect = 0;
             BARR_MPI;
-            MPI_Allreduce(&result, &expect, 1,  MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Reduce(&result, &expect, 1,  MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
             BARR_MPI;
             if (i_proc == 0) {
                 output[output_index] = expect;

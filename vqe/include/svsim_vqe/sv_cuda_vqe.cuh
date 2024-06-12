@@ -52,23 +52,6 @@ namespace NWQSim
 
       ~SV_CUDA_VQE()
         {
-            // Release for CPU side
-            SAFE_FREE_HOST_CUDA(sv_real_cpu);
-            SAFE_FREE_HOST_CUDA(sv_imag_cpu);
-            SAFE_FREE_HOST_CUDA(randoms);
-            SAFE_FREE_HOST_CUDA(results);
-
-            // Release for GPU side
-            SAFE_FREE_GPU(sv_real);
-            SAFE_FREE_GPU(sv_imag);
-            SAFE_FREE_GPU(m_real);
-            SAFE_FREE_GPU(m_imag);
-
-            SAFE_FREE_GPU(gates_gpu);
-
-            SAFE_FREE_GPU(randoms_gpu);
-            SAFE_FREE_GPU(results_gpu);
-
             SAFE_FREE_GPU(obs.xmasks);
             SAFE_FREE_GPU(obs.zmasks);
             SAFE_FREE_GPU(obs.x_index_sizes);
