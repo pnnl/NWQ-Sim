@@ -135,8 +135,12 @@ The same example can be run with the command line-configurable `nwq_vqe` executa
 ```shell
 ./vqe/nwq_vqe -f ../vqe/example_hamiltonians/h2O.hamil -n 10
 ```
-To run the example CUDA and MPI examples respectively, run (from `NWQ-Sim/build`):
+To run the example CUDA, MPI, and CUDA-MPI (using NVSHMEM) examples respectively, run (from `NWQ-Sim/build`):
 ```shell
 ./vqe/examples/vqe/examples/basic_example_cuda
-./vqe/examples/vqe/examples/basic_example_mpi
+mpirun -n <nproc> ./vqe/examples/vqe/examples/basic_example_mpi
+srun -C gpu -N 2 -n 2 -c 1 --gpus-per-task=1 --gpu-bind=single:1 ./vqe/examples/basic_example_cuda_mpi # For SLURM-based systems
+mpirun -n <nproc> ./vqe/examples/basic_example_cuda_mpi # For MPI-based dispatch
 ```
+
+Note that [examples/basic_example_cuda_mpi.cu](examples/basic_example_cuda_mpi.cu) separates the `SV_CUDA_MPI_VQE` constructor call and the call to `MPI_Finalize()` into two different functions. This is necessary to ensure that the `SV_CUDA_MPI` destructor (which invokes `nvshmem_finalize()`) is called before `MPI_Finalize()`.
