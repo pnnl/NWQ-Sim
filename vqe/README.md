@@ -11,7 +11,15 @@ VQE simulation based on the NWQ-Sim platform
   cmake .. -DCMAKE_CXX_COMPILER=/usr/bin/g++ -DCMAKE_C_COMPILER=/usr/bin/gcc 
   make
 ```
+On OLCF Frontier, you may need to load the cray-python module before using cmake for NLOpt.
+
 The specific CXX/C compiler paths can be altered as needed, the main emphasis is to ensure that the optimization code has access to C++ STD libraries.
+On OLCF Summit, you may use gcc/9.3 for the compilation of NLOpt:
+```shell
+  module load gcc/9.3.0-compiler_only
+  cmake .. -DCMAKE_CXX_COMPILER=/sw/summit/gcc/9.3.0-2/bin/g++ -DCMAKE_C_COMPILER=/sw/summit/gcc/9.3.0-2/bin/gcc
+```
+
 
 ## Installation/Configuration Directions
 After installing NLOpt, build NWQ-Sim as normal (see the [User Manual](doc/user_manual.md)).
@@ -131,16 +139,42 @@ The final energy (-75.7452) is about about 0.6 Hartree away from the true ground
 
 The example file [examples/config_example.cpp](examples/config_example.cpp) is similar, but demonstrates how to specify `NLOpt` algorithm parameters and cutoff criteria within NWQ-VQE.
 
+## Testing
 The same example can be run with the command line-configurable `nwq_vqe` executable by running:
 ```shell
 ./vqe/nwq_vqe -f ../vqe/example_hamiltonians/h2O.hamil -n 10
 ```
-To run the example CUDA, MPI, and CUDA-MPI (using NVSHMEM) examples respectively, run (from `NWQ-Sim/build`):
+
+Note that [examples/basic_example_cuda_mpi.cu](examples/basic_example_cuda_mpi.cu) separates the `SV_CUDA_MPI_VQE` constructor call and the call to `MPI_Finalize()` into two different functions. This is necessary to ensure that the `SV_CUDA_MPI` destructor (which invokes `nvshmem_finalize()`) is called before `MPI_Finalize()`.
+
+To locally run the example CUDA, MPI,and examples respectively, run (from `NWQ-Sim/build`):
 ```shell
 ./vqe/examples/vqe/examples/basic_example_cuda
 mpirun -n <nproc> ./vqe/examples/vqe/examples/basic_example_mpi
-srun -C gpu -N 2 -n 2 -c 1 --gpus-per-task=1 --gpu-bind=single:1 ./vqe/examples/basic_example_cuda_mpi # For SLURM-based systems
-mpirun -n <nproc> ./vqe/examples/basic_example_cuda_mpi # For MPI-based dispatch
+```
+To test on NERSC Perlmutter for the CPU MPI version using 4 nodes, 128 cores:
+```shell
+salloc --nodes 4 --qos interactive -t 60 --constraint cpu --account=m4243
+source ../environment/setup_perlmutter.sh
+srun -N4 -n128 ./vqe/examples/basic_example_mpi
 ```
 
-Note that [examples/basic_example_cuda_mpi.cu](examples/basic_example_cuda_mpi.cu) separates the `SV_CUDA_MPI_VQE` constructor call and the call to `MPI_Finalize()` into two different functions. This is necessary to ensure that the `SV_CUDA_MPI` destructor (which invokes `nvshmem_finalize()`) is called before `MPI_Finalize()`.
+To test on NERSC Perlmutter for the CUDA MPI version using 4 nodes, 128 cores:
+```shell
+salloc --nodes 4 --qos interactive -t 60 --constraint gpu --account=m4243
+source ../environment/setup_perlmutter.sh
+srun -C gpu -N 4 -n 4 -c 1 --gpus-per-task=1 --gpu-bind=single:1 ./vqe/examples/basic_example_cuda_mpi
+```
+
+To test on OLCF Frontier for the CPU MPI version using 4 nodes, 128 cores:
+```shell
+salloc -N 4 -A CSC528 -t 30 -q debug
+source ../environment/setup_frontier.sh
+srun -N4 -n128 ./vqe/examples/basic_example_mpi
+```
+To test on OLCF Summit for the CPU MPI version using 4 nodes, 16 cores per node:
+```shell
+bsub -W 60 -nnodes 4 -P CHP125 -Is /bin/bash
+source ../environment/setup_summit.sh
+jsrun -n 64 -a1 -g0 -c1 -r16 ./vqe/examples/basic_example_mpi
+```

@@ -91,6 +91,9 @@ namespace NWQSim
           gradient.resize(x.size());
           g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, x, gradient, 1e-4);
         }
+        if (iteration > 0){
+          Config::PRINT_SIM_TRACE = false;
+        }
         double ene = energy(x);
         if (callback != NULL) {
           callback(x, ene, iteration);
@@ -108,6 +111,7 @@ namespace NWQSim
       virtual void call_simulator() {};
       virtual ValType energy(const std::vector<double>& x) {
         ansatz->setParams(x);
+
         call_simulator();
 
         ExpectationMap emap;
