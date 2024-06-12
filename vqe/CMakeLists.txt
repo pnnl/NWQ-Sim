@@ -1,6 +1,6 @@
 file(GLOB SOURCEFILES "src/*.cpp")
 
-add_executable(nwq_vqe "main.cu")
+add_executable(nwq_vqe "main.cpp")
 
 add_library(vqe SHARED ${SOURCEFILES})
 
