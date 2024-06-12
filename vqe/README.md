@@ -144,10 +144,13 @@ The same example can be run with the command line-configurable `nwq_vqe` executa
 ```shell
 ./vqe/nwq_vqe -f ../vqe/example_hamiltonians/h2O.hamil -n 10
 ```
-To run the example CUDA and MPI examples respectively, run (from `NWQ-Sim/build`):
+
+Note that [examples/basic_example_cuda_mpi.cu](examples/basic_example_cuda_mpi.cu) separates the `SV_CUDA_MPI_VQE` constructor call and the call to `MPI_Finalize()` into two different functions. This is necessary to ensure that the `SV_CUDA_MPI` destructor (which invokes `nvshmem_finalize()`) is called before `MPI_Finalize()`.
+
+To locally run the example CUDA, MPI,and examples respectively, run (from `NWQ-Sim/build`):
 ```shell
 ./vqe/examples/vqe/examples/basic_example_cuda
-./vqe/examples/vqe/examples/basic_example_mpi
+mpirun -n <nproc> ./vqe/examples/vqe/examples/basic_example_mpi
 ```
 To test on NERSC Perlmutter for the CPU MPI version using 4 nodes, 128 cores:
 ```shell
@@ -155,6 +158,14 @@ salloc --nodes 4 --qos interactive -t 60 --constraint cpu --account=m4243
 source ../environment/setup_perlmutter.sh
 srun -N4 -n128 ./vqe/examples/basic_example_mpi
 ```
+
+To test on NERSC Perlmutter for the CUDA MPI version using 4 nodes, 128 cores:
+```shell
+salloc --nodes 4 --qos interactive -t 60 --constraint gpu --account=m4243
+source ../environment/setup_perlmutter.sh
+srun -C gpu -N 4 -n 4 -c 1 --gpus-per-task=1 --gpu-bind=single:1 ./vqe/examples/basic_example_cuda_mpi
+```
+
 To test on OLCF Frontier for the CPU MPI version using 4 nodes, 128 cores:
 ```shell
 salloc -N 4 -A CSC528 -t 30 -q debug

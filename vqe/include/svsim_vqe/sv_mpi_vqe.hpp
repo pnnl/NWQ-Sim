@@ -45,6 +45,9 @@ namespace NWQSim
           Config::PRINT_SIM_TRACE = false;
         }
         std::vector<ValType> xparams;  
+        if (iteration > 0){
+          Config::PRINT_SIM_TRACE = false;
+        }
         if (i_proc == 0) {
           std::vector<double>* ansatz_params = ansatz->getParams();
           stat = CALL_SIMULATOR;

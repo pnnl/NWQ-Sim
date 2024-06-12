@@ -60,7 +60,7 @@ namespace NWQSim
           for (auto& kv_pair: optimizer_settings.parameter_map) {
               optimizer.set_param(kv_pair.first.c_str(), kv_pair.second);
           }
-          auto& pauli_operators = hamil.getPauliOperators();
+          auto& pauli_operators = hamil.getPauliOperators();        
           for (auto& pauli_list: pauli_operators) {
             for (const PauliOperator& pauli: pauli_list) {
               const std::vector<IdxType>& xinds = pauli.get_xindices();
@@ -84,6 +84,9 @@ namespace NWQSim
         };
       // function for the NLOpt plugin
       double cost_function(const std::vector<double> x, std::vector<double>& gradient) {
+        if (iteration > 0){
+          Config::PRINT_SIM_TRACE = false;
+        }
         if (compute_gradient) {
           gradient.resize(x.size());
           g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, x, gradient, 1e-4);
@@ -119,8 +122,8 @@ namespace NWQSim
             emap[pauli] = expvals[index++];
           }
         }
-        ValType energy = hamil.expectation(emap);
-        return energy;
+        ValType ene = hamil.expectation(emap);
+        return ene;
       }
       protected:
         std::shared_ptr<Ansatz> ansatz;
