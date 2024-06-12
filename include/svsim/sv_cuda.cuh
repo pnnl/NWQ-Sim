@@ -768,7 +768,8 @@ namespace NWQSim
             BARR_CUDA;
 
         }
-        __device__ __inline__ void Expect_GATE(IdxType* x_indices, 
+       
+        __device__ __inline__  void Expect_GATE(IdxType* x_indices, 
                                  IdxType num_x_indices, 
                                  IdxType xmask, 
                                  IdxType zmask, 
@@ -929,7 +930,6 @@ namespace NWQSim
             BARR;
         }
     };
-
     __global__ void simulation_kernel_cuda(SV_CUDA *sv_gpu, IdxType n_gates)
     {
         IdxType cur_index = 0;
@@ -969,7 +969,7 @@ namespace NWQSim
             }
             else if (op_name == OP::EXPECT)
             {
-
+                /*
                 ObservableList o = *(ObservableList*)((sv_gpu->gates_gpu)[t].data);
                 IdxType* xinds = o.x_indices;
                 for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
@@ -981,7 +981,7 @@ namespace NWQSim
                                 obs_ind);
                     xinds += o.x_index_sizes[obs_ind];
                     grid.sync();
-                }
+                }*/
             }
             grid.sync();
         }

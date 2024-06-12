@@ -1,6 +1,6 @@
 file(GLOB SOURCEFILES "src/*.cpp")
 
-add_executable(nwq_vqe "main.cpp")
+add_executable(nwq_vqe "main.cu")
 
 add_library(vqe SHARED ${SOURCEFILES})
 
@@ -37,6 +37,19 @@ endif()
 
 # If CUDA Toolkit is available, set the CUDA standard and definitions
 if(CUDAToolkit_FOUND)
+    # Set CUDA architecture
+    set(CMAKE_CUDA_ARCHITECTURES "$ENV{MY_CUDA_ARCH}")
+
+    # Check for command line option, then environment variable
+    if(NOT DEFINED CUDA_ARCH)
+        if(DEFINED ENV{MY_CUDA_ARCH})
+            set(CMAKE_CUDA_ARCHITECTURES "$ENV{MY_CUDA_ARCH}")
+        else()
+            message(FATAL_ERROR "CUDA architecture is not set. Please set it manually using cmake -DCUDA_ARCH=N .. or by setting the MY_CUDA_ARCH environment variable.")
+        endif()
+    else()
+        set(CMAKE_CUDA_ARCHITECTURES "${CUDA_ARCH}")
+    endif()
     enable_language(CUDA)
     message("CUDA FOUND")
     set_source_files_properties(${SOURCEFILES} PROPERTIES LANGUAGE CUDA)

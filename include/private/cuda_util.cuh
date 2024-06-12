@@ -7,7 +7,7 @@
 /***********************************************
  * CUDA specific attributes
  ***********************************************/
-#define THREADS_CTA_CUDA 256
+#define THREADS_CTA_CUDA 128
 
 /***********************************************
  * Macros for CUDA

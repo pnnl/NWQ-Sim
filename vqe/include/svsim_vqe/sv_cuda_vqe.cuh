@@ -78,6 +78,7 @@ namespace NWQSim
         }
       virtual void call_simulator() override {        
         reset_state();
+        getchar();
         sim(ansatz);
         cudaDeviceSynchronize();
         cudaSafeCall(cudaMemcpy(expvals.data(), obs.exp_output, expvals.size() * sizeof(ValType),
