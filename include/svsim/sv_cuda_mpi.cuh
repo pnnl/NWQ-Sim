@@ -715,7 +715,9 @@ namespace NWQSim
                     nvshmem_double_get(sv_imag_remote, sv_imag, per_pe_num, pair_gpu);
                 grid.sync();
 
-                for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
+                IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << q - (lg2_m_gpu);
+                index |= i_proc & ((1 << q - (lg2_m_gpu)) - 1);
+                for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                      i += blockDim.x * gridDim.x)
                 {
                     ValType el_real[4];
@@ -840,7 +842,7 @@ namespace NWQSim
                 exp_val += hasEvenParity_cu(pos2 & mask, n_qubits) ? v2 : -v2;
                 exp_val += hasEvenParity_cu(pos3 & mask, n_qubits) ? v3 : -v3;
             }
-            // BARR_MPI;
+            // BARR_NVSHMEM;
             if (tid < per_pe_work) {
                 m_real[tid] = exp_val;
             }
@@ -1221,7 +1223,17 @@ namespace NWQSim
             if (num_x_indices == 2) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
-                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
+                IdxType q0t = q0;
+
+                if (q0 >= lg2_m_gpu) {
+                    SWAP_GATE(0, q0);
+                    q0t = 0;
+                    xmask = swapBits(xmask, q0t, q0);
+                    zmask = swapBits(zmask, q0t, q0);
+                    BARR_NVSHMEM;
+                    assert(q0t != q1);
+                }
+                IdxType zind0 = ((zmask & (1 << q0t)) >> q0t);
                 IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
                 const ValType* gm_real = exp_gate_perms_2q_d[zind0 + zind1];
                 const ValType* gm_imag = exp_gate_perms_2q_d[zind0 + zind1] + 16;
@@ -1232,17 +1244,74 @@ namespace NWQSim
                     reduce_dim = ((dim) >> (gpu_scale + 1));
                 }
                 EXPECT_C2V1_GATE(gm_real, gm_imag, q0, q1, xmask | zmask);
+                if (q0 >= lg2_m_gpu) {
+                    BARR_NVSHMEM;
+                    SWAP_GATE(0, q0);
+                    BARR_NVSHMEM;
+                }
             } else if (num_x_indices == 4) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
                 IdxType q2 = x_indices[2];
                 IdxType q3 = x_indices[3];
-                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
-                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
-                IdxType zind2 = ((zmask & (1 << q2)) >> q2) << 2;
-                IdxType zind3 = ((zmask & (1 << q3)) >> q3) << 3;
-                
-                if (max(max(q0, q1), max(q2, q3)) < lg2_m_gpu)
+                IdxType q0t = q0;
+                IdxType q1t = q1;
+                IdxType q2t = q2;
+                IdxType mask = xmask | zmask;
+                IdxType local_index = 0;
+                if (q0 == 0) {
+                    local_index = 1;
+                    if (q1 == 1) {
+                        local_index = 2;
+                        if (q2 == 2) {
+                            local_index = 3;
+                        }
+                    }
+                }
+                // assume the indices are sorted
+                if (q0 >= lg2_m_gpu) {
+                    q0t = local_index++;
+                    SWAP_GATE(q0t, q0);
+                    zmask = (IdxType)swapBits(zmask, (uint64_t)q0t, (uint64_t)q0);
+                    xmask = (IdxType)swapBits(xmask, (uint64_t)q0t, (uint64_t)q0);
+                    BARR_NVSHMEM;
+                }
+                if (q1 >= lg2_m_gpu) {
+
+                    q1t = local_index++;
+                    SWAP_GATE(q1t, q1);
+
+                    zmask = (IdxType)swapBits(zmask, (uint64_t)q1t, (uint64_t)q1);
+                    xmask = (IdxType)swapBits(xmask, (uint64_t)q1t, (uint64_t)q1);
+                    BARR_NVSHMEM;
+                }
+                if (q2 >= lg2_m_gpu) {
+                    assert (q2t != q1t);
+                    assert (q2t != q0t);
+                    assert (q2t != q3);
+                    q2t = local_index++;
+                    SWAP_GATE(q2t, q2);
+                    mask = swapBits(mask, (uint64_t)(q2t), (uint64_t)q2);
+                    zmask = (IdxType)swapBits(zmask, (uint64_t)q2t, (uint64_t)q2);
+                    xmask = (IdxType)swapBits(xmask, (uint64_t)q2t, (uint64_t)q2);
+                    BARR_NVSHMEM;
+                }
+                assert (q0t < lg2_m_gpu && q1t < lg2_m_gpu && q2t < lg2_m_gpu);
+
+                const IdxType v0 = std::min(q0t, q1t);
+                const IdxType v1 = std::min(q2t, q3);
+                const IdxType v2 = std::max(q0t, q1t);
+                const IdxType v3 = std::max(q2t, q3);
+                const IdxType p = std::min(v0, v1);
+                const IdxType q = std::min(std::min(v2, v3), std::max(v0, v1));
+                const IdxType r = std::max(std::min(v2, v3), std::max(v0, v1));
+                const IdxType s = std::max(v2, v3);                
+                IdxType zind0 = ((zmask & (1 << p)) >> p);
+                IdxType zind1 = ((zmask & (1 << q)) >> q) << 1;
+                IdxType zind2 = ((zmask & (1 << r)) >> r) << 2;
+                IdxType zind3 = ((zmask & (1 << s)) >> s) << 3;
+
+                if (q3 < lg2_m_gpu)
                 {
                     reduce_dim = ((dim) >> (gpu_scale + 4));
                 } else {
@@ -1251,6 +1320,19 @@ namespace NWQSim
                 const ValType* gm_real = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3];
                 const ValType* gm_imag = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3] + 256;
                 EXPECT_C4V1_GATE(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
+                BARR_NVSHMEM;
+                if (q0 >= lg2_m_gpu) {
+                    SWAP_GATE(q0t, q0);
+                    BARR_NVSHMEM;
+                }
+                if (q1 >= lg2_m_gpu) {
+                    SWAP_GATE(q1t, q1);
+                    BARR_NVSHMEM;
+                }
+                if (q2 >= lg2_m_gpu) {
+                    SWAP_GATE(q2t, q2);
+                    BARR_NVSHMEM;
+                }
             } else if (num_x_indices == 0) {
                 EXPECT_C0_GATE(zmask);
                 reduce_dim = ((dim) >> (gpu_scale));

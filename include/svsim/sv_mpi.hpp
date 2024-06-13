@@ -708,21 +708,22 @@ namespace NWQSim
                     // Send own partial statevector to remote nodes
                     MPI_Send(sv_real, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD);
                     MPI_Send(sv_imag, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD);
-                    size_t index = 0;
                 }
                 else
                 {
+
+                    IdxType index = (i_proc >> (s - (lg2_m_cpu) + 1)) << (s - (lg2_m_cpu));
+                    index |= i_proc & ((1 << s - (lg2_m_cpu)) - 1);
                     ValType *sv_real_remote = m_real;
                     ValType *sv_imag_remote = m_imag;
                     MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     MPI_Recv(sv_imag_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    size_t index = 0;
                     std::vector<bool> markers;
                     if (i_proc == 0) {
                         markers.resize(per_pe_num);
                     }
                     
-                    for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
+                    for (IdxType i = (index)*per_pe_work; i < (index + 1) * per_pe_work; i++)
                     {
                         ValType el_real[16];
                         ValType el_imag[16];
@@ -941,10 +942,8 @@ namespace NWQSim
                 }
                 else
                 {
-                    IdxType index = (i_proc >> (q - (lg2_m_cpu) + 1)) << q - (lg2_m_cpu);
+                    IdxType index = (i_proc >> (q - (lg2_m_cpu) + 1)) << (q - (lg2_m_cpu));
                     index |= i_proc & ((1 << q - (lg2_m_cpu)) - 1);
-                    IdxType start = i_proc == 0 ? 0 : (i_proc - 1) * per_pe_work;
-                    IdxType end = i_proc == 0 ? 2 * per_pe_work : (i_proc + 1) * per_pe_work;
                     ValType *sv_real_remote = m_real;
                     ValType *sv_imag_remote = m_imag;
                     MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -1143,10 +1142,6 @@ namespace NWQSim
 
                     zmask = (IdxType)swapBits(zmask, (uint64_t)q1t, (uint64_t)q1);
                     xmask = (IdxType)swapBits(xmask, (uint64_t)q1t, (uint64_t)q1);
-                                        // if (i_proc == 0) {
-                    //     std::cout << "Swapping qubit 1: " << q1 << " <-> " << q1t << std::endl;
-                    //     printf("%03x\n", zmask);
-                    // }
                     BARR_MPI;
                 }
                 if (q2 >= lg2_m_cpu) {
@@ -1158,10 +1153,6 @@ namespace NWQSim
                     mask = swapBits(mask, (uint64_t)(q2t), (uint64_t)q2);
                     zmask = (IdxType)swapBits(zmask, (uint64_t)q2t, (uint64_t)q2);
                     xmask = (IdxType)swapBits(xmask, (uint64_t)q2t, (uint64_t)q2);
-                    // if (i_proc == 0) {
-                    //     std::cout << "Swapping qubit 2: " << q2 << " <-> " << q2t << std::endl;
-                    //     printf("%03x\n", zmask);
-                    // }
                     BARR_MPI;
                 }
                 assert (q0t < lg2_m_cpu && q1t < lg2_m_cpu && q2t < lg2_m_cpu);
@@ -1178,15 +1169,6 @@ namespace NWQSim
                 IdxType zind1 = ((zmask & (1 << q)) >> q) << 1;
                 IdxType zind2 = ((zmask & (1 << r)) >> r) << 2;
                 IdxType zind3 = ((zmask & (1 << s)) >> s) << 3;
-                // if (i_proc == 0) {
-                //     std::cout << q0 << " " << q1  << " " << q2 << " " << q3 << std::endl;
-                //     std::cout << p << " " << q  << " " << r << " " << s << " GATE INDEX " << zind0 + zind1 + zind2 + zind3 << std::endl;
-                // }
-                // if (i_proc == 0) {
-                //     printf("%03x\n", xmask);
-                //     printf("%03x\n", zmask);
-                // }
-
                 const ValType* gm_real = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3];
                 const ValType* gm_imag = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3] + 256;
                 result = EXPECT_C4V1_GATE(gm_real, gm_imag, p, q, r, s, xmask | zmask);

@@ -128,6 +128,28 @@ typedef struct GPU_Timer
     cudaEvent_t stop;
 } gpu_timer;
 
+__device__
+inline 
+uint64_t swapBits (uint64_t n, uint64_t p1, uint64_t p2) {
+
+    /* Move p1'th to rightmost side */
+    uint64_t bit1 =  (n >> p1) & 1;
+
+    /* Move p2'th to rightmost side */
+    uint64_t bit2 =  (n >> p2) & 1;
+
+    /* XOR the two bits */
+    uint64_t x = (bit1 ^ bit2);
+
+    /* Put the xor bit back to their original positions */
+    x = (x << p1) | (x << p2);
+
+    /* XOR 'x' with the original number so that the
+    two sets are swapped */
+    uint64_t result = n ^ x;
+    return result;
+}
+
 /***********************************************
  * VQE Related Functions
  ***********************************************/
