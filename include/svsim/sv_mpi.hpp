@@ -703,7 +703,6 @@ namespace NWQSim
                 // load data from pair node
                 IdxType pair_cpu = (i_proc) ^ ((IdxType)1 << (s - (lg2_m_cpu)));
                 assert(pair_cpu != i_proc);
-                    printf("Pair CPU %d %d\n", i_proc, pair_cpu);
                 if (i_proc > pair_cpu)
                 {
                     // Send own partial statevector to remote nodes
@@ -720,11 +719,9 @@ namespace NWQSim
                     size_t index = 0;
                     std::vector<bool> markers;
                     if (i_proc == 0) {
-                        std::cout << per_pe_num << std::endl;
-                        std::cout << per_pe_work << std::endl;
-                        printf("%x\n", m_cpu-1);
                         markers.resize(per_pe_num);
                     }
+                    
                     for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
                     {
                         ValType el_real[16];
@@ -735,55 +732,9 @@ namespace NWQSim
                         const IdxType term3 = MOD2E(DIV2E(DIV2E(DIV2E(i, p), q - p - 1), r - q - 1), s - r - 1) * EXP2E(r + 1);
                         const IdxType term4 = DIV2E(DIV2E(DIV2E(DIV2E(i, p), q - p - 1), r - q - 1), s - r - 1) * EXP2E(s + 1);
                         const IdxType term = term4 + term3 + term2 + term1 + term0;
-                        if (qubit3 == s && qubit2 == r && r > lg2_m_cpu) // qubit3 is remote qubit
+                        if (qubit3 == s) // qubit3 is remote qubit
                         {
-                            if (i_proc == 0) {
-                                for(size_t j = 1; j < 16; j+= 2) {
-                                    LOCAL_G(markers, term + SV16IDX(j)) = 1;
-                                }
-                            }
-                            // printf("Qubit 3");
-                            el_real[0] = LOCAL_G(sv_real, term + SV16IDX(0));
-                            el_real[1] = LOCAL_G(sv_real_remote, term + SV16IDX(1));
-                            el_real[2] = LOCAL_G(sv_real, term + SV16IDX(2));
-                            el_real[3] = LOCAL_G(sv_real_remote, term + SV16IDX(3));
-                            el_real[4] = LOCAL_G(sv_real, term + SV16IDX(4));
-                            el_real[5] = LOCAL_G(sv_real_remote, term + SV16IDX(5));
-                            el_real[6] = LOCAL_G(sv_real, term + SV16IDX(6));
-                            el_real[7] = LOCAL_G(sv_real_remote, term + SV16IDX(7));
-                            el_real[8] = LOCAL_G(sv_real, term + SV16IDX(8));
-                            el_real[9] = LOCAL_G(sv_real_remote, term + SV16IDX(9));
-                            el_real[10] = LOCAL_G(sv_real, term + SV16IDX(10));
-                            el_real[11] = LOCAL_G(sv_real_remote, term + SV16IDX(11));
-                            el_real[12] = LOCAL_G(sv_real, term + SV16IDX(12));
-                            el_real[13] = LOCAL_G(sv_real_remote, term + SV16IDX(13));
-                            el_real[14] = LOCAL_G(sv_real, term + SV16IDX(14));
-                            el_real[15] = LOCAL_G(sv_real_remote, term + SV16IDX(15));
-
-                            el_imag[0] = LOCAL_G(sv_imag, term + SV16IDX(0));
-                            el_imag[1] = LOCAL_G(sv_imag_remote, term + SV16IDX(1));
-                            el_imag[2] = LOCAL_G(sv_imag, term + SV16IDX(2));
-                            el_imag[3] = LOCAL_G(sv_imag_remote, term + SV16IDX(3));
-                            el_imag[4] = LOCAL_G(sv_imag, term + SV16IDX(4));
-                            el_imag[5] = LOCAL_G(sv_imag_remote, term + SV16IDX(5));
-                            el_imag[6] = LOCAL_G(sv_imag, term + SV16IDX(6));
-                            el_imag[7] = LOCAL_G(sv_imag_remote, term + SV16IDX(7));
-                            el_imag[8] = LOCAL_G(sv_imag, term + SV16IDX(8));
-                            el_imag[9] = LOCAL_G(sv_imag_remote, term + SV16IDX(9));
-                            el_imag[10] = LOCAL_G(sv_imag, term + SV16IDX(10));
-                            el_imag[11] = LOCAL_G(sv_imag_remote, term + SV16IDX(11));
-                            el_imag[12] = LOCAL_G(sv_imag, term + SV16IDX(12));
-                            el_imag[13] = LOCAL_G(sv_imag_remote, term + SV16IDX(13));
-                            el_imag[14] = LOCAL_G(sv_imag, term + SV16IDX(14));
-                            el_imag[15] = LOCAL_G(sv_imag_remote, term + SV16IDX(15));
-                        }
-                        else if (qubit3 == s) // qubit3 is remote qubit
-                        {
-                            if (i_proc == 0) {
-                                for(size_t j = 1; j < 16; j+= 2) {
-                                    LOCAL_G(markers, term + SV16IDX(j)) = 1;
-                                }
-                            }
+                            
                             // printf("Qubit 3");
                             el_real[0] = LOCAL_G(sv_real, term + SV16IDX(0));
                             el_real[1] = LOCAL_G(sv_real_remote, term + SV16IDX(1));
@@ -825,12 +776,6 @@ namespace NWQSim
                             // else el_real_s[j*16+laneid] = LOCAL_G(sv_real, addr);
                             // laneid = 2,3,6,7,10,11,14,15;
 
-                            if (i_proc == 0) {
-                                for(size_t j = 2; j < 16; j+= 4) {
-                                    LOCAL_G(markers, term + SV16IDX(j)) = 1;
-                                    LOCAL_G(markers, term + SV16IDX(j+1)) = 1;
-                                }
-                            }
                             el_real[0] = LOCAL_G(sv_real, term + SV16IDX(0));
                             el_real[1] = LOCAL_G(sv_real, term + SV16IDX(1));
                             el_real[2] = LOCAL_G(sv_real_remote, term + SV16IDX(2));
@@ -885,10 +830,10 @@ namespace NWQSim
                        
                     }
                 if (i_proc == 0) {
-                    for(size_t j = 0; j < per_pe_num; j+= 1) {
-                        if (markers[j] == 0)
-                            printf("%d\n", j);
-                    }
+                    // for(size_t j = 0; j < per_pe_num; j+= 1) {
+                        // if (markers[j] == 0)
+                            // printf("%d\n", j);
+                    // }
                 }
                 }
                 BARR_MPI;
@@ -909,25 +854,35 @@ namespace NWQSim
             const IdxType inner_factor = q1dim;
             const IdxType qubit0_dim = ((IdxType)1 << qubit0);
             const IdxType qubit1_dim = ((IdxType)1 << qubit1);
+            const IdxType p = qubit0;
+            const IdxType q = qubit1;
             ValType exp_val = 0.0;
             for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
             {
-                IdxType outer = ((i / inner_factor) / (mider_factor)) * (q0dim + q0dim);
-                IdxType mider = ((i / inner_factor) % (mider_factor)) * (q1dim + q1dim);
-                IdxType inner = i % inner_factor;
-                IdxType pos0 = outer + mider + inner;
-                IdxType pos1 = outer + mider + inner + qubit1_dim;
-                IdxType pos2 = outer + mider + inner + qubit0_dim;
-                IdxType pos3 = outer + mider + inner + q0dim + q1dim;
+                // IdxType outer = ((i / inner_factor) / (mider_factor)) * (q0dim + q0dim);
+                // IdxType mider = ((i / inner_factor) % (mider_factor)) * (q1dim + q1dim);
+                // IdxType inner = i % inner_factor;
+                // IdxType pos0 = outer + mider + inner;
+                // IdxType pos1 = outer + mider + inner + qubit1_dim;
+                // IdxType pos2 = outer + mider + inner + qubit0_dim;
+                // IdxType pos3 = outer + mider + inner + q0dim + q1dim;
+                ValType el_real[4];
+                ValType el_imag[4];
+                ValType res_real[4] = {0};
+                ValType res_imag[4] = {0};
+                const IdxType term0 = MOD2E(i, p);
+                const IdxType term1 = MOD2E(DIV2E(i, p), q - p - 1) * EXP2E(p + 1);
+                const IdxType term2 = DIV2E(DIV2E(i, p), q - p - 1) * EXP2E(q + 1);
+                const IdxType term = term2 + term1 + term0;
 
-                const ValType el0_real = LOCAL_G(sv_real, pos0);
-                const ValType el0_imag = LOCAL_G(sv_imag, pos0);
-                const ValType el1_real = LOCAL_G(sv_real, pos1);
-                const ValType el1_imag = LOCAL_G(sv_imag, pos1);
-                const ValType el2_real = LOCAL_G(sv_real, pos2);
-                const ValType el2_imag = LOCAL_G(sv_imag, pos2);
-                const ValType el3_real = LOCAL_G(sv_real, pos3);
-                const ValType el3_imag = LOCAL_G(sv_imag, pos3);
+                const ValType el0_real = LOCAL_G(sv_real, term + SV4IDX(0));
+                const ValType el0_imag = LOCAL_G(sv_imag, term + SV4IDX(0));
+                const ValType el1_real = LOCAL_G(sv_real, term + SV4IDX(1));
+                const ValType el1_imag = LOCAL_G(sv_imag, term + SV4IDX(1));
+                const ValType el2_real = LOCAL_G(sv_real, term + SV4IDX(2));
+                const ValType el2_imag = LOCAL_G(sv_imag, term + SV4IDX(2));
+                const ValType el3_real = LOCAL_G(sv_real, term + SV4IDX(3));
+                const ValType el3_imag = LOCAL_G(sv_imag, term + SV4IDX(4));
 
                 // Real part
                 ValType sv_real_pos0 = (gm_real[0] * el0_real) - (gm_imag[0] * el0_imag) + (gm_real[1] * el1_real) - (gm_imag[1] * el1_imag) + (gm_real[2] * el2_real) - (gm_imag[2] * el2_imag) + (gm_real[3] * el3_real) - (gm_imag[3] * el3_imag);
@@ -946,10 +901,10 @@ namespace NWQSim
                 ValType v2 = sv_real_pos2 * sv_real_pos2 + sv_imag_pos2 * sv_imag_pos2;
                 ValType v3 = sv_real_pos3 * sv_real_pos3 + sv_imag_pos3 * sv_imag_pos3;
 
-                exp_val += hasEvenParity(pos0 & mask, n_qubits) ? v0 : -v0;
-                exp_val += hasEvenParity(pos1 & mask, n_qubits) ? v1 : -v1;
-                exp_val += hasEvenParity(pos2 & mask, n_qubits) ? v2 : -v2;
-                exp_val += hasEvenParity(pos3 & mask, n_qubits) ? v3 : -v3;
+                exp_val += hasEvenParity((term + SV4IDX(0)) & mask, n_qubits) ? v0 : -v0;
+                exp_val += hasEvenParity((term + SV4IDX(1)) & mask, n_qubits) ? v1 : -v1;
+                exp_val += hasEvenParity((term + SV4IDX(2)) & mask, n_qubits) ? v2 : -v2;
+                exp_val += hasEvenParity((term + SV4IDX(3)) & mask, n_qubits) ? v3 : -v3;
             }
             // BARR_MPI;
             return exp_val;
@@ -976,7 +931,6 @@ namespace NWQSim
                 // load data from pair node
                 IdxType pair_cpu = (i_proc) ^ ((IdxType)1 << (q - (lg2_m_cpu)));
                 assert(pair_cpu != i_proc);
-
                 if (i_proc > pair_cpu)
                 {
                     // Send own partial statevector to remote nodes
@@ -987,12 +941,18 @@ namespace NWQSim
                 }
                 else
                 {
+                    IdxType index = (i_proc >> (q - (lg2_m_cpu) + 1)) << q - (lg2_m_cpu);
+                    index |= i_proc & ((1 << q - (lg2_m_cpu)) - 1);
+                    IdxType start = i_proc == 0 ? 0 : (i_proc - 1) * per_pe_work;
+                    IdxType end = i_proc == 0 ? 2 * per_pe_work : (i_proc + 1) * per_pe_work;
                     ValType *sv_real_remote = m_real;
                     ValType *sv_imag_remote = m_imag;
                     MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     MPI_Recv(sv_imag_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
+                    
+                    for (IdxType i = index * per_pe_work; i < (index + 1) * per_pe_work; i++)
                     {
+                        
                         ValType el_real[4];
                         ValType el_imag[4];
                         ValType res_real[4] = {0};
@@ -1038,7 +998,7 @@ namespace NWQSim
                                 r_imag += (el_real[k] * gm_imag[j * 4 + k]) + (el_imag[k] * gm_real[j * 4 + k]);
                             }
                             ValType val = r_real * r_real + r_imag * r_imag;
-                            exp_val += hasEvenParity(indices[j] & mask, n_qubits) ? val: -val;
+                            exp_val += hasEvenParity((term + SV4IDX(j)) & mask, n_qubits) ? val: -val;
                         }
                     }
                     return exp_val;
@@ -1129,28 +1089,125 @@ namespace NWQSim
             if (num_x_indices == 2) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
-                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
+                IdxType q0t = q0;
+
+                if (q0 >= lg2_m_cpu) {
+                    SWAP_GATE(0, q0);
+                    q0t = 0;
+                    xmask = swapBits(xmask, q0t, q0);
+                    zmask = swapBits(zmask, q0t, q0);
+                    BARR_MPI;
+                    assert(q0t != q1);
+                }
+                IdxType zind0 = ((zmask & (1 << q0t)) >> q0t);
                 IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
                 const ValType* gm_real = exp_gate_perms_2q[zind0 + zind1];
                 const ValType* gm_imag = exp_gate_perms_2q[zind0 + zind1] + 16;
-                result = EXPECT_C2V1_GATE(gm_real, gm_imag, q0, q1, xmask | zmask);
+                result = EXPECT_C2V1_GATE(gm_real, gm_imag, q0t, q1, xmask | zmask);
+                if (q0 >= lg2_m_cpu) {
+                    BARR_MPI;
+                    SWAP_GATE(0, q0);
+                    BARR_MPI;
+                }
             } else if (num_x_indices == 4) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
                 IdxType q2 = x_indices[2];
                 IdxType q3 = x_indices[3];
-                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
-                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
-                IdxType zind2 = ((zmask & (1 << q2)) >> q2) << 2;
-                IdxType zind3 = ((zmask & (1 << q3)) >> q3) << 3;
+                IdxType q0t = q0;
+                IdxType q1t = q1;
+                IdxType q2t = q2;
+                IdxType mask = xmask | zmask;
+                IdxType local_index = 0;
+                if (q0 == 0) {
+                    local_index = 1;
+                    if (q1 == 1) {
+                        local_index = 2;
+                        if (q2 == 2) {
+                            local_index = 3;
+                        }
+                    }
+                }
+                // assume the indices are sorted
+                if (q0 >= lg2_m_cpu) {
+                    q0t = local_index++;
+                    SWAP_GATE(q0t, q0);
+                    zmask = (IdxType)swapBits(zmask, (uint64_t)q0t, (uint64_t)q0);
+                    xmask = (IdxType)swapBits(xmask, (uint64_t)q0t, (uint64_t)q0);
+                    BARR_MPI;
+                }
+                if (q1 >= lg2_m_cpu) {
+
+                    q1t = local_index++;
+                    SWAP_GATE(q1t, q1);
+
+                    zmask = (IdxType)swapBits(zmask, (uint64_t)q1t, (uint64_t)q1);
+                    xmask = (IdxType)swapBits(xmask, (uint64_t)q1t, (uint64_t)q1);
+                                        // if (i_proc == 0) {
+                    //     std::cout << "Swapping qubit 1: " << q1 << " <-> " << q1t << std::endl;
+                    //     printf("%03x\n", zmask);
+                    // }
+                    BARR_MPI;
+                }
+                if (q2 >= lg2_m_cpu) {
+                    assert (q2t != q1t);
+                    assert (q2t != q0t);
+                    assert (q2t != q3);
+                    q2t = local_index++;
+                    SWAP_GATE(q2t, q2);
+                    mask = swapBits(mask, (uint64_t)(q2t), (uint64_t)q2);
+                    zmask = (IdxType)swapBits(zmask, (uint64_t)q2t, (uint64_t)q2);
+                    xmask = (IdxType)swapBits(xmask, (uint64_t)q2t, (uint64_t)q2);
+                    // if (i_proc == 0) {
+                    //     std::cout << "Swapping qubit 2: " << q2 << " <-> " << q2t << std::endl;
+                    //     printf("%03x\n", zmask);
+                    // }
+                    BARR_MPI;
+                }
+                assert (q0t < lg2_m_cpu && q1t < lg2_m_cpu && q2t < lg2_m_cpu);
+
+                const IdxType v0 = std::min(q0t, q1t);
+                const IdxType v1 = std::min(q2t, q3);
+                const IdxType v2 = std::max(q0t, q1t);
+                const IdxType v3 = std::max(q2t, q3);
+                const IdxType p = std::min(v0, v1);
+                const IdxType q = std::min(std::min(v2, v3), std::max(v0, v1));
+                const IdxType r = std::max(std::min(v2, v3), std::max(v0, v1));
+                const IdxType s = std::max(v2, v3);                
+                IdxType zind0 = ((zmask & (1 << p)) >> p);
+                IdxType zind1 = ((zmask & (1 << q)) >> q) << 1;
+                IdxType zind2 = ((zmask & (1 << r)) >> r) << 2;
+                IdxType zind3 = ((zmask & (1 << s)) >> s) << 3;
+                // if (i_proc == 0) {
+                //     std::cout << q0 << " " << q1  << " " << q2 << " " << q3 << std::endl;
+                //     std::cout << p << " " << q  << " " << r << " " << s << " GATE INDEX " << zind0 + zind1 + zind2 + zind3 << std::endl;
+                // }
+                // if (i_proc == 0) {
+                //     printf("%03x\n", xmask);
+                //     printf("%03x\n", zmask);
+                // }
+
                 const ValType* gm_real = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3];
                 const ValType* gm_imag = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3] + 256;
-                result = EXPECT_C4V1_GATE(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
+                result = EXPECT_C4V1_GATE(gm_real, gm_imag, p, q, r, s, xmask | zmask);
+                BARR_MPI;
+                if (q0 >= lg2_m_cpu) {
+                    SWAP_GATE(q0t, q0);
+                    BARR_MPI;
+                }
+                if (q1 >= lg2_m_cpu) {
+                    SWAP_GATE(q1t, q1);
+                    BARR_MPI;
+                }
+                if (q2 >= lg2_m_cpu) {
+                    SWAP_GATE(q2t, q2);
+                    BARR_MPI;
+                }
             } else if (num_x_indices == 0) {
                 result = EXPECT_C0_GATE(zmask);
             }
             ValType expect = 0;
-            printf("%lld %f\n", i_proc, result);
+            // printf("%lld %f\n", i_proc, result);
             BARR_MPI;
             MPI_Reduce(&result, &expect, 1,  MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
             BARR_MPI;

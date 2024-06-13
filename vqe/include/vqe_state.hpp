@@ -60,14 +60,19 @@ namespace NWQSim
           for (auto& kv_pair: optimizer_settings.parameter_map) {
               optimizer.set_param(kv_pair.first.c_str(), kv_pair.second);
           }
-          xmasks = {0b110000011000, 0b101000011000, 0b110000000000, 0b000000000000};
-          zmasks = {0b111111111110, 0b111111111110, 0b011111111111, 0b111000000010};   
-          x_indices = {3, 4, 10, 11,
-                       3, 4, 9, 10,
-                       10, 11};
-          x_index_sizes = {4, 4, 2, 0};
-           expvals.resize(4);               
-          /*                                
+          //IZYZZYIIIIII
+          /*xmasks = {
+            0b001001000000
+          };
+          zmasks = {
+            0b011111000000
+          };   
+          x_indices = {
+            6, 9
+            };
+          x_index_sizes = {2};
+           expvals.resize(1);       */     
+          
           auto& pauli_operators = hamil.getPauliOperators();        
           for (auto& pauli_list: pauli_operators) {
             for (const PauliOperator& pauli: pauli_list) {
@@ -80,7 +85,7 @@ namespace NWQSim
               }
             }
           }
-          expvals.resize(hamil.num_ops());*/
+          expvals.resize(hamil.num_ops());
           // Check if the chosen algorithm requires derivatives
           compute_gradient = std::string(optimizer.get_algorithm_name()).find("no-derivative") == std::string::npos;
           optimizer.set_min_objective(nl_opt_function, (void*)this);
@@ -114,8 +119,8 @@ namespace NWQSim
           if (parameters.size() == 0) {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }
-          energy(parameters);
-          // nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
+          // energy(parameters);
+          nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
       }
       virtual void call_simulator() {};
       virtual ValType energy(const std::vector<double>& x) {
@@ -128,17 +133,15 @@ namespace NWQSim
         IdxType index = 0;
         for (auto& pauli_list: pauli_operators) {
           for (const PauliOperator& pauli: pauli_list) {
-            std::cout << expvals[index] << std::endl;
+            // std::cout << pauli << "  " << expvals[index] << std::endl;
             emap[pauli] = expvals[index++];
-              if (index > xmasks.size()) {
-              break;
-              }
+              // if (index >= xmasks.size())
+              //   break;
           }
-              if (index > xmasks.size()) {
-              break;
-              }
+              // if (index >= xmasks.size()) 
+              //   break;
         }
-        ValType ene = 0.0;// hamil.expectation(emap);
+        ValType ene = hamil.expectation(emap);
         return ene;
       }
       protected:
