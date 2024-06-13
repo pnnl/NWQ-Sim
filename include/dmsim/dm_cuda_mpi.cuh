@@ -204,6 +204,7 @@ namespace NWQSim
             if (Config::PRINT_SIM_TRACE)
                 MPI_Barrier(MPI_COMM_WORLD);
             sim_timer.start_timer();
+            
 
             NVSHMEM_CHECK(nvshmemx_collective_launch((const void *)dm_simulation_kernel_cuda_mpi, gridDim,
                                                      THREADS_CTA_CUDA, args, smem_size, 0));
@@ -218,9 +219,11 @@ namespace NWQSim
 
             // Copy the results back to CPU
             cudaSafeCall(cudaMemcpy(results, results_gpu, n_measures * sizeof(IdxType), cudaMemcpyDeviceToHost));
-
-            if (i_proc == 0)
+            
+            if (i_proc == 0) {
+                print_res_state();
                 printf("results copied to cpu\n");
+            }
 
             cudaCheckError();
 

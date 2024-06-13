@@ -703,6 +703,7 @@ namespace NWQSim
                 // load data from pair node
                 IdxType pair_cpu = (i_proc) ^ ((IdxType)1 << (s - (lg2_m_cpu)));
                 assert(pair_cpu != i_proc);
+                    printf("Pair CPU %d %d\n", i_proc, pair_cpu);
                 if (i_proc > pair_cpu)
                 {
                     // Send own partial statevector to remote nodes
@@ -717,7 +718,13 @@ namespace NWQSim
                     MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     MPI_Recv(sv_imag_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     size_t index = 0;
-                    
+                    std::vector<bool> markers;
+                    if (i_proc == 0) {
+                        std::cout << per_pe_num << std::endl;
+                        std::cout << per_pe_work << std::endl;
+                        printf("%x\n", m_cpu-1);
+                        markers.resize(per_pe_num);
+                    }
                     for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
                     {
                         ValType el_real[16];
@@ -728,83 +735,136 @@ namespace NWQSim
                         const IdxType term3 = MOD2E(DIV2E(DIV2E(DIV2E(i, p), q - p - 1), r - q - 1), s - r - 1) * EXP2E(r + 1);
                         const IdxType term4 = DIV2E(DIV2E(DIV2E(DIV2E(i, p), q - p - 1), r - q - 1), s - r - 1) * EXP2E(s + 1);
                         const IdxType term = term4 + term3 + term2 + term1 + term0;
-                        if (qubit3 == s) // qubit3 is remote qubit
-                    {
-                        // printf("Qubit 3");
-                        el_real[0] = LOCAL_G(sv_real, term + SV16IDX(0));
-                        el_real[1] = LOCAL_G(sv_real_remote, term + SV16IDX(1));
-                        el_real[2] = LOCAL_G(sv_real, term + SV16IDX(2));
-                        el_real[3] = LOCAL_G(sv_real_remote, term + SV16IDX(3));
-                        el_real[4] = LOCAL_G(sv_real, term + SV16IDX(4));
-                        el_real[5] = LOCAL_G(sv_real_remote, term + SV16IDX(5));
-                        el_real[6] = LOCAL_G(sv_real, term + SV16IDX(6));
-                        el_real[7] = LOCAL_G(sv_real_remote, term + SV16IDX(7));
-                        el_real[8] = LOCAL_G(sv_real, term + SV16IDX(8));
-                        el_real[9] = LOCAL_G(sv_real_remote, term + SV16IDX(9));
-                        el_real[10] = LOCAL_G(sv_real, term + SV16IDX(10));
-                        el_real[11] = LOCAL_G(sv_real_remote, term + SV16IDX(11));
-                        el_real[12] = LOCAL_G(sv_real, term + SV16IDX(12));
-                        el_real[13] = LOCAL_G(sv_real_remote, term + SV16IDX(13));
-                        el_real[14] = LOCAL_G(sv_real, term + SV16IDX(14));
-                        el_real[15] = LOCAL_G(sv_real_remote, term + SV16IDX(15));
+                        if (qubit3 == s && qubit2 == r && r > lg2_m_cpu) // qubit3 is remote qubit
+                        {
+                            if (i_proc == 0) {
+                                for(size_t j = 1; j < 16; j+= 2) {
+                                    LOCAL_G(markers, term + SV16IDX(j)) = 1;
+                                }
+                            }
+                            // printf("Qubit 3");
+                            el_real[0] = LOCAL_G(sv_real, term + SV16IDX(0));
+                            el_real[1] = LOCAL_G(sv_real_remote, term + SV16IDX(1));
+                            el_real[2] = LOCAL_G(sv_real, term + SV16IDX(2));
+                            el_real[3] = LOCAL_G(sv_real_remote, term + SV16IDX(3));
+                            el_real[4] = LOCAL_G(sv_real, term + SV16IDX(4));
+                            el_real[5] = LOCAL_G(sv_real_remote, term + SV16IDX(5));
+                            el_real[6] = LOCAL_G(sv_real, term + SV16IDX(6));
+                            el_real[7] = LOCAL_G(sv_real_remote, term + SV16IDX(7));
+                            el_real[8] = LOCAL_G(sv_real, term + SV16IDX(8));
+                            el_real[9] = LOCAL_G(sv_real_remote, term + SV16IDX(9));
+                            el_real[10] = LOCAL_G(sv_real, term + SV16IDX(10));
+                            el_real[11] = LOCAL_G(sv_real_remote, term + SV16IDX(11));
+                            el_real[12] = LOCAL_G(sv_real, term + SV16IDX(12));
+                            el_real[13] = LOCAL_G(sv_real_remote, term + SV16IDX(13));
+                            el_real[14] = LOCAL_G(sv_real, term + SV16IDX(14));
+                            el_real[15] = LOCAL_G(sv_real_remote, term + SV16IDX(15));
 
-                        el_imag[0] = LOCAL_G(sv_imag, term + SV16IDX(0));
-                        el_imag[1] = LOCAL_G(sv_imag_remote, term + SV16IDX(1));
-                        el_imag[2] = LOCAL_G(sv_imag, term + SV16IDX(2));
-                        el_imag[3] = LOCAL_G(sv_imag_remote, term + SV16IDX(3));
-                        el_imag[4] = LOCAL_G(sv_imag, term + SV16IDX(4));
-                        el_imag[5] = LOCAL_G(sv_imag_remote, term + SV16IDX(5));
-                        el_imag[6] = LOCAL_G(sv_imag, term + SV16IDX(6));
-                        el_imag[7] = LOCAL_G(sv_imag_remote, term + SV16IDX(7));
-                        el_imag[8] = LOCAL_G(sv_imag, term + SV16IDX(8));
-                        el_imag[9] = LOCAL_G(sv_imag_remote, term + SV16IDX(9));
-                        el_imag[10] = LOCAL_G(sv_imag, term + SV16IDX(10));
-                        el_imag[11] = LOCAL_G(sv_imag_remote, term + SV16IDX(11));
-                        el_imag[12] = LOCAL_G(sv_imag, term + SV16IDX(12));
-                        el_imag[13] = LOCAL_G(sv_imag_remote, term + SV16IDX(13));
-                        el_imag[14] = LOCAL_G(sv_imag, term + SV16IDX(14));
-                        el_imag[15] = LOCAL_G(sv_imag_remote, term + SV16IDX(15));
-                    }
-                    else // qubit2 is remote (not possible qubit0 or 1 is remote)
-                    {
-                        // if (( (laneid>>1)&1)!=0) el_real_s[j*16+laneid] = LOCAL_G(sv_real_remote,addr);
-                        // else el_real_s[j*16+laneid] = LOCAL_G(sv_real, addr);
-                        // laneid = 2,3,6,7,10,11,14,15;
+                            el_imag[0] = LOCAL_G(sv_imag, term + SV16IDX(0));
+                            el_imag[1] = LOCAL_G(sv_imag_remote, term + SV16IDX(1));
+                            el_imag[2] = LOCAL_G(sv_imag, term + SV16IDX(2));
+                            el_imag[3] = LOCAL_G(sv_imag_remote, term + SV16IDX(3));
+                            el_imag[4] = LOCAL_G(sv_imag, term + SV16IDX(4));
+                            el_imag[5] = LOCAL_G(sv_imag_remote, term + SV16IDX(5));
+                            el_imag[6] = LOCAL_G(sv_imag, term + SV16IDX(6));
+                            el_imag[7] = LOCAL_G(sv_imag_remote, term + SV16IDX(7));
+                            el_imag[8] = LOCAL_G(sv_imag, term + SV16IDX(8));
+                            el_imag[9] = LOCAL_G(sv_imag_remote, term + SV16IDX(9));
+                            el_imag[10] = LOCAL_G(sv_imag, term + SV16IDX(10));
+                            el_imag[11] = LOCAL_G(sv_imag_remote, term + SV16IDX(11));
+                            el_imag[12] = LOCAL_G(sv_imag, term + SV16IDX(12));
+                            el_imag[13] = LOCAL_G(sv_imag_remote, term + SV16IDX(13));
+                            el_imag[14] = LOCAL_G(sv_imag, term + SV16IDX(14));
+                            el_imag[15] = LOCAL_G(sv_imag_remote, term + SV16IDX(15));
+                        }
+                        else if (qubit3 == s) // qubit3 is remote qubit
+                        {
+                            if (i_proc == 0) {
+                                for(size_t j = 1; j < 16; j+= 2) {
+                                    LOCAL_G(markers, term + SV16IDX(j)) = 1;
+                                }
+                            }
+                            // printf("Qubit 3");
+                            el_real[0] = LOCAL_G(sv_real, term + SV16IDX(0));
+                            el_real[1] = LOCAL_G(sv_real_remote, term + SV16IDX(1));
+                            el_real[2] = LOCAL_G(sv_real, term + SV16IDX(2));
+                            el_real[3] = LOCAL_G(sv_real_remote, term + SV16IDX(3));
+                            el_real[4] = LOCAL_G(sv_real, term + SV16IDX(4));
+                            el_real[5] = LOCAL_G(sv_real_remote, term + SV16IDX(5));
+                            el_real[6] = LOCAL_G(sv_real, term + SV16IDX(6));
+                            el_real[7] = LOCAL_G(sv_real_remote, term + SV16IDX(7));
+                            el_real[8] = LOCAL_G(sv_real, term + SV16IDX(8));
+                            el_real[9] = LOCAL_G(sv_real_remote, term + SV16IDX(9));
+                            el_real[10] = LOCAL_G(sv_real, term + SV16IDX(10));
+                            el_real[11] = LOCAL_G(sv_real_remote, term + SV16IDX(11));
+                            el_real[12] = LOCAL_G(sv_real, term + SV16IDX(12));
+                            el_real[13] = LOCAL_G(sv_real_remote, term + SV16IDX(13));
+                            el_real[14] = LOCAL_G(sv_real, term + SV16IDX(14));
+                            el_real[15] = LOCAL_G(sv_real_remote, term + SV16IDX(15));
 
-                        el_real[0] = LOCAL_G(sv_real, term + SV16IDX(0));
-                        el_real[1] = LOCAL_G(sv_real, term + SV16IDX(1));
-                        el_real[2] = LOCAL_G(sv_real_remote, term + SV16IDX(2));
-                        el_real[3] = LOCAL_G(sv_real_remote, term + SV16IDX(3));
-                        el_real[4] = LOCAL_G(sv_real, term + SV16IDX(4));
-                        el_real[5] = LOCAL_G(sv_real, term + SV16IDX(5));
-                        el_real[6] = LOCAL_G(sv_real_remote, term + SV16IDX(6));
-                        el_real[7] = LOCAL_G(sv_real_remote, term + SV16IDX(7));
-                        el_real[8] = LOCAL_G(sv_real, term + SV16IDX(8));
-                        el_real[9] = LOCAL_G(sv_real, term + SV16IDX(9));
-                        el_real[10] = LOCAL_G(sv_real_remote, term + SV16IDX(10));
-                        el_real[11] = LOCAL_G(sv_real_remote, term + SV16IDX(11));
-                        el_real[12] = LOCAL_G(sv_real, term + SV16IDX(12));
-                        el_real[13] = LOCAL_G(sv_real, term + SV16IDX(13));
-                        el_real[14] = LOCAL_G(sv_real_remote, term + SV16IDX(14));
-                        el_real[15] = LOCAL_G(sv_real_remote, term + SV16IDX(15));
+                            el_imag[0] = LOCAL_G(sv_imag, term + SV16IDX(0));
+                            el_imag[1] = LOCAL_G(sv_imag_remote, term + SV16IDX(1));
+                            el_imag[2] = LOCAL_G(sv_imag, term + SV16IDX(2));
+                            el_imag[3] = LOCAL_G(sv_imag_remote, term + SV16IDX(3));
+                            el_imag[4] = LOCAL_G(sv_imag, term + SV16IDX(4));
+                            el_imag[5] = LOCAL_G(sv_imag_remote, term + SV16IDX(5));
+                            el_imag[6] = LOCAL_G(sv_imag, term + SV16IDX(6));
+                            el_imag[7] = LOCAL_G(sv_imag_remote, term + SV16IDX(7));
+                            el_imag[8] = LOCAL_G(sv_imag, term + SV16IDX(8));
+                            el_imag[9] = LOCAL_G(sv_imag_remote, term + SV16IDX(9));
+                            el_imag[10] = LOCAL_G(sv_imag, term + SV16IDX(10));
+                            el_imag[11] = LOCAL_G(sv_imag_remote, term + SV16IDX(11));
+                            el_imag[12] = LOCAL_G(sv_imag, term + SV16IDX(12));
+                            el_imag[13] = LOCAL_G(sv_imag_remote, term + SV16IDX(13));
+                            el_imag[14] = LOCAL_G(sv_imag, term + SV16IDX(14));
+                            el_imag[15] = LOCAL_G(sv_imag_remote, term + SV16IDX(15));
+                        }
+                        else // qubit2 is remote (not possible qubit0 or 1 is remote)
+                        {
+                            // if (( (laneid>>1)&1)!=0) el_real_s[j*16+laneid] = LOCAL_G(sv_real_remote,addr);
+                            // else el_real_s[j*16+laneid] = LOCAL_G(sv_real, addr);
+                            // laneid = 2,3,6,7,10,11,14,15;
 
-                        el_imag[0] = LOCAL_G(sv_imag, term + SV16IDX(0));
-                        el_imag[1] = LOCAL_G(sv_imag, term + SV16IDX(1));
-                        el_imag[2] = LOCAL_G(sv_imag_remote, term + SV16IDX(2));
-                        el_imag[3] = LOCAL_G(sv_imag_remote, term + SV16IDX(3));
-                        el_imag[4] = LOCAL_G(sv_imag, term + SV16IDX(4));
-                        el_imag[5] = LOCAL_G(sv_imag, term + SV16IDX(5));
-                        el_imag[6] = LOCAL_G(sv_imag_remote, term + SV16IDX(6));
-                        el_imag[7] = LOCAL_G(sv_imag_remote, term + SV16IDX(7));
-                        el_imag[8] = LOCAL_G(sv_imag, term + SV16IDX(8));
-                        el_imag[9] = LOCAL_G(sv_imag, term + SV16IDX(9));
-                        el_imag[10] = LOCAL_G(sv_imag_remote, term + SV16IDX(10));
-                        el_imag[11] = LOCAL_G(sv_imag_remote, term + SV16IDX(11));
-                        el_imag[12] = LOCAL_G(sv_imag, term + SV16IDX(12));
-                        el_imag[13] = LOCAL_G(sv_imag, term + SV16IDX(13));
-                        el_imag[14] = LOCAL_G(sv_imag_remote, term + SV16IDX(14));
-                        el_imag[15] = LOCAL_G(sv_imag_remote, term + SV16IDX(15));
-                    }
+                            if (i_proc == 0) {
+                                for(size_t j = 2; j < 16; j+= 4) {
+                                    LOCAL_G(markers, term + SV16IDX(j)) = 1;
+                                    LOCAL_G(markers, term + SV16IDX(j+1)) = 1;
+                                }
+                            }
+                            el_real[0] = LOCAL_G(sv_real, term + SV16IDX(0));
+                            el_real[1] = LOCAL_G(sv_real, term + SV16IDX(1));
+                            el_real[2] = LOCAL_G(sv_real_remote, term + SV16IDX(2));
+                            el_real[3] = LOCAL_G(sv_real_remote, term + SV16IDX(3));
+                            el_real[4] = LOCAL_G(sv_real, term + SV16IDX(4));
+                            el_real[5] = LOCAL_G(sv_real, term + SV16IDX(5));
+                            el_real[6] = LOCAL_G(sv_real_remote, term + SV16IDX(6));
+                            el_real[7] = LOCAL_G(sv_real_remote, term + SV16IDX(7));
+                            el_real[8] = LOCAL_G(sv_real, term + SV16IDX(8));
+                            el_real[9] = LOCAL_G(sv_real, term + SV16IDX(9));
+                            el_real[10] = LOCAL_G(sv_real_remote, term + SV16IDX(10));
+                            el_real[11] = LOCAL_G(sv_real_remote, term + SV16IDX(11));
+                            el_real[12] = LOCAL_G(sv_real, term + SV16IDX(12));
+                            el_real[13] = LOCAL_G(sv_real, term + SV16IDX(13));
+                            el_real[14] = LOCAL_G(sv_real_remote, term + SV16IDX(14));
+                            el_real[15] = LOCAL_G(sv_real_remote, term + SV16IDX(15));
+
+                            el_imag[0] = LOCAL_G(sv_imag, term + SV16IDX(0));
+                            el_imag[1] = LOCAL_G(sv_imag, term + SV16IDX(1));
+                            el_imag[2] = LOCAL_G(sv_imag_remote, term + SV16IDX(2));
+                            el_imag[3] = LOCAL_G(sv_imag_remote, term + SV16IDX(3));
+                            el_imag[4] = LOCAL_G(sv_imag, term + SV16IDX(4));
+                            el_imag[5] = LOCAL_G(sv_imag, term + SV16IDX(5));
+                            el_imag[6] = LOCAL_G(sv_imag_remote, term + SV16IDX(6));
+                            el_imag[7] = LOCAL_G(sv_imag_remote, term + SV16IDX(7));
+                            el_imag[8] = LOCAL_G(sv_imag, term + SV16IDX(8));
+                            el_imag[9] = LOCAL_G(sv_imag, term + SV16IDX(9));
+                            el_imag[10] = LOCAL_G(sv_imag_remote, term + SV16IDX(10));
+                            el_imag[11] = LOCAL_G(sv_imag_remote, term + SV16IDX(11));
+                            el_imag[12] = LOCAL_G(sv_imag, term + SV16IDX(12));
+                            el_imag[13] = LOCAL_G(sv_imag, term + SV16IDX(13));
+                            el_imag[14] = LOCAL_G(sv_imag_remote, term + SV16IDX(14));
+                            el_imag[15] = LOCAL_G(sv_imag_remote, term + SV16IDX(15));
+                        }
                         
                         // #pragma unroll
                         for (unsigned j = 0; j < 16; j++)
@@ -824,6 +884,12 @@ namespace NWQSim
                         }
                        
                     }
+                if (i_proc == 0) {
+                    for(size_t j = 0; j < per_pe_num; j+= 1) {
+                        if (markers[j] == 0)
+                            printf("%d\n", j);
+                    }
+                }
                 }
                 BARR_MPI;
                 return exp_val;

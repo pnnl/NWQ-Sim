@@ -60,11 +60,11 @@ namespace NWQSim
           for (auto& kv_pair: optimizer_settings.parameter_map) {
               optimizer.set_param(kv_pair.first.c_str(), kv_pair.second);
           }
-          xmasks = {0b110000011000, 0b000000110011, 0b100000000001, 0b000000000000};
-          zmasks = {0b111111111110, 0b000000111100, 0b111111111110, 0b100000000010};   
+          xmasks = {0b110000011000, 0b101000011000, 0b110000000000, 0b000000000000};
+          zmasks = {0b111111111110, 0b111111111110, 0b011111111111, 0b111000000010};   
           x_indices = {3, 4, 10, 11,
-                       0, 1, 4, 5,
-                       0, 11};
+                       3, 4, 9, 10,
+                       10, 11};
           x_index_sizes = {4, 4, 2, 0};
            expvals.resize(4);               
           /*                                
