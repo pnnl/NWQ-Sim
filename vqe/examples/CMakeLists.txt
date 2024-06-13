@@ -26,7 +26,6 @@ if(CUDAToolkit_FOUND)
             target_link_libraries(basic_example_cuda_mpi PUBLIC MPI::MPI_CXX)
             target_compile_definitions(basic_example_cuda_mpi PUBLIC MPI_ENABLED)
     endif()
-
 endif()
 
 # Link against MPI if available

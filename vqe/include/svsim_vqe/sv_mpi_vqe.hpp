@@ -41,6 +41,9 @@ namespace NWQSim
         ansatz->EXPECT(&obs);
       };
       virtual void call_simulator() override {  
+        if (iteration > 0){
+          Config::PRINT_SIM_TRACE = false;
+        }
         std::vector<ValType> xparams;  
         if (iteration > 0){
           Config::PRINT_SIM_TRACE = false;
@@ -70,7 +73,7 @@ namespace NWQSim
           MPI_Recv(&stat, 1, MPI_INT, 0, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
           if (stat == CALL_SIMULATOR) {
             call_simulator();
-              iteration++;
+            iteration++;
           }
         }
 
