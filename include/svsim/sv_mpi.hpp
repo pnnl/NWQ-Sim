@@ -664,11 +664,6 @@ namespace NWQSim
                     {
                         res_real += (el_real[k] * gm_real[j * 16 + k]) - (el_imag[k] * gm_imag[j * 16 + k]);
                         res_imag += (el_real[k] * gm_imag[j * 16 + k]) + (el_imag[k] * gm_real[j * 16 + k]);
-                    
-                        if (term + SV16IDX(j) == 4030) {
-                            // printf("val %f %f\n", el_real[k], el_imag[k]);
-
-                        }
                     }
 
                     ValType val = res_real * res_real + res_imag * res_imag;
@@ -819,10 +814,6 @@ namespace NWQSim
                             // #pragma unroll
                             for (unsigned k = 0; k < 16; k++)
                             {
-                                if (term + SV16IDX(j) == 4030) {
-                                    // printf("val %f %f\n", el_real[k], el_imag[k]);
-
-                                }
                                 res_real += (el_real[k] * gm_real[j * 16 + k]) - (el_imag[k] * gm_imag[j * 16 + k]);
                                 res_imag += (el_real[k] * gm_imag[j * 16 + k]) + (el_imag[k] * gm_real[j * 16 + k]);
                             }
@@ -925,7 +916,7 @@ namespace NWQSim
                     // Send own partial statevector to remote nodes
                     MPI_Send(sv_real, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD);
                     MPI_Send(sv_imag, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD);
-                    // Recevive partial statevector back
+                    // Recieve partial statevector back
                     return 0.0;
                 }
                 else
@@ -1068,7 +1059,7 @@ namespace NWQSim
                                  ValType* output,
                                  IdxType output_index)  {
             ValType result = 0.0;
-
+            BARR_MPI;
             if (num_x_indices == 2) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
@@ -1093,6 +1084,7 @@ namespace NWQSim
                 result = EXPECT_C0_GATE(zmask);
             }
             ValType expect = 0;
+            printf("%lld %f\n", i_proc, result);
             BARR_MPI;
             MPI_Reduce(&result, &expect, 1,  MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
             BARR_MPI;

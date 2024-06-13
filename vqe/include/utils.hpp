@@ -37,7 +37,7 @@ namespace NWQSim{
     OptimizerSettings(): rel_tol(-1), 
                          abs_tol(-1),
                          stop_val(-MAXFLOAT),
-                         max_evals(20),
+                         max_evals(1),
                          max_time(-1) {}
   };
 

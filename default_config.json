@@ -1,5 +1,5 @@
 {
-    "PRINT_SIM_TRACE": true,
+    "PRINT_SIM_TRACE": false,
     "ENABLE_FUSION": true,
     "ENABLE_NOISE": false,
     "ENABLE_TENSOR_CORE": false,
