@@ -714,6 +714,7 @@ namespace NWQSim
 
                     IdxType index = (i_proc >> (s - (lg2_m_cpu) + 1)) << (s - (lg2_m_cpu));
                     index |= i_proc & ((1 << s - (lg2_m_cpu)) - 1);
+                    // printf("%d %d %d %d\n", i_proc, (index)*per_pe_work, (index + 1) * per_pe_work, dim);
                     ValType *sv_real_remote = m_real;
                     ValType *sv_imag_remote = m_imag;
                     MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -944,6 +945,7 @@ namespace NWQSim
                 {
                     IdxType index = (i_proc >> (q - (lg2_m_cpu) + 1)) << (q - (lg2_m_cpu));
                     index |= i_proc & ((1 << q - (lg2_m_cpu)) - 1);
+                    // printf("%d %d %d %d\n", i_proc, (index)*per_pe_work, (index + 1) * per_pe_work, dim);
                     ValType *sv_real_remote = m_real;
                     ValType *sv_imag_remote = m_imag;
                     MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -1116,20 +1118,14 @@ namespace NWQSim
                 IdxType q0t = q0;
                 IdxType q1t = q1;
                 IdxType q2t = q2;
-                IdxType mask = xmask | zmask;
+                
                 IdxType local_index = 0;
-                if (q0 == 0) {
-                    local_index = 1;
-                    if (q1 == 1) {
-                        local_index = 2;
-                        if (q2 == 2) {
-                            local_index = 3;
-                        }
-                    }
-                }
                 // assume the indices are sorted
                 if (q0 >= lg2_m_cpu) {
                     q0t = local_index++;
+                    while((q0t == q1t || q0t == q2t) && q0t < lg2_m_cpu) {
+                        q0t++;
+                    }
                     SWAP_GATE(q0t, q0);
                     zmask = (IdxType)swapBits(zmask, (uint64_t)q0t, (uint64_t)q0);
                     xmask = (IdxType)swapBits(xmask, (uint64_t)q0t, (uint64_t)q0);
@@ -1138,19 +1134,21 @@ namespace NWQSim
                 if (q1 >= lg2_m_cpu) {
 
                     q1t = local_index++;
+                    while((q1t == q0t || q1t == q2t) && q1t < lg2_m_cpu) {
+                        q1t++;
+                    }
                     SWAP_GATE(q1t, q1);
-
                     zmask = (IdxType)swapBits(zmask, (uint64_t)q1t, (uint64_t)q1);
                     xmask = (IdxType)swapBits(xmask, (uint64_t)q1t, (uint64_t)q1);
                     BARR_MPI;
                 }
                 if (q2 >= lg2_m_cpu) {
-                    assert (q2t != q1t);
-                    assert (q2t != q0t);
-                    assert (q2t != q3);
                     q2t = local_index++;
+
+                    while((q2t == q0t || q2t == q1t) && q2t < lg2_m_cpu) {
+                        q2t++;
+                    }
                     SWAP_GATE(q2t, q2);
-                    mask = swapBits(mask, (uint64_t)(q2t), (uint64_t)q2);
                     zmask = (IdxType)swapBits(zmask, (uint64_t)q2t, (uint64_t)q2);
                     xmask = (IdxType)swapBits(xmask, (uint64_t)q2t, (uint64_t)q2);
                     BARR_MPI;

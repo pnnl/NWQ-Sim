@@ -60,18 +60,23 @@ namespace NWQSim
           for (auto& kv_pair: optimizer_settings.parameter_map) {
               optimizer.set_param(kv_pair.first.c_str(), kv_pair.second);
           }
-          //IZYZZYIIIIII
-          /*xmasks = {
-            0b001001000000
+          //IIIIXXXZZZXI
+          //IIIIXYXZZZYI
+         /* xmasks = {
+            0b000011100010,
+            0b000011100010
           };
           zmasks = {
-            0b011111000000
+            0b000000011100,
+            0b000001011110
           };   
           x_indices = {
-            6, 9
+            1, 5, 6, 7,
+            1, 5, 6, 7
+          //   // 6, 8, 9, 11
             };
-          x_index_sizes = {2};
-           expvals.resize(1);       */     
+          x_index_sizes = {4, 4};
+           expvals.resize(2);       */     
           
           auto& pauli_operators = hamil.getPauliOperators();        
           for (auto& pauli_list: pauli_operators) {
@@ -141,6 +146,7 @@ namespace NWQSim
               // if (index >= xmasks.size()) 
               //   break;
         }
+        // ValType ene = 0.0;
         ValType ene = hamil.expectation(emap);
         return ene;
       }
