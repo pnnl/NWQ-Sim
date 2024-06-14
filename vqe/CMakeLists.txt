@@ -32,6 +32,7 @@ endif()
 # If CUDA Toolkit is available, set the CUDA standard and definitions
 if(CUDAToolkit_FOUND)
     enable_language(CUDA)
+    set_source_files_properties("main.cpp" PROPERTIES LANGUAGE CUDA)
 
     target_compile_features(nwq_vqe PRIVATE cuda_std_17)
     #target_link_libraries(nwq_vqe PUBLIC CUDA::cudart)
