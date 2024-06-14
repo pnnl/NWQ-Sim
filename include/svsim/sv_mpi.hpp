@@ -543,7 +543,10 @@ namespace NWQSim
                     ValType *sv_imag_remote = m_imag;
                     MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     MPI_Recv(sv_imag_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
+                    
+                    IdxType index = (i_proc >> (q - (lg2_m_cpu) + 1)) << (q - (lg2_m_cpu));
+                    index |= i_proc & ((1 << q - (lg2_m_cpu)) - 1);
+                    for (IdxType i = (index)*per_pe_work; i < (index + 1) * per_pe_work; i++)
                     {
                         ValType el_real[4];
                         ValType el_imag[4];
@@ -724,7 +727,7 @@ namespace NWQSim
                         markers.resize(per_pe_num);
                     }
                     
-                    for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
+                    for (IdxType i = (index)*per_pe_work; i < (index + 1) * per_pe_work; i++)
                     {
                         ValType el_real[16];
                         ValType el_imag[16];
@@ -1375,7 +1378,9 @@ namespace NWQSim
                 MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 MPI_Recv(sv_imag_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-                for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
+                IdxType index = (i_proc >> (q - (lg2_m_cpu) + 1)) << (q - (lg2_m_cpu));
+                index |= i_proc & ((1 << q - (lg2_m_cpu)) - 1);
+                for (IdxType i = (index)*per_pe_work; i < (index + 1) * per_pe_work; i++)
                 {
                     ValType el_real[4];
                     ValType el_imag[4];
