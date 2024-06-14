@@ -1,7 +1,7 @@
 #pragma once
 
-#include "backendManager.hpp"
 #include "vqe_state.hpp"
+#include "backendManager.hpp"
 #include "svsim_vqe/sv_cpu_vqe.hpp"
 
 
@@ -28,7 +28,7 @@ public:
                                                                     nlopt::algorithm optimizer_algorithm,
                                                                     NWQSim::VQE::Callback _callback,
                                                                     NWQSim::IdxType seed = 0,
-                                                                    NWQSim::VQE::OptimizerSettings opt_settings = OptimizerSettings()) {
+                                                                    NWQSim::VQE::OptimizerSettings opt_settings = NWQSim::VQE::OptimizerSettings()) {
         // Convert to uppercase
         std::transform(backend.begin(), backend.end(), backend.begin(),
                        [](unsigned char c)

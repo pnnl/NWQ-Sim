@@ -5,11 +5,26 @@
 #include <unordered_map>
 #include <cmath>
 #include <math.h>
+#include <sstream>
 
 
 // Templated print function for std::vector
 template <typename T>
 std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
+  out << "[";
+  size_t len = target.size();
+  if (len > 0) {
+      for (size_t i = 0; i < len - 1; i++) {
+          out << target[i] << ", ";
+      }
+      out << target[len-1];
+  }
+  out << "]";
+  return out;
+}
+
+template <typename T>
+std::stringstream& operator<<(std::stringstream& out, const std::vector<T>& target) {
   out << "[";
   size_t len = target.size();
   if (len > 0) {

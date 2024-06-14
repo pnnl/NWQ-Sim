@@ -135,20 +135,12 @@ void optimize_ansatz(const VQEBackendManager& manager,
   std::generate(params.begin(), params.end(), 
       [&random_engine, &initdist] () {return initdist(random_engine);});
 
-  state.optimize(params, fval);
+  state->optimize(params, fval);
 }
 
 
 int main(int argc, char** argv) {
   VQEBackendManager manager;
-#ifdef MPI_ENABLED
-  int i_proc;
-  if (backend == "MPI" || backend == "NVGPU_MPI")
-  {
-    MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &i_proc);
-  }
-#endif
   std::string hamil_path, backend;
   NWQSim::IdxType n_part;
   NWQSim::VQE::OptimizerSettings settings;
@@ -157,6 +149,14 @@ int main(int argc, char** argv) {
   if (parse_args(argc, argv, manager, hamil_path, backend, n_part, algo, settings, seed)) {
     return 1;
   }
+#ifdef MPI_ENABLED
+  int i_proc;
+  if (backend == "MPI" || backend == "NVGPU_MPI")
+  {
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &i_proc);
+  }
+#endif
   manager.safe_print("Reading Hamiltonian...\n");
   NWQSim::VQE::Hamiltonian hamil(hamil_path, n_part);
   manager.safe_print("Constructing UCCSD Ansatz...\n");
@@ -170,9 +170,9 @@ int main(int argc, char** argv) {
   double fval;
   manager.safe_print("Beginning VQE loop...\n");
   optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, params, fval);
-  std::istringstream paramstream;
+  std::ostringstream paramstream;
   paramstream << params;
-  manager.safe_print("Finished VQE loop.\n\tFinal value: %e\n\tFinal parameters: %s\n", fval, paramstream.str().c_str());
+  manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters: %s\n", fval, paramstream.str().c_str());
 #ifdef MPI_ENABLED
   if (backend == "MPI" || backend == "NVGPU_MPI")
   {
