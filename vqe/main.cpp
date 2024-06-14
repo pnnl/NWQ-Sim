@@ -96,7 +96,6 @@ int parse_args(int argc, char** argv,
       return show_help();
   }
   algo = (nlopt::algorithm)nlopt_algorithm_from_string(algorithm_name.c_str());
-  std::cout << nlopt::algorithm_name(algo) << std::endl;
   if (config_file != "") {
     std::ifstream f(config_file);
     json data = json::parse(f); 
@@ -115,7 +114,7 @@ void carriage_return_callback_function(const std::vector<NWQSim::ValType>& x, NW
 
 // Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
 void callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fval, NWQSim::IdxType iteration) {
-  printf("\33[2K\rEvaluation %lld, fval = %f", iteration, fval);fflush(stdout);
+  printf("\33[2KEvaluation %lld, fval = %f\n", iteration, fval);fflush(stdout);
 }
 
 
@@ -128,7 +127,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      unsigned& seed,
                      std::vector<double>& params,
                      double& fval) {
-  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, carriage_return_callback_function, seed, settings);  
+  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, callback_function, seed, settings);  
   std::uniform_real_distribution<double> initdist(0, 2 * PI);
   std::mt19937_64 random_engine (seed);
   params.resize(ansatz->numParams());

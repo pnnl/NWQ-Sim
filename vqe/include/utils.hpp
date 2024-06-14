@@ -23,6 +23,12 @@ std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
   return out;
 }
 
+// Status enum for MPI processes
+enum STATUS {
+    CALL_SIMULATOR,
+    WAIT,
+    EXIT_LOOP
+};
 template <typename T>
 std::stringstream& operator<<(std::stringstream& out, const std::vector<T>& target) {
   out << "[";
