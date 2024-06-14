@@ -1,8 +1,7 @@
-#include "svsim_vqe/sv_cpu_vqe.hpp"
-// #include "svsim_vqe/sv_cuda_vqe.cuh"
-#include "private/nlohmann/json.hpp"
+#include "vqeBackendManager.hpp"
 #include "utils.hpp"
 #include <unordered_map>
+#include <sstream>
 #define UNDERLINE "\033[4m"
 
 #define CLOSEUNDERLINE "\033[0m"
@@ -12,6 +11,8 @@ int show_help() {
   std::cout << UNDERLINE << "REQUIRED" << CLOSEUNDERLINE << std::endl;
   std::cout << "--hamiltonian, -f     Path to the input Hamiltonian file (formatted as a sum of Fermionic operators, see examples)" << std::endl;
   std::cout << "--nparticles, -n      Number of electrons in molecule" << std::endl;
+  std::cout << "--backend, -b         Simulation backend. Defaults to CPU" << std::endl;
+  std::cout << "--list-backends, -l   List available backends and exit." << std::endl;
   std::cout << UNDERLINE << "OPTIONAL" << CLOSEUNDERLINE << std::endl;
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
   std::cout << "--config              Path to config file for NLOpt optimizer parameters" << std::endl;
@@ -26,7 +27,9 @@ int show_help() {
 
 using json = nlohmann::json;
 int parse_args(int argc, char** argv,
+               VQEBackendManager& manager,
                 std::string& hamilfile,
+                std::string& backend,
                 NWQSim::IdxType& n_particles,
                 nlopt::algorithm& algo,
                 NWQSim::VQE::OptimizerSettings& settings,
@@ -34,6 +37,7 @@ int parse_args(int argc, char** argv,
   std::string config_file = "";
   std::string algorithm_name = "LN_COBYLA";
   hamilfile = "";
+  backend = "CPU";
   n_particles = -1;
   settings.max_evals = 200;
   seed = 0;
@@ -41,7 +45,14 @@ int parse_args(int argc, char** argv,
     std::string argname = argv[i];
     if (argname == "-h" || argname == "--help") {
       return show_help();
+    } if (argname == "-l" || argname == "--list-backends") {
+      manager.print_available_backends();
+      return 1;
     } else
+    if (argname == "-b" || argname == "--backend") {
+      backend = argv[++i];
+      continue;
+    } 
     if (argname == "-f" || argname == "--hamiltonian") {
       hamilfile = argv[++i];
       continue;
@@ -85,7 +96,6 @@ int parse_args(int argc, char** argv,
       return show_help();
   }
   algo = (nlopt::algorithm)nlopt_algorithm_from_string(algorithm_name.c_str());
-  std::cout << nlopt::algorithm_name(algo) << std::endl;
   if (config_file != "") {
     std::ifstream f(config_file);
     json data = json::parse(f); 
@@ -104,35 +114,69 @@ void carriage_return_callback_function(const std::vector<NWQSim::ValType>& x, NW
 
 // Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
 void callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fval, NWQSim::IdxType iteration) {
-  printf("\33[2K\rEvaluation %lld, fval = %f", iteration, fval);fflush(stdout);
+  printf("\33[2KEvaluation %lld, fval = %f\n", iteration, fval);fflush(stdout);
 }
+
+
+void optimize_ansatz(const VQEBackendManager& manager,
+                     const std::string& backend,
+                     const NWQSim::VQE::Hamiltonian& hamil,
+                     std::shared_ptr<NWQSim::VQE::Ansatz> ansatz,
+                     NWQSim::VQE::OptimizerSettings& settings,
+                     nlopt::algorithm& algo,
+                     unsigned& seed,
+                     std::vector<double>& params,
+                     double& fval) {
+  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, callback_function, seed, settings);  
+  std::uniform_real_distribution<double> initdist(0, 2 * PI);
+  std::mt19937_64 random_engine (seed);
+  params.resize(ansatz->numParams());
+  std::generate(params.begin(), params.end(), 
+      [&random_engine, &initdist] () {return initdist(random_engine);});
+
+  state->optimize(params, fval);
+}
+
+
 int main(int argc, char** argv) {
-  std::string hamil_path;
+  VQEBackendManager manager;
+  std::string hamil_path, backend;
   NWQSim::IdxType n_part;
   NWQSim::VQE::OptimizerSettings settings;
   nlopt::algorithm algo;
   unsigned seed;
-  if (parse_args(argc, argv, hamil_path, n_part, algo, settings, seed)) {
+  if (parse_args(argc, argv, manager, hamil_path, backend, n_part, algo, settings, seed)) {
     return 1;
   }
+#ifdef MPI_ENABLED
+  int i_proc;
+  if (backend == "MPI" || backend == "NVGPU_MPI")
+  {
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &i_proc);
+  }
+#endif
+  manager.safe_print("Reading Hamiltonian...\n");
   NWQSim::VQE::Hamiltonian hamil(hamil_path, n_part);
+  manager.safe_print("Constructing UCCSD Ansatz...\n");
 
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
     hamil.getEnv(),
     NWQSim::VQE::getJordanWignerTransform,
     1
   );
-  NWQSim::VQE::SV_CPU_VQE state(ansatz, hamil, algo, carriage_return_callback_function, seed, settings);
-  
-  std::uniform_real_distribution<double> initdist(0, 2 * PI);
-  std::mt19937_64 random_engine (seed);
-  std::vector<double> params(ansatz->numParams());
-  std::generate(params.begin(), params.end(), 
-      [&random_engine, &initdist] () {return initdist(random_engine);});
-
+  std::vector<double> params;
   double fval;
-  state.optimize(params, fval);
-  std::cout << std::endl << "Final Energy: " << fval << std::endl;
-  std::cout << "Final Parameters: " << params << std::endl;
+  manager.safe_print("Beginning VQE loop...\n");
+  optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, params, fval);
+  std::ostringstream paramstream;
+  paramstream << params;
+  manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters: %s\n", fval, paramstream.str().c_str());
+#ifdef MPI_ENABLED
+  if (backend == "MPI" || backend == "NVGPU_MPI")
+  {
+    MPI_Finalize();
+  }
+#endif
   return 0;
 }

@@ -37,10 +37,10 @@ namespace NWQSim {
               FermionOperator occ_up_2 (s, Occupied, Up, Annihilation);
               if (r > s && p > q) {
                 // Down spin all together
-                std::cout << virt_down_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
-                             virt_down_2.qubitIndex(env.n_occ, env.n_virt) << " " << 
-                             occ_down_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
-                             occ_down_2.qubitIndex(env.n_occ, env.n_virt) << std::endl;
+                // std::cout << virt_down_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
+                //              virt_down_2.qubitIndex(env.n_occ, env.n_virt) << " " << 
+                //              occ_down_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
+                //              occ_down_2.qubitIndex(env.n_occ, env.n_virt) << std::endl;
                 fermion_operators.push_back({virt_down_1,
                                              virt_down_2,
                                              occ_down_1,

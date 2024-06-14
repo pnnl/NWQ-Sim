@@ -14,11 +14,6 @@
 
 namespace NWQSim
 {
-  enum STATUS {
-    CALL_SIMULATOR,
-    WAIT,
-    EXIT_LOOP
-  };
   namespace VQE {
     class SV_CUDA_MPI_VQE: public VQEState, public SV_CUDA_MPI {
       public:
@@ -73,7 +68,7 @@ namespace NWQSim
           std::vector<double>* ansatz_params = ansatz->getParams();
           stat = CALL_SIMULATOR;
           for(IdxType i = 1; i < n_gpus; i++) {
-            MPI_Send(&stat, 1, MPI_INT, i, 3, MPI_COMM_WORLD);
+            MPI_Send(&stat, 1, MPI_INT, i, iteration, MPI_COMM_WORLD);
             MPI_Send(ansatz_params->data(), ansatz->numParams(), MPI_DOUBLE, i, 1, MPI_COMM_WORLD);
           }
         } else {
@@ -81,7 +76,7 @@ namespace NWQSim
           MPI_Recv(xparams.data(), ansatz->numParams(), MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
           ansatz->setParams(xparams);
         }
-        BARR_MPI;
+        MPI_Barrier(MPI_COMM_WORLD);
         reset_state();
         sim(ansatz);
         cudaDeviceSynchronize();
@@ -89,17 +84,20 @@ namespace NWQSim
                                     cudaMemcpyDeviceToHost));
         MPI_Barrier(MPI_COMM_WORLD);
         if (i_proc != 0) {
-          MPI_Reduce(expvals.data(), NULL, expvals.size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+          MPI_Reduce(expvals.data(), expvals.data(), expvals.size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
           stat = WAIT;
         } else {
-            MPI_Reduce(MPI_IN_PLACE, expvals.data(), expvals.size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+          std::vector<ValType> temp(expvals.size());
+          MPI_Reduce(expvals.data(), temp.data(), expvals.size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+          std::copy(temp.begin(), temp.end(), expvals.begin());
         }
-        MPI_Barrier(MPI_COMM_WORLD);          
+        MPI_Barrier(MPI_COMM_WORLD);              
+        
       };
       virtual void process_loop() {
         assert(i_proc != 0);
         while(stat != EXIT_LOOP) {
-          MPI_Recv(&stat, 1, MPI_INT, 0, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+          MPI_Recv(&stat, 1, MPI_INT, 0, iteration, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
           if (stat == CALL_SIMULATOR) {
             call_simulator();
             iteration++;
@@ -114,9 +112,12 @@ namespace NWQSim
           }
           if (i_proc == 0) {
             nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
+            
+            // std::cout << energy(parameters) << std::endl;iteration = 1;
+            // std::cout << zmasks[1376] << std::endl;
             stat = EXIT_LOOP;
             for(IdxType i = 1; i < n_cpus; i++) {
-              MPI_Send(&stat, 1, MPI_INT, i, 3, MPI_COMM_WORLD);
+              MPI_Send(&stat, 1, MPI_INT, i, iteration, MPI_COMM_WORLD);
             }
 
           } else {

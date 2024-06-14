@@ -5,11 +5,32 @@
 #include <unordered_map>
 #include <cmath>
 #include <math.h>
+#include <sstream>
 
 
 // Templated print function for std::vector
 template <typename T>
 std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
+  out << "[";
+  size_t len = target.size();
+  if (len > 0) {
+      for (size_t i = 0; i < len - 1; i++) {
+          out << target[i] << ", ";
+      }
+      out << target[len-1];
+  }
+  out << "]";
+  return out;
+}
+
+// Status enum for MPI processes
+enum STATUS {
+    CALL_SIMULATOR,
+    WAIT,
+    EXIT_LOOP
+};
+template <typename T>
+std::stringstream& operator<<(std::stringstream& out, const std::vector<T>& target) {
   out << "[";
   size_t len = target.size();
   if (len > 0) {
@@ -37,7 +58,7 @@ namespace NWQSim{
     OptimizerSettings(): rel_tol(-1), 
                          abs_tol(-1),
                          stop_val(-MAXFLOAT),
-                         max_evals(20),
+                         max_evals(50),
                          max_time(-1) {}
   };
 

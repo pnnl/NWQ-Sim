@@ -159,7 +159,7 @@ source ../environment/setup_perlmutter.sh
 srun -N4 -n128 ./vqe/examples/basic_example_mpi
 ```
 
-To test on NERSC Perlmutter for the CUDA MPI version using 4 nodes, 128 cores:
+To test on NERSC Perlmutter for the CUDA MPI version using 4 nodes with 1 GPU each:
 ```shell
 salloc --nodes 4 --qos interactive -t 60 --constraint gpu --account=m4243
 source ../environment/setup_perlmutter.sh

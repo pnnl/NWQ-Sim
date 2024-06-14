@@ -212,7 +212,6 @@ namespace NWQSim
 
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
-
             if (i_proc == 0)
                 printf("GPU kernel time: %.3lf ms\n", sim_time);
 
@@ -505,7 +504,10 @@ namespace NWQSim
                     nvshmem_double_get(dm_imag_remote, dm_imag, per_pe_num, pair_gpu);
                 grid.sync();
 
-                for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
+
+                IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << q - (lg2_m_gpu);
+                index |= i_proc & ((1 << q - (lg2_m_gpu)) - 1);
+                for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                      i += blockDim.x * gridDim.x)
                 {
                     ValType el_real[4];
@@ -608,7 +610,9 @@ namespace NWQSim
                 nvshmem_double_get(dm_imag_remote, dm_imag, per_pe_num, pair_gpu);
             grid.sync();
 
-            for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
+            IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << q - (lg2_m_gpu);
+            index |= i_proc & ((1 << q - (lg2_m_gpu)) - 1);
+            for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                  i += blockDim.x * gridDim.x)
             {
                 ValType el_real[4];
@@ -762,8 +766,10 @@ namespace NWQSim
                 if (tid == 0)
                     nvshmem_double_get(dm_imag_remote, dm_imag, per_pe_num, pair_gpu);
                 grid.sync();
-
-                for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
+                
+                IdxType index = (i_proc >> (s - (lg2_m_gpu) + 1)) << s - (lg2_m_gpu);
+                index |= i_proc & ((1 << s - (lg2_m_gpu)) - 1);
+                for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                      i += blockDim.x * gridDim.x)
                 {
                     const IdxType term0 = MOD2E(i, p);
@@ -1223,7 +1229,7 @@ namespace NWQSim
                 extern __shared__ ValType els[];
                 ValType *el_real_s = &els[wid * 8 * 16 * 2];          // per warp 8*16 for real
                 ValType *el_imag_s = &els[wid * 8 * 16 * 2 + 8 * 16]; // per warp 8*16 for imag
-
+                
                 // load data from pair GPU
                 IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (s - (lg2_m_gpu)));
                 if (i_proc > pair_gpu)

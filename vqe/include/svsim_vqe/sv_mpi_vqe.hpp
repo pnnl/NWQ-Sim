@@ -15,11 +15,6 @@
 
 namespace NWQSim
 {
-  enum STATUS {
-    CALL_SIMULATOR,
-    WAIT,
-    EXIT_LOOP
-  };
   namespace VQE {
     class SV_MPI_VQE: public VQEState, public SV_MPI {
       public:

@@ -715,7 +715,9 @@ namespace NWQSim
                     nvshmem_double_get(sv_imag_remote, sv_imag, per_pe_num, pair_gpu);
                 grid.sync();
 
-                for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
+                IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << q - (lg2_m_gpu);
+                index |= i_proc & ((1 << q - (lg2_m_gpu)) - 1);
+                for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                      i += blockDim.x * gridDim.x)
                 {
                     ValType el_real[4];
@@ -840,7 +842,7 @@ namespace NWQSim
                 exp_val += hasEvenParity_cu(pos2 & mask, n_qubits) ? v2 : -v2;
                 exp_val += hasEvenParity_cu(pos3 & mask, n_qubits) ? v3 : -v3;
             }
-            // BARR_MPI;
+            // BARR_NVSHMEM;
             if (tid < per_pe_work) {
                 m_real[tid] = exp_val;
             }
@@ -872,6 +874,9 @@ namespace NWQSim
 
                 if (i_proc > pair_gpu)
                 {
+                    if (tid < per_pe_work) {
+                        m_real[tid] = exp_val;
+                    }
                     return;
                 }
                 
@@ -882,8 +887,11 @@ namespace NWQSim
                 if (tid == 0)
                     nvshmem_double_get(sv_imag_remote, sv_imag, per_pe_num, pair_gpu);
                 grid.sync();
+                
+                IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << q - (lg2_m_gpu);
+                index |= i_proc & ((1 << q - (lg2_m_gpu)) - 1);
 
-                for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work; i += blockDim.x * gridDim.x)
+                for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work; i += blockDim.x * gridDim.x)
                 {
                     ValType el_real[4];
                     ValType el_imag[4];
@@ -934,7 +942,7 @@ namespace NWQSim
                     }
                 }
                 if (tid < per_pe_work) {
-                    LOCAL_G_CUDA_MPI(m_real, tid) = exp_val;
+                    m_real[tid] = exp_val;
                 }
                 
             }
@@ -998,21 +1006,15 @@ namespace NWQSim
                     {
                         res_real += (el_real[k] * gm_real[j * 16 + k]) - (el_imag[k] * gm_imag[j * 16 + k]);
                         res_imag += (el_real[k] * gm_imag[j * 16 + k]) + (el_imag[k] * gm_real[j * 16 + k]);
-                    
-                        if (term + SV16IDX(j) == 4030) {
-                            // printf("val %f %f\n", el_real[k], el_imag[k]);
-
-                        }
                     }
 
                     ValType val = res_real * res_real + res_imag * res_imag;
-                
                     exp_val += hasEvenParity_cu((term + SV16IDX(j)) & mask, n_qubits) ? val : -val;
             
                 }
             }
             if (tid < per_pe_work) {
-                LOCAL_G_CUDA_MPI(m_real, tid) = exp_val;
+                m_real[tid] = exp_val;
             }
         }
 
@@ -1047,8 +1049,17 @@ namespace NWQSim
                 // load data from pair node
                 IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (s - (lg2_m_gpu)));
                 assert(pair_gpu != i_proc);
-                if (i_proc > pair_gpu)
+                if (i_proc > pair_gpu) {
+                    
+                    if (tid < per_pe_work) {
+                        m_real[tid] = exp_val;
+                    }
                     return;
+                }
+                // make the indices continguous (e.g. map from i_proc = 0, 2, 4, 6 - > 0, 1, 2, 3)
+                // Basically, we're just ``deleting'' bit s - (lg2_m_gpu). If s - (lg2_m_gpu) is 1 and i_proc = 5 = 0b101, then we get 0b011 (3)
+                IdxType index = (i_proc >> (s - (lg2_m_gpu) + 1)) << (s - (lg2_m_gpu));
+                index |= i_proc & ((1 << (s - (lg2_m_gpu))) - 1);
                 ValType *sv_real_remote = m_real;
                 ValType *sv_imag_remote = m_imag;
                 if (tid == 0)
@@ -1056,9 +1067,7 @@ namespace NWQSim
                 if (tid == 0)
                     nvshmem_double_get(sv_imag_remote, sv_imag, per_pe_num, pair_gpu);
                 grid.sync();
-                size_t index = 0;
-                
-                for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work; i += blockDim.x * gridDim.x)
+                for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work; i += blockDim.x * gridDim.x)
                 {
                     ValType el_real[16];
                     ValType el_imag[16];
@@ -1160,11 +1169,14 @@ namespace NWQSim
                         ValType val = res_real * res_real + res_imag * res_imag;
 
                         exp_val += hasEvenParity_cu((term + SV16IDX(j)) & mask, n_qubits) ? val : -val;
+                    // if (abs(val) > 1e-3) {
+                    //     printf("%lld %lld %lld %lld %lld %lld %lld %f %lld %f\n", tid, i_proc, index, j, term, i, term + SV16IDX(j), val, hasEvenParity_cu((term + SV16IDX(j)) & mask, n_qubits), exp_val);
+                    // }
                         
                     }
                 }
                 if (tid < per_pe_work) {
-                    LOCAL_G_CUDA_MPI(m_real, tid) = exp_val;
+                    m_real[tid] = exp_val;
                 }
             }
         }
@@ -1182,7 +1194,7 @@ namespace NWQSim
             }
             grid.sync();
             if (tid < per_pe_work) {
-                LOCAL_G_CUDA_MPI(m_real, tid) = exp_val;
+                m_real[tid] = exp_val;
             }
         }
 
@@ -1198,7 +1210,6 @@ namespace NWQSim
                 }
                 grid.sync();
             }
-            grid.sync();
             if (tid == 0) {
                 output[index] = m_real[0];
             }
@@ -1212,37 +1223,102 @@ namespace NWQSim
                          IdxType zmask, 
                          ValType* output,
                          IdxType output_index)  {
+                         
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
-
-            if (tid < (dim >> gpu_scale)) 
-                m_real[tid] = 0.0;
             grid_group grid = this_grid();
+            BARR_NVSHMEM;
             IdxType reduce_dim;
             if (num_x_indices == 2) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
-                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
+                IdxType q0t = q0;
+
+                if (q0 >= lg2_m_gpu) {
+                    SWAP_GATE(0, q0);
+                    q0t = 0;
+                    xmask = swapBits_cu(xmask, q0t, q0);
+                    zmask = swapBits_cu(zmask, q0t, q0);
+                    BARR_NVSHMEM;
+                    assert(q0t != q1);
+                }
+                IdxType zind0 = ((zmask & (1 << q0t)) >> q0t);
                 IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
                 const ValType* gm_real = exp_gate_perms_2q_d[zind0 + zind1];
                 const ValType* gm_imag = exp_gate_perms_2q_d[zind0 + zind1] + 16;
-                if (max(q0, q1) < lg2_m_gpu)
+                if (max(q0t, q1) < lg2_m_gpu)
                 {
                     reduce_dim = ((dim) >> (gpu_scale + 2));
                 } else {
                     reduce_dim = ((dim) >> (gpu_scale + 1));
                 }
-                EXPECT_C2V1_GATE(gm_real, gm_imag, q0, q1, xmask | zmask);
+                EXPECT_C2V1_GATE(gm_real, gm_imag, q0t, q1, xmask | zmask);
+                
+                BARR_NVSHMEM;
+                EXPECT_REDUCE(output, output_index, reduce_dim);
+                BARR_NVSHMEM;
+                if (q0 >= lg2_m_gpu) {
+                    SWAP_GATE(0, q0);
+                }
+                
             } else if (num_x_indices == 4) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
                 IdxType q2 = x_indices[2];
                 IdxType q3 = x_indices[3];
-                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
-                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
-                IdxType zind2 = ((zmask & (1 << q2)) >> q2) << 2;
-                IdxType zind3 = ((zmask & (1 << q3)) >> q3) << 3;
+                IdxType q0t = q0;
+                IdxType q1t = q1;
+                IdxType q2t = q2;
                 
-                if (max(max(q0, q1), max(q2, q3)) < lg2_m_gpu)
+                IdxType local_index = 0;
+                // assume the indices are sorted
+                if (q0 >= lg2_m_gpu) {
+                    q0t = local_index++;
+                    while((q0t == q1t || q0t == q2t) && q0t < lg2_m_gpu) {
+                        q0t++;
+                    }
+                    SWAP_GATE(q0t, q0);
+                    zmask = (IdxType)swapBits_cu(zmask, (uint64_t)q0t, (uint64_t)q0);
+                    xmask = (IdxType)swapBits_cu(xmask, (uint64_t)q0t, (uint64_t)q0);
+                    BARR_NVSHMEM; 
+                }
+                if (q1 >= lg2_m_gpu) {
+
+                    q1t = local_index++;
+                    while((q1t == q0t || q1t == q2t) && q1t < lg2_m_gpu) {
+                        q1t++;
+                    }
+                    SWAP_GATE(q1t, q1);
+                    zmask = (IdxType)swapBits_cu(zmask, (uint64_t)q1t, (uint64_t)q1);
+                    xmask = (IdxType)swapBits_cu(xmask, (uint64_t)q1t, (uint64_t)q1);
+                    BARR_NVSHMEM;
+                }
+                if (q2 >= lg2_m_gpu) {
+                    q2t = local_index++;
+
+                    while((q2t == q0t || q2t == q1t) && q2t < lg2_m_gpu) {
+                        q2t++;
+                    }
+                    SWAP_GATE(q2t, q2);
+                    zmask = (IdxType)swapBits_cu(zmask, (uint64_t)q2t, (uint64_t)q2);
+                    xmask = (IdxType)swapBits_cu(xmask, (uint64_t)q2t, (uint64_t)q2);
+                    BARR_NVSHMEM;
+                }
+                assert (q0t < lg2_m_gpu && q1t < lg2_m_gpu && q2t < lg2_m_gpu);
+
+                const IdxType v0 = min(q0t, q1t);
+                const IdxType v1 = min(q2t, q3);
+                const IdxType v2 = max(q0t, q1t);
+                const IdxType v3 = max(q2t, q3);
+                const IdxType p = min(v0, v1);
+                const IdxType q = min(min(v2, v3), max(v0, v1));
+                const IdxType r = max(min(v2, v3), max(v0, v1));
+                const IdxType s = max(v2, v3);                
+                IdxType zind0 = ((zmask & (1 << p)) >> p);
+                IdxType zind1 = ((zmask & (1 << q)) >> q) << 1;
+                IdxType zind2 = ((zmask & (1 << r)) >> r) << 2;
+                IdxType zind3 = ((zmask & (1 << s)) >> s) << 3;
+
+                if (q3 < lg2_m_gpu)
                 {
                     reduce_dim = ((dim) >> (gpu_scale + 4));
                 } else {
@@ -1250,13 +1326,33 @@ namespace NWQSim
                 }
                 const ValType* gm_real = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3];
                 const ValType* gm_imag = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3] + 256;
-                EXPECT_C4V1_GATE(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
+                EXPECT_C4V1_GATE(gm_real, gm_imag, p, q, r, s, xmask | zmask);
+                
+                BARR_NVSHMEM;
+                EXPECT_REDUCE(output, output_index, reduce_dim);
+                BARR_NVSHMEM;
+                if (q2 >= lg2_m_gpu) {
+                    SWAP_GATE(q2t, q2);
+                    BARR_NVSHMEM;
+                }
+                if (q1 >= lg2_m_gpu) {
+                    SWAP_GATE(q1t, q1);
+                    BARR_NVSHMEM;
+                }
+                if (q0 >= lg2_m_gpu) {
+                    SWAP_GATE(q0t, q0);
+                    BARR_NVSHMEM;
+                }
             } else if (num_x_indices == 0) {
                 EXPECT_C0_GATE(zmask);
                 reduce_dim = ((dim) >> (gpu_scale));
+                BARR_NVSHMEM;
+                EXPECT_REDUCE(output, output_index, reduce_dim);
+                BARR_NVSHMEM;
+            } else {
+                printf("ERROR\n");
+                assert(false);
             }
-            BARR_NVSHMEM;
-            EXPECT_REDUCE(output, output_index, reduce_dim);
         }
         __device__ __inline__ void M_GATE(const IdxType qubit, const IdxType cur_index)
         {
@@ -1636,8 +1732,9 @@ namespace NWQSim
             if (tid == 0)
                 nvshmem_double_get(sv_imag_remote, sv_imag, per_pe_num, pair_gpu);
             grid.sync();
-
-            for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
+            IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << (q - (lg2_m_gpu));
+            index |= i_proc & ((1 << q - (lg2_m_gpu)) - 1);
+            for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                  i += blockDim.x * gridDim.x)
             {
                 ValType el_real[4];
@@ -1719,6 +1816,7 @@ namespace NWQSim
         IdxType cur_index = 0;
         IdxType lg2_m_gpu = sv_gpu->lg2_m_gpu;
         grid_group grid = this_grid();
+        const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
         bool already_sync = false;
         for (IdxType t = 0; t < n_gates; t++)
         {
@@ -1791,11 +1889,8 @@ namespace NWQSim
                                 o.exp_output,
                                 obs_ind);
                     xinds += o.x_index_sizes[obs_ind];
-                    if (threadIdx.x == 0 && blockIdx.x == 0)
-                        nvshmem_barrier_all();
-                    grid.sync();
-                    already_sync = true;
                 }
+                BARR_NVSHMEM;
             }
             // only need sync when operating on remote qubits
             if ((ctrl >= lg2_m_gpu) || (qubit >= lg2_m_gpu))
