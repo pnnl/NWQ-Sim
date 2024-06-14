@@ -97,7 +97,6 @@ namespace NWQSim
           std::copy(temp.begin(), temp.end(), expvals.begin());
         }
         MPI_Barrier(MPI_COMM_WORLD);              
-        sleep((double)i_proc / 10);
         
       };
       virtual void process_loop() {
@@ -117,9 +116,10 @@ namespace NWQSim
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }
           if (i_proc == 0) {
-            //nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
+            nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
             
-            energy(parameters);
+            // std::cout << energy(parameters) << std::endl;iteration = 1;
+            // std::cout << zmasks[1376] << std::endl;
             stat = EXIT_LOOP;
             for(IdxType i = 1; i < n_cpus; i++) {
               MPI_Send(&stat, 1, MPI_INT, i, iteration, MPI_COMM_WORLD);

@@ -130,7 +130,7 @@ typedef struct GPU_Timer
 
 __device__
 inline 
-uint64_t swapBits (uint64_t n, uint64_t p1, uint64_t p2) {
+uint64_t swapBits_cu (uint64_t n, uint64_t p1, uint64_t p2) {
 
     /* Move p1'th to rightmost side */
     uint64_t bit1 =  (n >> p1) & 1;

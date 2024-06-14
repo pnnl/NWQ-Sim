@@ -724,7 +724,7 @@ namespace NWQSim
                         markers.resize(per_pe_num);
                     }
                     
-                    for (IdxType i = (index)*per_pe_work; i < (index + 1) * per_pe_work; i++)
+                    for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
                     {
                         ValType el_real[16];
                         ValType el_imag[16];
@@ -831,12 +831,6 @@ namespace NWQSim
                         }
                        
                     }
-                if (i_proc == 0) {
-                    // for(size_t j = 0; j < per_pe_num; j+= 1) {
-                        // if (markers[j] == 0)
-                            // printf("%d\n", j);
-                    // }
-                }
                 }
                 BARR_MPI;
                 return exp_val;
@@ -1171,16 +1165,16 @@ namespace NWQSim
                 const ValType* gm_imag = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3] + 256;
                 result = EXPECT_C4V1_GATE(gm_real, gm_imag, p, q, r, s, xmask | zmask);
                 BARR_MPI;
-                if (q0 >= lg2_m_cpu) {
-                    SWAP_GATE(q0t, q0);
+                if (q2 >= lg2_m_cpu) {
+                    SWAP_GATE(q2t, q2);
                     BARR_MPI;
                 }
                 if (q1 >= lg2_m_cpu) {
                     SWAP_GATE(q1t, q1);
                     BARR_MPI;
                 }
-                if (q2 >= lg2_m_cpu) {
-                    SWAP_GATE(q2t, q2);
+                if (q0 >= lg2_m_cpu) {
+                    SWAP_GATE(q0t, q0);
                     BARR_MPI;
                 }
             } else if (num_x_indices == 0) {

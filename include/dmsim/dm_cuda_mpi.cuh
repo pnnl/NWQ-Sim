@@ -212,7 +212,6 @@ namespace NWQSim
 
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
-
             if (i_proc == 0)
                 printf("GPU kernel time: %.3lf ms\n", sim_time);
 
