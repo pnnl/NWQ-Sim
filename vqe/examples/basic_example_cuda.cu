@@ -29,12 +29,12 @@ int main(int argc, char** argv) {
   // Note: path relative to presumed build directory
   std::string hamiltonian_path = "../vqe/example_hamiltonians/h2O.hamil"; //  Effective Hamiltonian file path
 
-  Hamiltonian hamil(hamiltonian_path, n_particles); // Build the Hamiltonian object (used for energy calculation)
+  std::shared_ptr<Hamiltonian> hamil = std::make_shared<Hamiltonian>(hamiltonian_path, n_particles); // Build the Hamiltonian object (used for energy calculation)
   Transformer jw_transform = getJordanWignerTransform; // Choose a transformation function
 
   // Build the ansatz circuit using the Hamiltonian Molecular environment and JW mapping
   //      (shared_ptr used to match baseline NWQ-Sim functionality)
-  std::shared_ptr<Ansatz> ansatz = std::make_shared<UCCSD>(hamil.getEnv(), jw_transform, 1);
+  std::shared_ptr<Ansatz> ansatz = std::make_shared<UCCSD>(hamil->getEnv(), jw_transform, 1);
   // Build the Quantum State object
   NWQSim::VQE::SV_CUDA_VQE state(ansatz, // reference to ansatz
                                 hamil,  // reference to Hamiltonian

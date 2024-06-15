@@ -18,6 +18,9 @@ namespace NWQSim {
       virtual void estimate(Function function_oracle, const std::vector<ValType>& x, std::vector<ValType>& grad, ValType epsilon) {
         throw std::runtime_error("First order oracle not implemented for this class");
       };
+      virtual void estimate(Function function_oracle, const std::vector<ValType>& x, std::vector<ValType>& grad, ValType epsilon, IdxType n_evals) {
+        throw std::runtime_error("First order oracle not implemented for this class");
+      };
       std::string get_name() const { return name; }
   };
   class SPSA: public GradientEstimator {

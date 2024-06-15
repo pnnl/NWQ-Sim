@@ -24,7 +24,7 @@ public:
     
     static std::shared_ptr<NWQSim::VQE::VQEState> create_vqe_solver(std::string backend, 
                                                                     std::shared_ptr<NWQSim::VQE::Ansatz> a, 
-                                                                    const NWQSim::VQE::Hamiltonian& h, 
+                                                                    std::shared_ptr<NWQSim::VQE::Hamiltonian> h, 
                                                                     nlopt::algorithm optimizer_algorithm,
                                                                     NWQSim::VQE::Callback _callback,
                                                                     NWQSim::IdxType seed = 0,

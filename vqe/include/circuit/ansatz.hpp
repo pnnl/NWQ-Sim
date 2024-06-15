@@ -22,6 +22,7 @@ namespace NWQSim {
         std::shared_ptr<std::vector<IdxType> > parameterized_gates; // Indices of parameterized gates
         std::shared_ptr<std::vector<IdxType> > gate_parameter_pointers; // Gate parameter indices
         std::shared_ptr<std::vector<ValType> > gate_coefficients; // Gate coefficients
+
       public:
         Ansatz(IdxType n_qubits): Circuit(n_qubits) {
           theta = std::make_shared<std::vector<ValType> >();
@@ -91,6 +92,11 @@ namespace NWQSim {
 
           return outstream.str();
         }
+        virtual std::vector<std::string> getFermionicOperatorStrings() const {
+          std::vector<std::string> result;
+          throw std::runtime_error("Fermionic operators not specified for this ansatz\n");
+          return result;
+        };
 
         Ansatz compose(const Circuit& other, std::vector<IdxType>& qubit_mapping) {
           Ansatz composition = Ansatz(*this);
@@ -233,6 +239,24 @@ namespace NWQSim {
           pauli_ops.reserve(4 * n_singles + 16 * n_doubles);
           transform(env, fermion_operators, pauli_ops, true);  
           buildAnsatz(pauli_ops);
+        };
+        virtual std::vector<std::string> getFermionicOperatorStrings() const override {
+          std::vector<std::string> result;
+          result.reserve(fermion_operators.size());
+          for (auto& oplist : fermion_operators) {
+            std::ostringstream opstream;
+            bool first = true;
+            for (auto& op: oplist) {
+              if (!first) {
+                opstream << " ";
+              } else {
+                first = false;
+              }
+              opstream << op.toString(env.n_occ, env.n_virt);
+            }
+            result.push_back(opstream.str());
+          }
+          return result;
         };
         const MolecularEnvironment& getEnv() const {return env;};
     };

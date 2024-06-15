@@ -52,8 +52,7 @@ namespace NWQSim {
         }
         const MolecularEnvironment& getEnv () const {return env;}
         const std::vector<std::vector<PauliOperator> >& getPauliOperators() const {return pauli_operators;};
-
-
+        const std::vector<std::vector<FermionOperator> >& getFermionicOperators() const {return fermi_operators;};
     };
   };// namespace vqe
 };// namespace nwqsim

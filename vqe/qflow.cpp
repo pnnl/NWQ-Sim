@@ -7,7 +7,7 @@
 #define CLOSEUNDERLINE "\033[0m"
 
 int show_help() {
-  std::cout << "NWQ-VQE Options" << std::endl;
+  std::cout << "NWQ-VQE QFlow Options" << std::endl;
   std::cout << UNDERLINE << "REQUIRED" << CLOSEUNDERLINE << std::endl;
   std::cout << "--hamiltonian, -f     Path to the input Hamiltonian file (formatted as a sum of Fermionic operators, see examples)" << std::endl;
   std::cout << "--nparticles, -n      Number of electrons in molecule" << std::endl;
@@ -15,13 +15,6 @@ int show_help() {
   std::cout << "--list-backends, -l   List available backends and exit." << std::endl;
   std::cout << UNDERLINE << "OPTIONAL" << CLOSEUNDERLINE << std::endl;
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
-  std::cout << "--config              Path to config file for NLOpt optimizer parameters" << std::endl;
-  std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA" << std::endl;
-  std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
-  std::cout << "--abstol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
-  std::cout << "--maxeval             Maximum number of function evaluations for optimizer. Defaults to 200" << std::endl;
-  std::cout << "--maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)" << std::endl;
-  std::cout << "--stopval             Cutoff function value for optimizer. Defaults to -MAXFLOAT (off)" << std::endl;
   return 1;
 }
 
@@ -62,25 +55,6 @@ int parse_args(int argc, char** argv,
     } else 
     if (argname == "--seed") {
       seed = (unsigned)std::atoi(argv[++i]);
-    } else 
-    if (argname == "--config") {
-      config_file = argv[++i];
-    } else 
-    if (argname == "--optimizer") {
-      algorithm_name = argv[++i];
-    } else 
-    if (argname == "--reltol") {
-      settings.rel_tol = std::atof(argv[++i]);
-    } else 
-    if (argname == "--abstol") {
-      settings.abs_tol = std::atof(argv[++i]);
-    } else 
-    if (argname == "--maxeval") {
-      settings.max_evals = std::atoll(argv[++i]);
-    } else if (argname == "--stopval") {
-      settings.stop_val = std::atof(argv[++i]);
-    } else if (argname == "--maxtime") {
-      settings.max_time = std::atof(argv[++i]);
     } else {
       fprintf(stderr, "\033[91mERROR:\033[0m Unrecognized option %s, type -h or --help for a list of configurable parameters\n", argv[i]);
       return show_help();
@@ -134,7 +108,12 @@ void optimize_ansatz(const VQEBackendManager& manager,
   std::generate(params.begin(), params.end(), 
       [&random_engine, &initdist] () {return initdist(random_engine);});
 
-  state->optimize(params, fval);
+  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, fval, 1e-4, 1e-3);
+  std::ostringstream strstream;
+  for (auto& i: param_tuple) {
+    strstream << i.first << ": " << i.second / PI << " rad"<<  std::endl;
+  }
+  manager.safe_print("%s", strstream.str().c_str());
 }
 
 
