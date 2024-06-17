@@ -105,22 +105,30 @@ namespace NWQSim
         return ene;
       }
       virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& final_ene, ValType delta, ValType eta) {
-        std::vector<ValType> gradient (x0.size());
+        std::vector<ValType> gradient (x0.size(),1.0);
         std::vector<ValType> params(x0);
         std::vector<ValType> minima_params(x0);
         ValType ene_prev = MAXFLOAT;
         ValType ene_curr = energy(params);
+        // gradient
         // get the single-direction starting vector
         g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, params, gradient, delta);
         IdxType step = 0;
+        for (auto& i: gradient) {
+          std::cout << i <<  " ";
+        }
+        std::cout << std::endl;
+        auto s1 = std::chrono::high_resolution_clock::now();
         // follow the starting vector until we hit a global minimum
         do {
           for (size_t i = 0; i < params.size(); i++) {
             params[i] -= eta * gradient[i];
           }
+          auto s1 =  std::chrono::high_resolution_clock::now();
+          // ene_curr = 0;
           ene_curr = energy(params);
-          std::cout << step << " " << ene_curr << std::endl;
-          if (ene_curr > ene_prev) {
+          std::cout << step << " " << ene_curr << " " << ene_prev << std::endl;
+          if (ene_curr >= ene_prev) {
             for (size_t i = 0; i < params.size(); i++) {
               params[i] += eta * gradient[i];
             }
@@ -129,7 +137,10 @@ namespace NWQSim
             ene_prev = ene_curr;
           }
           step++;
+          auto s2 =  std::chrono::high_resolution_clock::now();
+          std::cout << (s2-s1).count()/1e9 << std::endl;
         } while(true);
+        std::cout << "Ended loop\n" << std::endl;
         std::vector<std::string> fermi_strings = ansatz->getFermionicOperatorStrings();
 
         std::vector<std::pair<std::string, ValType>> result;
