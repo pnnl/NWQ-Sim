@@ -531,8 +531,7 @@ namespace NWQSim
 
                     ValType val = res_real * res_real + res_imag * res_imag;
                 
-                    exp_val += hasEvenParity(term + SV16IDX(j) & mask, n_qubits) ? val : -val;
-            
+                    exp_val += hasEvenParity((term + SV16IDX(j)) & mask, n_qubits) ? val : -val;
                 }
             }
             return exp_val;
@@ -582,6 +581,7 @@ namespace NWQSim
                 ValType v1 = sv_real_pos1 * sv_real_pos1 + sv_imag_pos1 * sv_imag_pos1;
                 ValType v2 = sv_real_pos2 * sv_real_pos2 + sv_imag_pos2 * sv_imag_pos2;
                 ValType v3 = sv_real_pos3 * sv_real_pos3 + sv_imag_pos3 * sv_imag_pos3;
+                
                 exp_val += hasEvenParity(pos0 & mask, n_qubits) ? v0 : -v0;
                 exp_val += hasEvenParity(pos1 & mask, n_qubits) ? v1 : -v1;
                 exp_val += hasEvenParity(pos2 & mask, n_qubits) ? v2 : -v2;
@@ -616,10 +616,10 @@ namespace NWQSim
                 IdxType q1 = x_indices[1];
                 IdxType q2 = x_indices[2];
                 IdxType q3 = x_indices[3];
-                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
-                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
-                IdxType zind2 = ((zmask & (1 << q2)) >> q2) << 2;
-                IdxType zind3 = ((zmask & (1 << q3)) >> q3) << 3;
+                IdxType zind0 = ((zmask & (1 << q0)) >> q0) << 3;
+                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 2;
+                IdxType zind2 = ((zmask & (1 << q2)) >> q2) << 1;
+                IdxType zind3 = ((zmask & (1 << q3)) >> q3) << 0;
                 const ValType* gm_real = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3];
                 const ValType* gm_imag = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3] + 256;
                 output[output_index] = EXPECT_C4_GATE(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);

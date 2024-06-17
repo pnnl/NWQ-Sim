@@ -60,6 +60,9 @@ namespace NWQSim {
           size_t gate_ix = 0;
           for (Gate& g: *gates) {
             std::string lower_name = OP_NAMES[g.op_name];
+            if (lower_name == "expect") {
+              continue;
+            }
             std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(),
               [](unsigned char c){ return std::tolower(c); });
 

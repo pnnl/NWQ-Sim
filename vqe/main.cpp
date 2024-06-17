@@ -170,6 +170,12 @@ int main(int argc, char** argv) {
   manager.safe_print("Beginning VQE loop...\n");
   optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, params, fval);
   std::ostringstream paramstream;
+  
+  std::string qasm_string = ansatz->toQASM3();
+  std::ofstream outfile;
+  outfile.open("../uccsd.qasm", std::fstream::out);
+  outfile << qasm_string;
+  outfile.close();
   paramstream << params;
   manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters: %s\n", fval, paramstream.str().c_str());
 #ifdef MPI_ENABLED

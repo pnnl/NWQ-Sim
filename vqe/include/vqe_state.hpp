@@ -61,7 +61,6 @@ namespace NWQSim
               optimizer.set_param(kv_pair.first.c_str(), kv_pair.second);
           }
           
-          
           auto& pauli_operators = hamil.getPauliOperators();        
           for (auto& pauli_list: pauli_operators) {
             for (const PauliOperator& pauli: pauli_list) {
@@ -123,10 +122,14 @@ namespace NWQSim
         IdxType index = 0;
         for (auto& pauli_list: pauli_operators) {
           for (const PauliOperator& pauli: pauli_list) {
-            // std::cout << pauli << "  " << expvals[index] << std::endl;
             emap[pauli] = expvals[index++];
+            // if (index >= xmasks.size())
+            //   break;
           }
+            // if (index >= xmasks.size())
+            //   break;
         }
+        // ValType ene = 0.0;
         ValType ene = hamil.expectation(emap);
         return ene;
       }
