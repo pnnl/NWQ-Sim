@@ -26,14 +26,16 @@ int parse_args(int argc, char** argv,
                 NWQSim::IdxType& n_particles,
                 nlopt::algorithm& algo,
                 NWQSim::VQE::OptimizerSettings& settings,
+                int& n_trials,
                 unsigned& seed) {
   std::string config_file = "";
   std::string algorithm_name = "LN_COBYLA";
   hamilfile = "";
   backend = "CPU";
   n_particles = -1;
+  n_trials = 1;
   settings.max_evals = 200;
-  seed = 0;
+  seed = time(0);
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
     if (argname == "-h" || argname == "--help") {
@@ -52,6 +54,9 @@ int parse_args(int argc, char** argv,
     } else 
     if (argname == "-n" || argname == "--nparticles") {
       n_particles = std::atoll(argv[++i]);
+    } else 
+    if (argname == "-g" || argname == "--grad-samples") {
+      n_trials = std::atoll(argv[++i]);
     } else 
     if (argname == "--seed") {
       seed = (unsigned)std::atoi(argv[++i]);
@@ -99,6 +104,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      NWQSim::VQE::OptimizerSettings& settings,
                      nlopt::algorithm& algo,
                      unsigned& seed,
+                     int num_trials,
                      std::vector<double>& params,
                      double& fval) {
   std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, callback_function, seed, settings);  
@@ -108,7 +114,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
   std::generate(params.begin(), params.end(), 
       [&random_engine, &initdist] () {return initdist(random_engine);});
 
-  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, fval, 1e-4, 1e-3);
+  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, fval, 1e-4, 1e-3, num_trials);
   std::ostringstream strstream;
   for (auto& i: param_tuple) {
     strstream << i.first << ": " << i.second / PI << " rad"<<  std::endl;
@@ -124,7 +130,8 @@ int main(int argc, char** argv) {
   NWQSim::VQE::OptimizerSettings settings;
   nlopt::algorithm algo;
   unsigned seed;
-  if (parse_args(argc, argv, manager, hamil_path, backend, n_part, algo, settings, seed)) {
+  int n_trials;
+  if (parse_args(argc, argv, manager, hamil_path, backend, n_part, algo, settings, n_trials, seed)) {
     return 1;
   }
 #ifdef MPI_ENABLED
@@ -147,7 +154,7 @@ int main(int argc, char** argv) {
   std::vector<double> params;
   double fval;
   manager.safe_print("Beginning VQE loop...\n");
-  optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, params, fval);
+  optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, n_trials, params, fval);
   std::ostringstream paramstream;
   paramstream << params;
   manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters: %s\n", fval, paramstream.str().c_str());

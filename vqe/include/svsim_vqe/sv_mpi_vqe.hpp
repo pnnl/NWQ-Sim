@@ -80,8 +80,8 @@ namespace NWQSim
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }
           if (i_proc == 0) {
-            // nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
-            energy(parameters);
+            nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
+            // energy(parameters);
             stat = EXIT_LOOP;
             for(IdxType i = 1; i < n_cpus; i++) {
               MPI_Send(&stat, 1, MPI_INT, i, 3, MPI_COMM_WORLD);

@@ -101,7 +101,6 @@ namespace NWQSim{
   // Convert an integer to an  `n_qubits`-digit binary string
   std::string to_binary_string(IdxType val, IdxType n_qubits);
 
-
 };};
 
 #endif

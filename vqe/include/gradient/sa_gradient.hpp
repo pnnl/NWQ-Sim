@@ -35,18 +35,25 @@ namespace NWQSim {
     public:
       SPSA(IdxType seed): GradientEstimator("SPSA"), random_engine(seed), distribution(0.5) {}; 
 
-      virtual void estimate(Function function_oracle, const std::vector<ValType>& x, std::vector<ValType>& grad, ValType epsilon) override {
+      virtual void estimate(Function function_oracle, const std::vector<ValType>& x, std::vector<ValType>& grad, ValType epsilon, IdxType n_trials = 1) override {
         std::vector<ValType> delta (x.size());
-        std::generate(delta.begin(), delta.end(), [&] () {return epsilon * (distribution(random_engine) ? 1. : -1.);});
-        // Two perturbation vectors, one adding the perturbation and one subtracting
-        std::vector<ValType> x1 (x.size());
-        std::transform(x.begin(), x.end(), delta.begin(), x1.begin(), [&] (ValType v1, ValType v2) {return v1 + v2;} );
-        std::vector<ValType> x2 (x.size());
-        std::transform(x.begin(), x.end(), delta.begin(), x2.begin(), [&] (ValType v1, ValType v2) {return v1 - v2;} );
+        grad.resize(x.size());
+        std::fill(grad.begin(), grad.end(), 0);
+        for (size_t i = 0; i < n_trials; i++) {
 
-        ValType v1 = function_oracle(x1);
-        ValType v2 = function_oracle(x2);
-        std::transform(delta.begin(), delta.end(), grad.begin(), [&] (ValType perturb) {return (v1 - v2) / (2 * perturb);});
+          std::generate(delta.begin(), delta.end(), [&] () {return epsilon * (distribution(random_engine) ? 1. : -1.);});
+          // Two perturbation vectors, one adding the perturbation and one subtracting
+          std::vector<ValType> x1 (x.size());
+          std::transform(x.begin(), x.end(), delta.begin(), x1.begin(), [&] (ValType v1, ValType v2) {return v1 + v2;} );
+          std::vector<ValType> x2 (x.size());
+          std::transform(x.begin(), x.end(), delta.begin(), x2.begin(), [&] (ValType v1, ValType v2) {return v1 - v2;} );
+
+          ValType v1 = function_oracle(x1);
+          ValType v2 = function_oracle(x2);
+          for (size_t j = 0; j < delta.size(); j++) {
+            grad[j] += (v1 - v2) /  (2 * n_trials * delta[j]);
+          }
+        }
       };
 
   };

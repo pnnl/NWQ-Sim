@@ -5,6 +5,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/complex.h>
+#include <pybind11/numpy.h>
 
 namespace py = pybind11;
 
@@ -24,18 +25,19 @@ std::vector<std::pair<std::string, double> > optimize_ansatz(const VQEBackendMan
                      std::shared_ptr<NWQSim::VQE::Ansatz> ansatz,
                      NWQSim::VQE::OptimizerSettings& settings,
                      nlopt::algorithm& algo,
-                     unsigned& seed,
+                     int n_evals,
+                     int& seed,
                      double eta,
                      double delta,
                      std::vector<double>& params,
                      double& fval) {
-  py::print("Started function");
+  // py::print("Started function");
   std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, null_callback_function, seed, settings);  
   std::uniform_real_distribution<double> initdist(0, 2 * PI);
-  py::print("Calling optimization routine");
+  // py::print("Calling optimization routine");
 
-  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, fval, eta, delta);
-  py::print("Exited optimization routine");
+  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, fval, eta, delta, n_evals);
+  // py::print("Exited optimization routine");
   return param_tuple;
 }
 
@@ -46,10 +48,11 @@ optimize_effective_hamiltonian(
   NWQSim::VQE::IdxType n_particles,
   const std::vector<double>& init_params,
   std::string backend = "CPU",
-  uint32_t seed = 0,
+  int seed = -1,
   double delta = 1e-4,
   double eta = 1e-4,
-  int n_trotter = 1) {
+  int n_trotter = 1,
+  int n_samples = 1) {
   seed = seed;
   std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(fermionic_operators, n_particles, NWQSim::VQE::getJordanWignerTransform);
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
@@ -60,13 +63,16 @@ optimize_effective_hamiltonian(
   if (init_params.size() != ansatz->numParams()) {
     throw std::runtime_error("Not enough initial parameters provided to ansatz, please pass " + std::to_string(ansatz->numParams()) + " parameters\n");
   }
+  if (seed == -1) {
+    seed = (int)time(NULL);
+  }
   std::vector<double> local_params (init_params);
   double fval;
   VQEBackendManager manager;
 
   NWQSim::VQE::OptimizerSettings settings;
   nlopt::algorithm algo = nlopt::algorithm::LN_COBYLA; // default value for ctor, not actually used
-  std::vector<std::pair<std::string, double> > result = optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, eta, delta, local_params, fval);
+  std::vector<std::pair<std::string, double> > result = optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, n_samples, seed, eta, delta, local_params, fval);
     // throw std::runtime_error("Done\n");
   // std::vector<std::pair<std::string, double> > result = {{"test", 0.0}};
   return result;
@@ -76,7 +82,26 @@ PYBIND11_MODULE(nwqflow, m) {
 
     m.def("optimize_effective_hamiltonian", 
     &optimize_effective_hamiltonian, 
-    "Perform single-direction gradient descent using an SPSA-estimated gradient and return the locally-optimal parameters along with the associated Fermionic excitation.");
+    "Perform single-direction gradient descentreturn the locally-optimal parameters\n"
+    "\tArguments:\n"
+    "\t\toperators (Iterable[(str, complex)]): List of xacc-formatted operator strings with coefficients\n"
+    "\t\tnum_particles (int): Number of electrons (assumed to be equal number of alpha/beta)\n"
+    "\t\tx0 (Iterable[float]): Initial parameter values\n"
+    "\t\tbackend (str): NWQ-Sim backend for simulation. Defaults to \"CPU\"\n"
+    "\t\tseed (int): Random seed for optimizer and SPSA perturbation. Defaults to time(NULL)\n"
+    "\t\tdelta (float): Magnitude of SPSA perturbation. Defaults to 1e-3\n"
+    "\t\teta (float): Gradient descent stepsize. Defaults to 1e-3\n"
+    "\t\tnum_trotter (int): Number of Trotter steps (linearly increases number of parameters). Defaults to 1\n"
+    "\t\tnum_samples (int): Number of gradient samples for SPSA average. Defaults to 1\n",
+    py::arg("operators"), 
+    py::arg("num_particles"), 
+    py::arg("x0"), 
+    py::arg("backend") = "CPU", 
+    py::arg("seed") = -1, 
+    py::arg("delta") = 1e-3, 
+    py::arg("eta") = 1e-3, 
+    py::arg("num_trotter") = 1, 
+    py::arg("tnum_samples") = 1);
 }
 /*
 int main(int argc, char** argv) {

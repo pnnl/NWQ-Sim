@@ -247,17 +247,17 @@ namespace NWQSim {
           std::vector<std::string> result;
           result.reserve(fermion_operators.size());
           for (auto& oplist : fermion_operators) {
-            std::ostringstream opstream;
+            std::string opstring = "";
             bool first = true;
             for (auto& op: oplist) {
               if (!first) {
-                opstream << " ";
+                opstring = " " + opstring;
               } else {
                 first = false;
               }
-              opstream << op.toString(env.n_occ, env.n_virt);
+              opstring = op.toString(env.n_occ, env.n_virt) + opstring;
             }
-            result.push_back(opstream.str());
+            result.push_back(opstring);
           }
           return result;
         };
