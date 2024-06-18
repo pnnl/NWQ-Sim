@@ -61,8 +61,7 @@ namespace NWQSim
               optimizer.set_param(kv_pair.first.c_str(), kv_pair.second);
           }
           
-          
-          auto& pauli_operators = hamil->getPauliOperators();        
+          auto& pauli_operators = hamil.getPauliOperators();        
           for (auto& pauli_list: pauli_operators) {
             for (const PauliOperator& pauli: pauli_list) {
               const std::vector<IdxType>& xinds = pauli.get_xindices();
@@ -170,11 +169,19 @@ namespace NWQSim
         IdxType index = 0;
         for (auto& pauli_list: pauli_operators) {
           for (const PauliOperator& pauli: pauli_list) {
-            // std::cout << pauli << "  " << expvals[index] << std::endl;
             emap[pauli] = expvals[index++];
+            // if (index >= xmasks.size())
+            //   break;
           }
+            // if (index >= xmasks.size())
+            //   break;
         }
+<<<<<<< HEAD
         ValType ene = hamil->expectation(emap);
+=======
+        // ValType ene = 0.0;
+        ValType ene = hamil.expectation(emap);
+>>>>>>> dev/vqe
         return ene;
       }
       protected:

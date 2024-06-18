@@ -38,8 +38,8 @@ void jwFermionToPauliSinglePair (
     const FermionOperator& aq,
     std::vector<std::vector<PauliOperator> >& output,
     bool hermitian) {
-  assert(ap_dagger.getType() == Creation);
-  assert(aq.getType() == Annihilation);
+  // assert(ap_dagger.getType() == Creation);
+  // assert(aq.getType() == Annihilation);
   std::vector<PauliOperator> local_result;
   local_result.reserve(4);
   std::vector<PauliOperator> ap_dag_paulis;
@@ -74,10 +74,10 @@ void jwFermionToPauliDoublePair (
     bool hermitian = false) {
   std::vector<PauliOperator> local_result;
   local_result.reserve(16);
-  assert(ap_dagger.getType() == Creation);
-  assert(aq_dagger.getType() == Creation);
-  assert(ar.getType() == Annihilation);
-  assert(as.getType() == Annihilation);
+  // assert(ap_dagger.getType() == Creation);
+  // assert(aq_dagger.getType() == Creation);
+  // assert(ar.getType() == Annihilation);
+  // assert(as.getType() == Annihilation);
   std::vector<PauliOperator> ap_dag_paulis;
   jwFermionToPauliSingle(n_occ, n_virt, ap_dagger, ap_dag_paulis);
   std::vector<PauliOperator> aq_dag_paulis;

@@ -40,7 +40,7 @@ int parse_args(int argc, char** argv,
   backend = "CPU";
   n_particles = -1;
   settings.max_evals = 200;
-  seed = 0;
+  seed = time(NULL);
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
     if (argname == "-h" || argname == "--help") {
@@ -50,7 +50,7 @@ int parse_args(int argc, char** argv,
       return 1;
     } else
     if (argname == "-b" || argname == "--backend") {
-      backend = argv[++i];
+      backend = argv[++i];//-2.034241 -1.978760  -1.825736
       continue;
     } 
     if (argname == "-f" || argname == "--hamiltonian") {
@@ -170,6 +170,12 @@ int main(int argc, char** argv) {
   manager.safe_print("Beginning VQE loop...\n");
   optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, params, fval);
   std::ostringstream paramstream;
+  
+  std::string qasm_string = ansatz->toQASM3();
+  std::ofstream outfile;
+  outfile.open("../uccsd.qasm", std::fstream::out);
+  outfile << qasm_string;
+  outfile.close();
   paramstream << params;
   manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters: %s\n", fval, paramstream.str().c_str());
 #ifdef MPI_ENABLED

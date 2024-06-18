@@ -80,10 +80,13 @@ namespace NWQSim
           ValType phase = y_phase % 2;
           size_t mask_u = ~((1lu << (max_x + 1)) - 1);
           size_t mask_l = (1lu << (max_x)) - 1;
+          double val = 0.0;
           for (IdxType i = 0; i < half_dim; i++) {
             IdxType idx0 = ((i << 1) & mask_u) | (i & mask_l);
             IdxType idx1 = xmask ^ idx0;
             ValType v0, v1;
+            val += sv_imag[idx1] * sv_imag[idx1]  + sv_real[idx1] * sv_real[idx1];
+            val += sv_imag[idx0] * sv_imag[idx0]  + sv_real[idx0] * sv_real[idx0];
             if (phase) {
               v0 = -sv_imag[idx1] * sv_real[idx0] + sv_imag[idx0] * sv_real[idx1];
               v1 = -sv_imag[idx0] * sv_real[idx1] + sv_imag[idx1] * sv_real[idx0];
@@ -97,6 +100,7 @@ namespace NWQSim
             if ((count_ones(idx0 & zmask) & 1) != 0) {
               thisval *= -1;
             }
+
             if ((count_ones(idx1 & zmask) & 1) != 0) {
               thisval -= v1;
             } else {

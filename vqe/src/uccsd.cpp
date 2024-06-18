@@ -10,13 +10,13 @@ namespace NWQSim {
         for (IdxType q = 0; q < env.n_virt; q++) {
           FermionOperator virtual_creation_down (q, Virtual, Down, Creation);
           FermionOperator virtual_creation_up (q, Virtual, Up, Creation);
-          fermion_operators.push_back({virtual_creation_down, occupied_annihilation_down});
-          fermion_operators.push_back({virtual_creation_up, occupied_annihilation_up});
+          fermion_operators.push_back({occupied_annihilation_down, virtual_creation_down});
+          fermion_operators.push_back({occupied_annihilation_up, virtual_creation_up});
 // #ifndef NDEBUG
-//                 std::cout << "SE: " << virtual_creation_down.qubitIndex(env.n_occ, env.n_virt) << " " << 
-//                              occupied_annihilation_down.qubitIndex(env.n_occ, env.n_virt) << std::endl;
-//                 std::cout << "SE: " <<  virtual_creation_up.qubitIndex(env.n_occ, env.n_virt) << " " << 
-//                              occupied_annihilation_up.qubitIndex(env.n_occ, env.n_virt) << std::endl;
+                // std::cout << "SE: " << virtual_creation_down.qubitIndex(env.n_occ, env.n_virt) << " " << 
+                //              occupied_annihilation_down.qubitIndex(env.n_occ, env.n_virt) << std::endl;
+                // std::cout << "SE: " <<  virtual_creation_up.qubitIndex(env.n_occ, env.n_virt) << " " << 
+                //              occupied_annihilation_up.qubitIndex(env.n_occ, env.n_virt) << std::endl;
 // #endif
         }
       }
@@ -41,33 +41,37 @@ namespace NWQSim {
                 //              virt_down_2.qubitIndex(env.n_occ, env.n_virt) << " " << 
                 //              occ_down_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
                 //              occ_down_2.qubitIndex(env.n_occ, env.n_virt) << std::endl;
-                fermion_operators.push_back({virt_down_1,
-                                             virt_down_2,
-                                             occ_down_1,
-                                             occ_down_2});
+                fermion_operators.push_back({
+                  occ_down_1,
+                  occ_down_2,
+                  virt_down_1,
+                  virt_down_2,
+                                             });
 // #ifndef NDEBUG
-//                 std::cout <<  "DE: " << virt_up_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
-//                              virt_up_2.qubitIndex(env.n_occ, env.n_virt) << " " << 
-//                              occ_up_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
-//                              occ_up_2.qubitIndex(env.n_occ, env.n_virt) << std::endl;
+                // std::cout <<  "DE: " << virt_up_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
+                //              virt_up_2.qubitIndex(env.n_occ, env.n_virt) << " " << 
+                //              occ_up_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
+                //              occ_up_2.qubitIndex(env.n_occ, env.n_virt) << std::endl;
 // #endif
                 // Up spin all together
-                fermion_operators.push_back({virt_up_1,
-                                             virt_up_2,
+                fermion_operators.push_back({
                                              occ_up_1,
-                                             occ_up_2});
+                                             occ_up_2,
+                                             virt_up_1,
+                                             virt_up_2,});
               }
 
 // #ifndef NDEBUG
-//               std::cout <<  "DE: " << virt_down_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
-//                             virt_up_2.qubitIndex(env.n_occ, env.n_virt) << " " << 
-//                             occ_up_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
-//                             occ_down_2.qubitIndex(env.n_occ, env.n_virt) << std::endl;
+              // std::cout <<  "DE: " << virt_down_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
+              //               virt_up_2.qubitIndex(env.n_occ, env.n_virt) << " " << 
+              //               occ_up_1.qubitIndex(env.n_occ, env.n_virt) << " " << 
+              //               occ_down_2.qubitIndex(env.n_occ, env.n_virt) << std::endl;
 // #endif
-              fermion_operators.push_back({virt_down_1,
-                                           virt_up_2,
+              fermion_operators.push_back({
                                            occ_up_1,
-                                           occ_down_2});
+                                           occ_down_2,
+                                           virt_down_1,
+                                           virt_up_2,});
             }
               
           }
@@ -76,9 +80,9 @@ namespace NWQSim {
     };
     void UCCSD::buildAnsatz(std::vector<std::vector<PauliOperator> > pauli_oplist) {
       theta->resize(pauli_oplist.size() * trotter_n);
-      for (IdxType i = 0; i < env.n_occ * 2; i++) {
+      for (IdxType i = 0; i < env.n_occ ; i++) {
         X(i);
-        // X(i + env.n_spatial);
+        X(i + env.n_spatial);
       }
       IdxType index = 0; // parameter index, shares parameters for Pauli evolution gates corresponding to the same Fermionic operator within the same Trotter step
       for (auto& fermionic_group: pauli_oplist) {
