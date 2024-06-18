@@ -40,7 +40,7 @@ int parse_args(int argc, char** argv,
   backend = "CPU";
   n_particles = -1;
   settings.max_evals = 200;
-  seed = 0;
+  seed = time(NULL);
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
     if (argname == "-h" || argname == "--help") {
@@ -50,7 +50,7 @@ int parse_args(int argc, char** argv,
       return 1;
     } else
     if (argname == "-b" || argname == "--backend") {
-      backend = argv[++i];
+      backend = argv[++i];//-2.034241 -1.978760  -1.825736
       continue;
     } 
     if (argname == "-f" || argname == "--hamiltonian") {
