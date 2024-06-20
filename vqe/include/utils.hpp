@@ -29,6 +29,16 @@ enum STATUS {
     WAIT,
     EXIT_LOOP
 };
+template <typename T, typename S>
+std::stringstream& operator<<(std::stringstream& out, const std::pair<T, S>& target) {
+  out << "(" << target.first << ", " << target.second << ")";
+  return out;
+}
+template <typename T, typename S>
+std::ostream& operator<<(std::ostream& out, const std::pair<T, S>& target) {
+  out << "(" << target.first << ", " << target.second << ")";
+  return out;
+}
 template <typename T>
 std::stringstream& operator<<(std::stringstream& out, const std::vector<T>& target) {
   out << "[";
@@ -42,6 +52,7 @@ std::stringstream& operator<<(std::stringstream& out, const std::vector<T>& targ
   out << "]";
   return out;
 }
+
 namespace NWQSim{
   namespace VQE{
   using IdxType = long long;
@@ -66,8 +77,8 @@ namespace NWQSim{
   IdxType getQubitIndex(IdxType orbital_index, IdxType spin, IdxType orb_type, IdxType n_occ, IdxType n_virt) {
     // Flattened indexing scheme
     // IdxType index = (orbital_index) \
-            + (orb_type * spin * n_virt + (!orb_type) * spin * n_occ) \
-            + orb_type * 2 * n_occ;
+          + (orb_type * spin * n_virt + (!orb_type) * spin * n_occ) \
+          + orb_type * 2 * n_occ;
     // Qiskit indexing scheme
     IdxType index = (orbital_index) \
             + (orb_type * n_occ) \
@@ -89,12 +100,12 @@ namespace NWQSim{
     //   spin = orbital_index >= n_occ;
     //   orbital_index -= spin * n_occ;
     // }
-    // Below is the reverse indexing for comparison with Qiskit
     orbital_index = qubit_idx;
     spin = (orbital_index >= (n_virt + n_occ));
     orbital_index -= spin * (n_virt + n_occ);
     orb_type = orbital_index >= n_occ;
     orbital_index -= orb_type * n_occ;
+    // Below is the reverse indexing for comparison with Qiskit
     // std::cout << qubit_idx << " " << orbital_index << " " << spin << " " << orb_type << " " << n_occ << " " << n_virt << std::endl;
   }
 

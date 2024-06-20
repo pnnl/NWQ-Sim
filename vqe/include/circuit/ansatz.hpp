@@ -100,7 +100,12 @@ namespace NWQSim {
           throw std::runtime_error("Fermionic operators not specified for this ansatz\n");
           return result;
         };
+        virtual std::vector<std::pair<std::string, ValType> > getFermionicOperatorParameters() const {
+          std::vector<std::pair<std::string, ValType> > result;
+          throw std::runtime_error("Fermionic operators not specified for this ansatz\n");
+          return result;
 
+        }
         Ansatz compose(const Circuit& other, std::vector<IdxType>& qubit_mapping) {
           Ansatz composition = Ansatz(*this);
           for (IdxType i = 0; i < num_qubits(); i++) {
@@ -258,6 +263,26 @@ namespace NWQSim {
               opstring = op.toString(env.n_occ, env.n_virt) + opstring;
             }
             result.push_back(opstring);
+          }
+          return result;
+        };
+        virtual std::vector<std::pair<std::string, ValType> > getFermionicOperatorParameters() const override {
+          std::vector<std::pair<std::string, ValType> > result;
+          result.reserve(fermion_operators.size());
+          for (size_t i = 0; i < fermion_operators.size(); i++) {
+            const auto &oplist = fermion_operators.at(i);
+            ValType param = theta->at(i);
+            std::string opstring = "";
+            bool first = true;
+            for (auto& op: oplist) {
+              if (!first) {
+                opstring = " " + opstring;
+              } else {
+                first = false;
+              }
+              opstring = op.toString(env.n_occ, env.n_virt) + opstring;
+            }
+            result.push_back(std::make_pair(opstring, param));
           }
           return result;
         };

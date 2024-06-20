@@ -80,9 +80,9 @@ namespace NWQSim {
     };
     void UCCSD::buildAnsatz(std::vector<std::vector<PauliOperator> > pauli_oplist) {
       theta->resize(pauli_oplist.size() * trotter_n);
-      for (IdxType i = 0; i < env.n_occ ; i++) {
+      for (IdxType i = 0; i < 2 * env.n_occ; i++) {
         X(i);
-        X(i + env.n_spatial);
+        // X(i+env.n_spatial);
       }
       IdxType index = 0; // parameter index, shares parameters for Pauli evolution gates corresponding to the same Fermionic operator within the same Trotter step
       for (auto& fermionic_group: pauli_oplist) {

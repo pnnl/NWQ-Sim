@@ -60,7 +60,7 @@ namespace NWQSim {
       FermionOpType getType() const { return type; }
       std::string toString (IdxType n_occ, IdxType n_virt) const {
         std::stringstream ss;
-        ss << ((type==Creation) ? "^": "") << qubitIndex(n_occ, n_virt);
+        ss  << qubitIndex(n_occ, n_virt) << ((type==Creation) ? "^": "");
         return ss.str();
       };
     };

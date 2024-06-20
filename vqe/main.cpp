@@ -169,15 +169,18 @@ int main(int argc, char** argv) {
   double fval;
   manager.safe_print("Beginning VQE loop...\n");
   optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, params, fval);
-  std::ostringstream paramstream;
   
-  std::string qasm_string = ansatz->toQASM3();
-  std::ofstream outfile;
-  outfile.open("../uccsd.qasm", std::fstream::out);
-  outfile << qasm_string;
-  outfile.close();
-  paramstream << params;
-  manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters: %s\n", fval, paramstream.str().c_str());
+  // std::string qasm_string = ansatz->toQASM3();
+  // std::ofstream outfile;
+  // outfile.open("../uccsd.qasm", std::fstream::out);
+  // outfile << qasm_string;
+  // outfile.close();
+  std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters();
+  manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters:\n", fval);
+  for (auto& pair: param_map) {
+    manager.safe_print("%s :: %e\n", pair.first.c_str(), pair.second);
+
+  }
 #ifdef MPI_ENABLED
   if (backend == "MPI" || backend == "NVGPU_MPI")
   {
