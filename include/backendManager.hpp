@@ -29,6 +29,10 @@
 #include "dmsim/dm_hip.hpp"
 #endif
 
+#ifdef HIP_MPI_ENABLED
+#include "svsim/sv_hip_mpi.hpp"
+#endif
+
 #include <iostream>
 #include <memory>
 
@@ -71,21 +75,20 @@ public:
 #ifdef OMP_ENABLED
         safe_print("- OpenMP\n");
 #endif
-
 #ifdef MPI_ENABLED
         safe_print("- MPI\n");
 #endif
-
 #ifdef CUDA_ENABLED
         safe_print("- NVGPU\n");
 #endif
-
 #ifdef CUDA_MPI_ENABLED
         safe_print("- NVGPU_MPI\n");
 #endif
-
 #ifdef HIP_ENABLED
         safe_print("- AMDGPU\n");
+#endif
+#ifdef HIP_MPI_ENABLED
+        safe_print("- AMDGPU_MPI\n");
 #endif
     }
 
@@ -146,6 +149,14 @@ public:
                 return std::make_shared<NWQSim::DM_CUDA_MPI>(numQubits);
         }
 #endif
+
+#ifdef HIP_MPI_ENABLED
+        else if (backend == "AMDGPU_MPI")
+        {
+            return std::make_shared<NWQSim::SV_HIP_MPI>(numQubits);
+        }
+#endif
+
         else if (backend == "LIST")
         {
             print_available_backends();

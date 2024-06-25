@@ -5,11 +5,22 @@
 /***********************************************
  * AMD GPU specific attributes
  ***********************************************/
-#define THREADS_CTA_HIP 256
+#define THREADS_CTA_HIP 1024
 
 #define LOCAL_G_HIP(arr, i) arr[(i)]
 #define LOCAL_P_HIP(arr, i, val) arr[(i)] = val;
 #define BARR_HIP grid.sync();
+
+// CLUSTER BASED
+
+#define PGAS_P(arr, i, val) roc_shmem_putmem(&(arr)[(i) & ((m_gpu) - 1)], (val), ((i) >> (lg2_m_gpu)))
+#define PGAS_G(arr, i) roc_nvshmem_getmem(&(arr)[(i) & ((m_gpu) - 1)], ((i) >> (lg2_m_gpu)))
+#define BARR_ROC_SHMEM                         \
+    if (threadIdx.x == 0 && blockIdx.x == 0) \
+        roc_shmem_ctx_wg_barrier_all(*p_ctx);               \
+    grid.sync();
+
+
 
 /***********************************************
  * Error Checking:
