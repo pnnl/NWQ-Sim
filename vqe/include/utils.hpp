@@ -29,6 +29,16 @@ enum STATUS {
     WAIT,
     EXIT_LOOP
 };
+template <typename T, typename S>
+std::stringstream& operator<<(std::stringstream& out, const std::pair<T, S>& target) {
+  out << "(" << target.first << ", " << target.second << ")";
+  return out;
+}
+template <typename T, typename S>
+std::ostream& operator<<(std::ostream& out, const std::pair<T, S>& target) {
+  out << "(" << target.first << ", " << target.second << ")";
+  return out;
+}
 template <typename T>
 std::stringstream& operator<<(std::stringstream& out, const std::vector<T>& target) {
   out << "[";
@@ -42,6 +52,7 @@ std::stringstream& operator<<(std::stringstream& out, const std::vector<T>& targ
   out << "]";
   return out;
 }
+
 namespace NWQSim{
   namespace VQE{
   using IdxType = long long;
@@ -63,44 +74,54 @@ namespace NWQSim{
   };
 
   inline
-  IdxType getQubitIndex(IdxType orbital_index, IdxType spin, IdxType orb_type, IdxType n_occ, IdxType n_virt) {
+  IdxType getQubitIndex(IdxType orbital_index, IdxType spin, IdxType orb_type, IdxType n_occ, IdxType n_virt, bool xacc_scheme) {
     // Flattened indexing scheme
-    // IdxType index = (orbital_index) \
-            + (orb_type * spin * n_virt + (!orb_type) * spin * n_occ) \
-            + orb_type * 2 * n_occ;
-    // Qiskit indexing scheme
-    IdxType index = (orbital_index) \
+    IdxType index;
+    if (!xacc_scheme) {
+      // DUCC scheme
+      index = (orbital_index) \
+          + (orb_type * spin * n_virt + (!orb_type) * spin * n_occ) \
+          + orb_type * 2 * n_occ; 
+    } else {
+      // Qiskit/XACC scheme
+      index = (orbital_index) \
             + (orb_type * n_occ) \
             + spin * (n_occ + n_virt);
+    }
     return index;
   }
 
 
   inline
-  void getFermiInfoFromQubit(IdxType qubit_idx, IdxType& orbital_index, IdxType& spin, IdxType& orb_type, IdxType n_occ, IdxType n_virt) {
+  void getFermiInfoFromQubit(IdxType qubit_idx, IdxType& orbital_index, IdxType& spin, IdxType& orb_type, IdxType n_occ, IdxType n_virt, bool xacc_scheme) {
     // Flattened indexing scheme (reversed). Extracts orbital/operator/spin properties from the qubit index
-    // orbital_index = qubit_idx;
-    // orb_type = (qubit_idx >= (2 * n_occ));
-    // orbital_index -= orb_type * (2 * n_occ);
-    // if (orb_type) {
-    //   spin = orbital_index >= n_virt;
-    //   orbital_index -= spin * n_virt;
-    // } else {
-    //   spin = orbital_index >= n_occ;
-    //   orbital_index -= spin * n_occ;
-    // }
+    if (!xacc_scheme) {
+      // DUCC reverse indexing
+      orbital_index = qubit_idx;
+      orb_type = (qubit_idx >= (2 * n_occ));
+      orbital_index -= orb_type * (2 * n_occ);
+      if (orb_type) {
+        spin = orbital_index >= n_virt;
+        orbital_index -= spin * n_virt;
+      } else {
+        spin = orbital_index >= n_occ;
+        orbital_index -= spin * n_occ;
+      }
+    } else {
+      // Qiskit/XACC reverse indexing
+      orbital_index = qubit_idx;
+      spin = (orbital_index >= (n_virt + n_occ));
+      orbital_index -= spin * (n_virt + n_occ);
+      orb_type = orbital_index >= n_occ;
+      orbital_index -= orb_type * n_occ;
+    }
+    
     // Below is the reverse indexing for comparison with Qiskit
-    orbital_index = qubit_idx;
-    spin = (orbital_index >= (n_virt + n_occ));
-    orbital_index -= spin * (n_virt + n_occ);
-    orb_type = orbital_index >= n_occ;
-    orbital_index -= orb_type * n_occ;
     // std::cout << qubit_idx << " " << orbital_index << " " << spin << " " << orb_type << " " << n_occ << " " << n_virt << std::endl;
   }
 
   // Convert an integer to an  `n_qubits`-digit binary string
   std::string to_binary_string(IdxType val, IdxType n_qubits);
-
 
 };};
 

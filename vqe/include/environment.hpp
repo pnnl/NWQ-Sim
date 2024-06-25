@@ -18,6 +18,7 @@ namespace NWQSim {
       IdxType n_part; 
       IdxType n_occ;
       IdxType n_virt;
+      bool xacc_scheme;
       ValType constant;
       
       // Ctors
@@ -25,15 +26,17 @@ namespace NWQSim {
 
       MolecularEnvironment(IdxType _nspatial,
                            IdxType _npart,
+                           bool _xacc_scheme,
                            ValType _const = 0.0): n_spatial(_nspatial),
                                             n_part (_npart),
                                             n_occ (n_part / 2),
                                             n_virt (n_spatial - n_occ),
+                                            xacc_scheme(_xacc_scheme),
                                             constant(_const) {}
 
       IdxType addr(IdxType orbital, bool is_virtual, bool spin_down) const {
         // Return the qubit index for a given orbital index, virtual/occupied status, and spin value
-        return getQubitIndex(orbital, spin_down, is_virtual, n_occ, n_virt);
+        return getQubitIndex(orbital, spin_down, is_virtual, n_occ, n_virt, xacc_scheme);
       }
     };
   };// namespace vqe

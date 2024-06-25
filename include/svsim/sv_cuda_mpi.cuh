@@ -716,7 +716,7 @@ namespace NWQSim
                 grid.sync();
 
                 IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << q - (lg2_m_gpu);
-                index |= i_proc & ((1 << q - (lg2_m_gpu)) - 1);
+                index |= i_proc & ((1 << (q - (lg2_m_gpu))) - 1);
                 for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                      i += blockDim.x * gridDim.x)
                 {
@@ -889,7 +889,7 @@ namespace NWQSim
                 grid.sync();
                 
                 IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << q - (lg2_m_gpu);
-                index |= i_proc & ((1 << q - (lg2_m_gpu)) - 1);
+                index |= i_proc & ((1 << (q - (lg2_m_gpu))) - 1);
 
                 for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work; i += blockDim.x * gridDim.x)
                 {
@@ -1733,7 +1733,7 @@ namespace NWQSim
                 nvshmem_double_get(sv_imag_remote, sv_imag, per_pe_num, pair_gpu);
             grid.sync();
             IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << (q - (lg2_m_gpu));
-            index |= i_proc & ((1 << q - (lg2_m_gpu)) - 1);
+            index |= i_proc & ((1 << (q - (lg2_m_gpu))) - 1);
             for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                  i += blockDim.x * gridDim.x)
             {

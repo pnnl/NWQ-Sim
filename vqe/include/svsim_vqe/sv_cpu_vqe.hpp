@@ -18,7 +18,7 @@ namespace NWQSim
     class SV_CPU_VQE: public VQEState, public SV_CPU {
       public:
         SV_CPU_VQE(std::shared_ptr<Ansatz> a, 
-                   const Hamiltonian& h, 
+                   std::shared_ptr<Hamiltonian> h, 
                    nlopt::algorithm optimizer_algorithm,
                    Callback _callback,
                    IdxType seed = 0,

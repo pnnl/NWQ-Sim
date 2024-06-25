@@ -38,7 +38,7 @@ namespace NWQSim
       public:
       
         VQEState(std::shared_ptr<Ansatz> a, 
-                   const Hamiltonian& h, 
+                   std::shared_ptr<Hamiltonian> h, 
                    nlopt::algorithm optimizer_algorithm,
                    Callback _callback,
                   IdxType seed = 0,
@@ -61,7 +61,7 @@ namespace NWQSim
               optimizer.set_param(kv_pair.first.c_str(), kv_pair.second);
           }
           
-          auto& pauli_operators = hamil.getPauliOperators();        
+          auto& pauli_operators = hamil->getPauliOperators();        
           for (auto& pauli_list: pauli_operators) {
             for (const PauliOperator& pauli: pauli_list) {
               const std::vector<IdxType>& xinds = pauli.get_xindices();
@@ -73,7 +73,7 @@ namespace NWQSim
               }
             }
           }
-          expvals.resize(hamil.num_ops());
+          expvals.resize(hamil->num_ops());
                                           
           // Check if the chosen algorithm requires derivatives
           compute_gradient = std::string(optimizer.get_algorithm_name()).find("no-derivative") == std::string::npos;
@@ -103,6 +103,49 @@ namespace NWQSim
         iteration++;
         return ene;
       }
+      virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& final_ene, ValType delta, ValType eta, IdxType n_grad_est) {
+        Config::PRINT_SIM_TRACE = false;
+        std::vector<ValType> gradient (x0.size(),1.0);
+        std::vector<ValType> params(x0);
+        std::vector<ValType> minima_params(x0);
+        ValType ene_prev = MAXFLOAT;
+        ValType ene_curr = energy(params);
+        // gradient
+        // get the single-direction starting vector
+        g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, params, gradient, delta, n_grad_est);
+        IdxType step = 0;
+        // for (auto& i: gradient) {
+          // std::cout << i <<  " ";
+        // }
+        // std::cout << std::endl;
+        // auto s1 = std::chrono::high_resolution_clock::now();
+        // follow the starting vector until we hit a global minimum
+        do {
+          for (size_t i = 0; i < params.size(); i++) {
+            params[i] -= eta * gradient[i];
+          }
+          // auto s1 =  std::chrono::high_resolution_clock::now();
+          // ene_curr = 0;
+          ene_curr = energy(params);
+          // std::cout << step << " " << ene_curr << " " << ene_prev << std::endl;
+          if (ene_curr >= ene_prev) {
+            for (size_t i = 0; i < params.size(); i++) {
+              params[i] += eta * gradient[i];
+            }
+            break;
+          } else {
+            ene_prev = ene_curr;
+          }
+          step++;
+          // auto s2 =  std::chrono::high_resolution_clock::now();
+          // std::cout << (s2-s1).count()/1e9 << std::endl;
+        } while(true);
+        // std::cout << "Ended loop\n" << std::endl;
+        std::vector<std::string> fermi_strings = ansatz->getFermionicOperatorStrings();
+
+        std::vector<std::pair<std::string, ValType>> result = ansatz->getFermionicOperatorParameters();
+        return result;
+      }
       virtual void optimize(std::vector<ValType>& parameters, ValType& final_ene) {
           iteration = 0;
           if (parameters.size() == 0) {
@@ -117,12 +160,16 @@ namespace NWQSim
 
         call_simulator();
 
-        ExpectationMap emap;
-        auto& pauli_operators = hamil.getPauliOperators();
+        // ExpectationMap emap;
+        auto& pauli_operators = hamil->getPauliOperators();
         IdxType index = 0;
+        ValType expectation = hamil->getEnv().constant;
         for (auto& pauli_list: pauli_operators) {
           for (const PauliOperator& pauli: pauli_list) {
-            emap[pauli] = expvals[index++];
+            // std::cout << pauli << " " << expvals[index] << " " << expectation << std::endl;
+            expectation += expvals[index++] * pauli.getCoeff().real();
+            
+            // emap[pauli] = expvals[index++];
             // if (index >= xmasks.size())
             //   break;
           }
@@ -130,12 +177,12 @@ namespace NWQSim
             //   break;
         }
         // ValType ene = 0.0;
-        ValType ene = hamil.expectation(emap);
-        return ene;
+        // ValType ene = hamil.expectation(emap);
+        return expectation;
       }
       protected:
         std::shared_ptr<Ansatz> ansatz;
-        const Hamiltonian& hamil;
+        std::shared_ptr<Hamiltonian> hamil;
         SPSA g_est;
         nlopt::opt optimizer;
         bool compute_gradient;

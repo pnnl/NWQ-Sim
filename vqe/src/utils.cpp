@@ -2,6 +2,7 @@
 #include "utils.hpp"
 #include <string>
 #include <iostream>
+#include <sstream>
 
 namespace NWQSim{
 namespace VQE {
@@ -16,10 +17,11 @@ namespace VQE {
     }
 
     return ss.str();
+
   }
+};// namespace VQE
 };// namespace NWQSim
 
-};// namespace VQE
 std::ostream& operator<<(std::ostream& out, const std::vector<double>& target) {
   out << "[";
   size_t len = target.size();

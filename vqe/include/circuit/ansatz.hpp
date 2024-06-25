@@ -20,14 +20,15 @@ namespace NWQSim {
       protected:
         std::shared_ptr<std::vector<ValType> > theta;
         std::shared_ptr<std::vector<IdxType> > parameterized_gates; // Indices of parameterized gates
-        std::shared_ptr<std::vector<IdxType> > gate_parameter_pointers; // Gate parameter indices
+        std::shared_ptr<std::vector<std::vector<std::pair<IdxType, ValType> > > > gate_parameter_pointers; // Gate parameter indices
         std::shared_ptr<std::vector<ValType> > gate_coefficients; // Gate coefficients
+
       public:
         Ansatz(IdxType n_qubits): Circuit(n_qubits) {
           theta = std::make_shared<std::vector<ValType> >();
           gate_coefficients = std::make_shared<std::vector<ValType> >();
           parameterized_gates = std::make_shared<std::vector<IdxType> >();
-          gate_parameter_pointers = std::make_shared<std::vector<IdxType> >();
+          gate_parameter_pointers = std::make_shared<std::vector<std::vector<std::pair<IdxType, ValType> > > >();
           };
         ~Ansatz() {};
         void assignGateParam(IdxType gate_index, ValType param) {
@@ -38,12 +39,16 @@ namespace NWQSim {
           */ 
           // 
         }
+        virtual 
         void setParams(const std::vector<ValType> params) {
           assert (params.size() == theta->size());
           std::copy(params.begin(), params.end(), theta->begin());
           IdxType index = 0;
           for (IdxType gate_id: *parameterized_gates) {
-            ValType paramval =  theta->at(gate_parameter_pointers->at(index));
+            ValType paramval = 0;
+            for (auto pair: gate_parameter_pointers->at(index)) {
+              paramval += theta->at(pair.first) * pair.second;
+            }
             paramval *= gate_coefficients->at(index);
             assignGateParam(gate_id, paramval);
             index++;
@@ -60,16 +65,24 @@ namespace NWQSim {
           size_t gate_ix = 0;
           for (Gate& g: *gates) {
             std::string lower_name = OP_NAMES[g.op_name];
-            if (lower_name == "expect") {
+            if (g.op_name == OP::EXPECT) {
               continue;
             }
             std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(),
               [](unsigned char c){ return std::tolower(c); });
 
             outstream << lower_name;
-            // std::cout << gate_ix 
             if (param_ix < parameterized_gates->size() and gate_ix == parameterized_gates->at(param_ix)) {
-              outstream << "(" << gate_coefficients->at(param_ix) << "*theta_" << gate_parameter_pointers->at(param_ix) << ")";
+              outstream << "(" << gate_coefficients->at(param_ix) << "*(";
+              std::vector<std::pair<IdxType, ValType> > expr_vec = gate_parameter_pointers->at(param_ix);
+              for (IdxType i = 0; i < expr_vec.size(); i++) {
+                outstream << expr_vec.at(i).second << "*theta_" << expr_vec.at(i).first;
+                if (i < expr_vec.size() - 1) {
+                  outstream << " * ";
+                } else {
+                  outstream << ")";
+                }
+              }
               param_ix++;
             } else {
               switch(g.op_name) {
@@ -94,7 +107,17 @@ namespace NWQSim {
 
           return outstream.str();
         }
+        virtual std::vector<std::string> getFermionicOperatorStrings() const {
+          std::vector<std::string> result;
+          throw std::runtime_error("Fermionic operators not specified for this ansatz\n");
+          return result;
+        };
+        virtual std::vector<std::pair<std::string, ValType> > getFermionicOperatorParameters() const {
+          std::vector<std::pair<std::string, ValType> > result;
+          throw std::runtime_error("Fermionic operators not specified for this ansatz\n");
+          return result;
 
+        }
         Ansatz compose(const Circuit& other, std::vector<IdxType>& qubit_mapping) {
           Ansatz composition = Ansatz(*this);
           for (IdxType i = 0; i < num_qubits(); i++) {
@@ -111,9 +134,9 @@ namespace NWQSim {
           return composition;
         }
         // Accessors
-        const IdxType numParams() const { return theta->size(); };
+        virtual IdxType numParams() const { return theta->size(); };
         const std::shared_ptr<std::vector<IdxType> > getParamGateIndices() const {return parameterized_gates;}
-        const std::shared_ptr<std::vector<IdxType> > getParamGatePointers() const {return gate_parameter_pointers;}
+        const std::shared_ptr<std::vector<std::vector<std::pair<IdxType, ValType> > > > getParamGatePointers() const {return gate_parameter_pointers;}
         std::vector<ValType> getGateParams() const {
           std::vector<ValType> result(parameterized_gates->size());
           // Get the parameter values for each gate
@@ -130,19 +153,12 @@ namespace NWQSim {
               IdxType _qubit,
               IdxType _ctrl = -1,
               IdxType _n_qubits = 1,
-              IdxType _param_idx = -1,
+              std::vector<std::pair<IdxType, ValType> > _param_ids = {{-1, 0.0}},
               ValType _coeff = 1.0,
-              ValType _param = 0,
               IdxType _repetition = 0) {
           IdxType index = gates->size();
-          IdxType param_index = _param_idx;
-          ValType param_value = _param;
-          if (param_index == -1) {
-            param_index = theta->size();
-            theta->push_back(param_value);
-          } else {
-            param_value = theta->at(param_index);
-          }
+          auto param_index = _param_ids;
+          ValType param_value = 0.0;
           gate_coefficients->push_back(_coeff);
           gate_parameter_pointers->push_back(param_index);
           parameterized_gates->push_back(index);
@@ -175,9 +191,8 @@ namespace NWQSim {
         };   
         void ExponentialGate(const PauliOperator& pauli_op,
                              enum OP _op_name, 
-                             ValType _coeff = 1.0, 
-                             ValType _param = 0.0, 
-                             IdxType param_index = -1) {
+                             std::vector<std::pair<IdxType, ValType> > _param,
+                             ValType _coeff = 1.0) {
           std::vector<IdxType> non_trivial;
           IdxType index = 0;
           for (PauliOp op: *pauli_op.getOps()) {
@@ -196,7 +211,7 @@ namespace NWQSim {
           for (IdxType i = non_trivial.size() - 1; i >= 1; i--) {
             CX(non_trivial[i], non_trivial[i-1]);
           }
-          OneParamGate(_op_name, non_trivial.front(), -1, 1, param_index, _coeff, _param, 0);
+          OneParamGate(_op_name, non_trivial.front(), -1, 1, _param, _coeff, 0);
           for (IdxType i = 0; i < non_trivial.size()-1; i++) {
             CX(non_trivial[i+1], non_trivial[i]);
           }
@@ -220,6 +235,14 @@ namespace NWQSim {
         IdxType n_singles;
         IdxType n_doubles;
         IdxType trotter_n;
+        IdxType unique_params;
+        // bool enforce_symmetries;
+        /** 
+         * Enforce symmetries for each term. Each fermionic term will have one symmetry entry. If no symmetries are enforced, 
+         * symmetries[i] = {{i, 1.0}}; Otherwise, symmetries[i] = {{j, 1.0}, {k, -1.0}} denotes that theta_i must be equal to theta_j - theta_k
+         */
+        std::vector<std::vector<std::pair<IdxType, ValType> > > symmetries;
+        std::vector<IdxType> fermion_ops_to_params; // map from fermion operators to parameters (used in update)
         std::vector<std::vector<FermionOperator> > fermion_operators;
         void getFermionOps();
         void buildAnsatz(std::vector<std::vector<PauliOperator> > pauli_oplist);
@@ -229,15 +252,65 @@ namespace NWQSim {
                                   trotter_n(_trotter_n),
                                   Ansatz(2 * _env.n_spatial) {
           n_singles = 2 * env.n_occ * env.n_virt;
-          n_doubles = 2 * env.n_occ * env.n_occ * env.n_virt * env.n_virt;
+          n_doubles = env.n_occ * (env.n_occ) * env.n_virt * (env.n_virt) + (int)tgamma(env.n_occ+1) * (int)tgamma(env.n_virt+1) / 2; 
           fermion_operators.reserve(n_singles + n_doubles);
+          symmetries = std::vector<std::vector<std::pair<IdxType, ValType> > >((n_singles + n_doubles));
+          fermion_ops_to_params.resize(n_doubles + n_singles);
+          std::fill(fermion_ops_to_params.begin(), fermion_ops_to_params.end(), -1);
+          unique_params = 0;
           getFermionOps();
+          theta->resize(unique_params * trotter_n);
+          // exit(0);
           std::vector<std::vector<PauliOperator> > pauli_ops;
           pauli_ops.reserve(4 * n_singles + 16 * n_doubles);
           transform(env, fermion_operators, pauli_ops, true);  
           buildAnsatz(pauli_ops);
         };
+        virtual std::vector<std::string> getFermionicOperatorStrings() const override {
+          std::vector<std::string> result;
+          result.reserve(fermion_operators.size());
+          for (auto& oplist : fermion_operators) {
+            std::string opstring = "";
+            bool first = true;
+            for (auto& op: oplist) {
+              if (!first) {
+                opstring = " " + opstring;
+              } else {
+                first = false;
+              }
+              opstring = op.toString(env.n_occ, env.n_virt) + opstring;
+            }
+            result.push_back(opstring);
+          }
+          return result;
+        };
+        virtual std::vector<std::pair<std::string, ValType> > getFermionicOperatorParameters() const override {
+          std::vector<std::pair<std::string, ValType> > result;
+          result.reserve(fermion_operators.size());
+          for (size_t i = 0; i < fermion_operators.size(); i++) {
+            const auto &oplist = fermion_operators.at(i);
+            const std::vector<std::pair<IdxType, ValType> > &param_expr = symmetries[i];
+            ValType param = 0.0;
+            for (auto& i: param_expr) {
+              param += i.second * theta->at(fermion_ops_to_params[i.first]);
+            }
+            std::string opstring = "";
+            bool first = true;
+            for (auto& op: oplist) {
+              if (!first) {
+                opstring = " " + opstring;
+              } else {
+                first = false;
+              }
+              opstring = op.toString(env.n_occ, env.n_virt) + opstring;
+            }
+            result.push_back(std::make_pair(opstring, param));
+          }
+          return result;
+        };
+        
         const MolecularEnvironment& getEnv() const {return env;};
+        virtual IdxType numParams() const override { return unique_params; };
     };
   };// namespace vqe
 };// namespace nwqsim

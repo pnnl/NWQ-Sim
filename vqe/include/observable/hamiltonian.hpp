@@ -24,8 +24,11 @@ namespace NWQSim {
         IdxType n_ops;
       
       public:
-        Hamiltonian(std::string input_path, IdxType n_particles, 
+        Hamiltonian(std::string input_path, IdxType n_particles, bool xacc_scheme,
                     Transformer transform = getJordanWignerTransform);
+        Hamiltonian(const std::vector<std::pair<std::string, std::complex<double>>>& input_ops, 
+                    IdxType n_particles, bool xacc_scheme,
+                    Transformer transform);
         Hamiltonian(MolecularEnvironment _env,
                     const std::vector<std::vector<FermionOperator> > _fermion_operators, 
                     Transformer transform = getJordanWignerTransform): env(_env), fermi_operators(_fermion_operators) {
@@ -52,8 +55,7 @@ namespace NWQSim {
         }
         const MolecularEnvironment& getEnv () const {return env;}
         const std::vector<std::vector<PauliOperator> >& getPauliOperators() const {return pauli_operators;};
-
-
+        const std::vector<std::vector<FermionOperator> >& getFermionicOperators() const {return fermi_operators;};
     };
   };// namespace vqe
 };// namespace nwqsim
