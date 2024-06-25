@@ -6,6 +6,7 @@
 #include <pybind11/stl.h>
 #include <pybind11/complex.h>
 #include <pybind11/numpy.h>
+#include <cmath>
 
 namespace py = pybind11;
 
@@ -48,13 +49,14 @@ optimize_effective_hamiltonian(
   NWQSim::VQE::IdxType n_particles,
   const std::vector<double>& init_params,
   std::string backend = "CPU",
+  bool use_xacc = false,
   int seed = -1,
   double delta = 1e-4,
   double eta = 1e-4,
   int n_trotter = 1,
   int n_samples = 1) {
   seed = seed;
-  std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(fermionic_operators, n_particles, NWQSim::VQE::getJordanWignerTransform);
+  std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(fermionic_operators, n_particles, use_xacc, NWQSim::VQE::getJordanWignerTransform);
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
                                                     hamil->getEnv(),
                                                     NWQSim::VQE::getJordanWignerTransform,
@@ -77,6 +79,7 @@ optimize_effective_hamiltonian(
   // std::vector<std::pair<std::string, double> > result = {{"test", 0.0}};
   return result;
 }
+
 PYBIND11_MODULE(nwqflow, m) {
     m.doc() = "QFlow backend based on NWQ-Sim"; // optional module docstring
 
@@ -88,6 +91,7 @@ PYBIND11_MODULE(nwqflow, m) {
     "\t\tnum_particles (int): Number of electrons (assumed to be equal number of alpha/beta)\n"
     "\t\tx0 (Iterable[float]): Initial parameter values\n"
     "\t\tbackend (str): NWQ-Sim backend for simulation. Defaults to \"CPU\"\n"
+    "\t\txacc (bool): Use XACC operator indexing, otherwise use DUCC. Defaults to False\n"
     "\t\tseed (int): Random seed for optimizer and SPSA perturbation. Defaults to time(NULL)\n"
     "\t\tdelta (float): Magnitude of SPSA perturbation. Defaults to 1e-3\n"
     "\t\teta (float): Gradient descent stepsize. Defaults to 1e-3\n"
@@ -97,11 +101,28 @@ PYBIND11_MODULE(nwqflow, m) {
     py::arg("num_particles"), 
     py::arg("x0"), 
     py::arg("backend") = "CPU", 
+    py::arg("xacc") = false, 
     py::arg("seed") = -1, 
     py::arg("delta") = 1e-3, 
     py::arg("eta") = 1e-3, 
     py::arg("num_trotter") = 1, 
     py::arg("tnum_samples") = 1);
+
+
+    m.def("get_param_count",
+    [] (int num_spatial_orbitals, int num_particles) {
+      int n_occ = num_particles / 2;
+      int n_virt = num_spatial_orbitals - n_occ;
+      // technically not the full fermi op count, but missing contribution accounts for the symmetry terms
+      return n_occ * n_virt + n_occ * n_occ * n_virt * n_virt;
+    },
+    "Get the parameter count for given orbital/particle counts\n"
+    "\tArguments:\n"
+    "\t\tnum_spatial_orbitals (int): Number of spatial orbitals (must be greater than the number of particles / 2)\n"
+    "\t\tnum_particles (int): Number of electrons (assumed to be equal number of alpha/beta)\n",
+    py::arg("num_spatial_orbitals"), 
+    py::arg("num_particles")
+    );
 }
 /*
 int main(int argc, char** argv) {

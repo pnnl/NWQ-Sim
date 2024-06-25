@@ -22,6 +22,7 @@ int show_help() {
   std::cout << "--maxeval             Maximum number of function evaluations for optimizer. Defaults to 200" << std::endl;
   std::cout << "--maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)" << std::endl;
   std::cout << "--stopval             Cutoff function value for optimizer. Defaults to -MAXFLOAT (off)" << std::endl;
+  std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl;
   return 1;
 }
 
@@ -33,6 +34,7 @@ int parse_args(int argc, char** argv,
                 NWQSim::IdxType& n_particles,
                 nlopt::algorithm& algo,
                 NWQSim::VQE::OptimizerSettings& settings,
+                bool& use_xacc,
                 unsigned& seed) {
   std::string config_file = "";
   std::string algorithm_name = "LN_COBYLA";
@@ -41,6 +43,7 @@ int parse_args(int argc, char** argv,
   n_particles = -1;
   settings.max_evals = 200;
   seed = time(NULL);
+  use_xacc = false;
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
     if (argname == "-h" || argname == "--help") {
@@ -62,6 +65,8 @@ int parse_args(int argc, char** argv,
     } else 
     if (argname == "--seed") {
       seed = (unsigned)std::atoi(argv[++i]);
+    } else if (argname == "--xacc") {
+      use_xacc = true;
     } else 
     if (argname == "--config") {
       config_file = argv[++i];
@@ -144,8 +149,9 @@ int main(int argc, char** argv) {
   NWQSim::IdxType n_part;
   NWQSim::VQE::OptimizerSettings settings;
   nlopt::algorithm algo;
+  bool use_xacc;
   unsigned seed;
-  if (parse_args(argc, argv, manager, hamil_path, backend, n_part, algo, settings, seed)) {
+  if (parse_args(argc, argv, manager, hamil_path, backend, n_part, algo, settings, use_xacc, seed)) {
     return 1;
   }
 #ifdef MPI_ENABLED
@@ -157,7 +163,7 @@ int main(int argc, char** argv) {
   }
 #endif
   manager.safe_print("Reading Hamiltonian...\n");
-  std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(hamil_path, n_part);
+  std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(hamil_path, n_part, use_xacc);
   manager.safe_print("Constructing UCCSD Ansatz...\n");
 
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
@@ -170,11 +176,11 @@ int main(int argc, char** argv) {
   manager.safe_print("Beginning VQE loop...\n");
   optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, params, fval);
   
-  // std::string qasm_string = ansatz->toQASM3();
-  // std::ofstream outfile;
-  // outfile.open("../uccsd.qasm", std::fstream::out);
-  // outfile << qasm_string;
-  // outfile.close();
+  std::string qasm_string = ansatz->toQASM3();
+  std::ofstream outfile;
+  outfile.open("../uccsd.qasm", std::fstream::out);
+  outfile << qasm_string;
+  outfile.close();
   std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters();
   manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters:\n", fval);
   for (auto& pair: param_map) {

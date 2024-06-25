@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
   // Note: path relative to presumed build directory
   std::string hamiltonian_path = "../vqe/example_hamiltonians/h2O.hamil"; //  Effective Hamiltonian file path
 
-  std::shared_ptr<Hamiltonian> hamil = std::make_shared<Hamiltonian>(hamiltonian_path, n_particles); // Build the Hamiltonian object (used for energy calculation)
+  std::shared_ptr<Hamiltonian> hamil = std::make_shared<Hamiltonian>(hamiltonian_path, n_particles, false); // Build the Hamiltonian object (used for energy calculation)
   Transformer jw_transform = getJordanWignerTransform; // Choose a transformation function
 
   // Build the ansatz circuit using the Hamiltonian Molecular environment and JW mapping

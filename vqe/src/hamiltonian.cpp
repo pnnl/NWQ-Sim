@@ -13,7 +13,7 @@ namespace NWQSim{
       IdxType term_index;
     };
     const std::regex pattern("\\(([\\d\\.e\\+-]+),\\s*([\\d\\.]+)\\)([\\d^\\s]+){0,1}");
-    Hamiltonian::Hamiltonian(std::string input_path, IdxType n_particles, 
+    Hamiltonian::Hamiltonian(std::string input_path, IdxType n_particles, bool xacc_scheme,
                     Transformer transform) {
       std::ifstream input_file(input_path);
       if (!input_file.is_open()) {
@@ -83,6 +83,7 @@ namespace NWQSim{
       IdxType n_virt = n_spatial_orbitals - n_occ;
       env = MolecularEnvironment(n_spatial_orbitals, 
                                  n_particles,
+                                 xacc_scheme,
                                  energy_constant);
       IdxType coeff_index = 0;
       IdxType otypeval, spinval, orbital_index;
@@ -93,7 +94,7 @@ namespace NWQSim{
         auto args = arglist.front();
         arglist.pop();
         
-        getFermiInfoFromQubit(args.qubit, orbital_index, spinval, otypeval, n_occ, n_virt);
+        getFermiInfoFromQubit(args.qubit, orbital_index, spinval, otypeval, n_occ, n_virt, xacc_scheme);
         spin = spinval ? Down : Up;
         orbitaltype = otypeval ? Virtual : Occupied;
         fermi_operators[args.term_index].push_back(
@@ -101,6 +102,7 @@ namespace NWQSim{
                           orbitaltype, 
                           spin, 
                           args.typeval, 
+                          xacc_scheme,
                           args.coeff));
       };
       transform(env, fermi_operators, pauli_operators, false);
@@ -119,6 +121,7 @@ namespace NWQSim{
     };
     Hamiltonian::Hamiltonian(const std::vector<std::pair<std::string, std::complex<double>>>& input_ops, 
                              IdxType n_particles, 
+                             bool xacc_scheme,
                              Transformer transform) {
 
 
@@ -173,6 +176,7 @@ namespace NWQSim{
       IdxType n_virt = n_spatial_orbitals - n_occ;
       env = MolecularEnvironment(n_spatial_orbitals, 
                                  n_particles,
+                                 xacc_scheme,
                                  energy_constant);
       IdxType coeff_index = 0;
       IdxType otypeval, spinval, orbital_index;
@@ -183,7 +187,7 @@ namespace NWQSim{
         auto args = arglist.front();
         arglist.pop();
         
-        getFermiInfoFromQubit(args.qubit, orbital_index, spinval, otypeval, n_occ, n_virt);
+        getFermiInfoFromQubit(args.qubit, orbital_index, spinval, otypeval, n_occ, n_virt, xacc_scheme);
         spin = spinval ? Down : Up;
         orbitaltype = otypeval ? Virtual : Occupied;
         fermi_operators[args.term_index].push_back(
@@ -191,6 +195,7 @@ namespace NWQSim{
                           orbitaltype, 
                           spin, 
                           args.typeval, 
+                          xacc_scheme,
                           args.coeff));
       };
       transform(env, fermi_operators, pauli_operators, false);

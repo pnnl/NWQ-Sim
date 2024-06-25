@@ -50,11 +50,11 @@ void jwFermionToPauliSinglePair (
   for (size_t i = 0; i < 4; i ++) {
     int i1 = (i & (1 << 0)) >> 0;
     int i2 = (i & (1 << 1)) >> 1;
-    PauliOperator p_op = ap_dag_paulis[i1] * 
-                         aq_paulis[i2];
+    PauliOperator p_op = ap_dag_paulis[i2] * 
+                         aq_paulis[i1];
     std::complex<ValType> p_coeff = fermicoeff * p_op.getCoeff();
     if (hermitian) {
-      p_op.setCoeff(std::complex(0.0,  p_coeff.imag() * 2) * std::complex(0.0, -1.0));
+      p_op.setCoeff(std::complex(0.0,  2 * p_coeff.imag()) * std::complex(0.0, -1.0));
     } else {
       p_op.setCoeff(p_coeff);
     }
@@ -88,19 +88,19 @@ void jwFermionToPauliDoublePair (
   jwFermionToPauliSingle(n_occ, n_virt, as, as_paulis);
   std::complex<ValType> fermicoeff = ap_dagger.getCoeff();
   // std::cout << fermicoeff << std::endl;
-  for (size_t i = 0; i < 16; i ++) {
+  for (int i = 15; i >= 0; i --) {
     int i1 = (i & (1 << 0)) >> 0;
     int i2 = (i & (1 << 1)) >> 1;
-    int i4 = (i & (1 << 2)) >> 2;
-    int i3 = (i & (1 << 3)) >> 3;
+    int i3 = (i & (1 << 2)) >> 2;
+    int i4 = (i & (1 << 3)) >> 3;
 
-    PauliOperator p_op = ap_dag_paulis[i1] * 
-                         aq_dag_paulis[i2] * 
+    PauliOperator p_op = ap_dag_paulis[i1] *
+                         aq_dag_paulis[i2] *
                          ar_paulis[i3] *
                          as_paulis[i4];
     std::complex<ValType> p_coeff = fermicoeff * p_op.getCoeff();
     if (hermitian) {
-      p_op.setCoeff(std::complex(0.0,  p_coeff.imag() * 2) * std::complex(0.0, 1.0));
+      p_op.setCoeff(std::complex(0.0, 2 * p_coeff.imag()) * std::complex(0.0, -1.0));
     } else {
       p_op.setCoeff(p_coeff);
     }

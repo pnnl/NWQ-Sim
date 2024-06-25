@@ -143,12 +143,7 @@ namespace NWQSim
         // std::cout << "Ended loop\n" << std::endl;
         std::vector<std::string> fermi_strings = ansatz->getFermionicOperatorStrings();
 
-        std::vector<std::pair<std::string, ValType>> result;
-        result.reserve(params.size());
-        for (size_t i = 0; i < params.size(); i++) {
-          result.push_back(std::make_pair(fermi_strings[i], params[i]));
-        }
-
+        std::vector<std::pair<std::string, ValType>> result = ansatz->getFermionicOperatorParameters();
         return result;
       }
       virtual void optimize(std::vector<ValType>& parameters, ValType& final_ene) {

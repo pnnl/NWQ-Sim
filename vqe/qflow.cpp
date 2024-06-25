@@ -15,6 +15,7 @@ int show_help() {
   std::cout << "--list-backends, -l   List available backends and exit." << std::endl;
   std::cout << UNDERLINE << "OPTIONAL" << CLOSEUNDERLINE << std::endl;
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
+  std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl;
   return 1;
 }
 
@@ -27,6 +28,7 @@ int parse_args(int argc, char** argv,
                 nlopt::algorithm& algo,
                 NWQSim::VQE::OptimizerSettings& settings,
                 int& n_trials,
+                bool& use_xacc,
                 unsigned& seed) {
   std::string config_file = "";
   std::string algorithm_name = "LN_COBYLA";
@@ -36,6 +38,7 @@ int parse_args(int argc, char** argv,
   n_trials = 1;
   settings.max_evals = 200;
   seed = time(0);
+  use_xacc = false;
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
     if (argname == "-h" || argname == "--help") {
@@ -60,6 +63,9 @@ int parse_args(int argc, char** argv,
     } else 
     if (argname == "--seed") {
       seed = (unsigned)std::atoi(argv[++i]);
+    } else
+    if (argname == "--xacc") {
+      use_xacc = true;
     } else {
       fprintf(stderr, "\033[91mERROR:\033[0m Unrecognized option %s, type -h or --help for a list of configurable parameters\n", argv[i]);
       return show_help();
@@ -130,8 +136,9 @@ int main(int argc, char** argv) {
   NWQSim::VQE::OptimizerSettings settings;
   nlopt::algorithm algo;
   unsigned seed;
+  bool use_xacc;
   int n_trials;
-  if (parse_args(argc, argv, manager, hamil_path, backend, n_part, algo, settings, n_trials, seed)) {
+  if (parse_args(argc, argv, manager, hamil_path, backend, n_part, algo, settings, n_trials, use_xacc, seed)) {
     return 1;
   }
 #ifdef MPI_ENABLED
@@ -143,7 +150,7 @@ int main(int argc, char** argv) {
   }
 #endif
   manager.safe_print("Reading Hamiltonian...\n");
-  std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(hamil_path, n_part);
+  std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(hamil_path, n_part, use_xacc);
   manager.safe_print("Constructing UCCSD Ansatz...\n");
 
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
