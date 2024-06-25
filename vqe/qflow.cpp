@@ -16,6 +16,8 @@ int show_help() {
   std::cout << UNDERLINE << "OPTIONAL" << CLOSEUNDERLINE << std::endl;
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
   std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl;
+  std::cout << "--delta               Magnitude of SPSA perturbation. Defaults to 1e-4" << std::endl;
+  std::cout << "--eta                 Gradient descent step size. Defaults to 1e-3" << std::endl;
   return 1;
 }
 
@@ -29,7 +31,9 @@ int parse_args(int argc, char** argv,
                 NWQSim::VQE::OptimizerSettings& settings,
                 int& n_trials,
                 bool& use_xacc,
-                unsigned& seed) {
+                unsigned& seed,
+                double& delta,
+                double& eta) {
   std::string config_file = "";
   std::string algorithm_name = "LN_COBYLA";
   hamilfile = "";
@@ -38,6 +42,8 @@ int parse_args(int argc, char** argv,
   n_trials = 1;
   settings.max_evals = 200;
   seed = time(0);
+  delta = 1e-4;
+  eta = 1e-3;
   use_xacc = false;
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
@@ -66,6 +72,10 @@ int parse_args(int argc, char** argv,
     } else
     if (argname == "--xacc") {
       use_xacc = true;
+    } else if (argname == "--delta") {
+      delta = std::atof(argv[++i]);
+    } else if (argname == "--eta") {
+      eta = std::atof(argv[++i]);
     } else {
       fprintf(stderr, "\033[91mERROR:\033[0m Unrecognized option %s, type -h or --help for a list of configurable parameters\n", argv[i]);
       return show_help();
@@ -112,6 +122,8 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      unsigned& seed,
                      int num_trials,
                      std::vector<double>& params,
+                     double delta,
+                     double eta,
                      double& fval) {
   std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, callback_function, seed, settings);  
   std::uniform_real_distribution<double> initdist(0, 2 * PI);
@@ -120,7 +132,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
   std::generate(params.begin(), params.end(), 
       [&random_engine, &initdist] () {return initdist(random_engine);});
 
-  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, fval, 1e-4, 1e-3, num_trials);
+  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, fval, delta, eta, num_trials);
   std::ostringstream strstream;
   for (auto& i: param_tuple) {
     strstream << i.first << ": " << i.second / PI << " rad"<<  std::endl;
@@ -135,10 +147,12 @@ int main(int argc, char** argv) {
   NWQSim::IdxType n_part;
   NWQSim::VQE::OptimizerSettings settings;
   nlopt::algorithm algo;
+  double delta;
+  double eta;
   unsigned seed;
   bool use_xacc;
   int n_trials;
-  if (parse_args(argc, argv, manager, hamil_path, backend, n_part, algo, settings, n_trials, use_xacc, seed)) {
+  if (parse_args(argc, argv, manager, hamil_path, backend, n_part, algo, settings, n_trials, use_xacc, seed, delta, eta)) {
     return 1;
   }
 #ifdef MPI_ENABLED
@@ -161,7 +175,7 @@ int main(int argc, char** argv) {
   std::vector<double> params;
   double fval;
   manager.safe_print("Beginning VQE loop...\n");
-  optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, n_trials, params, fval);
+  optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, n_trials, params, delta, eta, fval);
   std::ostringstream paramstream;
   paramstream << params;
   manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters: %s\n", fval, paramstream.str().c_str());

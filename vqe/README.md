@@ -178,3 +178,105 @@ bsub -W 60 -nnodes 4 -P CHP125 -Is /bin/bash
 source ../environment/setup_summit.sh
 jsrun -n 64 -a1 -g0 -c1 -r16 ./vqe/examples/basic_example_mpi
 ```
+
+# QFlow
+In the QFlow algorithm, we repeatedly perform single-direction gradient descent over downfolded Hamiltonians. 
+
+
+To perform a QFlow gradient descent for an effective Hamiltonian, NWQ-VQE provides two interfaces.
+## Command Line
+The `build/vqe/nwq_qflow` binary provides a command line interface, similar to `nwq_vqe`. However, the specific options differ:
+```
+NWQ-VQE QFlow Options
+REQUIRED
+--hamiltonian, -f     Path to the input Hamiltonian file (formatted as a sum of Fermionic operators, see examples)
+--nparticles, -n      Number of electrons in molecule
+--backend, -b         Simulation backend. Defaults to CPU
+--list-backends, -l   List available backends and exit.
+OPTIONAL
+--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)
+--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme.
+--delta               Magnitude of SPSA perturbation. Defaults to 1e-4
+--eta                 Gradient descent step size. Defaults to 1e-3
+```
+
+`--delta` and `--eta` are QFlow-specific parameters which control the gradient descent procedure (TODO: implement adaptive stepsize line search). `--delta` is used to perturb parameter vectors to compute the empirical gradient using SPSA, whereas `--eta` controls the descent stepsize. The algorithm descends the gradient from the (random) initial point until it finds a minimum, then returns.
+
+## Python
+A pybind11-enabled API allows for a direct Python interface. Two functions are provided: `optimize_effective_hamiltonian` and `get_param_count`. The latter returns the number of unique parameters, accounting for symmetry reparameterizations.
+
+A basic example using `qiskit-nature` utilities is shown below (assuming in root `NWQ-Sim` directory):
+```python
+%load_ext autoreload
+%autoreload 2
+import sys
+sys.path.insert(0, './build/vqe')
+import nwqflow
+from qiskit_nature.second_q.drivers import PySCFDriver
+from qiskit_nature.units import DistanceUnit
+from qiskit_nature.second_q.transformers import ActiveSpaceTransformer
+from qiskit_nature.second_q.mappers import JordanWignerMapper
+import numpy as np
+
+# Example Hamiltonian from PySCF
+driver = PySCFDriver(
+    atom='Li 0.0, 0.0, 0.0; H 0.0, 0.0 1.2',
+    basis='sto-3g',
+    charge=0,
+    spin=0,
+    unit=DistanceUnit.ANGSTROM
+)
+problem = driver.run()
+problem = ActiveSpaceTransformer(problem.num_particles, 5, range(5)).transform(problem)
+
+# Convert the PySCF format to XACC (e.g. "+_3 +_2 -_0 -_1" -> 3^ 2^ 0 1)
+oplist = []
+for op, coeff in problem.second_q_ops()[0].items():
+    new_op = []
+    for o in op.split():
+        ostr = o[2:]
+        if o[0:2] == '+_':
+            ostr+="^"
+        new_op.append(ostr)
+    oplist.append((' '.join(new_op), coeff))
+
+n_params = nwqflow.get_param_count(num_particles = 4, num_spatial_orbitals=5)  # number of optimization parameters
+initial_point = np.random.rand(n_params)  # initial parameter point
+# Perform single-direction gradient descent
+result = nwqflow.optimize_effective_hamiltonian(operators=oplist,
+                                                num_particles=4,
+                                                x0=initial_point,
+                                                backend="CPU",
+                                                xacc=True)
+print(result)
+```
+
+
+Documentation for `optimize_effective_hamiltonian` is shown below:
+```python
+    optimize_effective_hamiltonian(
+      operators: list[tuple[str, complex]], 
+      num_particles: int, 
+      x0: list[float], 
+      backend: str = 'CPU',
+      xacc: bool = False, 
+      seed: int = -1, 
+      delta: float = 0.001, 
+      eta: float = 0.001,
+      num_trotter: int = 1,
+      tnum_samples: int = 1) -> list[tuple[str, float]]
+
+    Perform single-direction gradient descentreturn the locally-optimal parameters
+            Arguments:
+                    operators (Iterable[(str, complex)]): List of xacc-formatted operator strings with coefficients
+                    num_particles (int): Number of electrons (assumed to be equal number of alpha/beta)
+                    x0 (Iterable[float]): Initial parameter values
+                    backend (str): NWQ-Sim backend for simulation. Defaults to "CPU"
+                    xacc (bool): Use XACC operator indexing, otherwise use DUCC. Defaults to False
+                    seed (int): Random seed for optimizer and SPSA perturbation. Defaults to time(NULL)
+                    delta (float): Magnitude of SPSA perturbation. Defaults to 1e-3
+                    eta (float): Gradient descent stepsize. Defaults to 1e-3
+                    num_trotter (int): Number of Trotter steps (linearly increases number of parameters). Defaults to 1
+                    num_samples (int): Number of gradient samples for SPSA average. Defaults to 1
+
+```
