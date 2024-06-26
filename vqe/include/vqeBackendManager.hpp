@@ -55,7 +55,7 @@ public:
 #ifdef CUDA_MPI_ENABLED
         else if (backend == "NVGPU_MPI")
         {
-            return std::make_shared<NWQSim::VQE::SV_CUDA_VQE>(a, h, optimizer_algorithm, _callback, seed, opt_settings);
+            return std::make_shared<NWQSim::VQE::SV_CUDA_MPI_VQE>(a, h, optimizer_algorithm, _callback, seed, opt_settings);
         }
 #endif
         else if (backend == "LIST")
