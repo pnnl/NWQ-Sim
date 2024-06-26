@@ -22,8 +22,9 @@ namespace NWQSim
                    nlopt::algorithm optimizer_algorithm,
                    Callback _callback,
                    IdxType seed = 0,
-                   OptimizerSettings opt_settings = OptimizerSettings()): 
-                                      SV_CUDA_MPI(a->num_qubits()),
+                   OptimizerSettings opt_settings = OptimizerSettings(),
+                   MPI_Comm _comm = MPI_COMM_WORLD): 
+                                      SV_CUDA_MPI(a->num_qubits(), _comm),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
         
         // Pauli term data sizes

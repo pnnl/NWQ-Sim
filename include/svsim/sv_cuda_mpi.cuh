@@ -41,7 +41,7 @@ namespace NWQSim
     class SV_CUDA_MPI : public QuantumState
     {
     public:
-        SV_CUDA_MPI(IdxType _n_qubits) : QuantumState(_n_qubits)
+        SV_CUDA_MPI(IdxType _n_qubits, MPI_Comm _comm = MPI_COMM_WORLD) : QuantumState(_n_qubits)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -51,7 +51,7 @@ namespace NWQSim
 
             // set GPUs and communication
 
-            comm_global = MPI_COMM_WORLD;
+            comm_global = _comm;
             nvshmemx_init_attr_t attr;
             MPI_Comm comm = comm_global;
             attr.mpi_comm = &comm;
@@ -190,7 +190,7 @@ namespace NWQSim
             cudaSafeCall(cudaDeviceSynchronize());
 
             if (Config::PRINT_SIM_TRACE)
-                MPI_Barrier(MPI_COMM_WORLD);
+                MPI_Barrier(comm_global);
             sim_timer.start_timer();
 
             NVSHMEM_CHECK(nvshmemx_collective_launch((const void *)simulation_kernel_cuda_mpi, gridDim,
@@ -216,9 +216,9 @@ namespace NWQSim
 
             if (Config::PRINT_SIM_TRACE)
             {
-                MPI_Barrier(MPI_COMM_WORLD);
+                MPI_Barrier(comm_global);
                 MPI_Gather(&sim_time, 1, MPI_DOUBLE,
-                           &sim_times[i_proc], 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+                           &sim_times[i_proc], 1, MPI_DOUBLE, 0, comm_global);
                 if (i_proc == 0)
                 {
                     double avg_sim_time = 0;
@@ -273,7 +273,7 @@ namespace NWQSim
             SAFE_FREE_GPU(result_gpu);
 
             double final_result;
-            MPI_Allreduce(&result, &final_result, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(&result, &final_result, 1, MPI_DOUBLE, MPI_SUM, comm_global);
 
             return final_result;
         }
@@ -300,7 +300,7 @@ namespace NWQSim
             SAFE_FREE_GPU(result_gpu);
 
             double final_result;
-            MPI_Allreduce(&result, &final_result, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(&result, &final_result, 1, MPI_DOUBLE, MPI_SUM, comm_global);
 
             return final_result;
         }
@@ -347,12 +347,12 @@ namespace NWQSim
             if (i_proc == 0)
                 SAFE_ALOC_HOST_CUDA(sv_diag_imag, dim * sizeof(ValType));
 
-            MPI_Barrier(MPI_COMM_WORLD);
+            MPI_Barrier(comm_global);
             MPI_Gather(sv_real_cpu, m_gpu, MPI_DOUBLE,
-                       &sv_diag_real[i_proc * m_gpu], m_gpu, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+                       &sv_diag_real[i_proc * m_gpu], m_gpu, MPI_DOUBLE, 0, comm_global);
             MPI_Gather(sv_imag_cpu, m_gpu, MPI_DOUBLE,
-                       &sv_diag_imag[i_proc * m_gpu], m_gpu, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-            MPI_Barrier(MPI_COMM_WORLD);
+                       &sv_diag_imag[i_proc * m_gpu], m_gpu, MPI_DOUBLE, 0, comm_global);
+            MPI_Barrier(comm_global);
 
             if (i_proc == 0)
             {
