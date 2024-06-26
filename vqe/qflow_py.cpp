@@ -9,6 +9,24 @@
 #include <cmath>
 
 namespace py = pybind11;
+#ifdef MPI_ENABLED
+#include <mpi4py/mpi4py.h>
+
+MPI_Comm get_mpi_comm(py::object py_comm) { 
+  PyObject* ptr = py_comm.ptr();
+  std::cout << "Pointer2 " << ptr << std::endl; 
+  std::cout << "Obj " << PyMPIInfo_Get(ptr) << std::endl; 
+
+  MPI_Comm* comm_ptr = PyMPIComm_Get(ptr);
+
+  if (!comm_ptr)
+    throw py::error_already_set();
+
+  std::cout << "Pointer " << comm_ptr << std::endl;
+  std::cout << "Val " << *comm_ptr << std::endl;
+  return *comm_ptr;
+}
+#endif
 
 // Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
 void null_callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fval, NWQSim::IdxType iteration) {
@@ -31,12 +49,28 @@ std::vector<std::pair<std::string, double> > optimize_ansatz(const VQEBackendMan
                      double eta,
                      double delta,
                      std::vector<double>& params,
-                     double& fval) {
+                     double& fval
+#ifdef MPI_ENABLED
+                     ,MPI_Comm comm) {
+#else
+){
+#endif
   // py::print("Started function");
-  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, null_callback_function, seed, settings);  
+  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, 
+                                                                           ansatz, 
+                                                                           hamil, 
+                                                                           algo, 
+                                                                           null_callback_function, 
+                                                                           seed, 
+                                                                           settings
+#ifdef MPI_ENABLED
+                                                                           ,comm);  
+#else
+);
+#endif
   std::uniform_real_distribution<double> initdist(0, 2 * PI);
   // py::print("Calling optimization routine");
-
+  std::cout << "Starting optimization" << std::endl;
   std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, fval, eta, delta, n_evals);
   // py::print("Exited optimization routine");
   return param_tuple;
@@ -54,9 +88,16 @@ optimize_effective_hamiltonian(
   double delta = 1e-4,
   double eta = 1e-4,
   int n_trotter = 1,
-  int n_samples = 1) {
+  int n_samples = 1,
+  py::object py_comm = py::cast<py::none>(Py_None)) {
+  std::cout << "Getting MPI Comm" << std::endl;
+  #ifdef MPI_ENABLED
+  MPI_Comm comm = get_mpi_comm(py_comm);
+  #endif
   seed = seed;
+  std::cout << "Building Hamiltonian" << std::endl;
   std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(fermionic_operators, n_particles, use_xacc, NWQSim::VQE::getJordanWignerTransform);
+  std::cout << "Building Ansatz" << std::endl;
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
                                                     hamil->getEnv(),
                                                     NWQSim::VQE::getJordanWignerTransform,
@@ -74,7 +115,23 @@ optimize_effective_hamiltonian(
 
   NWQSim::VQE::OptimizerSettings settings;
   nlopt::algorithm algo = nlopt::algorithm::LN_COBYLA; // default value for ctor, not actually used
-  std::vector<std::pair<std::string, double> > result = optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, n_samples, seed, eta, delta, local_params, fval);
+  std::vector<std::pair<std::string, double> > result = optimize_ansatz(manager, 
+                                                                        backend, 
+                                                                        hamil, 
+                                                                        ansatz, 
+                                                                        settings, 
+                                                                        algo, 
+                                                                        n_samples, 
+                                                                        seed, 
+                                                                        eta, 
+                                                                        delta, 
+                                                                        local_params, 
+                                                                        fval
+#ifdef MPI_ENABLED
+                                                                        ,comm);
+#else
+);
+#endif
     // throw std::runtime_error("Done\n");
   // std::vector<std::pair<std::string, double> > result = {{"test", 0.0}};
   return result;
@@ -106,7 +163,8 @@ PYBIND11_MODULE(nwqflow, m) {
     py::arg("delta") = 1e-3, 
     py::arg("eta") = 1e-3, 
     py::arg("num_trotter") = 1, 
-    py::arg("tnum_samples") = 1);
+    py::arg("tnum_samples") = 1,
+    py::arg("comm") = py::cast<py::none>(Py_None));
 
 
     m.def("get_param_count",

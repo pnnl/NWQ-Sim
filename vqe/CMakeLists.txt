@@ -6,10 +6,49 @@ add_executable(nwq_qflow "qflow.cpp")
 find_package(Python3 COMPONENTS Interpreter Development)
 # add_library(nwqflow "qflow_py.cpp")
 set(PYTHON_EXECUTABLE ${Python3_EXECUTABLE})
-set(PYHEADER ${Python3_EXECUTABLE})
+set(Python_EXECUTABLE ${Python3_EXECUTABLE})
+message("${Python3_EXECUTABLE}")
+include(${PROJECT_SOURCE_DIR}/vqe/FindPythonModule.cmake)
+find_python_module(mpi4py REQUIRED)
+
+# we also need the include directories for mpi4py
+if(mpi4py_FOUND)
+  execute_process(
+    COMMAND
+      "${Python_EXECUTABLE}" "-c"
+      "import mpi4py as m; print(m.__version__); print(m.get_include());"
+    RESULT_VARIABLE
+      _mpi4py_SEARCH_SUCCESS
+    OUTPUT_VARIABLE
+      _mpi4py_VALUES
+    ERROR_VARIABLE
+      _mpi4py_ERROR_VALUE
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+
+  # Convert the process output into a list
+  string(REGEX REPLACE ";" "\\\\;" _mpi4py_VALUES ${_mpi4py_VALUES})
+  string(REGEX REPLACE "\n" ";" _mpi4py_VALUES ${_mpi4py_VALUES})
+  list(GET _mpi4py_VALUES 0 mpi4py_VERSION)
+  list(GET _mpi4py_VALUES 1 mpi4py_INCLUDE_DIRS)
+
+  # Make sure all directory separators are '/'
+  string(REGEX REPLACE "\\\\" "/" mpi4py_INCLUDE_DIRS ${mpi4py_INCLUDE_DIRS})
+
+  # Get the major and minor version numbers
+  string(REGEX REPLACE "\\." ";" _mpi4py_VERSION_LIST ${mpi4py_VERSION})
+  list(GET _mpi4py_VERSION_LIST 0 mpi4py_VERSION_MAJOR)
+  list(GET _mpi4py_VERSION_LIST 1 mpi4py_VERSION_MINOR)
+  list(GET _mpi4py_VERSION_LIST 2 mpi4py_VERSION_PATCH)
+  string(REGEX MATCH "[0-9]*" mpi4py_VERSION_PATCH ${mpi4py_VERSION_PATCH})
+  math(EXPR mpi4py_VERSION_DECIMAL
+      "(${mpi4py_VERSION_MAJOR} * 10000) + (${mpi4py_VERSION_MINOR} * 100) + ${mpi4py_VERSION_PATCH}")
+endif()
+
 add_subdirectory(pybind11)
 pybind11_add_module(nwqflow "qflow_py.cpp")
-
+message("${Python3_INCLUDE_DIRS}")
+target_include_directories(nwqflow BEFORE PRIVATE ${mpi4py_INCLUDE_DIRS})
 add_library(vqe SHARED ${SOURCEFILES})
 
 target_compile_features(nwq_vqe PRIVATE cxx_std_17)

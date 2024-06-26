@@ -21,14 +21,18 @@
 class VQEBackendManager: public BackendManager
 {
 public:
-    
     static std::shared_ptr<NWQSim::VQE::VQEState> create_vqe_solver(std::string backend, 
                                                                     std::shared_ptr<NWQSim::VQE::Ansatz> a, 
                                                                     std::shared_ptr<NWQSim::VQE::Hamiltonian> h, 
                                                                     nlopt::algorithm optimizer_algorithm,
                                                                     NWQSim::VQE::Callback _callback,
                                                                     NWQSim::IdxType seed = 0,
-                                                                    NWQSim::VQE::OptimizerSettings opt_settings = NWQSim::VQE::OptimizerSettings()) {
+                                                                    NWQSim::VQE::OptimizerSettings opt_settings = NWQSim::VQE::OptimizerSettings()
+#ifdef MPI_ENABLED
+                                                                    ,MPI_Comm comm = MPI_COMM_WORLD) {
+#else
+    ){
+#endif
         // Convert to uppercase
         std::transform(backend.begin(), backend.end(), backend.begin(),
                        [](unsigned char c)
@@ -41,7 +45,7 @@ public:
 #ifdef MPI_ENABLED
         else if (backend == "MPI")
         {
-            return std::make_shared<NWQSim::VQE::SV_MPI_VQE>(a, h, optimizer_algorithm, _callback, seed, opt_settings);
+            return std::make_shared<NWQSim::VQE::SV_MPI_VQE>(a, h, optimizer_algorithm, _callback, seed, opt_settings, comm);
         }
 #endif
 
@@ -55,7 +59,7 @@ public:
 #ifdef CUDA_MPI_ENABLED
         else if (backend == "NVGPU_MPI")
         {
-            return std::make_shared<NWQSim::VQE::SV_CUDA_VQE>(a, h, optimizer_algorithm, _callback, seed, opt_settings);
+            return std::make_shared<NWQSim::VQE::SV_CUDA_VQE>(a, h, optimizer_algorithm, _callback, seed, opt_settings, comm);
         }
 #endif
         else if (backend == "LIST")
