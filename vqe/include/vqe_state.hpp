@@ -73,7 +73,7 @@ namespace NWQSim
               }
             }
           }
-          expvals.resize(hamil->num_ops());
+          hamil->get_pauli_coeffs(coeffs);
                                           
           // Check if the chosen algorithm requires derivatives
           compute_gradient = std::string(optimizer.get_algorithm_name()).find("no-derivative") == std::string::npos;
@@ -110,16 +110,11 @@ namespace NWQSim
         std::vector<ValType> minima_params(x0);
         ValType ene_prev = MAXFLOAT;
         ValType ene_curr = energy(params);
+
         // gradient
         // get the single-direction starting vector
         g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, params, gradient, delta, n_grad_est);
         IdxType step = 0;
-        // for (auto& i: gradient) {
-          // std::cout << i <<  " ";
-        // }
-        // std::cout << std::endl;
-        // auto s1 = std::chrono::high_resolution_clock::now();
-        // follow the starting vector until we hit a global minimum
         do {
           for (size_t i = 0; i < params.size(); i++) {
             params[i] -= eta * gradient[i];
@@ -163,19 +158,7 @@ namespace NWQSim
         // ExpectationMap emap;
         auto& pauli_operators = hamil->getPauliOperators();
         IdxType index = 0;
-        ValType expectation = hamil->getEnv().constant;
-        for (auto& pauli_list: pauli_operators) {
-          for (const PauliOperator& pauli: pauli_list) {
-            // std::cout << pauli << " " << expvals[index] << " " << expectation << std::endl;
-            expectation += expvals[index++] * pauli.getCoeff().real();
-            
-            // emap[pauli] = expvals[index++];
-            // if (index >= xmasks.size())
-            //   break;
-          }
-            // if (index >= xmasks.size())
-            //   break;
-        }
+        ValType expectation = hamil->getEnv().constant + expvals.front();
         // ValType ene = 0.0;
         // ValType ene = hamil.expectation(emap);
         return expectation;
@@ -194,6 +177,7 @@ namespace NWQSim
         std::vector<IdxType> xmasks;
         std::vector<IdxType> zmasks;
         std::vector<IdxType> x_indices;
+        std::vector<ValType> coeffs;
         std::vector<ValType> expvals;
 
       

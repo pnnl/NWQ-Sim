@@ -38,6 +38,16 @@ namespace NWQSim {
             n_ops += i.size();
           }
         }
+        void
+        get_pauli_coeffs(std::vector<double> & result) const {
+          // result.resize(pauli_operators.size;
+          result.reserve(pauli_operators.size());
+          for (auto& pauli_list: pauli_operators) {
+            for (auto& pauli: pauli_list) {
+              result.push_back(pauli.getCoeff().real());
+            }
+          }
+        };
         ValType expectation(const ExpectationMap& expectations) const {
           ValType expect = env.constant;
           for (auto& pauli_list: pauli_operators) {

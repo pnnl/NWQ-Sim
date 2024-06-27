@@ -25,16 +25,19 @@ namespace NWQSim
                    OptimizerSettings opt_settings = OptimizerSettings()): 
                                       SV_CPU(a->num_qubits()),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
+        expvals.reserve(1);
         obs.xmasks = xmasks.data();
         obs.zmasks = zmasks.data();
         obs.numterms = xmasks.size();
         obs.exp_output = expvals.data();
+        obs.coeffs = coeffs.data();
         obs.x_indices = x_indices.data();
         obs.x_index_sizes = x_index_sizes.data();
         ansatz->EXPECT(&obs);
       };
       virtual void call_simulator() override {        
         reset_state();
+        std::fill(expvals.begin(), expvals.end(), 0);
         sim(ansatz);
       };
 
@@ -74,7 +77,7 @@ namespace NWQSim
               }
               expectation += local_exp;
             }
-            return expectation;
+            return expectation * op.getCoeff().real();
           }
           ValType sign = (y_phase / 2) % 2 ? -1: 1;
           ValType phase = y_phase % 2;

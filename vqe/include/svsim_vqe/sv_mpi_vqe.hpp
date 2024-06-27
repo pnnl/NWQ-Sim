@@ -29,6 +29,8 @@ namespace NWQSim
         obs.xmasks = xmasks.data();
         obs.zmasks = zmasks.data();
         obs.numterms = xmasks.size();
+        obs.coeffs = coeffs.data();
+        expvals.resize(1);
         obs.exp_output = expvals.data();
         obs.x_indices = x_indices.data();
         obs.x_index_sizes = x_index_sizes.data();
@@ -56,6 +58,7 @@ namespace NWQSim
           ansatz->setParams(xparams);
         }
         BARR_MPI;
+        std::fill(expvals.begin(), expvals.end(), 0);
         reset_state();
         sim(ansatz);
         if (i_proc != 0) {

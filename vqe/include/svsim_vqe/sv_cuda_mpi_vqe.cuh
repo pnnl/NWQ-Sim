@@ -77,6 +77,7 @@ namespace NWQSim
           ansatz->setParams(xparams);
         }
         MPI_Barrier(MPI_COMM_WORLD);
+        cudaSafeCall(cudaMemset(obs.exp_output, 0, expvals.size() * sizeof(ValType)));
         reset_state();
         sim(ansatz);
         cudaDeviceSynchronize();

@@ -17,12 +17,13 @@ namespace NWQSim
     private:
         // number of qubits
         IdxType n_qubits;
+        IdxType n_expect;
 
     public:
         // user input gate sequence
         std::shared_ptr<std::vector<Gate>> gates;
 
-        Circuit(IdxType _n_qubits) : n_qubits(_n_qubits)
+        Circuit(IdxType _n_qubits) : n_qubits(_n_qubits), n_expect(0)
         {
             // Implementation of constructor
             gates = std::make_shared<std::vector<Gate>>();
@@ -37,6 +38,9 @@ namespace NWQSim
         std::vector<Gate> get_gates()
         {
             return *gates;
+        }
+        IdxType num_expect() {
+            return n_expect;
         }
         void set_gates(std::vector<Gate> new_gates)
         {
@@ -200,6 +204,7 @@ namespace NWQSim
             // Compute the expectation value of a list of observables (data stored in the ObservableList struct)
             Gate G(OP::EXPECT, 0, -1, 1, 0, 0, 0, 0, obsptr);
             gates->push_back(G);
+            n_expect ++;
         }
         void SDG(IdxType qubit)
         {
