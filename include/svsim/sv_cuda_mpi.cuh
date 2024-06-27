@@ -1330,7 +1330,7 @@ namespace NWQSim
                 EXPECT_C4V1_GATE(gm_real, gm_imag, p, q, r, s, xmask | zmask);
                 
                 BARR_NVSHMEM;
-                EXPECT_REDUCE(output, output_index, reduce_dim);
+                EXPECT_REDUCE(output, output_index, reduce_dim, coeff);
                 BARR_NVSHMEM;
                 if (q2 >= lg2_m_gpu) {
                     SWAP_GATE(q2t, q2);
@@ -1348,7 +1348,7 @@ namespace NWQSim
                 EXPECT_C0_GATE(zmask);
                 reduce_dim = ((dim) >> (gpu_scale));
                 BARR_NVSHMEM;
-                EXPECT_REDUCE(output, output_index, reduce_dim);
+                EXPECT_REDUCE(output, output_index, reduce_dim, coeff);
                 BARR_NVSHMEM;
             } else {
                 printf("ERROR\n");
@@ -1889,7 +1889,7 @@ namespace NWQSim
                                 o.xmasks[obs_ind],
                                 o.zmasks[obs_ind],
                                 o.exp_output + n_expect,
-                                o.coeffs[obs_ind]
+                                o.coeffs[obs_ind],
                                 obs_ind);
                     xinds += o.x_index_sizes[obs_ind];
                 }
