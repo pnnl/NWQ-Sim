@@ -17,6 +17,7 @@ namespace NWQSim
         IdxType* xmasks;
         IdxType* zmasks;
         ValType* exp_output;
+        ValType* coeffs;
         IdxType numterms;
     };
     // Base class

@@ -1199,7 +1199,7 @@ namespace NWQSim
         }
 
         __device__ inline
-        void EXPECT_REDUCE(ValType* output, IdxType index, IdxType reduce_dim) {
+        void EXPECT_REDUCE(ValType* output, IdxType index, IdxType reduce_dim, ValType coeff) {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             // Parallel reduction
@@ -1211,7 +1211,7 @@ namespace NWQSim
                 grid.sync();
             }
             if (tid == 0) {
-                output[index] = m_real[0];
+                *output += m_real[0] * coeff;
             }
         }
 
@@ -1222,6 +1222,7 @@ namespace NWQSim
                          IdxType xmask, 
                          IdxType zmask, 
                          ValType* output,
+                         ValType coeff,
                          IdxType output_index)  {
                          
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -1254,7 +1255,7 @@ namespace NWQSim
                 EXPECT_C2V1_GATE(gm_real, gm_imag, q0t, q1, xmask | zmask);
                 
                 BARR_NVSHMEM;
-                EXPECT_REDUCE(output, output_index, reduce_dim);
+                EXPECT_REDUCE(output, output_index, reduce_dim, coeff);
                 BARR_NVSHMEM;
                 if (q0 >= lg2_m_gpu) {
                     SWAP_GATE(0, q0);
@@ -1329,7 +1330,7 @@ namespace NWQSim
                 EXPECT_C4V1_GATE(gm_real, gm_imag, p, q, r, s, xmask | zmask);
                 
                 BARR_NVSHMEM;
-                EXPECT_REDUCE(output, output_index, reduce_dim);
+                EXPECT_REDUCE(output, output_index, reduce_dim, coeff);
                 BARR_NVSHMEM;
                 if (q2 >= lg2_m_gpu) {
                     SWAP_GATE(q2t, q2);
@@ -1347,7 +1348,7 @@ namespace NWQSim
                 EXPECT_C0_GATE(zmask);
                 reduce_dim = ((dim) >> (gpu_scale));
                 BARR_NVSHMEM;
-                EXPECT_REDUCE(output, output_index, reduce_dim);
+                EXPECT_REDUCE(output, output_index, reduce_dim, coeff);
                 BARR_NVSHMEM;
             } else {
                 printf("ERROR\n");
@@ -1818,6 +1819,7 @@ namespace NWQSim
         grid_group grid = this_grid();
         const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
         bool already_sync = false;
+        IdxType n_expect = 0;
         for (IdxType t = 0; t < n_gates; t++)
         {
             OP op_name = (sv_gpu->gates_gpu)[t].op_name;
@@ -1878,7 +1880,7 @@ namespace NWQSim
             }
             else if (op_name == OP::EXPECT)
             {
-
+                
                 ObservableList o = *(ObservableList*)((sv_gpu->gates_gpu)[t].data);
                 IdxType* xinds = o.x_indices;
                 for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
@@ -1886,10 +1888,12 @@ namespace NWQSim
                                 o.x_index_sizes[obs_ind],
                                 o.xmasks[obs_ind],
                                 o.zmasks[obs_ind],
-                                o.exp_output,
+                                o.exp_output + n_expect,
+                                o.coeffs[obs_ind],
                                 obs_ind);
                     xinds += o.x_index_sizes[obs_ind];
                 }
+                n_expect ++;
                 BARR_NVSHMEM;
             }
             // only need sync when operating on remote qubits

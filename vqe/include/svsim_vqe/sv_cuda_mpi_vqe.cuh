@@ -31,14 +31,15 @@ namespace NWQSim
         obs.numterms = nterms;
         IdxType isize = nterms * sizeof(IdxType);
         IdxType vsize = nterms * sizeof(ValType);
-
+        expvals.resize(1);
         // Allocate space on the GPU for the Pauli expectation information
         //  For now, duplicate info on each GPU (i.e. don't use nvshmem)
         SAFE_ALOC_GPU(obs.xmasks, isize);
         SAFE_ALOC_GPU(obs.zmasks, isize);
         SAFE_ALOC_GPU(obs.x_index_sizes, isize);
         SAFE_ALOC_GPU(obs.x_indices, x_indices.size() * sizeof(IdxType));
-        SAFE_ALOC_GPU(obs.exp_output, vsize);
+        SAFE_ALOC_GPU(obs.exp_output, expvals.size()* sizeof(ValType));
+        SAFE_ALOC_GPU(obs.coeffs, vsize);
 
         // Copy Pauli masks and indices from host to device
         cudaSafeCall(cudaMemcpy(obs.xmasks, xmasks.data(), isize,
@@ -48,6 +49,8 @@ namespace NWQSim
         cudaSafeCall(cudaMemcpy(obs.x_index_sizes, x_index_sizes.data(), isize,
                                     cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(obs.x_indices, x_indices.data(), x_indices.size() * sizeof(IdxType),
+                                    cudaMemcpyHostToDevice));
+        cudaSafeCall(cudaMemcpy(obs.coeffs, coeffs.data(), coeffs.size() * sizeof(ValType),
                                     cudaMemcpyHostToDevice));
         ObservableList* obs_device;
         SAFE_ALOC_GPU(obs_device, sizeof(ObservableList));
@@ -77,6 +80,7 @@ namespace NWQSim
           ansatz->setParams(xparams);
         }
         MPI_Barrier(MPI_COMM_WORLD);
+        cudaSafeCall(cudaMemset(obs.exp_output, 0, expvals.size() * sizeof(ValType)));
         reset_state();
         sim(ansatz);
         cudaDeviceSynchronize();

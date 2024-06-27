@@ -293,6 +293,7 @@ namespace NWQSim
 
             auto start = std::chrono::steady_clock::now();
             int n_gates = gates.size();
+            int n_expect = 0;
             for (int i = 0; i < n_gates; i++)
             {
 
@@ -348,10 +349,12 @@ namespace NWQSim
                                     o.x_index_sizes[obs_ind],
                                     o.xmasks[obs_ind],
                                     o.zmasks[obs_ind],
-                                    o.exp_output,
+                                    o.exp_output + n_expect,
+                                    o.coeffs[obs_ind],
                                     obs_ind);
                         xinds += o.x_index_sizes[obs_ind];
                     }
+                    n_expect++;
                 }
                 else
                 {
@@ -1081,6 +1084,7 @@ namespace NWQSim
                                  IdxType xmask, 
                                  IdxType zmask, 
                                  ValType* output,
+                                 ValType coeff,
                                  IdxType output_index)  {
             ValType result = 0.0;
             BARR_MPI;
@@ -1189,7 +1193,7 @@ namespace NWQSim
             MPI_Reduce(&result, &expect, 1,  MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
             BARR_MPI;
             if (i_proc == 0) {
-                output[output_index] = expect;
+                *output += coeff * expect;
             }
            
         }

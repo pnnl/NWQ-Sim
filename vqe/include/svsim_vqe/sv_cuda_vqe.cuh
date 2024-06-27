@@ -30,11 +30,13 @@ namespace NWQSim
         obs.numterms = nterms;
         IdxType isize = nterms * sizeof(IdxType);
         IdxType vsize = nterms * sizeof(ValType);
+        expvals.resize(1);
         SAFE_ALOC_GPU(obs.xmasks, isize);
         SAFE_ALOC_GPU(obs.zmasks, isize);
         SAFE_ALOC_GPU(obs.x_index_sizes, isize);
         SAFE_ALOC_GPU(obs.x_indices, x_indices.size() * sizeof(IdxType));
-        SAFE_ALOC_GPU(obs.exp_output, vsize);
+        SAFE_ALOC_GPU(obs.exp_output, expvals.size()* sizeof(ValType));
+        SAFE_ALOC_GPU(obs.coeffs, vsize);
         cudaSafeCall(cudaMemcpy(obs.xmasks, xmasks.data(), isize,
                                     cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(obs.zmasks, zmasks.data(), isize,
@@ -42,6 +44,8 @@ namespace NWQSim
         cudaSafeCall(cudaMemcpy(obs.x_index_sizes, x_index_sizes.data(), isize,
                                     cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(obs.x_indices, x_indices.data(), x_indices.size() * sizeof(IdxType),
+                                    cudaMemcpyHostToDevice));
+        cudaSafeCall(cudaMemcpy(obs.coeffs, coeffs.data(), coeffs.size() * sizeof(ValType),
                                     cudaMemcpyHostToDevice));
         ObservableList* obs_device;
         SAFE_ALOC_GPU(obs_device, sizeof(ObservableList));
@@ -56,11 +60,13 @@ namespace NWQSim
             SAFE_FREE_GPU(obs.zmasks);
             SAFE_FREE_GPU(obs.x_index_sizes);
             SAFE_FREE_GPU(obs.x_indices);
+            SAFE_FREE_GPU(obs.coeffs);
             SAFE_FREE_GPU(obs.exp_output);
             SAFE_FREE_GPU(ansatz->gates->back().data);
         }
       virtual void call_simulator() override {        
         reset_state();
+        cudaSafeCall(cudaMemset(obs.exp_output, 0, expvals.size() * sizeof(ValType)));
         sim(ansatz);
         cudaDeviceSynchronize();
         cudaSafeCall(cudaMemcpy(expvals.data(), obs.exp_output, expvals.size() * sizeof(ValType),

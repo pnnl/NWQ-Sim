@@ -743,7 +743,7 @@ namespace NWQSim
         }
         
         
-        __device__ __inline__ void EXP_REDUCE_GATE(const IdxType output_index, ValType* output, IdxType reduce_dim)
+        __device__ __inline__ void EXP_REDUCE_GATE(const IdxType output_index, ValType* output, IdxType reduce_dim, ValType coeff)
         {
             grid_group grid = this_grid();
             
@@ -761,8 +761,9 @@ namespace NWQSim
 
             if (tid == 0)
             {
-                ValType expectation = m_real[0];
-                LOCAL_P_CUDA(output, output_index, expectation);
+                ValType expectation = coeff * m_real[0];
+                ValType prev_exp = LOCAL_G_CUDA(output, 0);
+                LOCAL_P_CUDA(output, 0, prev_exp + expectation);
             }
 
             BARR_CUDA;
@@ -773,6 +774,7 @@ namespace NWQSim
                                  IdxType xmask, 
                                  IdxType zmask, 
                                  ValType* output,
+                                 ValType coeff,
                                  IdxType output_index)  {
             grid_group grid = this_grid();
             const IdxType n_size = (IdxType)1 << (n_qubits);
@@ -807,7 +809,7 @@ namespace NWQSim
             }
 
             BARR_CUDA;
-            EXP_REDUCE_GATE(output_index, output, reduce_dim);
+            EXP_REDUCE_GATE(output_index, output, reduce_dim, coeff);
             BARR_CUDA;
         }
 
@@ -934,7 +936,7 @@ namespace NWQSim
     {
         IdxType cur_index = 0;
         grid_group grid = this_grid();
-
+        IdxType n_expect = 0;
         for (IdxType t = 0; t < n_gates; t++)
         {
             auto op_name = (sv_gpu->gates_gpu)[t].op_name;
@@ -972,16 +974,19 @@ namespace NWQSim
 
                 ObservableList o = *(ObservableList*)((sv_gpu->gates_gpu)[t].data);
                 IdxType* xinds = o.x_indices;
+                grid.sync();
                 for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
                     sv_gpu->Expect_GATE(xinds, 
                                 o.x_index_sizes[obs_ind],
                                 o.xmasks[obs_ind],
                                 o.zmasks[obs_ind],
-                                o.exp_output,
+                                o.exp_output + n_expect,
+                                o.coeffs[obs_ind],
                                 obs_ind);
                     xinds += o.x_index_sizes[obs_ind];
                     grid.sync();
                 }
+                n_expect ++;
             }
             grid.sync();
         }
