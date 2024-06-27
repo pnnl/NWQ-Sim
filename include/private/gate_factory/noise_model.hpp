@@ -60,7 +60,10 @@ namespace NWQSim
                           << std::imag(mat[x * dim + y])
                           << "j)   ";
             }
-            std::cout << std::endl;
+            if (Config::PRINT_SIM_TRACE)
+            {
+                std::cout << std::endl;
+            }
         }
     }
 

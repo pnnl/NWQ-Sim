@@ -35,7 +35,7 @@ namespace NWQSim
             {
                 auto it = gateMatrixFunctions.find(g.op_name);
 
-                SVGate sv_gate(g.op_name, g.qubit, g.ctrl);
+                SVGate sv_gate(g.op_name, g.qubit, g.ctrl, g.data);
 
                 if (it != gateMatrixFunctions.end())
                 {
@@ -45,7 +45,7 @@ namespace NWQSim
                 {
                     sv_gate.qubit = g.repetition;
                 }
-                else if (!(g.op_name == OP::M || g.op_name == OP::RESET))
+                else if (!(g.op_name == OP::M || g.op_name == OP::RESET || g.op_name == OP::EXPECT))
                 {
                     std::cout << g.op_name << std::endl;
                     throw std::runtime_error("Invalid gate operation");

@@ -39,7 +39,7 @@ cd build
 ```
 3. Configure the project using CMake and build
 ```bash
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j4
 ```
 
@@ -72,7 +72,7 @@ cd build
 ```
 3. Configure the project using CMake
 ```bash
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Release
 ```
 4. (ISSUE) Default clang++ compiler on Frontier HPC produces slow-running code. hipcc improves performance but can't be set directly in CMake. A temporary fix is provided below to replace clang++ with hipcc in build scripts:
 

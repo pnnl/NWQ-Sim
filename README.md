@@ -119,13 +119,15 @@ Internally, it supports arbitrary 1 or 2 qubit gates for optimization and extens
 To build and run NWQ-Sim, please refer to the detailed instructions provided in the [User Manual](doc/user_manual.md). The User Manual contains step-by-step guidelines on installing dependencies, building from source, configuring runtime options, and more.
 
 
-## Authors 
+## Authors and Developers
 
-#### [Ang Li](http://www.angliphd.com/), Senior Computer Scientist, Pacific Northwest National Laboratory (PNNL)
+- Ang Li, Pacific Northwest National Laboratory
+- Matt Burns, University of Rochester and Pacific Northwest National Laboratory
+- Meng Wang, The University of British Columbia and Pacific Northwest National Laboratory
+- Chenxu Liu, Pacific Northwest National Laboratory
 
 Additionally, the following folks contribute the project:
 
- - Meng Wang, The University of British Columbia and Pacific Northwest National Laboratory 
  - Sriram Krishnamoorthy, Pacific Northwest National Laboratory 
  - Bo Fang, Pacific Northwest National Laboratory
  - Muqing Zheng, Lehigh University and Pacific Northwest National Laboratory

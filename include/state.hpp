@@ -5,13 +5,21 @@
 
 #include "private/config.hpp"
 #include "private/gate_factory/sv_gates.hpp"
-
 #include <stdexcept> // For std::runtime_error
 #include <vector>
 #include <string>
 
 namespace NWQSim
 {
+    struct ObservableList {
+        IdxType* x_indices;
+        IdxType* x_index_sizes;
+        IdxType* xmasks;
+        IdxType* zmasks;
+        ValType* exp_output;
+        ValType* coeffs;
+        IdxType numterms;
+    };
     // Base class
     class QuantumState
     {

@@ -281,7 +281,7 @@ namespace NWQSim
                         err_rate_fixed = err_rate_max;
                     }
                     double dep_rate = qubit_dim_double * (err_rate_fixed - tr_infid) / (qubit_dim_double * tr_fid - 1.0);
-                    double dep_rate_max = min(1.0, sp_dim_double / (sp_dim_double - 1.0)); // maximum depolarizing rate (note this is not the error probability)
+                    double dep_rate_max = fmin(1.0, sp_dim_double / (sp_dim_double - 1.0)); // maximum depolarizing rate (note this is not the error probability)
                     double dep_rate_fixed = dep_rate;
                     if (dep_rate > dep_rate_max)
                     { // Again, I think this actually means MODEL FAILURE
@@ -393,7 +393,7 @@ namespace NWQSim
                             err_rate_fixed = err_rate_max;
                         }
                         double dep_rate = qubit_dim_double * (err_rate_fixed - tr_infid) / (qubit_dim_double * tr_fid - 1.0);
-                        double dep_rate_max = min(1.0, sp_dim_double / (sp_dim_double - 1.0)); // maximum depolarizing rate (note this is not the error probability)
+                        double dep_rate_max = fmin(1.0, sp_dim_double / (sp_dim_double - 1.0)); // maximum depolarizing rate (note this is not the error probability)
                         double dep_rate_fixed = dep_rate;
 
                         if (dep_rate > dep_rate_max)

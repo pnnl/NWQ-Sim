@@ -93,7 +93,10 @@ namespace NWQSim::Config
                       << "\033[1;32m" << (DEVICE_CONFIG_FILE.empty() ? "Not Set" : DEVICE_CONFIG_FILE) << "\033[0m" << std::endl;
             std::cout << std::left << std::setw(40) << "\033[1;33mSimulation Backend:\033[0m"
                       << "\033[1;32m" << (sim_backend == "sv" ? "SVSim" : "DMSim") << "\033[0m" << std::endl;
-            std::cout << std::endl;
+            if (Config::PRINT_SIM_TRACE)
+            {
+                std::cout << std::endl;
+            }
         }
     }
 

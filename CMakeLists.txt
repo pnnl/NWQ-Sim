@@ -47,6 +47,8 @@ if(CUDAToolkit_FOUND)
     else()
         set(CMAKE_CUDA_ARCHITECTURES "${CUDA_ARCH}")
     endif()
+    
+    set(CMAKE_CUDA_FLAGS_DEBUG "-g -G")
 
 
     set(CMAKE_CUDA_FLAGS_RELEASE "-O3")
@@ -79,6 +81,7 @@ if(XACC_FOUND)
 else()
     set(xacc_found_str "FALSE")
 endif()
+
 
 if(HIP_FOUND)
     set(hip_found_str "TRUE")
@@ -114,6 +117,8 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 
 # Subdirectories
 add_subdirectory(qasm)
+add_subdirectory(vqe)
+
 
 if(XACC_FOUND)
     add_subdirectory(xacc)
