@@ -6,6 +6,7 @@
 #include <cmath>
 #include <math.h>
 #include <sstream>
+#include <list>
 
 
 // Templated print function for std::vector
@@ -72,7 +73,18 @@ namespace NWQSim{
                          max_evals(50),
                          max_time(-1) {}
   };
-
+  void all_pairs_shortest_paths(const std::vector<std::list<IdxType> >& adj_list, std::vector<IdxType>& distances);
+  void readgraph(std::string fpath, std::vector<std::list<IdxType> >& adj_list);
+  inline
+  IdxType count_ones(IdxType val) {
+    IdxType count = 0;
+    IdxType mask = 1;
+    for (size_t i = 0; i < sizeof(IdxType) * 8 - 1; i++) {
+      count += (val & mask) > 0;
+      mask = mask << 1;
+    }
+    return count;
+  }
   inline
   IdxType getQubitIndex(IdxType orbital_index, IdxType spin, IdxType orb_type, IdxType n_occ, IdxType n_virt, bool xacc_scheme) {
     // Flattened indexing scheme

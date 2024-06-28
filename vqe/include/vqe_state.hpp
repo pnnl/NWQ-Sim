@@ -20,16 +20,7 @@ namespace NWQSim
     }
 
     
-    inline
-    IdxType count_ones(IdxType val) {
-      IdxType count = 0;
-      IdxType mask = 1;
-      for (size_t i = 0; i < sizeof(IdxType) * 8 - 1; i++) {
-        count += (val & mask) > 0;
-        mask = mask << 1;
-      }
-      return count;
-    }
+    
 
     typedef std::function<void(const std::vector<ValType>& x, ValType ene, IdxType iter)> Callback;
 

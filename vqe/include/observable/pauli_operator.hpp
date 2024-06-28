@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <memory>
 #include <numeric>
+#include "utils.hpp"
 namespace NWQSim {
   /* Basic data type for indices */
   using IdxType = long long int;
@@ -250,20 +251,39 @@ namespace NWQSim {
         }
         bool parity(const PauliOperator& other) const {
           IdxType mindim = std::min(other.dim, dim);
-          bool parity_xor = 0;
-          for (IdxType i = 0; i < mindim; i++) {
-            parity_xor = parity_xor ^ commutationRelations[ops.get()->at(i)][other.ops.get()->at(i)];
-          }
-          return parity_xor;
+          // take the symplectic inner product
+          return (count_ones((xmask ^ other.zmask) | (zmask ^ other.xmask)) % 2) == 0;
         }
         bool isNonTrivial() const { return non_trivial;}
+        // qubitiwse
         bool QWC(PauliOperator& other) {
-          IdxType mindim = std::min(other.dim, dim);
-          bool qwc = 1;
-          for (IdxType i = 0; i < mindim; i++) {
-            qwc = qwc && commutationRelations[ops.get()->at(i)][other.ops.get()->at(i)];
+          return ((xmask ^ other.zmask) | (zmask ^ other.xmask)) == 0;
+        }
+        bool TRC(PauliOperator& other, 
+                 IdxType group_mask, 
+                 const std::vector<std::vector<IdxType> >& distances,
+                 IdxType tolerance) {
+          IdxType sympprod = (xmask ^ other.zmask) | (zmask ^ other.xmask);
+          IdxType total_anticomm = sympprod | group_mask;
+          IdxType n_anticomm_total = 0;
+          IdxType n_anticomm = 0;
+          std::list<IdxType> anticomm;
+          IdxType D = 0;
+          for (IdxType i = 0; i < dim; i++) {
+            if (total_anticomm & (1 << i)) {
+              n_anticomm_total++;
+              for (auto other: anticomm) {
+                D = std::max(D, distances[i][other]);
+              }
+              anticomm.push_back(i);
+
+              if (sympprod & (1 << i))
+                n_anticomm++;
+            }
           }
-          return qwc;
+          bool gc = (n_anticomm % 2) == 0;
+          bool within_tol = (D * n_anticomm_total * n_anticomm_total) < tolerance;
+          return within_tol && gc;
         }
         bool GC(PauliOperator& other) {
           return parity(other);
