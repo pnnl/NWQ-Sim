@@ -763,7 +763,7 @@ namespace NWQSim
             {
                 ValType expectation = coeff * m_real[0];
                 ValType prev_exp = LOCAL_G_CUDA(output, 0);
-                LOCAL_P_CUDA(output, output_index, prev_exp + expectation);
+                LOCAL_P_CUDA(output, 0, prev_exp + expectation);
             }
 
             BARR_CUDA;
@@ -981,7 +981,7 @@ namespace NWQSim
                                 o.xmasks[obs_ind],
                                 o.zmasks[obs_ind],
                                 o.exp_output + n_expect,
-                                o.coeffs[obs_ind]
+                                o.coeffs[obs_ind],
                                 obs_ind);
                     xinds += o.x_index_sizes[obs_ind];
                     grid.sync();
