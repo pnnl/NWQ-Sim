@@ -6,29 +6,17 @@ namespace NWQSim {
     void jwFermionToPauliSingle (
     IdxType n_occ,
     IdxType n_virt,
+    IdxType n_qubits,
     FermionOperator ferm_op,
     std::vector<PauliOperator>& output) {
   size_t qubit_index = ferm_op.qubitIndex(n_occ, n_virt);
-  std::stringstream ss1;
-  std::stringstream ss2;
-  for (size_t i = 0; i < qubit_index; i++) {
-    ss1 << "Z";
-    ss2 << "Z";
-  }
-  ss1 << "X";
-  ss2 << "Y";
-  for (size_t i = qubit_index + 1; i < 2 * (n_occ + n_virt); i++) {
-    ss1 << "I";
-    ss2 << "I";
-  }
-  std::string str1 = ss1.str();
-  std::reverse(str1.begin(), str1.end());
-  std::string str2 = ss2.str();
-  std::reverse(str2.begin(), str2.end());
+  IdxType xmask = (1 << qubit_index);
+  IdxType zmask1 = (1 << qubit_index) - 1;
+  IdxType zmask2 = (1 << (qubit_index + 1)) - 1;
   // we also want to subtract a, adagger
-  output.push_back(PauliOperator(str1, 0.5));
+  output.push_back(PauliOperator(xmask, zmask1, n_qubits, 0.5));
   int sign = (ferm_op.getType() == Annihilation) - (ferm_op.getType() == Creation);
-  output.push_back(PauliOperator(str2, std::complex(0.0, 0.5 * sign)));
+  output.push_back(PauliOperator(xmask, zmask2, n_qubits, std::complex(0.0, 0.5 * sign)));
 }
 
 void jwFermionToPauliSinglePair (
@@ -43,9 +31,9 @@ void jwFermionToPauliSinglePair (
   std::vector<PauliOperator> local_result;
   local_result.reserve(4);
   std::vector<PauliOperator> ap_dag_paulis;
-  jwFermionToPauliSingle(n_occ, n_virt, ap_dagger, ap_dag_paulis);
+  jwFermionToPauliSingle(n_occ, n_virt, 2 * (n_occ + n_virt), ap_dagger, ap_dag_paulis);
   std::vector<PauliOperator> aq_paulis;
-  jwFermionToPauliSingle(n_occ, n_virt, aq, aq_paulis);
+  jwFermionToPauliSingle(n_occ, n_virt, 2 * (n_occ + n_virt),  aq, aq_paulis);
   std::complex<ValType> fermicoeff = ap_dagger.getCoeff();
   for (size_t i = 0; i < 4; i ++) {
     int i1 = (i & (1 << 0)) >> 0;
@@ -79,13 +67,13 @@ void jwFermionToPauliDoublePair (
   // assert(ar.getType() == Annihilation);
   // assert(as.getType() == Annihilation);
   std::vector<PauliOperator> ap_dag_paulis;
-  jwFermionToPauliSingle(n_occ, n_virt, ap_dagger, ap_dag_paulis);
+  jwFermionToPauliSingle(n_occ, n_virt,2 * (n_occ + n_virt),  ap_dagger, ap_dag_paulis);
   std::vector<PauliOperator> aq_dag_paulis;
-  jwFermionToPauliSingle(n_occ, n_virt, aq_dagger, aq_dag_paulis);
+  jwFermionToPauliSingle(n_occ, n_virt,2 * (n_occ + n_virt),  aq_dagger, aq_dag_paulis);
   std::vector<PauliOperator> ar_paulis;
-  jwFermionToPauliSingle(n_occ, n_virt, ar, ar_paulis);
+  jwFermionToPauliSingle(n_occ, n_virt,2 * (n_occ + n_virt),  ar, ar_paulis);
   std::vector<PauliOperator> as_paulis;
-  jwFermionToPauliSingle(n_occ, n_virt, as, as_paulis);
+  jwFermionToPauliSingle(n_occ, n_virt,2 * (n_occ + n_virt),  as, as_paulis);
   std::complex<ValType> fermicoeff = ap_dagger.getCoeff();
   // std::cout << fermicoeff << std::endl;
   for (int i = 15; i >= 0; i --) {

@@ -42,32 +42,18 @@ namespace NWQSim
       };
 
       virtual ValType getPauliExpectation(const PauliOperator& op) override {
-          IdxType qubit = 0;
-          IdxType xmask = 0;
-          IdxType zmask = 0;
+          IdxType qubit = op.get_dim();
+          IdxType xmask = op.get_xmask();
+          IdxType zmask = op.get_zmask();
           IdxType y_phase = 0;
           IdxType max_x = 0;
-          for (auto pauli_op: *op.getOps()) {
-            switch (pauli_op)
-            {
-              case PauliOp::X:
-                xmask = xmask | (1 << qubit);
-                max_x = qubit;
-                break;
-              case PauliOp::Y:
-                xmask = xmask | (1 << qubit);
-                zmask = zmask | (1 << qubit);
-                max_x = qubit;
-                y_phase += 1;
-                break;
-              case PauliOp::Z:
-                zmask = zmask | (1ll << qubit);
-                break;
-              default:
-                break;
-            }
-            qubit++;
+          for (IdxType i = 0; i < dim; i++) {
+            bool xbit = (xmask >> i) & 1;
+            bool zbit = (zmask >> i) & 1;
+            y_phase += (xbit && zbit);
+            max_x = std::max(i, max_x);
           }
+
           ValType expectation = 0.0;
           if (xmask == 0) {
             for (IdxType i = 0; i < dim; i++) {

@@ -29,6 +29,7 @@ enum STATUS {
     WAIT,
     EXIT_LOOP
 };
+
 template <typename T, typename S>
 std::stringstream& operator<<(std::stringstream& out, const std::pair<T, S>& target) {
   out << "(" << target.first << ", " << target.second << ")";
@@ -91,7 +92,16 @@ namespace NWQSim{
     return index;
   }
 
-
+inline
+IdxType count_ones(IdxType val) {
+  IdxType count = 0;
+  IdxType mask = 1;
+  for (size_t i = 0; i < sizeof(IdxType) * 8 - 1; i++) {
+    count += (val & mask) > 0;
+    mask = mask << 1;
+  }
+  return count;
+}
   inline
   void getFermiInfoFromQubit(IdxType qubit_idx, IdxType& orbital_index, IdxType& spin, IdxType& orb_type, IdxType n_occ, IdxType n_virt, bool xacc_scheme) {
     // Flattened indexing scheme (reversed). Extracts orbital/operator/spin properties from the qubit index

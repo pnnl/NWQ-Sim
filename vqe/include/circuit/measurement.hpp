@@ -24,26 +24,29 @@ namespace NWQSim {
         Measurement(const PauliOperator& _op): op(_op), Circuit(_op.numQubits()) {
           size_t index = 0;
           sign = 1.0;
-          std::vector<PauliOp> opstring;
-          opstring.reserve(op.numQubits());
-          for (PauliOp opval: *op.getOps()) {
-            if (opval == PauliOp::I) {
-              opstring.push_back(PauliOp::I);
-              index++;
-              continue;
-            }
-            if (opval == PauliOp::X) {
+          IdxType dim = _op.get_dim();
+          IdxType xmask = _op.get_xmask();
+          IdxType zmask = _op.get_zmask();
+
+          for (IdxType index = 0; index < dim; index++) {
+            IdxType xbit = (xmask >> (1 << index)) >> index;
+            IdxType zbit = (zmask >> (1 << index)) >> index;
+            switch (xbit + 2 * zbit)
+            {
+            case 1: // X
+              /* code */
               H(index);
-            }
-            if (opval == PauliOp::Y) {
-              S(index);
+              break;
+            case 3: // Y
+              RZ(-PI/2, index);
               H(index);
-              sign *= -1;
+            
+            default:
+              break;
             }
-            opstring.push_back(PauliOp::Z);
-            index++;
           }
-          diagonal_op = PauliOperator(opstring);
+          
+          diagonal_op = PauliOperator(0, op.get_xmask() | op.get_zmask(), op.get_dim());
           std::cout << diagonal_op << std::endl;
         };
         ValType operatorExpectation(std::unordered_map<IdxType, IdxType> counts) {

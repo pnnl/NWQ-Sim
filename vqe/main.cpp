@@ -138,7 +138,6 @@ void optimize_ansatz(const VQEBackendManager& manager,
   params.resize(ansatz->numParams());
   std::generate(params.begin(), params.end(), 
       [&random_engine, &initdist] () {return initdist(random_engine);});
-
   state->optimize(params, fval);
 }
 
@@ -171,6 +170,8 @@ int main(int argc, char** argv) {
     NWQSim::VQE::getJordanWignerTransform,
     1
   );
+
+  exit(0);
   std::vector<double> params;
   double fval;
   manager.safe_print("Beginning VQE loop...\n");

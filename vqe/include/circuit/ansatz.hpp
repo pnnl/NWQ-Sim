@@ -194,19 +194,33 @@ namespace NWQSim {
                              std::vector<std::pair<IdxType, ValType> > _param,
                              ValType _coeff = 1.0) {
           std::vector<IdxType> non_trivial;
-          IdxType index = 0;
-          for (PauliOp op: *pauli_op.getOps()) {
-            if (op != PauliOp::I) {
+          IdxType dim = pauli_op.get_dim();
+          IdxType xmask = pauli_op.get_xmask();
+          IdxType zmask = pauli_op.get_zmask();
+
+          for (IdxType index = 0; index < dim; index++) {
+            IdxType xbit = (xmask >> index) & 1;
+            IdxType zbit = (zmask >> index) & 1;
+            switch (xbit + 2 * zbit)
+            {
+            case 1: // X
+              /* code */
               non_trivial.push_back(index);
-              if (op == PauliOp::X) {
-                H(index);
-              }
-              if (op == PauliOp::Y) {
-                RZ(-PI/2, index);
-                H(index);
-              }
+              H(index);
+              break;
+            case 2: // Z
+              non_trivial.push_back(index);
+              break;
+
+            case 3: // Y
+              non_trivial.push_back(index);
+              RZ(-PI/2, index);
+              H(index);
+              break;
+            
+            default:
+              break;
             }
-            index++;
           }
           for (IdxType i = non_trivial.size() - 1; i >= 1; i--) {
             CX(non_trivial[i], non_trivial[i-1]);
@@ -215,16 +229,25 @@ namespace NWQSim {
           for (IdxType i = 0; i < non_trivial.size()-1; i++) {
             CX(non_trivial[i+1], non_trivial[i]);
           }
-          for (IdxType idx: non_trivial) {
-            PauliOp op = pauli_op.at(idx);
-            if (op != PauliOp::I) {
-              if (op == PauliOp::X) {
-                H(idx);
-              }
-              if (op == PauliOp::Y) {
-                H(idx);
-                RZ(PI / 2, idx);
-              }
+          for (IdxType index: non_trivial) {
+            IdxType xbit = (xmask >> index) & 1;
+            IdxType zbit = (zmask >> index) & 1;
+            switch (xbit + 2 * zbit)
+            {
+            case 1: // X
+              /* code */
+              H(index);
+              break;
+            case 2: // Z
+              break;
+
+            case 3: // Y
+              H(index);
+              RZ(PI/2, index);
+              break;
+      
+            default:
+              break;
             }
           }
         }

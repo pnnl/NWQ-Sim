@@ -20,16 +20,7 @@ namespace NWQSim
     }
 
     
-    inline
-    IdxType count_ones(IdxType val) {
-      IdxType count = 0;
-      IdxType mask = 1;
-      for (size_t i = 0; i < sizeof(IdxType) * 8 - 1; i++) {
-        count += (val & mask) > 0;
-        mask = mask << 1;
-      }
-      return count;
-    }
+
 
     typedef std::function<void(const std::vector<ValType>& x, ValType ene, IdxType iter)> Callback;
 
@@ -64,7 +55,8 @@ namespace NWQSim
           auto& pauli_operators = hamil->getPauliOperators();        
           for (auto& pauli_list: pauli_operators) {
             for (const PauliOperator& pauli: pauli_list) {
-              const std::vector<IdxType>& xinds = pauli.get_xindices();
+              std::vector<IdxType> xinds;
+              pauli.get_xindices(xinds);
               xmasks.push_back(pauli.get_xmask());
               zmasks.push_back(pauli.get_zmask());
               x_index_sizes.push_back(xinds.size());
