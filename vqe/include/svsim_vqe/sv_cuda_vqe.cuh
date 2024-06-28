@@ -73,7 +73,7 @@ namespace NWQSim
                                     cudaMemcpyDeviceToHost));
       };
 
-
+};
   };
 } // namespace NWQSim
 

@@ -61,7 +61,11 @@ namespace NWQSim {
           return expect;
         }
         IdxType num_ops () const {
-          return n_ops;
+          IdxType result = 0;
+          for (auto& i : pauli_operators) {
+            result += i.size();
+          }
+          return result;
         }
         const MolecularEnvironment& getEnv () const {return env;}
         const std::vector<std::vector<PauliOperator> >& getPauliOperators() const {return pauli_operators;};

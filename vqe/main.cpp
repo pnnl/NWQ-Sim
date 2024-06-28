@@ -163,6 +163,7 @@ int main(int argc, char** argv) {
 #endif
   manager.safe_print("Reading Hamiltonian...\n");
   std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(hamil_path, n_part, use_xacc);
+  manager.safe_print("Constructed %lld Pauli Observables\n", hamil->num_ops());
   manager.safe_print("Constructing UCCSD Ansatz...\n");
 
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
@@ -171,7 +172,7 @@ int main(int argc, char** argv) {
     1
   );
 
-  exit(0);
+  manager.safe_print("%lld Gates with %lld parameters\n" ,ansatz->num_gates(), ansatz->numParams());
   std::vector<double> params;
   double fval;
   manager.safe_print("Beginning VQE loop...\n");
