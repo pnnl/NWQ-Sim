@@ -212,13 +212,12 @@ namespace NWQSim
                 {
                     ObservableList o = *(ObservableList*)(g.data);
                     IdxType* xinds = o.x_indices;
-                    o.exp_output[n_expect] = 0.0;
                     for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
                         EXPECT_GATE(xinds, 
                                     o.x_index_sizes[obs_ind],
                                     o.xmasks[obs_ind],
                                     o.zmasks[obs_ind],
-                                    o.exp_output + n_expect,
+                                    o.exp_output,
                                     o.coeffs[obs_ind],
                                     obs_ind);
                         xinds += o.x_index_sizes[obs_ind];

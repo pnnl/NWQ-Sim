@@ -40,7 +40,7 @@ namespace NWQSim
                                       g_est(seed),
                                       optimizer_settings(opt_settings)
                                       {
-          optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
+           optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
           // Set the termination criteria
           optimizer.set_maxeval(optimizer_settings.max_evals);
           optimizer.set_maxtime(optimizer_settings.max_time);
@@ -51,21 +51,58 @@ namespace NWQSim
           for (auto& kv_pair: optimizer_settings.parameter_map) {
               optimizer.set_param(kv_pair.first.c_str(), kv_pair.second);
           }
-          
-          auto& pauli_operators = hamil->getPauliOperators();        
+        }
+        void initialize() {
+         
+          const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators();    
+          IdxType index = 0;    
+          obsvec.resize(pauli_operators.size());
+          xmasks.resize(pauli_operators.size());
+          zmasks.resize(pauli_operators.size());
+          x_index_sizes.resize(pauli_operators.size());
+          x_indices.resize(pauli_operators.size());
+          coeffs.resize(pauli_operators.size());
+          std::vector<IdxType> mapping (ansatz->num_qubits());
+          std::iota(mapping.begin(), mapping.end(), 0);
           for (auto& pauli_list: pauli_operators) {
+            xmasks[index].reserve(pauli_list.size());
+            zmasks[index].reserve(pauli_list.size());
+            coeffs[index].reserve(pauli_list.size());
+            x_index_sizes[index].reserve(pauli_list.size());
+            IdxType composite_xmask = 0;
+            IdxType composite_zmask = 0;
+            IdxType ncommute = pauli_list.size();
             for (const PauliOperator& pauli: pauli_list) {
               std::vector<IdxType> xinds;
               pauli.get_xindices(xinds);
-              xmasks.push_back(pauli.get_xmask());
-              zmasks.push_back(pauli.get_zmask());
-              x_index_sizes.push_back(xinds.size());
-              for (auto i: xinds) {
-                x_indices.push_back(i);
+              coeffs[index].push_back(pauli.getCoeff().real());
+              if (ncommute > 1) {
+                composite_xmask |= pauli.get_xmask();
+                xmasks[index].push_back(0);
+                coeffs[index].back() *= (pauli.count_y() % 2) ? -1.0 : 1.0;
+                x_index_sizes[index].push_back(0);
+              zmasks[index].push_back(pauli.get_zmask() | pauli.get_xmask());
+              } else {
+                xmasks[index].push_back(pauli.get_xmask());
+                x_index_sizes[index].push_back(xinds.size());
+                x_indices[index] = xinds;
+                zmasks[index].push_back(pauli.get_zmask());
               }
+              composite_zmask |= pauli.get_zmask();
             }
+
+            PauliOperator common(composite_xmask, composite_zmask, ansatz->num_qubits());
+            if (ncommute > 1) {
+              Measurement circ(common);
+              ansatz->compose(circ, mapping);
+            }
+            fill_obslist(index);
+            if (ncommute > 1) {
+              Measurement circ(common, true);
+              ansatz->compose(circ, mapping);
+            }
+            index++;
           }
-          hamil->get_pauli_coeffs(coeffs);
                                           
           // Check if the chosen algorithm requires derivatives
           compute_gradient = std::string(optimizer.get_algorithm_name()).find("no-derivative") == std::string::npos;
@@ -76,6 +113,7 @@ namespace NWQSim
           optimizer.set_upper_bounds(upper_bounds);
           
         };
+      virtual void fill_obslist(IdxType index) {};
       // function for the NLOpt plugin
       double cost_function(const std::vector<double> x, std::vector<double>& gradient) {
         if (iteration > 0){
@@ -148,7 +186,16 @@ namespace NWQSim
         call_simulator();
 
         // ExpectationMap emap;
+
+      
+        // const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators();    
         auto& pauli_operators = hamil->getPauliOperators();
+        double expval = 0.0;
+        for (auto& clique: pauli_operators) {
+          for (auto& pauli: clique) {
+            expval += getPauliExpectation(pauli) * pauli.getCoeff().real();
+          }
+        }
         IdxType index = 0;
         ValType expectation = hamil->getEnv().constant + expvals.front();
         // ValType ene = 0.0;
@@ -164,12 +211,12 @@ namespace NWQSim
         Callback callback;
         OptimizerSettings optimizer_settings;
         IdxType iteration;
-        ObservableList obs;
-        std::vector<IdxType> x_index_sizes;
-        std::vector<IdxType> xmasks;
-        std::vector<IdxType> zmasks;
-        std::vector<IdxType> x_indices;
-        std::vector<ValType> coeffs;
+        std::vector<ObservableList> obsvec;
+        std::vector<std::vector<IdxType> >  x_index_sizes;
+        std::vector<std::vector<IdxType> > xmasks;
+        std::vector<std::vector<IdxType> > zmasks;
+        std::vector<std::vector<IdxType> > x_indices;
+        std::vector<std::vector<ValType> > coeffs;
         std::vector<ValType> expvals;
 
       
