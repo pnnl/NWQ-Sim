@@ -147,6 +147,29 @@ namespace NWQSim::Config
             layout[std::to_string(q)]
         ));
     }
+    inline void readLayoutString(std::string s) {
+        size_t pos_start = 0;
+        size_t pos_end;
+        std::string token;
+        while((pos_end = s.find(",", pos_start)) != std::string::npos) {
+            token = s.substr (pos_start, pos_end - pos_start);
+            size_t src_end = token.find("=");
+            if (src_end == std::string::npos) {
+                throw std::invalid_argument("Ill-formatted layout string\n");
+            }
+            std::string log_qb = token.substr(0, src_end);
+            std::string phys_qb = token.substr(src_end+1);
+            layout[log_qb] = std::stoll(phys_qb);
+            pos_start = pos_end + 1;
+        }
+        token = s.substr (pos_start);
+        if (token.length()) {
+            size_t src_end = token.find("=");
+            std::string log_qb = token.substr(0, src_end);
+            std::string phys_qb = token.substr(src_end+1);
+            layout[log_qb] = std::stoll(phys_qb);
+        }
+    }
     inline void Update(const std::string &filename)
     {
         LoadConfigFromFile(filename, false);

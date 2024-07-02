@@ -72,6 +72,9 @@ int main(int argc, char **argv)
                   << "Path to dump binary statevector/density matrix result. (default: \"\", no output dump). Can be reused as a later -initial file" << std::endl;
         std::cout << std::setw(20) << "-layout"
                   << "Path to json mapping logical qubits to device qubits, used when constructing the DM-Sim noise gates. (default: \"\", no mapping)." << std::endl;
+        std::cout << std::setw(20) << "-layout-string"
+                  << "String denoting qubit layout. Format maps logical qubits (lq, 0...n_qubits) to physical qubits."
+                  << " Format is lq0=pq0;lq1=pq1..." << std::endl;
     }
     if (cmdOptionExists(argv, argv + argc, "-shots"))
     {
@@ -114,6 +117,11 @@ int main(int argc, char **argv)
     {
         layoutfile = std::string(getCmdOption(argv, argv + argc, "-layout"));
         Config::LoadLayoutFromFile(layoutfile);
+    }
+    if (cmdOptionExists(argv, argv + argc, "-layout-string"))
+    {
+        std::string layoutstring = std::string(getCmdOption(argv, argv + argc, "-layout-string"));
+        Config::readLayoutString(layoutstring);
     }
 // If MPI or NVSHMEM backend, initialize MPI
 #ifdef MPI_ENABLED
