@@ -27,6 +27,7 @@ int main(int argc, char **argv)
     std::string config = "./default_config.json";
     std::string initfile = "";
     std::string dumpfile = "";
+    std::string layoutfile = "";
     std::string backend = "CPU";
     std::string simulation_method = "sv";
 
@@ -69,6 +70,8 @@ int main(int argc, char **argv)
                   << "Expected format is binary sv/dm_real.concat(sv/dm_imag)" << std::endl;
         std::cout << std::setw(20) << "-dump"
                   << "Path to dump binary statevector/density matrix result. (default: \"\", no output dump). Can be reused as a later -initial file" << std::endl;
+        std::cout << std::setw(20) << "-layout"
+                  << "Path to json mapping logical qubits to device qubits, used when constructing the DM-Sim noise gates. (default: \"\", no mapping)." << std::endl;
     }
     if (cmdOptionExists(argv, argv + argc, "-shots"))
     {
@@ -106,6 +109,11 @@ int main(int argc, char **argv)
     if (cmdOptionExists(argv, argv + argc, "-config"))
     {
         config = std::string(getCmdOption(argv, argv + argc, "-config"));
+    }
+    if (cmdOptionExists(argv, argv + argc, "-layout"))
+    {
+        layoutfile = std::string(getCmdOption(argv, argv + argc, "-layout"));
+        Config::LoadLayoutFromFile(layoutfile);
     }
 // If MPI or NVSHMEM backend, initialize MPI
 #ifdef MPI_ENABLED

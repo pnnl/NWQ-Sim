@@ -17,6 +17,7 @@ namespace NWQSim::Config
     inline std::string DEVICE_CONFIG_FILE = "dummy_ibmq12";
 
     inline nlohmann::json backend_config = {};
+    inline nlohmann::json layout = {};
 
     inline void LoadConfigFromFile(const std::string &filename, bool required = true)
     {
@@ -73,6 +74,17 @@ namespace NWQSim::Config
                 j.at("DEVICE_CONFIG_FILE").get_to(DEVICE_CONFIG_FILE);
         }
     }
+    inline void LoadLayoutFromFile(const std::string &filename, bool required = true)
+    {
+        std::ifstream i(filename);
+        if (!i.is_open())
+        {
+            return;
+            // throw std::runtime_error("Could not open " + filename);
+        }
+        layout = nlohmann::json::parse(i);
+        i.close();
+    }
 
     inline void printConfig(IdxType i_proc, const std::string &sim_backend)
     {
@@ -115,6 +127,13 @@ namespace NWQSim::Config
         if (f.fail())
             throw std::logic_error("Device config file not found at " + path);
         backend_config = nlohmann::json::parse(f);
+        if (layout.empty()) {
+            IdxType n_qubits;
+            backend_config["num_qubits"].get_to(n_qubits);
+            for (IdxType n = 0; n < n_qubits; n++) {
+                layout[std::to_string(n)] = n;
+            }
+        }
     }
 
     inline void Load(const std::string &filename = "../default_config.json")
@@ -123,7 +142,11 @@ namespace NWQSim::Config
         if (ENABLE_NOISE)
             readConfigFile();
     }
-
+    inline std::string qindex(IdxType q) {
+        return std::to_string(static_cast<IdxType>(
+            layout[std::to_string(q)]
+        ));
+    }
     inline void Update(const std::string &filename)
     {
         LoadConfigFromFile(filename, false);

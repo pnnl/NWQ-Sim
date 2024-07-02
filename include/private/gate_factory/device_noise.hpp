@@ -242,8 +242,8 @@ namespace NWQSim
                 double qubit_dim_double = (double)qubit_dim;
                 double sp_dim_double = (double)sp_dim;
                 // Read qubits properties
-                std::string str_q1 = std::to_string(q1); // key must be string
-                std::string str_q2 = std::to_string(q2); // key must be string
+                std::string str_q1 = Config::qindex(q1); // key must be string
+                std::string str_q2 = Config::qindex(q2); // key must be string
 
                 double T1_1, T1_2, T2_1, T2_2, gate_len, err_rate;
                 try
@@ -350,7 +350,7 @@ namespace NWQSim
                 double qubit_dim_double = (double)qubit_dim;
                 double sp_dim_double = (double)sp_dim;
                 // Read qubits properties
-                std::string str_q1 = std::to_string(q1); // key must be string
+                std::string str_q1 = Config::qindex(q1); // key must be string
                 double T1, T2; 
                 try
                 {
