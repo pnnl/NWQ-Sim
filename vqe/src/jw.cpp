@@ -152,7 +152,7 @@ void getJordanWignerTransform(
   }
   std::vector<PauliOperator>& templist = temp_output[0];
   std::list<std::vector<IdxType>> pauli_cliques;
-  sorted_insertion(templist, pauli_cliques, false);
+  sorted_insertion(templist, pauli_cliques, false, );
   output.resize(pauli_cliques.size());
   IdxType index = 0;
   for (auto& clique: pauli_cliques) {

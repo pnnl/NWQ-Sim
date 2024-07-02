@@ -34,11 +34,7 @@ namespace NWQSim {
       {1,  1,  1,   -1}, // ZI=Z, ZX=iY, ZZ=I, ZY=-iX
       {1, -1 ,  1,   1} // YI=Y, YX=-iZ, YY=I, YZ=iX
     };
-    enum class COMM_RELATION {
-      GC,  // general commutativity (aka "FC")
-      QWC, // qubit-wise commutativity
-      TRC  // topology-restricted commutativity
-    };
+ 
     const char *const PAULI_OP_NAMES[] = {
       "I",
       "X",
@@ -244,11 +240,12 @@ namespace NWQSim {
           bool within_tol = (D * n_anticomm_total * n_anticomm_total) < tolerance;
           return within_tol && gc;
         }
-        bool commutes(const PauliOperator& other, COMM_RELATION relation) const {
+        bool commutes(const PauliOperator& other, 
+                      Commute relation) const {
           switch(relation) {
-            case COMM_RELATION::QWC:
+            case Commute::QWC:
             return QWC(other);
-            case COMM_RELATION::GC:
+            case Commute::GC:
             return GC(other);
           }
 

@@ -35,7 +35,7 @@ namespace NWQSim
     class SV_HIP : public QuantumState
     {
     public:
-        SV_HIP(IdxType _n_qubits) : QuantumState(_n_qubits)
+        SV_HIP(IdxType _n_qubits, const std::string& configpath = "../default_config.json") : QuantumState(_n_qubits, configpath)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;

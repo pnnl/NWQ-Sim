@@ -24,9 +24,9 @@ namespace NWQSim
     class QuantumState
     {
     public:
-        QuantumState(IdxType _n_qubits)
+        QuantumState(IdxType _n_qubits, const std::string& configpath = "../default_config.json")
         {
-            Config::Load();
+            Config::Load(configpath);
             registerGates();
         }                          // constructor
         virtual ~QuantumState() {} // virtual destructor

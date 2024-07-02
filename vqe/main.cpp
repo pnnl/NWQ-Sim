@@ -15,7 +15,8 @@ int show_help() {
   std::cout << "--list-backends, -l   List available backends and exit." << std::endl;
   std::cout << UNDERLINE << "OPTIONAL" << CLOSEUNDERLINE << std::endl;
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
-  std::cout << "--config              Path to config file for NLOpt optimizer parameters" << std::endl;
+  std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
+  std::cout << "--opt-config          Path to config file for NLOpt optimizer parameters" << std::endl;
   std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA" << std::endl;
   std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--abstol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
@@ -31,12 +32,14 @@ int parse_args(int argc, char** argv,
                VQEBackendManager& manager,
                 std::string& hamilfile,
                 std::string& backend,
+                std::string& config_file,
                 NWQSim::IdxType& n_particles,
                 nlopt::algorithm& algo,
                 NWQSim::VQE::OptimizerSettings& settings,
                 bool& use_xacc,
                 unsigned& seed) {
-  std::string config_file = "";
+  std::string opt_config_file = "";
+  config_file = "../default_config.json";
   std::string algorithm_name = "LN_COBYLA";
   hamilfile = "";
   backend = "CPU";
@@ -71,6 +74,9 @@ int parse_args(int argc, char** argv,
     if (argname == "--config") {
       config_file = argv[++i];
     } else 
+    if (argname == "--opt-config") {
+      opt_config_file = argv[++i];
+    } else  
     if (argname == "--optimizer") {
       algorithm_name = argv[++i];
     } else 
@@ -125,6 +131,7 @@ void callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fv
 
 void optimize_ansatz(const VQEBackendManager& manager,
                      const std::string& backend,
+                     const std::string& configfile,
                      std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil,
                      std::shared_ptr<NWQSim::VQE::Ansatz> ansatz,
                      NWQSim::VQE::OptimizerSettings& settings,
@@ -132,7 +139,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      unsigned& seed,
                      std::vector<double>& params,
                      double& fval) {
-  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, callback_function, seed, settings);  
+  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, configfile, ansatz, hamil, algo, callback_function, seed, settings);  
   std::uniform_real_distribution<double> initdist(0, 2 * PI);
   std::mt19937_64 random_engine (seed);
   params.resize(ansatz->numParams());
@@ -144,13 +151,13 @@ void optimize_ansatz(const VQEBackendManager& manager,
 
 int main(int argc, char** argv) {
   VQEBackendManager manager;
-  std::string hamil_path, backend;
+  std::string hamil_path, backend, config;
   NWQSim::IdxType n_part;
   NWQSim::VQE::OptimizerSettings settings;
   nlopt::algorithm algo;
   bool use_xacc;
   unsigned seed;
-  if (parse_args(argc, argv, manager, hamil_path, backend, n_part, algo, settings, use_xacc, seed)) {
+  if (parse_args(argc, argv, manager, hamil_path, backend, config, n_part, algo, settings, use_xacc, seed)) {
     return 1;
   }
 #ifdef MPI_ENABLED
@@ -176,7 +183,7 @@ int main(int argc, char** argv) {
   std::vector<double> params;
   double fval;
   manager.safe_print("Beginning VQE loop...\n");
-  optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, params, fval);
+  optimize_ansatz(manager, backend, config, hamil, ansatz, settings, algo, seed, params, fval);
   
   std::string qasm_string = ansatz->toQASM3();
   std::ofstream outfile;

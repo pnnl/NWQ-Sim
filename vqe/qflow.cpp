@@ -125,7 +125,8 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      double delta,
                      double eta,
                      double& fval) {
-  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, callback_function, seed, settings);  
+  std::string config = "../default_config.json";
+  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, config, ansatz, hamil, algo, callback_function, seed, settings);  
   std::uniform_real_distribution<double> initdist(0, 2 * PI);
   std::mt19937_64 random_engine (seed);
   params.resize(ansatz->numParams());

@@ -9,6 +9,8 @@
 #include <list>
 
 
+
+
 // Templated print function for std::vector
 template <typename T>
 std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
@@ -59,6 +61,11 @@ namespace NWQSim{
   namespace VQE{
   using IdxType = long long;
   using ValType = double;
+  enum class Commute {
+    GC,  // general commutativity (aka "FC")
+    QWC, // qubit-wise commutativity
+    TRC  // topology-restricted commutativity
+  };
   struct OptimizerSettings {
     // Structure to pass settings to the optimizer
     ValType rel_tol; // relative tolerance cutoff

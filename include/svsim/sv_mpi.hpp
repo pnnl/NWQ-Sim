@@ -23,7 +23,7 @@ namespace NWQSim
     {
 
     public:
-        SV_MPI(IdxType _n_qubits) : QuantumState(_n_qubits)
+        SV_MPI(IdxType _n_qubits, const std::string& configpath = "../default_config.json") : QuantumState(_n_qubits, configpath)
         {
             // SV initialization
             n_qubits = _n_qubits;

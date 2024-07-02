@@ -23,7 +23,7 @@ namespace NWQSim
     {
 
     public:
-        SV_CPU(IdxType _n_qubits) : QuantumState(_n_qubits)
+        SV_CPU(IdxType _n_qubits, const std::string& configpath = "../default_config.json") : QuantumState(_n_qubits, configpath)
         {
             // Initialize CPU side
             n_qubits = _n_qubits;
