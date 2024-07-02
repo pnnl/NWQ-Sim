@@ -65,7 +65,7 @@ private:
     void classify_measurements();
 
     void execute_gate(shared_ptr<QuantumState> state, std::shared_ptr<NWQSim::Circuit> circuit, qasm_gate gate);
-    IdxType *sub_execute(shared_ptr<QuantumState> state, IdxType repetition, bool print_metrics);
+    IdxType *sub_execute(shared_ptr<QuantumState> state, std::string initpath, IdxType repetition, bool print_metrics);
 
     void dump_defined_gates();
     void dump_cur_inst();
@@ -79,7 +79,7 @@ public:
     void load_qobj_string(const std::string qobj_string);
 
     IdxType num_qubits();
-    map<string, IdxType> *execute(shared_ptr<QuantumState> state, IdxType repetition, bool print_metrics = false);
+    map<string, IdxType> *execute(shared_ptr<QuantumState> state, std::string initpath, IdxType repetition, bool print_metrics = false);
     ~qasm_parser();
 };
 
@@ -620,7 +620,7 @@ void qasm_parser::classify_measurements()
             final_measurements = false;
 }
 
-map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, IdxType repetition, bool print_metrics)
+map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::string initpath, IdxType repetition, bool print_metrics)
 {
     IdxType *results;
 
@@ -630,13 +630,13 @@ map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, IdxTy
 
         for (IdxType i = 0; i < repetition; i++)
         {
-            IdxType *sub_result = sub_execute(state, 1, print_metrics);
+            IdxType *sub_result = sub_execute(state, initpath, 1, print_metrics);
             results[i] = sub_result[0];
         }
     }
     else
     {
-        results = sub_execute(state, repetition, print_metrics);
+        results = sub_execute(state, initpath, repetition, print_metrics);
     }
 
     map<IdxType, IdxType> result_dict;
@@ -655,9 +655,13 @@ map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, IdxTy
         return convert_dictionary(result_dict, list_cregs);
 }
 
-IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, IdxType repetition, bool print_metrics)
+IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string initpath, IdxType repetition, bool print_metrics)
 {
-    state->reset_state();
+    if (initpath != "") {
+        state->set_initial(initpath);
+    } else {
+        state->reset_state();
+    }
 
     std::shared_ptr<NWQSim::Circuit> circuit = std::make_shared<Circuit>(num_qubits());
 

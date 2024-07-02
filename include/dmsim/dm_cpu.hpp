@@ -25,7 +25,7 @@ namespace NWQSim
     {
 
     public:
-        DM_CPU(IdxType _n_qubits) : QuantumState(_n_qubits)
+        DM_CPU(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits, config)
         {
             // Initialize CPU side
             n_qubits = _n_qubits;
@@ -87,6 +87,24 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
+        virtual void set_initial (std::string fpath) override {
+            std::ifstream instream;
+            instream.open(fpath, std::ios::in|std::ios::binary);
+            if (instream.is_open()) {
+                instream.read((char*)dm_real, dm_size);
+                instream.read((char*)dm_imag, dm_size);
+                instream.close();
+            }
+        }
+        virtual void dump_res_state(std::string outpath) override {
+            std::ofstream outstream;
+            outstream.open(outpath, std::ios::out|std::ios::binary);
+            if (outstream.is_open()) {
+                outstream.write((char*)dm_real, sizeof(ValType) * dim);
+                outstream.write((char*)dm_imag, sizeof(ValType) * dim);
+                outstream.close();
+            }
+        };
 
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {

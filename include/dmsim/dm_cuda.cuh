@@ -40,7 +40,7 @@ namespace NWQSim
     class DM_CUDA : public QuantumState
     {
     public:
-        DM_CUDA(IdxType _n_qubits) : QuantumState(_n_qubits)
+        DM_CUDA(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits, config)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -120,7 +120,32 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-
+        virtual void set_initial (std::string fpath) override {
+            std::ifstream instream;
+            instream.open(fpath, std::ios::in|std::ios::binary);
+            if (instream.is_open()) {
+                instream.read((char*)dm_real_cpu, dm_size);
+                instream.read((char*)dm_imag_cpu, dm_size);
+                cudaSafeCall(cudaMemcpy(dm_real, dm_real_cpu,
+                                        dm_size, cudaMemcpyHostToDevice));
+                cudaSafeCall(cudaMemcpy(dm_imag, dm_imag_cpu,
+                                        dm_size, cudaMemcpyHostToDevice));
+                instream.close();
+            }
+        }
+        virtual void dump_res_state(std::string outpath) override {
+            std::ofstream outstream;
+            outstream.open(outpath, std::ios::out|std::ios::binary);
+            if (outstream.is_open()) {
+                cudaSafeCall(cudaMemcpy(dm_real_cpu, dm_real, 
+                                        dm_size, cudaMemcpyDeviceToHost));
+                cudaSafeCall(cudaMemcpy(dm_imag_cpu, dm_imag, 
+                                        dm_size, cudaMemcpyDeviceToHost));
+                outstream.write((char*)sv_real_cpu, sizeof(ValType) * dim);
+                outstream.write((char*)sv_imag_cpu, sizeof(ValType) * dim);
+                outstream.close();
+            }
+        };
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
             IdxType origional_gates = circuit->num_gates();

@@ -44,7 +44,7 @@ namespace NWQSim
     class DM_CUDA_MPI : public QuantumState
     {
     public:
-        DM_CUDA_MPI(IdxType _n_qubits) : QuantumState(_n_qubits)
+        DM_CUDA_MPI(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits, config)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -145,6 +145,41 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
+        virtual void set_initial (std::string fpath) override {
+            std::ifstream instream;
+            instream.open(fpath, std::ios::in|std::ios::binary);
+            if (instream.is_open()) {
+                instream.seekg(dm_size_per_gpu * i_proc);
+                instream.read((char*)dm_real_cpu, dm_size_per_gpu);
+                instream.read((char*)dm_imag_cpu, dm_size_per_gpu);
+                cudaSafeCall(cudaMemcpy(dm_real, dm_real_cpu,
+                                        dm_size_per_gpu, cudaMemcpyHostToDevice));
+                cudaSafeCall(cudaMemcpy(dm_imag, dm_imag_cpu,
+                                        dm_size_per_gpu, cudaMemcpyHostToDevice));
+                instream.close();
+            }
+        }
+        virtual void dump_res_state(std::string outpath) override {
+            std::ofstream outstream;
+            outstream.open(outpath, std::ios::out|std::ios::binary);
+            IdxType ticket = 1;
+            // synchronize the file writes with a basic point-point ticket lock
+            if (i_proc != 0) {
+                MPI_Recv(&ticket, 1, MPI_INT64_T, i_proc - 1, i_proc, comm_global, MPI_STATUS_IGNORE);
+            }
+            if (outstream.is_open()) {
+                cudaSafeCall(cudaMemcpy(dm_real_cpu, dm_real, dm_size_per_gpu, cudaMemcpyDeviceToHost));
+                cudaSafeCall(cudaMemcpy(dm_imag_cpu, dm_imag, dm_size_per_gpu, cudaMemcpyDeviceToHost));
+                // append to the end of the file
+                outstream.seekp(0, std::ios::end);
+                outstream.write((char*)dm_real_cpu, sizeof(ValType) * dm_size_per_gpu);
+                outstream.write((char*)dm_imag_cpu, sizeof(ValType) * dm_size_per_gpu);
+                outstream.close();
+            }
+            if (i_proc != n_gpus - 1) {
+                MPI_Send(&ticket, 1, MPI_INT64_T, i_proc + 1, i_proc + 1, comm_global);
+            } 
+        };
 
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {

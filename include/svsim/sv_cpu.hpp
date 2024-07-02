@@ -72,6 +72,27 @@ namespace NWQSim
             rng.seed(seed);
         }
 
+        virtual void set_initial (std::string fpath) override {
+            std::ifstream instream;
+            instream.open(fpath, std::ios::in|std::ios::binary);
+            if (instream.is_open()) {
+                instream.read((char*)sv_real, sizeof(ValType) * dim);
+                instream.read((char*)sv_imag, sizeof(ValType) * dim);
+            }
+            instream.close();
+            std::cout << sv_real[0] << std::endl;
+        }
+
+        virtual void dump_res_state(std::string outpath) override {
+            std::ofstream outstream;
+            outstream.open(outpath, std::ios::out|std::ios::binary);
+            if (outstream.is_open()) {
+                outstream.write((char*)sv_real, sizeof(ValType) * dim);
+                outstream.write((char*)sv_imag, sizeof(ValType) * dim);
+                outstream.close();
+            }
+        };
+        
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
             IdxType origional_gates = circuit->num_gates();
@@ -180,6 +201,7 @@ namespace NWQSim
             auto start = std::chrono::steady_clock::now();
             int n_gates = gates.size();
             int n_expect = 0;
+            std::cout << sv_real[0] << std::endl;
             for (int i = 0; i < n_gates; i++)
             {
 

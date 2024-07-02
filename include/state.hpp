@@ -43,11 +43,12 @@ namespace NWQSim
         virtual IdxType *get_results() = 0;
         virtual IdxType measure(IdxType qubit) = 0;
         virtual IdxType *measure_all(IdxType repetition) = 0;
-
+        virtual void set_initial(std::string fpath) = 0;
         virtual ValType get_exp_z() = 0;
         virtual ValType get_exp_z(const std::vector<size_t> &in_bits) = 0;
 
         virtual void print_res_state() = 0;
+        virtual void dump_res_state(std::string outfile) = 0;
 
         virtual void save_state()
         {

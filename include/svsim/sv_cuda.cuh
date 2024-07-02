@@ -112,7 +112,27 @@ namespace NWQSim
             cudaSafeCall(cudaMemset(m_real, 0, sv_size + sizeof(ValType)));
             cudaSafeCall(cudaMemset(m_imag, 0, sv_size + sizeof(ValType)));
         }
+        virtual void set_initial (std::string fpath) override {
+            std::ifstream instream;
+            instream.open(fpath, std::ios::in|std::ios::binary);
+            if (instream.is_open()) {
+                instream.read((char*)sv_real_cpu, sizeof(ValType) * dim);
+                instream.read((char*)sv_imag_cpu, sizeof(ValType) * dim);
+                load_state();
+                instream.close();
+            }
+        }
 
+        virtual void dump_res_state(std::string outpath) override {
+            std::ofstream outstream;
+            outstream.open(outpath, std::ios::out|std::ios::binary);
+            if (outstream.is_open()) {
+                save_state();
+                outstream.write((char*)sv_real_cpu, sizeof(ValType) * dim);
+                outstream.write((char*)sv_imag_cpu, sizeof(ValType) * dim);
+                outstream.close();
+            }
+        };
         void set_seed(IdxType seed) override
         {
             rng.seed(seed);

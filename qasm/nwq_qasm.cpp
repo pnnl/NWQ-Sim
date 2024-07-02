@@ -17,13 +17,16 @@
 
 using namespace NWQSim;
 ValType pass_threshold = 0.98;
-ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis);
+ValType run_brnchmark(std::string backend, const std::string& config, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis);
 
 int main(int argc, char **argv)
 {
     IdxType total_shots = 1024;
     bool run_with_basis = false;
     bool print_metrics = false;
+    std::string config = "./default_config.json";
+    std::string initfile = "";
+    std::string dumpfile = "";
     std::string backend = "CPU";
     std::string simulation_method = "sv";
 
@@ -59,6 +62,13 @@ int main(int argc, char **argv)
                   << "Select the simulation method: sv (state vector, default), dm (density matrix). (default: " << simulation_method << ")." << std::endl;
         std::cout << std::setw(20) << "-basis"
                   << "Run the transpiled benchmark circuits which only contain basis gates." << std::endl;
+        std::cout << std::setw(20) << "-config"
+                  << "Path to configuration JSON file. (default: \"../default_config.json\")" << std::endl;
+        std::cout << std::setw(20) << "-initial"
+                  << "Initial statevector/density matrix to enable simulation reuse/checkpointing. Must match qubit dimension of input circuit." 
+                  << "Expected format is binary sv/dm_real.concat(sv/dm_imag)" << std::endl;
+        std::cout << std::setw(20) << "-dump"
+                  << "Path to dump binary statevector/density matrix result. (default: \"\", no output dump). Can be reused as a later -initial file" << std::endl;
     }
     if (cmdOptionExists(argv, argv + argc, "-shots"))
     {
@@ -85,6 +95,18 @@ int main(int argc, char **argv)
     {
         simulation_method = std::string(getCmdOption(argv, argv + argc, "-sim"));
     }
+    if (cmdOptionExists(argv, argv + argc, "-initial"))
+    {
+        initfile = std::string(getCmdOption(argv, argv + argc, "-initial"));
+    }
+    if (cmdOptionExists(argv, argv + argc, "-dump"))
+    {
+        dumpfile = std::string(getCmdOption(argv, argv + argc, "-dump"));
+    }
+    if (cmdOptionExists(argv, argv + argc, "-config"))
+    {
+        config = std::string(getCmdOption(argv, argv + argc, "-config"));
+    }
 // If MPI or NVSHMEM backend, initialize MPI
 #ifdef MPI_ENABLED
     if (backend == "MPI" || backend == "NVGPU_MPI")
@@ -99,14 +121,14 @@ int main(int argc, char **argv)
         parser.load_qasm_file(filename);
 
         // Create the backend
-        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method);
+        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, config, parser.num_qubits(), simulation_method);
         if (!state)
         {
             std::cerr << "Failed to create backend\n";
             return 1;
         }
         state->print_config(simulation_method);
-        map<string, IdxType> *counts = parser.execute(state, total_shots, print_metrics);
+        map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
 
         // std::vector<size_t> in_bits;
 
@@ -121,7 +143,9 @@ int main(int argc, char **argv)
         // {
         //     in_bits[i] = i;
         // }
-
+        if (dumpfile != "") {
+            state->dump_res_state(dumpfile);
+        }
         if (state->i_proc == 0)
         {
             print_counts(counts, total_shots);
@@ -137,14 +161,14 @@ int main(int argc, char **argv)
         qasm_parser parser;
         parser.load_qasm_string(std::string(qasmString)+";\n");
         // Create the backend
-        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method);
+        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, config, parser.num_qubits(), simulation_method);
         if (!state)
         {
             std::cerr << "Failed to create backend\n";
             return 1;
         }
         state->print_config(simulation_method);
-        map<string, IdxType> *counts = parser.execute(state, total_shots, print_metrics);
+        map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
         if (state->i_proc == 0)
         {
             print_counts(counts, total_shots);
@@ -157,14 +181,15 @@ int main(int argc, char **argv)
         qasm_parser parser;
         parser.load_qobj_file(qobjFile);
         // Create the backend
-        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method);
+        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, config, parser.num_qubits(), simulation_method);
         if (!state)
         {
             std::cerr << "Failed to create backend\n";
             return 1;
         }
+        
         state->print_config(simulation_method);
-        map<string, IdxType> *counts = parser.execute(state, total_shots, print_metrics);
+        map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
 
         json result_count_json;
         for (const auto& r : (*counts))
@@ -176,6 +201,9 @@ int main(int argc, char **argv)
         cout << "----------" << endl;
         state->print_res_state();
         cout << "----------" << endl;
+        if (dumpfile != "") {
+            state->dump_res_state(dumpfile);
+        }
 
         //if (state->i_proc == 0)
         //{
@@ -189,14 +217,15 @@ int main(int argc, char **argv)
         qasm_parser parser;
         parser.load_qobj_string(std::string(qobjString));
         // Create the backend
-        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method);
+        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, config, parser.num_qubits(), simulation_method);
         if (!state)
         {
             std::cerr << "Failed to create backend\n";
             return 1;
         }
+        
         state->print_config(simulation_method);
-        map<string, IdxType> *counts = parser.execute(state, total_shots, print_metrics);
+        map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
 
         json result_count_json;
         for (const auto& r : (*counts))
@@ -208,6 +237,9 @@ int main(int argc, char **argv)
         cout << "----------" << endl;
         state->print_res_state();
         cout << "----------" << endl;
+        if (dumpfile != "") {
+            state->dump_res_state(dumpfile);
+        }
 
         //if (state->i_proc == 0)
         //{
@@ -220,7 +252,7 @@ int main(int argc, char **argv)
     {
         total_shots = 16384; //for verification
         int benchmark_index = stoi(getCmdOption(argv, argv + argc, "-t"));
-        ValType fidelity = run_brnchmark(backend, benchmark_index, total_shots, simulation_method, run_with_basis);
+        ValType fidelity = run_brnchmark(backend, config, benchmark_index, total_shots, simulation_method, run_with_basis);
         BackendManager::safe_print("Fidelity between NWQSim and Qiskit Execution: %.4f\n", fidelity);
     }
     if (cmdOptionExists(argv, argv + argc, "-a"))
@@ -228,7 +260,7 @@ int main(int argc, char **argv)
         bool passed = true;
         for (int benchmark_index = 12; benchmark_index < 36; benchmark_index++)
         {
-            ValType fidelity = run_brnchmark(backend, benchmark_index, total_shots, simulation_method, run_with_basis);
+            ValType fidelity = run_brnchmark(backend, config, benchmark_index, total_shots, simulation_method, run_with_basis);
             if (fidelity < pass_threshold)
             {
                 BackendManager::safe_print("Benchmark %d fidelity: %.4f Failed!\n", benchmark_index, fidelity);
@@ -250,7 +282,7 @@ int main(int argc, char **argv)
     return 0;
 }
 
-ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis)
+ValType run_brnchmark(std::string backend, const std::string& config, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis)
 {
     stringstream ss_file, ss_result;
     if (is_basis)
@@ -272,14 +304,14 @@ ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, s
     qasm_parser parser;
     parser.load_qasm_file(ss_file.str().c_str());
     // Create the backend
-    std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method);
+    std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, config, parser.num_qubits(), simulation_method);
     if (!state)
     {
         std::cerr << "Failed to create backend\n";
         return 1;
     }
     state->print_config(simulation_method);
-    map<string, IdxType> *svsim_counts = parser.execute(state, total_shots);
+    map<string, IdxType> *svsim_counts = parser.execute(state, "", total_shots);
     map<string, ValType> ref_probs;
     map<string, ValType> svsim_probs;
     string line;

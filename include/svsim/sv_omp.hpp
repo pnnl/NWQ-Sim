@@ -52,6 +52,24 @@ namespace NWQSim
 
             return result;
         }
+        virtual void set_initial (std::string fpath) override {
+            std::ifstream instream;
+            instream.open(fpath, std::ios::in|std::ios::binary);
+            if (instream.is_open()) {
+                instream.read((char*)sv_real, sizeof(ValType) * dim);
+                instream.read((char*)sv_imag, sizeof(ValType) * dim);
+                instream.close();
+            }
+        }
+        virtual void dump_res_state(std::string outpath) override {
+            std::ofstream outstream;
+            outstream.open(outpath, std::ios::out|std::ios::binary);
+            if (outstream.is_open()) {
+                outstream.write((char*)sv_real, sizeof(ValType) * dim);
+                outstream.write((char*)sv_imag, sizeof(ValType) * dim);
+                outstream.close();
+            }
+        };
 
     protected:
         void simulation_kernel(const std::vector<SVGate> &gates) override

@@ -186,10 +186,10 @@ int main(int argc, char** argv) {
   optimize_ansatz(manager, backend, config, hamil, ansatz, settings, algo, seed, params, fval);
   
   std::string qasm_string = ansatz->toQASM3();
-  std::ofstream outfile;
-  outfile.open("../uccsd.qasm", std::fstream::out);
-  outfile << qasm_string;
-  outfile.close();
+  std::ofstream outstream;
+  outstream.open("../uccsd.qasm", std::fstream::out);
+  outstream << qasm_string;
+  outstream.close();
   std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters();
   manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters:\n", fval);
   for (auto& pair: param_map) {
