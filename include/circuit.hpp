@@ -442,9 +442,21 @@ namespace NWQSim
             Gate G(OP::CU, qubit, ctrl, 2, theta, phi, lam);
             gates->push_back(G);
         }
+        void ECR(IdxType ctrl, IdxType qubit) {
+            /******************************************
+             * Echoed Cross-Resonance Gate
+             * Implements 1/sqrt(2) (IX - XY)
+             * ECR = 1/$\sqrt{2}$ * [ 0  1  0  i]
+             *                      [ 1  0 -i  0]
+             *                      [ 0  i  0  1]
+             *                      [-i  0  1  0]
+             ******************************************/
+            Gate G(OP::ECR, qubit, ctrl, 2);
+            gates->push_back(G);
+        }
         void RXX(ValType theta, IdxType qubit0, IdxType qubit1)
         {
-            // RXX, w.s.p. to Qiksik: https://qiskit.org/documentation/stubs/qiskit.circuit.library.RXXGate.html
+            // RXX, w.s.p. to Qiskit: https://qiskit.org/documentation/stubs/qiskit.circuit.library.RXXGate.html
             /**  CU   = [cos(theta/2)    0               0               -i*sin(theta/2)]
                         [0               cos(theta/2)    -i*sin(theta/2) 0]
                         [0               -i*sin(theta/2) cos(theta/2)    0]

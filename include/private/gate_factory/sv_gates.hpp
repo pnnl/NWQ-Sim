@@ -251,7 +251,22 @@ namespace NWQSim
                 memcpy(gm_imag, imag, 16 * sizeof(ValType));
                 return OP::C2;
             });
-
+        GateFactory::getInstance().registerGate(
+            OP::ECR,
+            [](const Gate &g, ValType *gm_real, ValType *gm_imag)
+            {
+                ValType real[16] = {0, S2I, 0, 0,
+                                    S2I, 0, 0, 0,
+                                    0, 0, 0, S2I,
+                                    0, 0, S2I, 0};
+                ValType imag[16] =  {0,  0,  0,  S2I,
+                                     0,  0, -S2I,  0,
+                                     0,  S2I,  0,  0,
+                                    -S2I,  0,  0,  0};
+                memcpy(gm_real, real, 16 * sizeof(ValType));
+                memcpy(gm_imag, imag, 16 * sizeof(ValType));
+                return OP::C2;
+            });
         GateFactory::getInstance().registerGate(
             OP::CY,
             [](const Gate &g, ValType *gm_real, ValType *gm_imag)

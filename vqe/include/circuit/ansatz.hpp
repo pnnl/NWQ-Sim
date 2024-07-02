@@ -93,11 +93,10 @@ namespace NWQSim {
                 case OP::P:
                   outstream << "(" << g.theta << ")";
                   break;
-                case OP::CX: {
-                  outstream << " q[" << g.ctrl << "],";
-                  break;
-                }
                 default:
+                if (g.n_qubits == 2) {
+                  outstream << " q[" << g.ctrl << "],";
+                }
                 break;
               }
             }

@@ -26,7 +26,7 @@ using json = nlohmann::json;
 namespace NWQSim
 {
     // Records all names of 2 qubit gates
-    std::vector<OP> gates2q{OP::CX};
+    std::vector<OP> gates2q{OP::CX, OP::ECR};
 
     //================ Set gates =================
     void set_X(std::complex<double> *res)
@@ -252,12 +252,22 @@ namespace NWQSim
                     T2_1 = Config::backend_config["T2"][str_q1];
                     T1_2 = Config::backend_config["T1"][str_q2];
                     T2_2 = Config::backend_config["T2"][str_q2];
-                    gate_len = Config::backend_config["gate_lens"][gate_name + str_q1 + "_" + str_q2];
-                    err_rate = Config::backend_config["gate_errs"][gate_name + str_q1 + "_" + str_q2];
+                    
+                    std::string name = gate_name + str_q1 + "_" + str_q2;
+                    if (Config::backend_config["gate_lens"].find(name) == Config::backend_config["gate_lens"].end()) {
+                        name = gate_name + str_q2 + "_" + str_q1;
+                    }
+                    // std::cout << name << std::endl;
+                    gate_len = Config::backend_config["gate_lens"][name];
+                    err_rate = Config::backend_config["gate_errs"][name];
+
                 }
                 catch (...)
                 {
-                    throw std::invalid_argument("2-qubit gate (%s,%s) properties is not contained in the configuration file.");
+                    // std::strin
+                    throw std::invalid_argument("2-qubit gate: " + 
+                                                std::string(OP_NAMES[gate_op])+ str_q1 + str_q2+  
+                                                " properties is not contained in the configuration file.");
                 }
 
                 std::complex<double> tr_sp[sp_dim][sp_dim] = {};
@@ -324,7 +334,7 @@ namespace NWQSim
                 set_RZ(&ideal_gate[0][0], theta);
                 break;
             default:
-                throw std::invalid_argument("Unsupported basis gate!");
+                throw std::invalid_argument("Unsupported basis gate: " + std::string(OP_NAMES[gate_op]));
             }
 
             if (!Config::ENABLE_NOISE)

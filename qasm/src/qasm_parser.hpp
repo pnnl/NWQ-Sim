@@ -793,6 +793,8 @@ void qasm_parser::execute_gate(shared_ptr<QuantumState> state, std::shared_ptr<N
         circuit->CSDG(qubits[0], qubits[1]);
     else if (gate_name == "CT")
         circuit->CT(qubits[0], qubits[1]);
+    else if (gate_name == "ECR")
+        circuit->ECR(qubits[0], qubits[1]);
     else if (gate_name == "CTDG")
         circuit->CTDG(qubits[0], qubits[1]);
     else if (gate_name == "CSX")

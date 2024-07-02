@@ -194,6 +194,16 @@ namespace NWQSim
          * RXX gate: TODO
          * RXX = TODO
          ******************************************/
+        ECR,
+        /******************************************
+         * Echoed Cross-Resonance Gate
+         * Implements 1/sqrt(2) (IX - XY)
+         * ECR = 1/sqrt(2) * [ 0  1  0  i]
+         *                   [ 1  0 -i  0]
+         *                   [ 0  i  0  1]
+         *                   [-i  0  1  0]
+         ******************************************/
+
         RXX,
         /******************************************
          * RYY gate: TODO
@@ -291,6 +301,7 @@ namespace NWQSim
         "CSX",
         "CP",
         "CU",
+        "ECR",
         "RXX",
         "RYY",
         "RZZ",
