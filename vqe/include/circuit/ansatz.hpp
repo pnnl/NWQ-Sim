@@ -9,7 +9,9 @@
 #include "observable/pauli_operator.hpp"
 #include "transform/transform.hpp"
 #include "circuit.hpp"
+#include "utils.hpp"
 #include <unordered_set>
+
 /**
  * Generic Ansatz Class (to be inherited by specific types, e.g. UCCSD) 
 */
@@ -275,7 +277,8 @@ namespace NWQSim {
                                   trotter_n(_trotter_n),
                                   Ansatz(2 * _env.n_spatial) {
           n_singles = 2 * env.n_occ * env.n_virt;
-          n_doubles = env.n_occ * (env.n_occ) * env.n_virt * (env.n_virt) + (int)tgamma(env.n_occ+1) * (int)tgamma(env.n_virt+1) / 2; 
+          n_doubles = env.n_occ * (env.n_occ) * env.n_virt * (env.n_virt) +\
+              choose2(env.n_occ) * choose2(env.n_virt) * 2; 
           fermion_operators.reserve(n_singles + n_doubles);
           symmetries = std::vector<std::vector<std::pair<IdxType, ValType> > >((n_singles + n_doubles));
           fermion_ops_to_params.resize(n_doubles + n_singles);
