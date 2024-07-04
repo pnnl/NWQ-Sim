@@ -25,10 +25,7 @@ namespace NWQSim
                    OptimizerSettings opt_settings = OptimizerSettings()): 
                                       SV_CPU(a->num_qubits()),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
-        const auto& paulilist = h->getPauliOperators();
         expvals.resize(1);
-        size_t index = 0;
-        size_t curr_ptr = 0;
         initialize();
         
         

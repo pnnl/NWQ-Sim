@@ -7,6 +7,7 @@
 #include "circuit/measurement.hpp"
 #include "gradient/sa_gradient.hpp"
 #include "observable/hamiltonian.hpp"
+#include "circuit_pass/fusion.hpp"
 #include "nlopt.hpp"
 #include <memory>
 #include <cmath>
@@ -76,12 +77,12 @@ namespace NWQSim
               std::vector<IdxType> xinds;
               pauli.get_xindices(xinds);
               coeffs[index].push_back(pauli.getCoeff().real());
-              if (ncommute > 1) {
+              if (true || ncommute > 1) {
                 composite_xmask |= pauli.get_xmask();
                 xmasks[index].push_back(0);
                 coeffs[index].back() *= (pauli.count_y() % 2) ? -1.0 : 1.0;
                 x_index_sizes[index].push_back(0);
-              zmasks[index].push_back(pauli.get_zmask() | pauli.get_xmask());
+                zmasks[index].push_back(pauli.get_zmask() | pauli.get_xmask());
               } else {
                 xmasks[index].push_back(pauli.get_xmask());
                 x_index_sizes[index].push_back(xinds.size());
@@ -92,15 +93,14 @@ namespace NWQSim
             }
 
             PauliOperator common(composite_xmask, composite_zmask, ansatz->num_qubits());
-            if (ncommute > 1) {
-              Measurement circ(common);
-              ansatz->compose(circ, mapping);
-            }
+            
+            Measurement circ1(common);
+            ansatz->compose(circ1, mapping);
+            
             fill_obslist(index);
-            if (ncommute > 1) {
-              Measurement circ(common, true);
-              ansatz->compose(circ, mapping);
-            }
+            
+            Measurement circ2(common, true);
+            ansatz->compose(circ2, mapping);
             index++;
           }
                                           
@@ -176,7 +176,7 @@ namespace NWQSim
           if (parameters.size() == 0) {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }
-          // energy(parameters);
+          energy(parameters);
           nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
       }
       virtual void call_simulator() {};
@@ -189,13 +189,13 @@ namespace NWQSim
 
       
         // const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators();    
-        auto& pauli_operators = hamil->getPauliOperators();
-        double expval = 0.0;
-        for (auto& clique: pauli_operators) {
-          for (auto& pauli: clique) {
-            expval += getPauliExpectation(pauli) * pauli.getCoeff().real();
-          }
-        }
+        // auto& pauli_operators = hamil->getPauliOperators();
+        // double expval = 0.0;
+        // for (auto& clique: pauli_operators) {
+        //   for (auto& pauli: clique) {
+        //     expval += getPauliExpectation(pauli) * pauli.getCoeff().real();
+        //   }
+        // }
         IdxType index = 0;
         ValType expectation = hamil->getEnv().constant + expvals.front();
         // ValType ene = 0.0;
