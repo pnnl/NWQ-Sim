@@ -1,5 +1,6 @@
 #include <iostream>
 #include "transform/transform.hpp"
+#include "utils.hpp"
 
 namespace NWQSim {
   namespace VQE {
@@ -130,7 +131,6 @@ void getJordanWignerTransform(
     return;
   }
   PauliMap coeffmap;
-  output.resize(1);
   for (auto& paulilist: temp_output) {
     
     for (PauliOperator& op: paulilist) {
@@ -140,12 +140,27 @@ void getJordanWignerTransform(
       coeffmap[op] += op.getCoeff();
     }
   }
+  temp_output[0].clear();
+
+  // can call sorted insertion here, then add an extra loop to the VQEState ctors
   for (auto& op_pair: coeffmap) {
     if (op_pair.second == std::complex<ValType>(0.0, 0.0)) {
       continue;
     }
-    output[0].push_back(op_pair.first);
-    output[0].back().setCoeff(op_pair.second);
+    temp_output[0].push_back(op_pair.first);
+    temp_output[0].back().setCoeff(op_pair.second);
+  }
+  std::vector<PauliOperator>& templist = temp_output[0];
+  std::list<std::vector<IdxType>> pauli_cliques;
+  sorted_insertion(templist, pauli_cliques, false);
+  output.resize(pauli_cliques.size());
+  IdxType index = 0;
+  for (auto& clique: pauli_cliques) {
+    output[index].reserve(clique.size());
+    for (IdxType pauli_idx: clique) {
+      output[index].push_back(templist[pauli_idx]);
+    }
+    index++;
   }
 }
   }; // namespace VQE 

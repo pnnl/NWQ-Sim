@@ -120,20 +120,20 @@ namespace NWQSim {
           return result;
 
         }
-        Ansatz compose(const Circuit& other, std::vector<IdxType>& qubit_mapping) {
-          Ansatz composition = Ansatz(*this);
+        void compose(const Circuit& other, std::vector<IdxType>& qubit_mapping) {
+          // Ansatz composition = Ansatz(*this);
           for (IdxType i = 0; i < num_qubits(); i++) {
             if (i != qubit_mapping[i]) {
-              composition.SWAP(i, qubit_mapping[i]);
+              SWAP(i, qubit_mapping[i]);
             }
           }
           // std::concate
-          composition.gates->insert(composition.gates->end(), other.gates->begin(), other.gates->end());
+          gates->insert(gates->end(), other.gates->begin(), other.gates->end());
           // for (size_t i = 0; i < other->gates.size(); i++) {
 
           // }
           // std::copy(other.gates->begin(), other.gates->end(), composition.gates->begin() + gates->size());
-          return composition;
+          // return composition;
         }
         // Accessors
         virtual IdxType numParams() const { return theta->size(); };

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <math.h>
 #include <sstream>
+#include <list>
 
 
 // Templated print function for std::vector
@@ -141,7 +142,8 @@ IdxType count_ones(IdxType val) {
     // Below is the reverse indexing for comparison with Qiskit
     // std::cout << qubit_idx << " " << orbital_index << " " << spin << " " << orb_type << " " << n_occ << " " << n_virt << std::endl;
   }
-
+  class PauliOperator;
+void sorted_insertion(const std::vector<PauliOperator>& paulilist, std::list<std::vector<IdxType> >& cliques, bool overlap);
   // Convert an integer to an  `n_qubits`-digit binary string
   std::string to_binary_string(IdxType val, IdxType n_qubits);
 

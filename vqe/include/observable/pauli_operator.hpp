@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <memory>
 #include <numeric>
+#include <list>
 #include "utils.hpp"
 namespace NWQSim {
   /* Basic data type for indices */
@@ -33,7 +34,11 @@ namespace NWQSim {
       {1,  1,  1,   -1}, // ZI=Z, ZX=iY, ZZ=I, ZY=-iX
       {1, -1 ,  1,   1} // YI=Y, YX=-iZ, YY=I, YZ=iX
     };
-    
+    enum class COMM_RELATION {
+      GC,  // general commutativity (aka "FC")
+      QWC, // qubit-wise commutativity
+      TRC  // topology-restricted commutativity
+    };
     const char *const PAULI_OP_NAMES[] = {
       "I",
       "X",
@@ -186,29 +191,67 @@ namespace NWQSim {
         }
         bool parity(const PauliOperator& other, ValType& sign) const {
           IdxType mindim = std::min(other.dim, dim);
-          IdxType n_ones = count_ones((xmask ^ other.zmask) | (zmask ^ other.xmask));
+          IdxType n_ones = count_ones((xmask & other.zmask) | (zmask & other.xmask));
           sign = (n_ones / 2) % 2 ? -1.0 : 1.0;
           return (n_ones % 2) == 0;
           // return parity_xor;
         }
         bool parity(IdxType other_zmask, ValType& sign) const {
-          IdxType n_ones = count_ones((xmask ^ other_zmask) | zmask );
+          IdxType n_ones = count_ones((xmask & other_zmask) | zmask );
           sign = (n_ones / 2) % 2 ? -1.0 : 1.0;
           return (n_ones % 2) == 0;
           // return parity_xor;
         }
         bool parity(const PauliOperator& other) const {
           IdxType mindim = std::min(other.dim, dim);
-          IdxType n_ones = count_ones((xmask ^ other.zmask) | (zmask ^ other.xmask));
+          IdxType n_ones = count_ones((xmask & other.zmask) | (zmask & other.xmask));
           return (n_ones % 2) == 0;
           // return parity_xor;
         }
         bool isNonTrivial() const { return non_trivial;}
-        bool QWC(PauliOperator& other) {          
-          return ((xmask ^ other.zmask) | (zmask ^ other.xmask)) == 0;
+        bool QWC(const PauliOperator& other) const {          
+          return ((xmask & other.zmask) | (zmask & other.xmask)) == 0;
         }
-        bool GC(PauliOperator& other) {
+        bool GC(const PauliOperator& other) const {
           return parity(other);
+        }
+        IdxType count_y() const {
+          return count_ones(xmask & zmask);
+        }
+        bool TRC(const PauliOperator& other, 
+                 IdxType group_mask, 
+                 const std::vector<std::vector<IdxType> >& distances,
+                 IdxType tolerance) const {
+          IdxType sympprod = (xmask & other.zmask) | (zmask & other.xmask);
+          IdxType total_anticomm = sympprod | group_mask;
+          IdxType n_anticomm_total = 0;
+          IdxType n_anticomm = 0;
+          std::list<IdxType> anticomm;
+          IdxType D = 0;
+          for (IdxType i = 0; i < dim; i++) {
+            if (total_anticomm & (1 << i)) {
+              n_anticomm_total++;
+              for (auto other: anticomm) {
+                D = std::max(D, distances[i][other]);
+              }
+              anticomm.push_back(i);
+
+              if (sympprod & (1 << i))
+                n_anticomm++;
+            }
+          }
+          bool gc = (n_anticomm % 2) == 0;
+          bool within_tol = (D * n_anticomm_total * n_anticomm_total) < tolerance;
+          return within_tol && gc;
+        }
+        bool commutes(const PauliOperator& other, COMM_RELATION relation) const {
+          switch(relation) {
+            case COMM_RELATION::QWC:
+            return QWC(other);
+            case COMM_RELATION::GC:
+            return GC(other);
+          }
+
         }
         std::complex<ValType> getCoeff() const {return coeff;}
         void setCoeff (std::complex<ValType> new_coeff) {coeff = new_coeff;}
