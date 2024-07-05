@@ -60,6 +60,7 @@ namespace NWQSim
                 instream.read((char*)sv_imag, sizeof(ValType) * dim);
                 instream.close();
             }
+            
         }
         virtual void dump_res_state(std::string outpath) override {
             std::ofstream outstream;

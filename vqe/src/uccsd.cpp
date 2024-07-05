@@ -153,7 +153,13 @@ namespace NWQSim {
     24 1 5 7^ 2^
     25 1 5 7^ 3^
     */
-    void UCCSD::buildAnsatz(std::vector<std::vector<PauliOperator> > pauli_oplist) {
+    void UCCSD::buildAnsatz() {
+      getFermionOps();
+      theta->resize(unique_params * trotter_n);
+      // exit(0);
+      std::vector<std::vector<PauliOperator> > pauli_oplist;
+      pauli_oplist.reserve(4 * n_singles + 16 * n_doubles);
+      transform(env, fermion_operators, pauli_oplist, true);
       unique_params *= trotter_n;
       for (IdxType i = 0; i < env.n_occ; i++) {
         X(i);

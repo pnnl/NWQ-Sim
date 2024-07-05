@@ -250,6 +250,7 @@ namespace NWQSim {
             }
           }
         }
+        virtual void buildAnsatz();
     };
     class UCCSD: public Ansatz {
       protected:
@@ -266,8 +267,7 @@ namespace NWQSim {
         std::vector<std::vector<std::pair<IdxType, ValType> > > symmetries;
         std::vector<IdxType> fermion_ops_to_params; // map from fermion operators to parameters (used in update)
         std::vector<std::vector<FermionOperator> > fermion_operators;
-        void getFermionOps();
-        void buildAnsatz(std::vector<std::vector<PauliOperator> > pauli_oplist);
+        virtual void getFermionOps();
       public:
         UCCSD(const MolecularEnvironment& _env, Transformer transform, IdxType _trotter_n = 1): 
                                   env(_env),
@@ -280,14 +280,9 @@ namespace NWQSim {
           fermion_ops_to_params.resize(n_doubles + n_singles);
           std::fill(fermion_ops_to_params.begin(), fermion_ops_to_params.end(), -1);
           unique_params = 0;
-          getFermionOps();
-          theta->resize(unique_params * trotter_n);
-          // exit(0);
-          std::vector<std::vector<PauliOperator> > pauli_ops;
-          pauli_ops.reserve(4 * n_singles + 16 * n_doubles);
-          transform(env, fermion_operators, pauli_ops, true);  
-          buildAnsatz(pauli_ops);
+          
         };
+        virtual void buildAnsatz() override;
         virtual std::vector<std::string> getFermionicOperatorStrings() const override {
           std::vector<std::string> result;
           result.reserve(fermion_operators.size());
@@ -319,6 +314,63 @@ namespace NWQSim {
             std::string opstring = "";
             bool first = true;
             for (auto& op: oplist) {
+              if (!first) {
+                opstring = " " + opstring;
+              } else {
+                first = false;
+              }
+              opstring = op.toString(env.n_occ, env.n_virt) + opstring;
+            }
+            result.push_back(std::make_pair(opstring, param));
+          }
+          return result;
+        };
+        
+        const MolecularEnvironment& getEnv() const {return env;};
+        virtual IdxType numParams() const override { return unique_params; };
+    };
+    class AdaptUCCSD: public UCCSD {
+      protected:
+        std::vector<uint32_t> active_operators; // indices from the operator pool for active operators
+      public:
+        AdaptUCCSD(const MolecularEnvironment& _env, Transformer transform, IdxType _trotter_n = 1): 
+                                  env(_env),
+                                  trotter_n(_trotter_n),
+                                  UCCSD(env, transform, trotter_n) {};
+        virtual void buildAnsatz() override;
+        virtual std::vector<std::string> getFermionicOperatorStrings() const override {
+          std::vector<std::string> result;
+          result.reserve(active_operators.size());
+          for (auto index: active_operators) {
+            auto oplist = fermion_operators[index];
+            std::string opstring = "";
+            bool first = true;
+            for (auto& op: oplist) {
+              if (!first) {
+                opstring = " " + opstring;
+              } else {
+                first = false;
+              }
+              opstring = op.toString(env.n_occ, env.n_virt) + opstring;
+            }
+            result.push_back(opstring);
+          }
+          return result;
+        };
+        virtual std::vector<std::pair<std::string, ValType> > getFermionicOperatorParameters() const override {
+          std::vector<std::pair<std::string, ValType> > result;
+          result.reserve(fermion_operators.size());
+          for (IdxType index: active_operators) {
+            const auto &oplist = fermion_operators.at(index);
+            const std::vector<std::pair<IdxType, ValType> > &param_expr = symmetries[index];
+            ValType param = 0.0;
+            for (auto& i: param_expr) {
+              param += i.second * theta->at(fermion_ops_to_params[i.first]);
+            }
+            std::string opstring = "";
+            bool first = true;
+            for (auto index: active_operators) {
+              auto oplist = fermion_operators[index];
               if (!first) {
                 opstring = " " + opstring;
               } else {

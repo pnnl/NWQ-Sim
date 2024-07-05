@@ -1,4 +1,6 @@
 #include "observable/pauli_operator.hpp"
+#include "observable/fermion_operator.hpp"
+
 #include "utils.hpp"
 #include <string>
 #include <iostream>

@@ -133,6 +133,15 @@ namespace NWQSim
         iteration++;
         return ene;
       }
+      virtual void get_current_gradient(std::vector<double>& gradient, ValType delta, ValType eta, IdxType n_grad_est) {
+        g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, ansatz->getParams(), gradient, delta, n_grad_est);
+      }
+      void set_ansatz(std::shared_ptr<Ansatz> new_a) {
+        ansatz = new_a;
+      }
+      void set_hamil(std::shared_ptr<Hamiltonian> _hamil) {
+        hamil = _hamil;
+      }
       virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& final_ene, ValType delta, ValType eta, IdxType n_grad_est) {
         Config::PRINT_SIM_TRACE = false;
         std::vector<ValType> gradient (x0.size(),1.0);
@@ -202,6 +211,7 @@ namespace NWQSim
         // ValType ene = hamil.expectation(emap);
         return expectation;
       }
+      std::shared_ptr<Hamiltonian> get_hamiltonian() const { return hamil; }
       protected:
         std::shared_ptr<Ansatz> ansatz;
         std::shared_ptr<Hamiltonian> hamil;

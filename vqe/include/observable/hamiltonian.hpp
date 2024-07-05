@@ -38,6 +38,13 @@ namespace NWQSim {
             n_ops += i.size();
           }
         }
+        Hamiltonian(MolecularEnvironment _env,
+                    const std::vector<std::vector<PauliOperator> > _pauli_operators): env(_env), pauli_operators(_pauli_operators) {
+          n_ops = 0;
+          for (auto& i : pauli_operators) {
+            n_ops += i.size();
+          }
+        }
         void
         get_pauli_coeffs(std::vector<double> & result) const {
           // result.resize(pauli_operators.size;

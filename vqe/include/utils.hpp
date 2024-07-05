@@ -18,9 +18,9 @@ std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
   size_t len = target.size();
   if (len > 0) {
       for (size_t i = 0; i < len - 1; i++) {
-          out << target[i] << ", ";
+          out << std::to_string(target[i]) << ", ";
       }
-      out << target[len-1];
+      out << std::to_string(target[len-1]);
   }
   out << "]";
   return out;
@@ -141,7 +141,8 @@ IdxType count_ones(IdxType val) {
 void sorted_insertion(const std::vector<PauliOperator>& paulilist, std::list<std::vector<IdxType> >& cliques, bool overlap);
   // Convert an integer to an  `n_qubits`-digit binary string
   std::string to_binary_string(IdxType val, IdxType n_qubits);
-
+ void generate_excitations(std::vector<std::vector<FermionOperator> >& _fermion_operators,
+                                         const MolecularEnvironment& _env);
 };};
 
 #endif
