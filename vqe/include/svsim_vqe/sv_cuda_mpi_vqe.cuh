@@ -38,23 +38,13 @@ namespace NWQSim
       virtual void fill_obslist(IdxType index) override {
         ObservableList& obs = obsvec[index];
         
-        obs.x_indices = x_indices[index].data();
         obs.numterms = xmasks[index].size();
         IdxType isize = obs.numterms * sizeof(IdxType);
         IdxType vsize = obs.numterms * sizeof(ValType);
-        SAFE_ALOC_GPU(obs.xmasks, isize);
         SAFE_ALOC_GPU(obs.zmasks, isize);
-        SAFE_ALOC_GPU(obs.x_index_sizes, isize);
-        SAFE_ALOC_GPU(obs.x_indices, x_indices[index].size() * sizeof(IdxType));
         obs.exp_output = expvals_dev;
         SAFE_ALOC_GPU(obs.coeffs, vsize);
-        cudaSafeCall(cudaMemcpy(obs.xmasks, xmasks[index].data(), isize,
-                                    cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(obs.zmasks, zmasks[index].data(), isize,
-                                    cudaMemcpyHostToDevice));
-        cudaSafeCall(cudaMemcpy(obs.x_index_sizes, x_index_sizes[index].data(), isize,
-                                    cudaMemcpyHostToDevice));
-        cudaSafeCall(cudaMemcpy(obs.x_indices, x_indices[index].data(), x_indices[index].size() * sizeof(IdxType),
                                     cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(obs.coeffs, coeffs[index].data(), coeffs[index].size() * sizeof(ValType),
                                     cudaMemcpyHostToDevice));
@@ -65,7 +55,6 @@ namespace NWQSim
         ansatz->EXPECT(obs_device); 
       };
       virtual void call_simulator() override {  
-        std::cout << "Called simulator" << i_proc << std::endl;
         std::vector<ValType> xparams;   
         if (iteration > 0){
           Config::PRINT_SIM_TRACE = false;
@@ -87,17 +76,28 @@ namespace NWQSim
         reset_state();
         sim(ansatz);
         cudaDeviceSynchronize();
+        std::vector<double> m_imag_cpu(m_gpu);
+          
+        cudaSafeCall(cudaMemcpy(m_imag_cpu.data(), m_imag, m_gpu * sizeof(ValType),
+                                    cudaMemcpyDeviceToHost));
+        IdxType reduction_visitors = 0;
+        for (size_t i = 0; i < m_gpu; i++) {
+            if (m_imag_cpu[i] == 1) {
+                reduction_visitors ++;
+                //std::cout << "FAIL AT " << (i_proc * m_gpu) + i << " " << m_imag_cpu[i] << std::endl;
+            }
+        }
         cudaSafeCall(cudaMemcpy(expvals.data(), expvals_dev, expvals.size() * sizeof(ValType),
                                     cudaMemcpyDeviceToHost));
         MPI_Barrier(MPI_COMM_WORLD);
+        printf("%lld %e %lld\n", i_proc, expvals[0], reduction_visitors);
+        std::vector<ValType> temp(expvals.begin(), expvals.end());
+          MPI_Reduce(temp.data(), expvals.data(), expvals.size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
         if (i_proc != 0) {
-          MPI_Reduce(expvals.data(), expvals.data(), expvals.size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
           stat = WAIT;
-        } else {
-          std::vector<ValType> temp(expvals.size());
-          MPI_Reduce(expvals.data(), temp.data(), expvals.size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-          std::copy(temp.begin(), temp.end(), expvals.begin());
-        }
+        }else {
+        
+        printf("Result %e %lld\n", expvals[0], m_gpu);}
         MPI_Barrier(MPI_COMM_WORLD);              
         
       };
@@ -134,15 +134,16 @@ namespace NWQSim
       ~SV_CUDA_MPI_VQE()
         {
           for (auto& obs: obsvec) {
-          
-          
-            SAFE_FREE_GPU(obs.xmasks);
-            SAFE_FREE_GPU(obs.zmasks);
-            SAFE_FREE_GPU(obs.x_index_sizes);
-            SAFE_FREE_GPU(obs.x_indices);
+              SAFE_FREE_GPU(obs.zmasks);
+              SAFE_FREE_GPU(obs.coeffs);
           }
             SAFE_FREE_GPU(expvals_dev);
-            SAFE_FREE_GPU(ansatz->gates->back().data);
+          for (auto g: *ansatz->gates) {
+              if (g.op_name == OP::EXPECT) {
+                  SAFE_FREE_GPU(g.data);
+              }
+          }
+            
             // SAFE_FREE_GPU(randoms_gpu);
             // SAFE_FREE_GPU(gates_gpu);
             // SAFE_FREE_HOST_CUDA(randoms);

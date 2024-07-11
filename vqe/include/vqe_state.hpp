@@ -54,8 +54,20 @@ namespace NWQSim
           }
         }
         void initialize() {
-         
-          const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators();    
+            // 0 3.273514e-01
+// Evaluation 0, fval = 21.949690
+
+// Finished VQE loop.
+        // Final value: 2.194969e+01
+         //   0.519016 (0.00324322 + 0i)IIIIZIIIIIXX
+         //-0.263524 (-0.00210224 + 0i)YZZZZYZIIIII
+            // -0.264174 (-5.01215e-05 + 0i)YZZZZYIIIZII
+            // 0.00287325 (0.00444125 + 0i)IIIXXIIIIXZX
+            // 0.158064 (3.65849e-18 + 0i)IYYIIIIIIIIIIIIIIIII
+            // 0.0981487 (3.65855e-18 + 0i)IIIIIIIIIIIYYIIIIIII
+            // 0.829777 (0.094532 + 0i)IIIIIIIIIIIZIZIIIIII
+            // 0.0108362 (0.0108748 + 0i)XZXIIIIIIIXZXIIIIIII
+          const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators();  
           IdxType index = 0;    
           obsvec.resize(pauli_operators.size());
           xmasks.resize(pauli_operators.size());
@@ -176,8 +188,8 @@ namespace NWQSim
           if (parameters.size() == 0) {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }
-          energy(parameters);
-          nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
+          final_ene = energy(parameters);
+          // nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
       }
       virtual void call_simulator() {};
       virtual ValType energy(const std::vector<double>& x) {

@@ -55,8 +55,9 @@ int main(int argc, char** argv) {
                                 hamil,  // reference to Hamiltonian
                                 nlopt::algorithm::LD_MMA, // NLOpt algorithm for optimization
                                 callback_function, // Callback function for each energy evaluation
-                                0 // Random seed (passed to the SPSA gradient estimator for random perturbations)
-                                );
+                                0, // Random seed (passed to the SPSA gradient estimator for random perturbations)
+                                settings // pass the optimizer settings struct
+                               );
   // Random initial parameters (sets to all 0 by default if not provided). Note that the function modifies `parameters` inplace
   std::vector<double> parameters(ansatz->numParams(), 1.0);
   std::uniform_real_distribution<double> dist(0.0, 2 * PI);

@@ -188,7 +188,6 @@ namespace NWQSim
             gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
             void *args[] = {&sv_gpu, &n_gates};
             cudaSafeCall(cudaDeviceSynchronize());
-
             if (Config::PRINT_SIM_TRACE)
                 MPI_Barrier(MPI_COMM_WORLD);
             sim_timer.start_timer();
@@ -1181,180 +1180,60 @@ namespace NWQSim
             }
         }
 
-        __device__ inline void EXPECT_C0_GATE(IdxType mask) {
+        __device__ inline void EXPECT_C0_GATE(IdxType mask, ValType coeff) {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             double exp_val = 0.0;
-            const IdxType per_pe_work = ((dim) >> (gpu_scale));
-
+            const IdxType per_pe_work = m_gpu;
             for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work; i += blockDim.x * gridDim.x)
             {
                 double val = LOCAL_G_CUDA_MPI(sv_real, i) * LOCAL_G_CUDA_MPI(sv_real, i) + LOCAL_G_CUDA_MPI(sv_imag, i) * LOCAL_G_CUDA_MPI(sv_imag, i);
                 exp_val += hasEvenParity_cu(i & mask, n_qubits) ? val : -val;
             }
-            grid.sync();
             if (tid < per_pe_work) {
-                m_real[tid] = exp_val;
+                m_real[tid] += coeff * exp_val;
             }
         }
 
         __device__ inline
-        void EXPECT_REDUCE(ValType* output, IdxType index, IdxType reduce_dim, ValType coeff) {
+        void EXPECT_REDUCE(ValType* output) {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             // Parallel reduction
-            for (IdxType k = (reduce_dim >> 1); k > 0; k >>= 1)
+            // if (tid < m_gpu && abs(m_real[tid]) > 1e-10 ) {
+            //     printf("%lld %e\n", tid, m_real[tid]);
+            // }
+            for (IdxType k = (dim >> (gpu_scale + 1)); k > 0; k >>= 1)
             {
                 if (tid < k) {
                     m_real[tid] += m_real[tid + k];
+                    LOCAL_P_CUDA_MPI(m_imag, tid + k, 1);
+                    
+                    LOCAL_P_CUDA_MPI(m_imag, tid, 1);
                 }
                 grid.sync();
             }
+            grid.sync();
             if (tid == 0) {
-                *output += m_real[0] * coeff;
+                *output += m_real[0];
+                    LOCAL_P_CUDA_MPI(m_imag, 0, 1);
             }
         }
 
-
-        __device__ inline
-        void EXPECT_GATE(IdxType* x_indices, 
-                         IdxType num_x_indices, 
-                         IdxType xmask, 
-                         IdxType zmask, 
-                         ValType* output,
-                         ValType coeff,
-                         IdxType output_index)  {
-                         
-            const int tid = blockDim.x * blockIdx.x + threadIdx.x;
+__device__ __inline__ void EXPECT_GATE(ObservableList o)  {
             grid_group grid = this_grid();
-            BARR_NVSHMEM;
-            IdxType reduce_dim;
-            if (num_x_indices == 2) {
-                IdxType q0 = x_indices[0];
-                IdxType q1 = x_indices[1];
-                IdxType q0t = q0;
-
-                if (q0 >= lg2_m_gpu) {
-                    SWAP_GATE(0, q0);
-                    q0t = 0;
-                    xmask = swapBits_cu(xmask, q0t, q0);
-                    zmask = swapBits_cu(zmask, q0t, q0);
-                    BARR_NVSHMEM;
-                    assert(q0t != q1);
-                }
-                IdxType zind0 = ((zmask & (1 << q0t)) >> q0t);
-                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
-                const ValType* gm_real = exp_gate_perms_2q_d[zind0 + zind1];
-                const ValType* gm_imag = exp_gate_perms_2q_d[zind0 + zind1] + 16;
-                if (max(q0t, q1) < lg2_m_gpu)
-                {
-                    reduce_dim = ((dim) >> (gpu_scale + 2));
-                } else {
-                    reduce_dim = ((dim) >> (gpu_scale + 1));
-                }
-                EXPECT_C2V1_GATE(gm_real, gm_imag, q0t, q1, xmask | zmask);
-                
-                BARR_NVSHMEM;
-                EXPECT_REDUCE(output, output_index, reduce_dim, coeff);
-                BARR_NVSHMEM;
-                if (q0 >= lg2_m_gpu) {
-                    SWAP_GATE(0, q0);
-                }
-                
-            } else if (num_x_indices == 4) {
-                IdxType q0 = x_indices[0];
-                IdxType q1 = x_indices[1];
-                IdxType q2 = x_indices[2];
-                IdxType q3 = x_indices[3];
-                IdxType q0t = q0;
-                IdxType q1t = q1;
-                IdxType q2t = q2;
-                
-                IdxType local_index = 0;
-                // assume the indices are sorted
-                if (q0 >= lg2_m_gpu) {
-                    q0t = local_index++;
-                    while((q0t == q1t || q0t == q2t) && q0t < lg2_m_gpu) {
-                        q0t++;
-                    }
-                    SWAP_GATE(q0t, q0);
-                    zmask = (IdxType)swapBits_cu(zmask, (uint64_t)q0t, (uint64_t)q0);
-                    xmask = (IdxType)swapBits_cu(xmask, (uint64_t)q0t, (uint64_t)q0);
-                    BARR_NVSHMEM; 
-                }
-                if (q1 >= lg2_m_gpu) {
-
-                    q1t = local_index++;
-                    while((q1t == q0t || q1t == q2t) && q1t < lg2_m_gpu) {
-                        q1t++;
-                    }
-                    SWAP_GATE(q1t, q1);
-                    zmask = (IdxType)swapBits_cu(zmask, (uint64_t)q1t, (uint64_t)q1);
-                    xmask = (IdxType)swapBits_cu(xmask, (uint64_t)q1t, (uint64_t)q1);
-                    BARR_NVSHMEM;
-                }
-                if (q2 >= lg2_m_gpu) {
-                    q2t = local_index++;
-
-                    while((q2t == q0t || q2t == q1t) && q2t < lg2_m_gpu) {
-                        q2t++;
-                    }
-                    SWAP_GATE(q2t, q2);
-                    zmask = (IdxType)swapBits_cu(zmask, (uint64_t)q2t, (uint64_t)q2);
-                    xmask = (IdxType)swapBits_cu(xmask, (uint64_t)q2t, (uint64_t)q2);
-                    BARR_NVSHMEM;
-                }
-                assert (q0t < lg2_m_gpu && q1t < lg2_m_gpu && q2t < lg2_m_gpu);
-
-                const IdxType v0 = min(q0t, q1t);
-                const IdxType v1 = min(q2t, q3);
-                const IdxType v2 = max(q0t, q1t);
-                const IdxType v3 = max(q2t, q3);
-                const IdxType p = min(v0, v1);
-                const IdxType q = min(min(v2, v3), max(v0, v1));
-                const IdxType r = max(min(v2, v3), max(v0, v1));
-                const IdxType s = max(v2, v3);                
-                IdxType zind0 = ((zmask & (1 << p)) >> p);
-                IdxType zind1 = ((zmask & (1 << q)) >> q) << 1;
-                IdxType zind2 = ((zmask & (1 << r)) >> r) << 2;
-                IdxType zind3 = ((zmask & (1 << s)) >> s) << 3;
-
-                if (q3 < lg2_m_gpu)
-                {
-                    reduce_dim = ((dim) >> (gpu_scale + 4));
-                } else {
-                    reduce_dim = ((dim) >> (gpu_scale + 3));
-                }
-                const ValType* gm_real = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3];
-                const ValType* gm_imag = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3] + 256;
-                EXPECT_C4V1_GATE(gm_real, gm_imag, p, q, r, s, xmask | zmask);
-                
-                BARR_NVSHMEM;
-                EXPECT_REDUCE(output, output_index, reduce_dim, coeff);
-                BARR_NVSHMEM;
-                if (q2 >= lg2_m_gpu) {
-                    SWAP_GATE(q2t, q2);
-                    BARR_NVSHMEM;
-                }
-                if (q1 >= lg2_m_gpu) {
-                    SWAP_GATE(q1t, q1);
-                    BARR_NVSHMEM;
-                }
-                if (q0 >= lg2_m_gpu) {
-                    SWAP_GATE(q0t, q0);
-                    BARR_NVSHMEM;
-                }
-            } else if (num_x_indices == 0) {
-                EXPECT_C0_GATE(zmask);
-                reduce_dim = ((dim) >> (gpu_scale));
-                BARR_NVSHMEM;
-                EXPECT_REDUCE(output, output_index, reduce_dim, coeff);
-                BARR_NVSHMEM;
-            } else {
-                printf("ERROR\n");
-                assert(false);
+            const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
+            if (tid < m_gpu) {
+                m_real[tid] = 0;
+            
             }
+            for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
+                EXPECT_C0_GATE(o.zmasks[obs_ind], o.coeffs[obs_ind]);
+            }
+            BARR_NVSHMEM;
+            EXPECT_REDUCE(o.exp_output);
         }
+        
         __device__ __inline__ void M_GATE(const IdxType qubit, const IdxType cur_index)
         {
             ValType rand = randoms_gpu[cur_index];
@@ -1882,18 +1761,10 @@ namespace NWQSim
             {
                 
                 ObservableList o = *(ObservableList*)((sv_gpu->gates_gpu)[t].data);
-                IdxType* xinds = o.x_indices;
-                for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
-                    sv_gpu->EXPECT_GATE(xinds, 
-                                o.x_index_sizes[obs_ind],
-                                o.xmasks[obs_ind],
-                                o.zmasks[obs_ind],
-                                o.exp_output + n_expect,
-                                o.coeffs[obs_ind],
-                                obs_ind);
-                    xinds += o.x_index_sizes[obs_ind];
-                }
-                n_expect ++;
+                
+                BARR_NVSHMEM;
+                sv_gpu->EXPECT_GATE(o);
+                    
                 BARR_NVSHMEM;
             }
             // only need sync when operating on remote qubits

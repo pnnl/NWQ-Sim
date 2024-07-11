@@ -27,6 +27,7 @@ namespace NWQSim
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
         expvals.resize(1);
         initialize();
+
         
         
       };
@@ -34,6 +35,15 @@ namespace NWQSim
         reset_state();
         std::fill(expvals.begin(), expvals.end(), 0.0);
         sim(ansatz);
+                  std::vector<std::vector<PauliOperator>> paulis = hamil->getPauliOperators();
+        for (auto paulivec: paulis) {
+            for (auto op: paulivec) {
+            double exp = getPauliExpectation(op);
+            if (abs(exp) > 1e-10) {
+                std::cout << exp << " " << op  << std::endl;
+            }
+            }
+        }
       };
 
       virtual void fill_obslist(IdxType index) override {

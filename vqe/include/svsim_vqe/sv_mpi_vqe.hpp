@@ -26,6 +26,8 @@ namespace NWQSim
                    OptimizerSettings opt_settings = OptimizerSettings()): 
                                       SV_MPI(a->num_qubits()),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
+        expvals.resize(1);
+        initialize();
       };
 
       virtual void fill_obslist(IdxType index) override {
@@ -63,6 +65,8 @@ namespace NWQSim
         std::fill(expvals.begin(), expvals.end(), 0);
         reset_state();
         sim(ansatz);
+        std::vector<ValType> exptemp(expvals.begin(), expvals.end());
+        MPI_Reduce(exptemp.data(), expvals.data(), expvals.size(),  MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
         if (i_proc != 0) {
           stat = WAIT;
         }
