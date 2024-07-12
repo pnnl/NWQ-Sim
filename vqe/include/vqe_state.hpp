@@ -30,7 +30,7 @@ namespace NWQSim
       
         VQEState(std::shared_ptr<Ansatz> a, 
                    std::shared_ptr<Hamiltonian> h, 
-                   nlopt::algorithm optimizer_algorithm,
+                   nlopt::algorithm _optimizer_algorithm,
                    Callback _callback,
                   IdxType seed = 0,
                   OptimizerSettings opt_settings = OptimizerSettings()): 
@@ -38,24 +38,21 @@ namespace NWQSim
                                       ansatz(a),
                                       callback(_callback),
                                       g_est(seed),
+                                      optimizer_algorithm(_optimizer_algorithm),
                                       optimizer_settings(opt_settings)
                                       {
-           optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
-          // Set the termination criteria
-          optimizer.set_maxeval(optimizer_settings.max_evals);
-          optimizer.set_maxtime(optimizer_settings.max_time);
-          optimizer.set_ftol_abs(optimizer_settings.abs_tol);
-          optimizer.set_ftol_rel(optimizer_settings.rel_tol);
-          optimizer.set_stopval(optimizer_settings.stop_val);
-          // Set any specified optimizer parameters
-          for (auto& kv_pair: optimizer_settings.parameter_map) {
-              optimizer.set_param(kv_pair.first.c_str(), kv_pair.second);
-          }
+          
         }
         void initialize() {
-         
-          const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators();    
+          const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators(); 
           IdxType index = 0;    
+          measurement.reset(new Ansatz(ansatz->num_qubits()));
+          obsvec.clear();
+          xmasks.clear();
+          zmasks.clear();
+          x_index_sizes.clear();
+          x_indices.clear();
+          coeffs.clear();
           obsvec.resize(pauli_operators.size());
           xmasks.resize(pauli_operators.size());
           zmasks.resize(pauli_operators.size());
@@ -65,52 +62,22 @@ namespace NWQSim
           std::vector<IdxType> mapping (ansatz->num_qubits());
           std::iota(mapping.begin(), mapping.end(), 0);
           for (auto& pauli_list: pauli_operators) {
-            xmasks[index].reserve(pauli_list.size());
-            zmasks[index].reserve(pauli_list.size());
-            coeffs[index].reserve(pauli_list.size());
-            x_index_sizes[index].reserve(pauli_list.size());
-            IdxType composite_xmask = 0;
-            IdxType composite_zmask = 0;
-            IdxType ncommute = pauli_list.size();
-            for (const PauliOperator& pauli: pauli_list) {
-              std::vector<IdxType> xinds;
-              pauli.get_xindices(xinds);
-              coeffs[index].push_back(pauli.getCoeff().real());
-              if (ncommute > 1) {
-                composite_xmask |= pauli.get_xmask();
-                xmasks[index].push_back(0);
-                coeffs[index].back() *= (pauli.count_y() % 2) ? -1.0 : 1.0;
-                x_index_sizes[index].push_back(0);
-              zmasks[index].push_back(pauli.get_zmask() | pauli.get_xmask());
-              } else {
-                xmasks[index].push_back(pauli.get_xmask());
-                x_index_sizes[index].push_back(xinds.size());
-                x_indices[index] = xinds;
-                zmasks[index].push_back(pauli.get_zmask());
-              }
-              composite_zmask |= pauli.get_zmask();
-            }
-
-            PauliOperator common(composite_xmask, composite_zmask, ansatz->num_qubits());
-            if (ncommute > 1) {
-              Measurement circ(common);
-              ansatz->compose(circ, mapping);
-            }
+            xmasks[index] = std::vector<IdxType>(pauli_list.size(), 0);
+            x_index_sizes[index] = std::vector<IdxType>(pauli_list.size(), 0);
+            PauliOperator common = make_common_op(pauli_list, 
+                                                  zmasks[index], 
+                                                  coeffs[index]);
+            Measurement circ1(common);
+            measurement->compose(circ1, mapping);
             fill_obslist(index);
-            if (ncommute > 1) {
-              Measurement circ(common, true);
-              ansatz->compose(circ, mapping);
-            }
+            Measurement circ2(common, true);
+            measurement->compose(circ2, mapping);
             index++;
           }
                                           
           // Check if the chosen algorithm requires derivatives
-          compute_gradient = std::string(optimizer.get_algorithm_name()).find("no-derivative") == std::string::npos;
-          optimizer.set_min_objective(nl_opt_function, (void*)this);
-          std::vector<double> lower_bounds(ansatz->numParams(), 0);
-          std::vector<double> upper_bounds(ansatz->numParams(), 2 * PI);
-          optimizer.set_lower_bounds(lower_bounds);
-          optimizer.set_upper_bounds(upper_bounds);
+          compute_gradient = std::string(nlopt::algorithm_name(optimizer_algorithm)).find("no-derivative") == std::string::npos;
+          
           
         };
       virtual void fill_obslist(IdxType index) {};
@@ -134,13 +101,13 @@ namespace NWQSim
         return ene;
       }
       virtual void get_current_gradient(std::vector<double>& gradient, ValType delta, ValType eta, IdxType n_grad_est) {
-        g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, ansatz->getParams(), gradient, delta, n_grad_est);
+        g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, ansatz->getParamRef(), gradient, delta, n_grad_est);
       }
       void set_ansatz(std::shared_ptr<Ansatz> new_a) {
         ansatz = new_a;
       }
-      void set_hamil(std::shared_ptr<Hamiltonian> _hamil) {
-        hamil = _hamil;
+      void swap_hamil(std::shared_ptr<Hamiltonian>& _hamil) {
+        hamil.swap(_hamil);
       }
       virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& final_ene, ValType delta, ValType eta, IdxType n_grad_est) {
         Config::PRINT_SIM_TRACE = false;
@@ -181,14 +148,31 @@ namespace NWQSim
         return result;
       }
       virtual void optimize(std::vector<ValType>& parameters, ValType& final_ene) {
-          iteration = 0;
-          if (parameters.size() == 0) {
-            parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
+          nlopt::opt optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
+          optimizer.set_min_objective(nl_opt_function, (void*)this);
+          std::vector<double> lower_bounds(ansatz->numParams(), -2 * PI);
+          std::vector<double> upper_bounds(ansatz->numParams(), 2 * PI);
+          optimizer.set_lower_bounds(lower_bounds);
+          optimizer.set_upper_bounds(upper_bounds);
+          // Set the termination criteria
+          optimizer.set_maxeval(optimizer_settings.max_evals);
+          optimizer.set_maxtime(optimizer_settings.max_time);
+          optimizer.set_ftol_abs(optimizer_settings.abs_tol);
+          optimizer.set_ftol_rel(optimizer_settings.rel_tol);
+          optimizer.set_stopval(optimizer_settings.stop_val);
+          // Set any specified optimizer parameters
+          for (auto& kv_pair: optimizer_settings.parameter_map) {
+              optimizer.set_param(kv_pair.first.c_str(), kv_pair.second);
           }
+          iteration = 0;
+          // if (parameters.size() == 0) {
+          //   parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
+          // }
           // energy(parameters);
           nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
       }
       virtual void call_simulator() {};
+      virtual void call_simulator(std::shared_ptr<Ansatz> measurement) {};
       virtual ValType energy(const std::vector<double>& x) {
         ansatz->setParams(x);
 
@@ -211,12 +195,13 @@ namespace NWQSim
         // ValType ene = hamil.expectation(emap);
         return expectation;
       }
+      
       std::shared_ptr<Hamiltonian> get_hamiltonian() const { return hamil; }
       protected:
         std::shared_ptr<Ansatz> ansatz;
+        std::shared_ptr<Ansatz> measurement;
         std::shared_ptr<Hamiltonian> hamil;
         SPSA g_est;
-        nlopt::opt optimizer;
         bool compute_gradient;
         Callback callback;
         OptimizerSettings optimizer_settings;
@@ -228,6 +213,7 @@ namespace NWQSim
         std::vector<std::vector<IdxType> > x_indices;
         std::vector<std::vector<ValType> > coeffs;
         std::vector<ValType> expvals;
+        nlopt::algorithm optimizer_algorithm;
 
       
 

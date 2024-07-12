@@ -39,10 +39,7 @@ namespace NWQSim {
         return getQubitIndex(orbital, spin_down, is_virtual, n_occ, n_virt, xacc_scheme);
       }
     };
-     void generate_excitations(std::vector<std::vector<FermionOperator> >& _fermion_operators,
-                                         const MolecularEnvironment& _env, Transformer transform) {
 
-        };
   };// namespace vqe
 };// namespace nwqsim
 #endif

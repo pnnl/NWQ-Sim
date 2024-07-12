@@ -2,6 +2,8 @@
 #include "utils.hpp"
 #include <unordered_map>
 #include <sstream>
+#include "circuit/dynamic_ansatz.hpp"
+#include "vqe_adapt.hpp"
 #define UNDERLINE "\033[4m"
 
 #define CLOSEUNDERLINE "\033[0m"
@@ -24,6 +26,7 @@ int show_help() {
   std::cout << "--maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)" << std::endl;
   std::cout << "--stopval             Cutoff function value for optimizer. Defaults to -MAXFLOAT (off)" << std::endl;
   std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl;
+  std::cout << "--adapt               Use AdaptVQE for dynamic ansatz construction. Defaults to false" << std::endl;
   return 1;
 }
 
@@ -37,12 +40,14 @@ int parse_args(int argc, char** argv,
                 nlopt::algorithm& algo,
                 NWQSim::VQE::OptimizerSettings& settings,
                 bool& use_xacc,
+                bool& adapt,
                 unsigned& seed) {
   std::string opt_config_file = "";
   config_file = "../default_config.json";
   std::string algorithm_name = "LN_COBYLA";
   hamilfile = "";
   backend = "CPU";
+  adapt = false;
   n_particles = -1;
   settings.max_evals = 200;
   seed = time(NULL);
@@ -86,6 +91,9 @@ int parse_args(int argc, char** argv,
     if (argname == "--abstol") {
       settings.abs_tol = std::atof(argv[++i]);
     } else 
+    if (argname == "--adapt") {
+      adapt = true;
+    } else 
     if (argname == "--maxeval") {
       settings.max_evals = std::atoll(argv[++i]);
     } else if (argname == "--stopval") {
@@ -107,8 +115,8 @@ int parse_args(int argc, char** argv,
       return show_help();
   }
   algo = (nlopt::algorithm)nlopt_algorithm_from_string(algorithm_name.c_str());
-  if (config_file != "") {
-    std::ifstream f(config_file);
+  if (opt_config_file != "") {
+    std::ifstream f(opt_config_file);
     json data = json::parse(f); 
     for (json::iterator it = data.begin(); it != data.end(); ++it) {
       settings.parameter_map[it.key()] = it.value().get<NWQSim::ValType>();
@@ -127,7 +135,10 @@ void carriage_return_callback_function(const std::vector<NWQSim::ValType>& x, NW
 void callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fval, NWQSim::IdxType iteration) {
   printf("\33[2KEvaluation %lld, fval = %f\n", iteration, fval);fflush(stdout);
 }
-
+// Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
+void silent_callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fval, NWQSim::IdxType iteration) {
+  
+}
 
 void optimize_ansatz(const VQEBackendManager& manager,
                      const std::string& backend,
@@ -137,6 +148,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      NWQSim::VQE::OptimizerSettings& settings,
                      nlopt::algorithm& algo,
                      unsigned& seed,
+                     bool& adapt,
                      std::vector<double>& params,
                      double& fval) {
   std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, configfile, ansatz, hamil, algo, callback_function, seed, settings);  
@@ -145,7 +157,20 @@ void optimize_ansatz(const VQEBackendManager& manager,
   params.resize(ansatz->numParams());
   std::generate(params.begin(), params.end(), 
       [&random_engine, &initdist] () {return initdist(random_engine);});
-  state->optimize(params, fval);
+
+  if (adapt) {
+    std::shared_ptr<NWQSim::VQE::DynamicAnsatz> dyn_ansatz = std::reinterpret_pointer_cast<NWQSim::VQE::DynamicAnsatz>(ansatz);
+    dyn_ansatz->make_op_pool(hamil->getTransformer());
+
+    NWQSim::VQE::AdaptVQE adapt_instance(dyn_ansatz, state, hamil);
+    adapt_instance.make_commutators();
+    adapt_instance.optimize(params, fval, 100);
+  } else {
+    state->initialize();
+    state->optimize(params, fval);
+
+  }
+  
 }
 
 
@@ -155,9 +180,9 @@ int main(int argc, char** argv) {
   NWQSim::IdxType n_part;
   NWQSim::VQE::OptimizerSettings settings;
   nlopt::algorithm algo;
-  bool use_xacc;
+  bool use_xacc, adapt;
   unsigned seed;
-  if (parse_args(argc, argv, manager, hamil_path, backend, config, n_part, algo, settings, use_xacc, seed)) {
+  if (parse_args(argc, argv, manager, hamil_path, backend, config, n_part, algo, settings, use_xacc, adapt, seed)) {
     return 1;
   }
 #ifdef MPI_ENABLED
@@ -173,17 +198,24 @@ int main(int argc, char** argv) {
   manager.safe_print("Constructed %lld Pauli Observables\n", hamil->num_ops());
   manager.safe_print("Constructing UCCSD Ansatz...\n");
 
-  std::shared_ptr<NWQSim::VQE::Ansatz> ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
-    hamil->getEnv(),
-    NWQSim::VQE::getJordanWignerTransform,
-    1
-  );
+  std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
+  if (adapt)
+  {
+    ansatz = std::make_shared<NWQSim::VQE::DynamicAnsatz>(hamil->getEnv());
+  } else {
+    ansatz  = std::make_shared<NWQSim::VQE::UCCSD>(
+      hamil->getEnv(),
+      NWQSim::VQE::getJordanWignerTransform,
+      1
+    );
+  }
+  ansatz->buildAnsatz();
 
   manager.safe_print("%lld Gates with %lld parameters\n" ,ansatz->num_gates(), ansatz->numParams());
   std::vector<double> params;
   double fval;
   manager.safe_print("Beginning VQE loop...\n");
-  optimize_ansatz(manager, backend, config, hamil, ansatz, settings, algo, seed, params, fval);
+  optimize_ansatz(manager, backend, config, hamil, ansatz, settings, algo, seed, adapt, params, fval);
   
   std::string qasm_string = ansatz->toQASM3();
   std::ofstream outstream;

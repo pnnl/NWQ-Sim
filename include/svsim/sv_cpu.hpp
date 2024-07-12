@@ -80,7 +80,6 @@ namespace NWQSim
                 instream.read((char*)sv_imag, sizeof(ValType) * dim);
             }
             instream.close();
-            std::cout << sv_real[0] << std::endl;
         }
 
         virtual void dump_res_state(std::string outpath) override {
@@ -201,7 +200,6 @@ namespace NWQSim
             auto start = std::chrono::steady_clock::now();
             int n_gates = gates.size();
             int n_expect = 0;
-            std::cout << sv_real[0] << std::endl;
             for (int i = 0; i < n_gates; i++)
             {
 
@@ -235,14 +233,14 @@ namespace NWQSim
                     ObservableList o = *(ObservableList*)(g.data);
                     IdxType* xinds = o.x_indices;
                     for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
-                        EXPECT_GATE(xinds, 
-                                    o.x_index_sizes[obs_ind],
-                                    o.xmasks[obs_ind],
+                        EXPECT_GATE(NULL, 
+                                    0,
+                                    NULL,
                                     o.zmasks[obs_ind],
                                     o.exp_output,
                                     o.coeffs[obs_ind],
                                     obs_ind);
-                        xinds += o.x_index_sizes[obs_ind];
+                        // xinds += o.x_index_sizes[obs_ind];
                     }
                     n_expect++;
                 }

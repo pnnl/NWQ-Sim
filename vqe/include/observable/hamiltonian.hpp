@@ -22,6 +22,7 @@ namespace NWQSim {
         std::vector<std::vector<FermionOperator> > fermi_operators;
         std::vector<std::vector<PauliOperator> > pauli_operators;
         IdxType n_ops;
+        Transformer qubit_transform;
       
       public:
         Hamiltonian(std::string input_path, IdxType n_particles, bool xacc_scheme,
@@ -75,6 +76,7 @@ namespace NWQSim {
           return result;
         }
         const MolecularEnvironment& getEnv () const {return env;}
+        Transformer getTransformer () const {return qubit_transform;}
         const std::vector<std::vector<PauliOperator> >& getPauliOperators() const {return pauli_operators;};
         const std::vector<std::vector<FermionOperator> >& getFermionicOperators() const {return fermi_operators;};
     };

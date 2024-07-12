@@ -3,6 +3,7 @@
 #include <vector>
 #include <complex>
 #include "utils.hpp"
+#include "environment.hpp"
 namespace NWQSim {
   /* Basic data type for indices */
   using IdxType = long long int;
@@ -69,6 +70,8 @@ namespace NWQSim {
         return ss.str();
       };
     };
+    void generate_excitations(std::vector<std::vector< std::vector<FermionOperator> > >& _fermion_operators,
+                                    const MolecularEnvironment& _env);
   };// namespace vqe
 };// namespace nwqsim
 

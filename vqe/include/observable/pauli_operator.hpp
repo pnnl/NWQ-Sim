@@ -140,11 +140,11 @@ namespace NWQSim {
           }
           return PauliOperator(newxmask, newzmask, dim, new_coeff);
         }
-        PauliOperator& operator*=(ValType scalar){
+        PauliOperator& operator*=(std::complex<ValType> scalar){
           coeff *= scalar;
           return *this;
         }
-        PauliOperator operator*(ValType scalar) const {
+        PauliOperator operator*(std::complex<ValType> scalar) const {
           PauliOperator newop (*this);
           newop.coeff *= scalar;
           return newop;

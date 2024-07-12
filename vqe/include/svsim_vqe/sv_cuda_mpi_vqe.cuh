@@ -111,6 +111,22 @@ namespace NWQSim
 
       }
       virtual void optimize(std::vector<ValType>& parameters, ValType& final_ene) override {
+          nlopt::opt optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
+          optimizer.set_min_objective(nl_opt_function, (void*)this);
+          std::vector<double> lower_bounds(ansatz->numParams(), 0);
+          std::vector<double> upper_bounds(ansatz->numParams(), 2 * PI);
+          optimizer.set_lower_bounds(lower_bounds);
+          optimizer.set_upper_bounds(upper_bounds);
+          // Set the termination criteria
+          optimizer.set_maxeval(optimizer_settings.max_evals);
+          optimizer.set_maxtime(optimizer_settings.max_time);
+          optimizer.set_ftol_abs(optimizer_settings.abs_tol);
+          optimizer.set_ftol_rel(optimizer_settings.rel_tol);
+          optimizer.set_stopval(optimizer_settings.stop_val);
+          // Set any specified optimizer parameters
+          for (auto& kv_pair: optimizer_settings.parameter_map) {
+              optimizer.set_param(kv_pair.first.c_str(), kv_pair.second);
+          }
           iteration = 0;
           if (parameters.size() == 0) {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);

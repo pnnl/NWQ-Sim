@@ -1,4 +1,5 @@
 #include "circuit/ansatz.hpp"
+#include "circuit/dynamic_ansatz.hpp"
 namespace NWQSim {
   namespace VQE {
     void UCCSD::getFermionOps()
@@ -159,11 +160,17 @@ namespace NWQSim {
       // exit(0);
       std::vector<std::vector<PauliOperator> > pauli_oplist;
       pauli_oplist.reserve(4 * n_singles + 16 * n_doubles);
-      transform(env, fermion_operators, pauli_oplist, true);
+      qubit_transform(env, fermion_operators, pauli_oplist, true);
       unique_params *= trotter_n;
-      for (IdxType i = 0; i < env.n_occ; i++) {
-        X(i);
-        X(i+env.n_spatial);
+      if (env.xacc_scheme) {
+        for (IdxType i = 0; i < env.n_occ; i++) {
+          X(i);
+          X(i+env.n_spatial);
+        }
+      } else {
+        for (IdxType i = 0; i < 2 * env.n_occ; i++) {
+          X(i);
+        }
       }
       IdxType index = 0; // parameter index, shares parameters for Pauli evolution gates corresponding to the same Fermionic operator within the same Trotter step
       for (auto& fermionic_group: pauli_oplist) {
@@ -206,6 +213,21 @@ namespace NWQSim {
           index++;
         }
       }
+    }
+    void DynamicAnsatz::buildAnsatz() {
+      // exit(0);
+      if (env.xacc_scheme) {
+        for (IdxType i = 0; i < env.n_occ; i++) {
+          X(i);
+          X(i+env.n_spatial);
+        }
+      } else {
+        for (IdxType i = 0; i < 2 * env.n_occ; i++) {
+          X(i);
+        }
+      }
+
+      
     }
 }; //namespace VQE
 }; //namespace NWQSim

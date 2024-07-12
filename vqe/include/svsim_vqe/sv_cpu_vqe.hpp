@@ -30,7 +30,6 @@ namespace NWQSim
         expvals.resize(1);
         size_t index = 0;
         size_t curr_ptr = 0;
-        initialize();
         
         
       };
@@ -38,8 +37,14 @@ namespace NWQSim
         reset_state();
         std::fill(expvals.begin(), expvals.end(), 0.0);
         sim(ansatz);
+        sim(measurement);
       };
 
+      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) override {    
+        reset_state();
+        sim(ansatz);
+        sim(_measurement);
+      };
       virtual void fill_obslist(IdxType index) override {
         ObservableList& obs = obsvec[index];
         obs.coeffs = coeffs[index].data();
@@ -49,7 +54,7 @@ namespace NWQSim
         obs.exp_output = expvals.data();
         obs.x_indices = x_indices[index].data();
         obs.numterms = xmasks[index].size();
-        ansatz->EXPECT(&obs); 
+        measurement->EXPECT(&obs);
       };
       virtual ValType getPauliExpectation(const PauliOperator& op) override {
           IdxType qubit = op.get_dim();
