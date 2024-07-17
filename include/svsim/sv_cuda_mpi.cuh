@@ -1200,23 +1200,18 @@ namespace NWQSim
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             // Parallel reduction
-            // if (tid < m_gpu && abs(m_real[tid]) > 1e-10 ) {
-            //     printf("%lld %e\n", tid, m_real[tid]);
-            // }
             for (IdxType k = (dim >> (gpu_scale + 1)); k > 0; k >>= 1)
             {
                 if (tid < k) {
                     m_real[tid] += m_real[tid + k];
-                    LOCAL_P_CUDA_MPI(m_imag, tid + k, 1);
-                    
-                    LOCAL_P_CUDA_MPI(m_imag, tid, 1);
                 }
                 grid.sync();
             }
             grid.sync();
-            if (tid == 0) {
+            if (tid == 0) { 
+                printf("GPU before %lld %e\n", i_proc, output[0]);
                 *output += m_real[0];
-                    LOCAL_P_CUDA_MPI(m_imag, 0, 1);
+                printf("GPU after %lld %e\n", i_proc, output[0]);
             }
         }
 
@@ -1230,7 +1225,8 @@ __device__ __inline__ void EXPECT_GATE(ObservableList o)  {
             for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
                 EXPECT_C0_GATE(o.zmasks[obs_ind], o.coeffs[obs_ind]);
             }
-            BARR_NVSHMEM;
+            grid.sync();
+            
             EXPECT_REDUCE(o.exp_output);
         }
         

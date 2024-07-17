@@ -38,7 +38,7 @@ namespace NWQSim
       virtual void fill_obslist(IdxType index) override {
         ObservableList& obs = obsvec[index];
         
-        obs.numterms = xmasks[index].size();
+        obs.numterms = zmasks[index].size();
         IdxType isize = obs.numterms * sizeof(IdxType);
         IdxType vsize = obs.numterms * sizeof(ValType);
         SAFE_ALOC_GPU(obs.zmasks, isize);
@@ -76,21 +76,10 @@ namespace NWQSim
         reset_state();
         sim(ansatz);
         cudaDeviceSynchronize();
-        std::vector<double> m_imag_cpu(m_gpu);
-          
-        cudaSafeCall(cudaMemcpy(m_imag_cpu.data(), m_imag, m_gpu * sizeof(ValType),
-                                    cudaMemcpyDeviceToHost));
-        IdxType reduction_visitors = 0;
-        for (size_t i = 0; i < m_gpu; i++) {
-            if (m_imag_cpu[i] == 1) {
-                reduction_visitors ++;
-                //std::cout << "FAIL AT " << (i_proc * m_gpu) + i << " " << m_imag_cpu[i] << std::endl;
-            }
-        }
         cudaSafeCall(cudaMemcpy(expvals.data(), expvals_dev, expvals.size() * sizeof(ValType),
                                     cudaMemcpyDeviceToHost));
         MPI_Barrier(MPI_COMM_WORLD);
-        printf("%lld %e %lld\n", i_proc, expvals[0], reduction_visitors);
+        printf("%lld %e\n", i_proc, expvals[0]);
         std::vector<ValType> temp(expvals.begin(), expvals.end());
           MPI_Reduce(temp.data(), expvals.data(), expvals.size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
         if (i_proc != 0) {

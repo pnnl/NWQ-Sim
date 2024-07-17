@@ -89,18 +89,11 @@ namespace NWQSim
               std::vector<IdxType> xinds;
               pauli.get_xindices(xinds);
               coeffs[index].push_back(pauli.getCoeff().real());
-              if (true || ncommute > 1) {
-                composite_xmask |= pauli.get_xmask();
-                xmasks[index].push_back(0);
-                coeffs[index].back() *= (pauli.count_y() % 2) ? -1.0 : 1.0;
-                x_index_sizes[index].push_back(0);
-                zmasks[index].push_back(pauli.get_zmask() | pauli.get_xmask());
-              } else {
-                xmasks[index].push_back(pauli.get_xmask());
-                x_index_sizes[index].push_back(xinds.size());
-                x_indices[index] = xinds;
-                zmasks[index].push_back(pauli.get_zmask());
-              }
+              composite_xmask |= pauli.get_xmask();
+              xmasks[index].push_back(0);
+              coeffs[index].back() *= (pauli.count_y() % 2) ? -1.0 : 1.0;
+              x_index_sizes[index].push_back(0);
+              zmasks[index].push_back(pauli.get_zmask() | pauli.get_xmask());
               composite_zmask |= pauli.get_zmask();
             }
 
