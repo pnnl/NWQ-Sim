@@ -147,24 +147,15 @@ std::vector<IdxType> sorted_nodes;
 }
 void generate_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
                                     const MolecularEnvironment& env) {
-  for (IdxType p = 0; p < env.n_occ; p++) {
-      FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
-      FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
-      for (IdxType q = 0; q < env.n_virt; q++) {
-        FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
-        FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
-        // fermion_operators.push_back({
-        //   {occupied_annihilation_down, virtual_creation_down},
-        //   // {occupied_annihilation_up, virtual_creation_up},
-        // });
-        fermion_operators.push_back({
-          {occupied_annihilation_down, virtual_creation_down},
-          {occupied_annihilation_up, virtual_creation_up},
-        });
-        std::cout << "Single" << std::endl;
-          std::cout << occupied_annihilation_down.toString(env.n_occ, env.n_virt) << " " << virtual_creation_down.toString(env.n_occ, env.n_virt) << " "
-                    << occupied_annihilation_up.toString(env.n_occ, env.n_virt) << " " << virtual_creation_up.toString(env.n_occ, env.n_virt) << std::endl;
-      }
+  // Single excitation
+      for (IdxType p = 0; p < env.n_occ; p++) {
+        FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
+        FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
+        for (IdxType q = 0; q < env.n_virt; q++) {
+          FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
+          FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
+          fermion_operators.push_back({{occupied_annihilation_up, virtual_creation_up}, {occupied_annihilation_down, virtual_creation_down}});
+        }
     }
       // Double excitation
     for (IdxType i = 0; i < env.n_occ; i++) {
@@ -179,51 +170,65 @@ void generate_excitations(std::vector<std::vector<std::vector<FermionOperator> >
           for (IdxType s = r+1; s < env.n_virt; s++) {
             FermionOperator virt_down_2 (s, Virtual, Down, Creation, env.xacc_scheme);
             FermionOperator virt_up_2 (s, Virtual, Up, Creation, env.xacc_scheme);
-            fermion_operators.push_back(
-                {
-                  {occ_down_1,
+            IdxType alpha_term = fermion_operators.size();
+            fermion_operators.push_back({{
+                  occ_down_1,
                   occ_down_2,
                   virt_down_2,
                   virt_down_1},
-                 {occ_up_1,
+                  {occ_up_1,
+                   occ_up_2,
+                   virt_up_2,
+                   virt_up_1},
+                   {
+                  occ_up_1,
+                  occ_down_2,
+                  virt_down_2,
+                  virt_up_1},
+                  {
+                  occ_down_1 * -1.0,
                   occ_up_2,
-                  virt_up_2,
+                  virt_down_2,
                   virt_up_1}
                   });
-            // fermion_operators.push_back(
-            //     {
-            //       // {occ_down_1,
-            //       // occ_down_2,
-            //       // virt_down_2,
-            //       // virt_down_1},
-            //      {occ_up_1,
-            //       occ_up_2,
-            //       virt_up_2,
-            //       virt_up_1}
-            //       });
           }
         }
       }
     }
     for (IdxType i = 0; i < env.n_occ; i++) {
       FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
-      for (IdxType j = 0; j < env.n_occ; j++) {
+      FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
+      for (IdxType j = 0; j < i + 1; j++) {
+        FermionOperator occ_down_2 (j, Occupied, Down, Annihilation, env.xacc_scheme);
         FermionOperator occ_up_2 (j, Occupied, Up, Annihilation, env.xacc_scheme);
         for (IdxType r = 0; r < env.n_virt; r++) {
         FermionOperator virt_down_1 (r, Virtual, Down, Creation, env.xacc_scheme);
-          for (IdxType s = 0; s < env.n_virt; s++) {
+        FermionOperator virt_up_1 (r, Virtual, Up, Creation, env.xacc_scheme);
+          for (IdxType s = 0; s < r + 1; s++) {
+          FermionOperator virt_down_2 (s, Virtual, Down, Creation, env.xacc_scheme);
           FermionOperator virt_up_2 (s, Virtual, Up, Creation, env.xacc_scheme);
             
-        std::cout << "Double" << std::endl;
-            std::cout << occ_down_1.toString(env.n_occ, env.n_virt) << " " << occ_up_2.toString(env.n_occ, env.n_virt) << " "
-                      << virt_down_1.toString(env.n_occ, env.n_virt) << " " << virt_up_2.toString(env.n_occ, env.n_virt) << std::endl;
-            fermion_operators.push_back({{
-                  occ_down_1,
-                  occ_up_2,
-                  virt_down_1,
-                  virt_up_2}});
-            
+            IdxType term = fermion_operators.size();
+            if (i != j && r != s) {
+              fermion_operators.push_back({
+                    {occ_up_1,
+                    occ_down_2,
+                    virt_down_2,
+                    virt_up_1},
+                    {occ_down_1,
+                    occ_up_2,
+                    virt_up_2,
+                    virt_down_1}});
+            } else {
+              fermion_operators.push_back({
+                    {occ_down_1,
+                    occ_up_2,
+                    virt_up_2,
+                    virt_down_1}});
+
+            }
           }
+            
         }
       }
     }

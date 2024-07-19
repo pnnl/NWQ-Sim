@@ -1,5 +1,6 @@
 #include "vqeBackendManager.hpp"
 #include "utils.hpp"
+#include <string>
 #include <unordered_map>
 #include <sstream>
 #include "circuit/dynamic_ansatz.hpp"
@@ -133,7 +134,11 @@ void carriage_return_callback_function(const std::vector<NWQSim::ValType>& x, NW
 
 // Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
 void callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fval, NWQSim::IdxType iteration) {
-  printf("\33[2KEvaluation %lld, fval = %f\n", iteration, fval);fflush(stdout);
+  std::string paramstr = "[";
+  for (auto i: x) {
+    paramstr += std::to_string(i) + ", ";
+  }
+  printf("\33[2KEvaluation %lld, fval = %f, x=%s\n", iteration, fval, paramstr.c_str());fflush(stdout);
 }
 // Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
 void silent_callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fval, NWQSim::IdxType iteration) {
@@ -181,16 +186,16 @@ int main(int argc, char** argv) {
   NWQSim::VQE::OptimizerSettings settings;
   nlopt::algorithm algo;
   bool use_xacc, adapt;
-  unsigned seed;
-  if (parse_args(argc, argv, manager, hamil_path, backend, config, n_part, algo, settings, use_xacc, adapt, seed)) {
-    return 1;
-  }
-#ifdef MPI_ENABLED
-  int i_proc;
-  if (backend == "MPI" || backend == "NVGPU_MPI")
-  {
-    MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &i_proc);
+    unsigned seed;
+    if (parse_args(argc, argv, manager, hamil_path, backend, config, n_part, algo, settings, use_xacc, adapt, seed)) {
+      return 1;
+    }
+  #ifdef MPI_ENABLED
+    int i_proc;
+    if (backend == "MPI" || backend == "NVGPU_MPI")
+    {
+      MPI_Init(&argc, &argv);
+      MPI_Comm_rank(MPI_COMM_WORLD, &i_proc);
   }
 #endif
   manager.safe_print("Reading Hamiltonian...\n");

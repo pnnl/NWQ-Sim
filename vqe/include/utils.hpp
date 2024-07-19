@@ -12,19 +12,19 @@
 
 
 // Templated print function for std::vector
-template <typename T>
-std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
-  out << "[";
-  size_t len = target.size();
-  if (len > 0) {
-      for (size_t i = 0; i < len - 1; i++) {
-          out << target[i] << ", ";
-      }
-      out << target[len-1];
-  }
-  out << "]";
-  return out;
-}
+// template <typename T>
+// std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
+//   out << "[";
+//   size_t len = target.size();
+//   if (len > 0) {
+//       for (size_t i = 0; i < len - 1; i++) {
+//           out << target[i] << ", ";
+//       }
+//       out << target[len-1];
+//   }
+//   out << "]";
+//   return out;
+// }
 
 // Status enum for MPI processes
 enum STATUS {
@@ -59,6 +59,19 @@ std::stringstream& operator<<(std::stringstream& out, const std::vector<T>& targ
 
 namespace NWQSim{
   namespace VQE{
+    template <typename T>
+std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
+  out << "[";
+  size_t len = target.size();
+  if (len > 0) {
+      for (size_t i = 0; i < len - 1; i++) {
+          out << target[i] << ", ";
+      }
+      out << target[len-1];
+  }
+  out << "]";
+  return out;
+}
   using IdxType = long long;
   using ValType = double;
   enum class Commute {

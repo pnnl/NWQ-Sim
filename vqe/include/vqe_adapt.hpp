@@ -1,5 +1,6 @@
 #ifndef VQE_ADAPT_HH
 #define VQE_ADAPT_HH
+#include "state.hpp"
 #include "vqe_state.hpp"
 #include "environment.hpp"
 #include "utils.hpp"
@@ -16,13 +17,20 @@ namespace NWQSim {
         const std::complex<ValType> imag = {0, 1.0};
         std::vector<std::vector<std::vector<double> > > commutator_coeffs;
         std::vector<std::vector<std::vector<IdxType> > > commutator_zmasks;
-        std::list<ObservableList > gradient_observables;
+        std::vector<std::vector<ObservableList*> > gradient_observables;
     public:
       AdaptVQE(std::shared_ptr<DynamicAnsatz> _ans, std::shared_ptr<VQEState> backend, std::shared_ptr<Hamiltonian> _hamil): 
             ansatz(_ans), 
             state(backend), 
             hamil(_hamil) {
         gradient_measurement = std::make_shared<Ansatz>(_ans->num_qubits());
+      }
+      ~AdaptVQE() {
+        for (auto obslist: gradient_observables) {
+          for (ObservableList* i: obslist) {
+            delete i;
+          }
+        }
       }
       void commutator(std::vector<PauliOperator>& oplist1, 
                       std::vector<PauliOperator>& oplist2, 
@@ -56,7 +64,7 @@ namespace NWQSim {
         // gradient_observables.reserve(pauli_op_pool.size());
         commutator_zmasks.resize(pauli_op_pool.size());
         gradient_magnitudes.resize(pauli_op_pool.size());
-
+        gradient_observables.resize(pauli_op_pool.size());
         for (size_t i = 0; i < pauli_op_pool.size(); i++) {
           std::unordered_map<PauliOperator,  std::complex<double>, PauliHash> pmap;
           std::vector<PauliOperator> oplist = pauli_op_pool[i];
@@ -72,48 +80,30 @@ namespace NWQSim {
               comm_ops.push_back(op);
             }
           }
-          // for (auto op: oplist) {
-          //   std::cout << " " << op;
-          // }
-          // std::cout << std::endl << "\t";
-          // for (auto op: comm_ops) {
-          //   std::cout << " " << op ;
-          // }
-          // std::cout << std::endl;
+          // Create commuting groups using the (nonoverlapping) Sorted Insertion heuristic (see Crawford et. al 2021)
           std::list<std::vector<IdxType>> cliques;
           sorted_insertion(comm_ops, cliques, false);
           auto cliqueiter = cliques.begin();
           commutator_coeffs[i].resize(cliques.size());
           commutator_zmasks[i].resize(cliques.size());
+          gradient_observables[i].resize(cliques.size());
           std::vector<IdxType> qubit_mapping (ansatz->num_qubits());
           std::iota(qubit_mapping.begin(), qubit_mapping.end(), 0);
+          // For each clique, construct a measurement circuit and append
           for (size_t j = 0; j < cliques.size(); j++) {
             std::vector<IdxType>& clique = *cliqueiter;
             std::vector<PauliOperator> commuting_group (clique.size());
             std::transform(clique.begin(), clique.end(),
               commuting_group.begin(), [&] (IdxType ind) {return comm_ops[ind];});
-            
-            ObservableList obs_new;
-            obs_new.exp_output = &gradient_magnitudes[i];
-            obs_new.numterms = clique.size();
-            obs_new.xmasks = NULL;
-            obs_new.x_index_sizes = NULL;
-            obs_new.x_index_sizes = NULL;
-            // std::cout << "Commuting group:\n\t";
-            // for (auto op: commuting_group) {
-            //   std::cout << " " << op ;
-            // }
-            // std::cout << std::endl;
+            // NOTE: IN PROCESS OF API UPDATE!!!! PPOD!!!!!
+ 
             PauliOperator common = make_common_op(commuting_group, 
                                                   commutator_zmasks[i][j], 
                                                   commutator_coeffs[i][j]);
             
-            obs_new.coeffs = commutator_coeffs[i][j].data();
-            obs_new.zmasks = commutator_zmasks[i][j].data();
-            gradient_observables.push_back(obs_new);
             Measurement circ1 (common, false);
-            gradient_measurement->compose(circ1, qubit_mapping);
-            gradient_measurement->EXPECT(&gradient_observables.back());
+            gradient_measurement->compose(circ1, qubit_mapping);            
+            state->set_exp_gate(gradient_measurement, gradient_observables[i][j], commutator_zmasks[i][j], commutator_coeffs[i][j]);
             Measurement circ2 (common, true);
             gradient_measurement->compose(circ2, qubit_mapping);      
             cliqueiter++;  
@@ -121,7 +111,7 @@ namespace NWQSim {
           // commutators[i] = std::make_shared<Hamiltonian>(hamil->getEnv(), comm_ops_grouped);
         }
       }
-      void optimize(std::vector<double>& parameters, ValType& ene, IdxType maxiter, ValType reltol = 1e-3, ValType reltol_fval = 1e-5) {
+      void optimize(std::vector<double>& parameters, ValType& ene, IdxType maxiter, ValType reltol = 1e-5, ValType reltol_fval = 1e-7) {
         ene = hamil->getEnv().constant;
         state->initialize();
         ValType constant = ene;
@@ -137,22 +127,21 @@ namespace NWQSim {
         // state->initialize();
         // parameters.push_back(paramval);
         // state->optimize(parameters, ene);
-        std::cout << parameters.size() << std::endl;
         while(iter < maxiter) {
           prev_ene = ene;
           IdxType max_ind = 0; 
           double max_ene = -MAXFLOAT;
-          std::fill(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0);
+          // std::fill(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0);
           state->call_simulator(gradient_measurement);
+          std::fill(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0);
+          state->get_exp_values(gradient_observables, gradient_magnitudes);
           double grad_norm = std::accumulate(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0.0, [] (ValType a, ValType b) {
             return a + b * b;
           });
-          for (auto i: gradient_magnitudes)
-            std::cout << i << " ";
-            std::cout << std::endl;
           max_ind = std::max_element(gradient_magnitudes.begin(),
                                      gradient_magnitudes.end(),
                                      [] (ValType a, ValType b) {return abs(a) < abs(b);}) - gradient_magnitudes.begin();
+          std::cout << gradient_magnitudes << std::endl;
           if (std::sqrt(grad_norm) < reltol) {
             break;
           }

@@ -1,5 +1,6 @@
 #ifndef VQE_CPU_STATE
 #define VQE_CPU_STATE
+#include "state.hpp"
 #include "svsim/sv_cpu.hpp"
 #include "vqe_state.hpp"
 #include "observable/pauli_operator.hpp"
@@ -29,15 +30,16 @@ namespace NWQSim
         const auto& paulilist = h->getPauliOperators();
         expvals.resize(1);
         size_t index = 0;
-        size_t curr_ptr = 0;
-        
-        
+        size_t curr_ptr = 0;        
       };
       virtual void call_simulator() override {        
         reset_state();
         std::fill(expvals.begin(), expvals.end(), 0.0);
         sim(ansatz);
         sim(measurement);
+        for (auto i: obsvec) {
+          expvals[0] += i->exp_output;
+        }
       };
 
       virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) override {    
@@ -46,15 +48,12 @@ namespace NWQSim
         sim(_measurement);
       };
       virtual void fill_obslist(IdxType index) override {
-        ObservableList& obs = obsvec[index];
-        obs.coeffs = coeffs[index].data();
-        obs.xmasks = xmasks[index].data();
-        obs.zmasks = zmasks[index].data();
-        obs.x_index_sizes = x_index_sizes[index].data();
-        obs.exp_output = expvals.data();
-        obs.x_indices = x_indices[index].data();
-        obs.numterms = xmasks[index].size();
-        measurement->EXPECT(&obs);
+        ObservableList*& obs = obsvec[index];
+        obs = new ObservableList;
+        obs->coeffs = coeffs[index].data();
+        obs->zmasks = zmasks[index].data();
+        obs->numterms = zmasks[index].size();
+        measurement->EXPECT(obs);
       };
       virtual ValType getPauliExpectation(const PauliOperator& op) override {
           IdxType qubit = op.get_dim();

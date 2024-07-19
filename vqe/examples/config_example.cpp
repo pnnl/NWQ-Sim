@@ -24,9 +24,9 @@ void callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fv
 
 // H2O Example
 int main(int argc, char** argv) {
-  NWQSim::IdxType n_particles = 10; // Set the number of particles
+  NWQSim::IdxType n_particles = 4; // Set the number of particles
   // Note: path relative to presumed build directory
-  std::string hamiltonian_path = "../vqe/example_hamiltonians/h2O.hamil"; //  Effective Hamiltonian file path
+  std::string hamiltonian_path = "../vqe/example_hamiltonians/LiH_3_xacc.hamil"; //  Effective Hamiltonian file path
 
   std::shared_ptr<Hamiltonian> hamil = std::make_shared<Hamiltonian>(hamiltonian_path, n_particles, false); // Build the Hamiltonian object (used for energy calculation) using the DUCC mapping
   Transformer jw_transform = getJordanWignerTransform; // Choose a transformation function
@@ -34,6 +34,7 @@ int main(int argc, char** argv) {
   // Build the ansatz circuit using the Hamiltonian Molecular environment and JW mapping
   //      (shared_ptr used to match baseline NWQ-Sim functionality)
   std::shared_ptr<Ansatz> ansatz = std::make_shared<UCCSD>(hamil->getEnv(), jw_transform, 1);
+  ansatz->buildAnsatz();
   
   // Now we get a bit fancier. We can pass an `OptimizerSettings` object to specify termination criteria and optimizer parameters
   OptimizerSettings settings;
@@ -55,6 +56,7 @@ int main(int argc, char** argv) {
                                 hamil,  // reference to Hamiltonian
                                 nlopt::algorithm::LD_MMA, // NLOpt algorithm for optimization
                                 callback_function, // Callback function for each energy evaluation
+                                "../default_config.json",
                                 0 // Random seed (passed to the SPSA gradient estimator for random perturbations)
                                 );
   // Random initial parameters (sets to all 0 by default if not provided). Note that the function modifies `parameters` inplace

@@ -37,7 +37,7 @@ namespace NWQSim
     class SV_CUDA : public QuantumState
     {
     public:
-        SV_CUDA(IdxType _n_qubits, const std::string& configpath = "../default_config.json") : QuantumState(_n_qubits, configpath)
+        SV_CUDA(IdxType _n_qubits, const std::string& config_path) : QuantumState(_n_qubits, config_path)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -112,6 +112,11 @@ namespace NWQSim
             cudaSafeCall(cudaMemset(m_real, 0, sv_size + sizeof(ValType)));
             cudaSafeCall(cudaMemset(m_imag, 0, sv_size + sizeof(ValType)));
         }
+
+        void set_seed(IdxType seed) override
+        {
+            rng.seed(seed);
+        }
         virtual void set_initial (std::string fpath) override {
             std::ifstream instream;
             instream.open(fpath, std::ios::in|std::ios::binary);
@@ -133,10 +138,7 @@ namespace NWQSim
                 outstream.close();
             }
         };
-        void set_seed(IdxType seed) override
-        {
-            rng.seed(seed);
-        }
+        
         dim3 get_dims () {
             dim3 gridDim(1, 1, 1);
             cudaDeviceProp deviceProp;
@@ -749,8 +751,7 @@ namespace NWQSim
                 m_real[tid] = exp_val;
             }
         }
-        __device__ inline void Expect_C0(IdxType mask) {
-            grid_group grid = this_grid();
+        __device__ inline void Expect_C0(IdxType mask, ValType coeff) {
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             double exp_val = 0.0;
             for (IdxType i = tid; i < dim; i += blockDim.x * gridDim.x) {
@@ -758,12 +759,12 @@ namespace NWQSim
                 exp_val += hasEvenParity_cu(i & mask, n_qubits) ? val : -val;
             }
             if (tid < dim) {
-                m_real[tid] = exp_val;
+                m_real[tid] += coeff * exp_val;
             }
         }
         
         
-        __device__ __inline__ void EXP_REDUCE_GATE(const IdxType output_index, ValType* output, IdxType reduce_dim, ValType coeff)
+        __device__ __inline__ void EXP_REDUCE_GATE(ValType* output, IdxType reduce_dim)
         {
             grid_group grid = this_grid();
             
@@ -781,7 +782,7 @@ namespace NWQSim
 
             if (tid == 0)
             {
-                ValType expectation = coeff * m_real[0];
+                ValType expectation = m_real[0];
                 ValType prev_exp = LOCAL_G_CUDA(output, 0);
                 LOCAL_P_CUDA(output, 0, prev_exp + expectation);
             }
@@ -789,48 +790,20 @@ namespace NWQSim
             BARR_CUDA;
 
         }
-        __device__ __inline__ void Expect_GATE(IdxType* x_indices, 
-                                 IdxType num_x_indices, 
-                                 IdxType xmask, 
-                                 IdxType zmask, 
-                                 ValType* output,
-                                 ValType coeff,
-                                 IdxType output_index)  {
+        #define QI(o, i)  (o->x_indices[i])
+        #define QbI(o, i, ind)  ((o->zmasks[ind] & (1 << QI(o, i))) >> (1 << QI(o, i))) << i
+        #define QV2(o, ind) (QbI(o, 0, ind) + QbI(o, 1, ind))
+        #define QV4(o, ind) (QbI(o, 0, ind) + QbI(o, 1, ind) + QbI(o, 2, ind) + QbI(o, 3, ind))
+        __device__ __inline__ void Expect_GATE(ObservableList* o)  {
             grid_group grid = this_grid();
-            const IdxType n_size = (IdxType)1 << (n_qubits);
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
-            const IdxType local_tid = threadIdx.x; // thread_id in warp
-            IdxType reduce_dim;
-            if (num_x_indices == 2) {
-                IdxType q0 = x_indices[0];
-                IdxType q1 = x_indices[1];
-                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
-                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
-                const ValType* gm_real = exp_gate_perms_2q_d[zind0 + zind1];
-                const ValType* gm_imag = exp_gate_perms_2q_d[zind0 + zind1] + 16;
-                Expect_C2(gm_real, gm_imag, q0, q1, xmask | zmask);
-                reduce_dim = (dim) >> 2;
-            } else if (num_x_indices == 4) {
-                IdxType q0 = x_indices[0];
-                IdxType q1 = x_indices[1];
-                IdxType q2 = x_indices[2];
-                IdxType q3 = x_indices[3];
-                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
-                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
-                IdxType zind2 = ((zmask & (1 << q2)) >> q2) << 2;
-                IdxType zind3 = ((zmask & (1 << q3)) >> q3) << 3;
-                const ValType* gm_real = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3];
-                const ValType* gm_imag = exp_gate_perms_4q_d[zind0 + zind1 + zind2 + zind3] + 256;
-                Expect_C4(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
-                reduce_dim = (dim) >> 4;
-            } else if (num_x_indices == 0) {
-                Expect_C0(zmask);
-                reduce_dim = dim;
+            if (tid < dim)
+                m_real[tid] = 0;
+            for (IdxType obs_ind = 0; obs_ind < o->numterms; obs_ind++) {
+                Expect_C0(o->zmasks[obs_ind], o->coeffs[obs_ind]);
             }
-
             BARR_CUDA;
-            EXP_REDUCE_GATE(output_index, output, reduce_dim, coeff);
-            BARR_CUDA;
+            EXP_REDUCE_GATE(&o->exp_output, dim);
         }
 
         __device__ __inline__ void RESET_GATE(const IdxType qubit)
@@ -954,9 +927,10 @@ namespace NWQSim
 
     __global__ void simulation_kernel_cuda(SV_CUDA *sv_gpu, IdxType n_gates)
     {
-        IdxType cur_index = 0;
+        IdxType cur_index = 0; 
         grid_group grid = this_grid();
-        IdxType n_expect = 0;
+        // Put the observable data structure in shared memory to reduce register pressure
+        __shared__ ObservableList* o;
         for (IdxType t = 0; t < n_gates; t++)
         {
             auto op_name = (sv_gpu->gates_gpu)[t].op_name;
@@ -992,21 +966,9 @@ namespace NWQSim
             else if (op_name == OP::EXPECT)
             {
 
-                ObservableList o = *(ObservableList*)((sv_gpu->gates_gpu)[t].data);
-                IdxType* xinds = o.x_indices;
                 grid.sync();
-                for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
-                    sv_gpu->Expect_GATE(xinds, 
-                                o.x_index_sizes[obs_ind],
-                                o.xmasks[obs_ind],
-                                o.zmasks[obs_ind],
-                                o.exp_output + n_expect,
-                                o.coeffs[obs_ind],
-                                obs_ind);
-                    xinds += o.x_index_sizes[obs_ind];
-                    grid.sync();
-                }
-                n_expect ++;
+                o = (ObservableList*)((sv_gpu->gates_gpu)[t].data);
+                sv_gpu->Expect_GATE(o);
             }
             grid.sync();
         }

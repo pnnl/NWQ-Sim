@@ -38,9 +38,24 @@ namespace NWQSim {
         virtual void add_operator(IdxType operator_index, ValType param) {
           theta->push_back(param);
           std::vector<std::pair<IdxType, ValType > > idxvals = {{theta->size() - 1, 1.0}};
+          // std::cout << "Adding operator ";
+          // size_t index = 0;
+          // size_t num_opstrings = fermi_op_pool[operator_index].size();
+          // for (auto opstring: fermi_op_pool[operator_index]) {
+          //   size_t num_ops = opstring.size();
+          //   size_t o_index = 0;
+          //   for (auto single_qubit_op: opstring) {
+          //     std::cout << single_qubit_op.toString(env.n_occ, env.n_virt);
+          //     if ((o_index++) < num_ops - 1)
+          //       std::cout << " ";
+          //   }
+          //   if ((index ++) < num_opstrings - 1) {
+          //     std::cout << ", ";
+          //   }
+          // }
+          // std::cout << std::endl;
           for (PauliOperator pauli: pauli_op_pool[operator_index]) {
             if (pauli.isNonTrivial() && abs(pauli.getCoeff().real()) > 1e-10) {
-              std::cout << pauli << std::endl;
               ExponentialGate(pauli, OP::RZ, idxvals, 2 * pauli.getCoeff().real());
             }
           }
@@ -78,16 +93,19 @@ namespace NWQSim {
             std::string opstring = "";
             bool first = true;
             for (auto oplist: opgroup) {
-              for (auto& op: oplist) {
-                if (!first) {
-                  opstring = " " + opstring;
-                } else {
-                  first = false;
-                }
-                opstring = op.toString(env.n_occ, env.n_virt) + opstring;
+              if (!first) {
+                opstring = opstring + " ";
+              } else {
+                first = false;
               }
-              if (opgroup.size() > 1)
-                opstring = opstring + ", ";
+              std::string term = "";
+              size_t index = 0;
+              for (auto& op: oplist) {
+                term = op.toString(env.n_occ, env.n_virt) + " " + term;
+              }
+              opstring += "(" + term + ")";
+              if ((index++) < oplist.size() - 1)
+                opstring = opstring + ",";
             }
             result.push_back(std::make_pair(opstring, param));
           }

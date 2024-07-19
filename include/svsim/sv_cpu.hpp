@@ -23,7 +23,7 @@ namespace NWQSim
     {
 
     public:
-        SV_CPU(IdxType _n_qubits, const std::string& configpath = "../default_config.json") : QuantumState(_n_qubits, configpath)
+        SV_CPU(IdxType _n_qubits, const std::string& config_path) : QuantumState(_n_qubits, config_path)
         {
             // Initialize CPU side
             n_qubits = _n_qubits;
@@ -71,7 +71,7 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-
+        
         virtual void set_initial (std::string fpath) override {
             std::ifstream instream;
             instream.open(fpath, std::ios::in|std::ios::binary);
@@ -80,6 +80,7 @@ namespace NWQSim
                 instream.read((char*)sv_imag, sizeof(ValType) * dim);
             }
             instream.close();
+            std::cout << sv_real[0] << std::endl;
         }
 
         virtual void dump_res_state(std::string outpath) override {
@@ -199,7 +200,6 @@ namespace NWQSim
         {
             auto start = std::chrono::steady_clock::now();
             int n_gates = gates.size();
-            int n_expect = 0;
             for (int i = 0; i < n_gates; i++)
             {
 
@@ -230,19 +230,8 @@ namespace NWQSim
                 }
                 else if (g.op_name == OP::EXPECT)
                 {
-                    ObservableList o = *(ObservableList*)(g.data);
-                    IdxType* xinds = o.x_indices;
-                    for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
-                        EXPECT_GATE(NULL, 
-                                    0,
-                                    NULL,
-                                    o.zmasks[obs_ind],
-                                    o.exp_output,
-                                    o.coeffs[obs_ind],
-                                    obs_ind);
-                        // xinds += o.x_index_sizes[obs_ind];
-                    }
-                    n_expect++;
+                    ObservableList* o = (ObservableList*)(g.data);
+                    EXPECT_GATE(o);
                 }
                 else
                 {
@@ -620,36 +609,12 @@ namespace NWQSim
             }
             return exp_val;
         }
-        virtual void EXPECT_GATE(IdxType* x_indices, 
-                                 IdxType num_x_indices, 
-                                 IdxType xmask, 
-                                 IdxType zmask, 
-                                 ValType* output,
-                                 ValType coeff,
-                                 IdxType output_index)  {
-            if (num_x_indices == 2) {
-                IdxType q0 = x_indices[0];
-                IdxType q1 = x_indices[1];
-                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
-                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
-                const ValType* gm_real = exp_gate_perms_2q[zind0 + zind1];
-                const ValType* gm_imag = exp_gate_perms_2q[zind0 + zind1] + 16;
-                *output += coeff * EXPECT_C2_GATE(gm_real, gm_imag, q0, q1, xmask | zmask);
-            } else if (num_x_indices == 4) {
-                IdxType q0 = x_indices[0];
-                IdxType q1 = x_indices[1];
-                IdxType q2 = x_indices[2];
-                IdxType q3 = x_indices[3];
-                IdxType zind0 = ((zmask & (1 << q0)) >> q0) << 3;
-                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 2;
-                IdxType zind2 = ((zmask & (1 << q2)) >> q2) << 1;
-                IdxType zind3 = ((zmask & (1 << q3)) >> q3) << 0;
-                const ValType* gm_real = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3];
-                const ValType* gm_imag = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3] + 256;
-                *output += coeff * EXPECT_C4_GATE(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
-            } else if (num_x_indices == 0) {
-                *output += coeff * Expect_C0(zmask);
+        virtual void EXPECT_GATE(ObservableList* o)  {
+            ValType result = 0.0;
+            for (size_t i = 0; i < o->numterms; i++) {
+                result += o->coeffs[i] * Expect_C0(o->zmasks[i]);
             }
+            o->exp_output = result;
         }
         //============== Reset ================
         virtual void RESET_GATE(const IdxType qubit)

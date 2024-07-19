@@ -36,4 +36,5 @@ if(MPI_FOUND)
 endif()
 
 add_executable(basic_example_cpu "basic_example_cpu.cpp")
+add_executable(basic_example_adapt_cpu "basic_example_adapt_cpu.cpp")
 add_executable(config_example "config_example.cpp")

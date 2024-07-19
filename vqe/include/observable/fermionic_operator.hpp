@@ -69,6 +69,11 @@ namespace NWQSim {
         ss  << qubitIndex(n_occ, n_virt) << ((type==Creation) ? "^": "");
         return ss.str();
       };
+      FermionOperator operator*(std::complex<ValType> scalar) {
+        FermionOperator result(*this);
+        result.coeff *= scalar;
+        return result;
+      }
     };
     void generate_excitations(std::vector<std::vector< std::vector<FermionOperator> > >& _fermion_operators,
                                     const MolecularEnvironment& _env);

@@ -35,7 +35,7 @@ namespace NWQSim
     class SV_HIP : public QuantumState
     {
     public:
-        SV_HIP(IdxType _n_qubits, const std::string& configpath = "../default_config.json") : QuantumState(_n_qubits, configpath)
+        SV_HIP(IdxType _n_qubits) : QuantumState(_n_qubits)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -115,33 +115,6 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-        void set_initial (std::string fpath) override {
-            std::ifstream instream;
-            instream.open(fpath, std::ios::in|std::ios::binary);
-            if (instream.is_open()) {
-                instream.read((char*)sv_real_cpu, sv_size);
-                instream.read((char*)sv_imag_cpu, sv_size);
-                // GPU side initialization
-                hipSafeCall(hipMemcpy(sv_real, sv_real_cpu,
-                                        sv_size, hipMemcpyHostToDevice));
-                hipSafeCall(hipMemcpy(sv_imag, sv_imag_cpu,
-                                        sv_size, hipMemcpyHostToDevice));
-                instream.close();
-            }
-        }
-        virtual void dump_res_state(std::string outpath) override {
-            std::ofstream outstream;
-            outstream.open(outpath, std::ios::out|std::ios::binary);
-            if (outstream.is_open()) {
-                hipSafeCall(hipMemcpy(sv_real_cpu, sv_real,
-                                    sv_size, hipMemcpyDeviceToHost));
-                hipSafeCall(hipMemcpy(sv_imag_cpu, sv_imag,
-                                    sv_size, hipMemcpyDeviceToHost));
-                outstream.write((char*)sv_real_cpu, sv_size);
-                outstream.write((char*)sv_imag_cpu, sv_size);
-                outstream.close();
-            }
-        };
 
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
