@@ -1200,28 +1200,32 @@ namespace NWQSim
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             // Parallel reduction
-            for (IdxType k = (dim >> (gpu_scale + 1)); k > 0; k >>= 1)
+            IdxType gridlog2 = 63 - __clzll(blockDim.x * gridDim.x);
+            if (blockDim.x * gridDim.x & ((1 << gridlog2) - 1)) {
+                gridlog2 += 1;
+            }
+            IdxType reduce_limit = 1 << gridlog2;
+            reduce_limit = min(reduce_limit, dim >> gpu_scale);
+            for (IdxType k = (reduce_limit >> 1); k > 0; k >>= 1)
             {
-                if (tid < k) {
+                if (tid < k && tid + k < blockDim.x * gridDim.x) {
                     m_real[tid] += m_real[tid + k];
                 }
                 grid.sync();
             }
-            grid.sync();
             if (tid == 0) { 
-                printf("GPU before %lld %e\n", i_proc, output[0]);
                 *output += m_real[0];
-                printf("GPU after %lld %e\n", i_proc, output[0]);
             }
         }
 
 __device__ __inline__ void EXPECT_GATE(ObservableList o)  {
             grid_group grid = this_grid();
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
-            if (tid < m_gpu) {
+            // for (IdxType ind = tid; ind < m_gpu; ind += blockDim.x * gridDim.x) {
+            //     m_real[ind] = 0;
+            // }
+            if (tid < dim)
                 m_real[tid] = 0;
-            
-            }
             for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
                 EXPECT_C0_GATE(o.zmasks[obs_ind], o.coeffs[obs_ind]);
             }
