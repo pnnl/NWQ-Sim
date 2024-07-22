@@ -6,7 +6,7 @@ add_executable(nwq_qflow "qflow.cpp")
 # find_package(Python3 COMPONENTS Interpreter Development)
 # add_library(nwqflow "qflow_py.cpp")
 # set(PYTHON_EXECUTABLE ${Python3_EXECUTABLE})
-#set(PYHEADER ${Python3_EXECUTABLE}) 
+# set(PYHEADER ${Python3_EXECUTABLE})
 # add_subdirectory(pybind11)
 # pybind11_add_module(nwqflow "qflow_py.cpp")
 
@@ -36,8 +36,8 @@ if(OpenMP_FOUND)
     target_link_libraries(nwq_qflow PUBLIC OpenMP::OpenMP_CXX)
     target_compile_definitions(nwq_qflow PUBLIC OMP_ENABLED)
 
-   # target_link_libraries(nwqflow PUBLIC OpenMP::OpenMP_CXX)
-   # target_compile_definitions(nwqflow PUBLIC OMP_ENABLED)
+    # target_link_libraries(nwqflow PUBLIC OpenMP::OpenMP_CXX)
+    # target_compile_definitions(nwqflow PUBLIC OMP_ENABLED)
 endif()
 
 # Link against MPI if available
@@ -46,8 +46,10 @@ if(MPI_FOUND)
     target_compile_definitions(nwq_vqe PUBLIC MPI_ENABLED)
     target_link_libraries(nwq_qflow PUBLIC MPI::MPI_CXX)
     target_compile_definitions(nwq_qflow PUBLIC MPI_ENABLED)
-  #  target_link_libraries(nwqflow PUBLIC MPI::MPI_CXX)
-  #  target_compile_definitions(nwqflow PUBLIC MPI_ENABLED)
+
+    # target_link_libraries(nwqflow PUBLIC MPI::MPI_CXX)
+    # target_compile_definitions(nwqflow PUBLIC MPI_ENABLED)
+
 endif()
 
 # If CUDA Toolkit is available, set the CUDA standard and definitions
@@ -64,8 +66,10 @@ if(CUDAToolkit_FOUND)
     target_compile_features(nwq_qflow PRIVATE cuda_std_17)
     target_compile_definitions(nwq_qflow PUBLIC CUDA_ENABLED)
 
- #   target_compile_features(nwqflow PRIVATE cuda_std_17)
- #   target_compile_definitions(nwqflow PUBLIC CUDA_ENABLED)
+
+    # target_compile_features(nwqflow PRIVATE cuda_std_17)
+    # target_compile_definitions(nwqflow PUBLIC CUDA_ENABLED)
+
 
     # If NVSHMEM is available, link against it and set the definitions
     if(NVSHMEM_FOUND AND TARGET nvshmem::nvshmem)
@@ -77,9 +81,9 @@ if(CUDAToolkit_FOUND)
         target_link_libraries(nwq_qflow PUBLIC nvshmem::nvshmem)
         target_compile_definitions(nwq_qflow PUBLIC CUDA_MPI_ENABLED)
 
-   #     set_target_properties(nwqflow PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-   #     target_link_libraries(nwqflow PUBLIC nvshmem::nvshmem)
-   #     target_compile_definitions(nwqflow PUBLIC CUDA_MPI_ENABLED)
+        # set_target_properties(nwqflow PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+        # target_link_libraries(nwqflow PUBLIC nvshmem::nvshmem)
+        # target_compile_definitions(nwqflow PUBLIC CUDA_MPI_ENABLED)
     endif()
 endif()
 

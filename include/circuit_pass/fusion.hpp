@@ -178,8 +178,9 @@ namespace NWQSim
             {
                 GateType g(circuit_in[i]);
                 circuit_out.push_back(g);
-                for (IdxType q = 0; q < n_qubits; q++)
-                    canfuse[q] = false;
+                for (IdxType j = 0; j < n_qubits; j++)
+                    for (IdxType k = 0; k < n_qubits; k++)
+                        canfuse[j * n_qubits + k] = false;
             }
             else if (circuit_in[i].op_name == RESET) // 1-qubit reset gate
             {
@@ -286,8 +287,8 @@ namespace NWQSim
             {
                 GateType g(circuit_in[i]);
                 circuit_out.push_back(g);
-                for (IdxType q = 0; q < n_qubits; q++)
-                    canfuse[q] = false;
+                for (IdxType j = 0; j < n_qubits; j++)
+                    canfuse[j] = false;
             }
             else if (circuit_in[i].op_name == get_op(1, sim_type)) // 1-qubit gate
             {
@@ -385,8 +386,9 @@ namespace NWQSim
             {
                 GateType g(circuit_in[i]);
                 circuit_out.push_back(g);
-                for (IdxType q = 0; q < n_qubits; q++)
-                    canfuse[q] = false;
+                for (IdxType j = 0; j < n_qubits; j++)
+                    for (IdxType k = 0; k < n_qubits; k++)
+                        canfuse[j * n_qubits + k] = false;
             }
             else if (circuit_in[i].op_name == get_op(1, sim_type)) // 1-qubit gate
             {
@@ -509,8 +511,9 @@ namespace NWQSim
             {
                 GateType g(circuit_in[i]);
                 circuit_out.push_back(g);
-                for (IdxType q = 0; q < n_qubits; q++)
-                    canfuse[q] = false;
+                for (IdxType j = 0; j < n_qubits; j++)
+                    for (IdxType k = 0; k < n_qubits; k++)
+                        canfuse[j * n_qubits + k] = false;
             }
             else if (circuit_in[i].op_name == get_op(1, sim_type)) // 1-qubit gate
             {

@@ -25,33 +25,50 @@ namespace NWQSim
                    OptimizerSettings opt_settings = OptimizerSettings()): 
                                       SV_CPU(a->num_qubits()),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
-        expvals.reserve(1);
-        obs.xmasks = xmasks.data();
-        obs.zmasks = zmasks.data();
-        obs.numterms = xmasks.size();
-        obs.exp_output = expvals.data();
-        obs.coeffs = coeffs.data();
-        obs.x_indices = x_indices.data();
-        obs.x_index_sizes = x_index_sizes.data();
-        ansatz->EXPECT(&obs);
+        expvals.resize(1);
+        initialize();
+
+        
+        
       };
       virtual void call_simulator() override {        
         reset_state();
-        std::fill(expvals.begin(), expvals.end(), 0);
+        std::fill(expvals.begin(), expvals.end(), 0.0);
         sim(ansatz);
+                  std::vector<std::vector<PauliOperator>> paulis = hamil->getPauliOperators();
+        for (auto paulivec: paulis) {
+            for (auto op: paulivec) {
+            double exp = getPauliExpectation(op);
+            if (abs(exp) > 1e-10) {
+                std::cout << exp << " " << op  << std::endl;
+            }
+            }
+        }
       };
 
+      virtual void fill_obslist(IdxType index) override {
+        ObservableList& obs = obsvec[index];
+        obs.coeffs = coeffs[index].data();
+        obs.xmasks = xmasks[index].data();
+        obs.zmasks = zmasks[index].data();
+        obs.x_index_sizes = x_index_sizes[index].data();
+        obs.exp_output = expvals.data();
+        obs.x_indices = x_indices[index].data();
+        obs.numterms = xmasks[index].size();
+        ansatz->EXPECT(&obs); 
+      };
       virtual ValType getPauliExpectation(const PauliOperator& op) override {
           IdxType qubit = op.get_dim();
           IdxType xmask = op.get_xmask();
           IdxType zmask = op.get_zmask();
           IdxType y_phase = 0;
           IdxType max_x = 0;
-          for (IdxType i = 0; i < dim; i++) {
+          for (IdxType i = 0; i < qubit; i++) {
             bool xbit = (xmask >> i) & 1;
             bool zbit = (zmask >> i) & 1;
             y_phase += (xbit && zbit);
-            max_x = std::max(i, max_x);
+            if (xbit)
+              max_x = std::max(i, max_x);
           }
 
           ValType expectation = 0.0;
@@ -63,7 +80,7 @@ namespace NWQSim
               }
               expectation += local_exp;
             }
-            return expectation * op.getCoeff().real();
+            return expectation;
           }
           ValType sign = (y_phase / 2) % 2 ? -1: 1;
           ValType phase = y_phase % 2;

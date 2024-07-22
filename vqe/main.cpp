@@ -150,10 +150,12 @@ int main(int argc, char** argv) {
   nlopt::algorithm algo;
   bool use_xacc;
   unsigned seed;
+  std::cout << "Parsing args" << std::endl;
   if (parse_args(argc, argv, manager, hamil_path, backend, n_part, algo, settings, use_xacc, seed)) {
     return 1;
   }
 #ifdef MPI_ENABLED
+  std::cout << "Initializing MPI" << std::endl;
   int i_proc;
   if (backend == "MPI" || backend == "NVGPU_MPI")
   {

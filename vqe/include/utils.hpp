@@ -6,6 +6,7 @@
 #include <cmath>
 #include <math.h>
 #include <sstream>
+#include <list>
 
 
 // Templated print function for std::vector
@@ -22,7 +23,19 @@ std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
   out << "]";
   return out;
 }
-
+template <typename T>
+inline
+T factorial(T n) {
+    return (n == 1 || n == 0) ? 1 : factorial(n - 1) * n;
+ }
+template <typename T>
+inline
+T choose2(T n) {
+    if (n >= 2) {
+        return factorial(n) / (factorial(n-2) * 2);
+    }
+    return 1;
+}
 // Status enum for MPI processes
 enum STATUS {
     CALL_SIMULATOR,
@@ -129,7 +142,8 @@ IdxType count_ones(IdxType val) {
     // Below is the reverse indexing for comparison with Qiskit
     // std::cout << qubit_idx << " " << orbital_index << " " << spin << " " << orb_type << " " << n_occ << " " << n_virt << std::endl;
   }
-
+  class PauliOperator;
+void sorted_insertion(const std::vector<PauliOperator>& paulilist, std::list<std::vector<IdxType> >& cliques, bool overlap);
   // Convert an integer to an  `n_qubits`-digit binary string
   std::string to_binary_string(IdxType val, IdxType n_qubits);
 

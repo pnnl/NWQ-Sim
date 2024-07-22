@@ -343,18 +343,8 @@ namespace NWQSim
                 {
                     BARR_MPI;
                     ObservableList o = *(ObservableList*)(g.data);
-                    IdxType* xinds = o.x_indices;
-                    for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
-                        EXPECT_GATE(xinds, 
-                                    o.x_index_sizes[obs_ind],
-                                    o.xmasks[obs_ind],
-                                    o.zmasks[obs_ind],
-                                    o.exp_output + n_expect,
-                                    o.coeffs[obs_ind],
-                                    obs_ind);
-                        xinds += o.x_index_sizes[obs_ind];
-                    }
-                    n_expect++;
+                    EXPECT_GATE(o);
+                    BARR_MPI;
                 }
                 else
                 {
@@ -1079,122 +1069,13 @@ namespace NWQSim
             return exp_val;
             
         }
-        void EXPECT_GATE(IdxType* x_indices, 
-                                 IdxType num_x_indices, 
-                                 IdxType xmask, 
-                                 IdxType zmask, 
-                                 ValType* output,
-                                 ValType coeff,
-                                 IdxType output_index)  {
-            ValType result = 0.0;
-            BARR_MPI;
-            if (num_x_indices == 2) {
-                IdxType q0 = x_indices[0];
-                IdxType q1 = x_indices[1];
-                IdxType q0t = q0;
-
-                if (q0 >= lg2_m_cpu) {
-                    SWAP_GATE(0, q0);
-                    q0t = 0;
-                    xmask = swapBits(xmask, q0t, q0);
-                    zmask = swapBits(zmask, q0t, q0);
-                    BARR_MPI;
-                    assert(q0t != q1);
-                }
-                IdxType zind0 = ((zmask & (1 << q0t)) >> q0t);
-                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
-                const ValType* gm_real = exp_gate_perms_2q[zind0 + zind1];
-                const ValType* gm_imag = exp_gate_perms_2q[zind0 + zind1] + 16;
-                result = EXPECT_C2V1_GATE(gm_real, gm_imag, q0t, q1, xmask | zmask);
-                if (q0 >= lg2_m_cpu) {
-                    BARR_MPI;
-                    SWAP_GATE(0, q0);
-                    BARR_MPI;
-                }
-            } else if (num_x_indices == 4) {
-                IdxType q0 = x_indices[0];
-                IdxType q1 = x_indices[1];
-                IdxType q2 = x_indices[2];
-                IdxType q3 = x_indices[3];
-                IdxType q0t = q0;
-                IdxType q1t = q1;
-                IdxType q2t = q2;
-                
-                IdxType local_index = 0;
-                // assume the indices are sorted
-                if (q0 >= lg2_m_cpu) {
-                    q0t = local_index++;
-                    while((q0t == q1t || q0t == q2t) && q0t < lg2_m_cpu) {
-                        q0t++;
-                    }
-                    SWAP_GATE(q0t, q0);
-                    zmask = (IdxType)swapBits(zmask, (uint64_t)q0t, (uint64_t)q0);
-                    xmask = (IdxType)swapBits(xmask, (uint64_t)q0t, (uint64_t)q0);
-                    BARR_MPI;
-                }
-                if (q1 >= lg2_m_cpu) {
-
-                    q1t = local_index++;
-                    while((q1t == q0t || q1t == q2t) && q1t < lg2_m_cpu) {
-                        q1t++;
-                    }
-                    SWAP_GATE(q1t, q1);
-                    zmask = (IdxType)swapBits(zmask, (uint64_t)q1t, (uint64_t)q1);
-                    xmask = (IdxType)swapBits(xmask, (uint64_t)q1t, (uint64_t)q1);
-                    BARR_MPI;
-                }
-                if (q2 >= lg2_m_cpu) {
-                    q2t = local_index++;
-
-                    while((q2t == q0t || q2t == q1t) && q2t < lg2_m_cpu) {
-                        q2t++;
-                    }
-                    SWAP_GATE(q2t, q2);
-                    zmask = (IdxType)swapBits(zmask, (uint64_t)q2t, (uint64_t)q2);
-                    xmask = (IdxType)swapBits(xmask, (uint64_t)q2t, (uint64_t)q2);
-                    BARR_MPI;
-                }
-                assert (q0t < lg2_m_cpu && q1t < lg2_m_cpu && q2t < lg2_m_cpu);
-
-                const IdxType v0 = std::min(q0t, q1t);
-                const IdxType v1 = std::min(q2t, q3);
-                const IdxType v2 = std::max(q0t, q1t);
-                const IdxType v3 = std::max(q2t, q3);
-                const IdxType p = std::min(v0, v1);
-                const IdxType q = std::min(std::min(v2, v3), std::max(v0, v1));
-                const IdxType r = std::max(std::min(v2, v3), std::max(v0, v1));
-                const IdxType s = std::max(v2, v3);                
-                IdxType zind0 = ((zmask & (1 << p)) >> p);
-                IdxType zind1 = ((zmask & (1 << q)) >> q) << 1;
-                IdxType zind2 = ((zmask & (1 << r)) >> r) << 2;
-                IdxType zind3 = ((zmask & (1 << s)) >> s) << 3;
-                const ValType* gm_real = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3];
-                const ValType* gm_imag = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3] + 256;
-                result = EXPECT_C4V1_GATE(gm_real, gm_imag, p, q, r, s, xmask | zmask);
-                BARR_MPI;
-                if (q2 >= lg2_m_cpu) {
-                    SWAP_GATE(q2t, q2);
-                    BARR_MPI;
-                }
-                if (q1 >= lg2_m_cpu) {
-                    SWAP_GATE(q1t, q1);
-                    BARR_MPI;
-                }
-                if (q0 >= lg2_m_cpu) {
-                    SWAP_GATE(q0t, q0);
-                    BARR_MPI;
-                }
-            } else if (num_x_indices == 0) {
-                result = EXPECT_C0_GATE(zmask);
-            }
+        void EXPECT_GATE(ObservableList o)  {
             ValType expect = 0;
-            // printf("%lld %f\n", i_proc, result);
-            BARR_MPI;
-            MPI_Reduce(&result, &expect, 1,  MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-            BARR_MPI;
-            if (i_proc == 0) {
-                *output += coeff * expect;
+            for (size_t i = 0; i < o.numterms; i++) {
+                expect += o.coeffs[i] * EXPECT_C0_GATE(o.zmasks[i]);
             }
+            // printf("%lld %f\n", i_proc, result);
+            *o.exp_output += expect;
            
         }
         // We first do a local reduction, then we do a MPI scan, then update local vector

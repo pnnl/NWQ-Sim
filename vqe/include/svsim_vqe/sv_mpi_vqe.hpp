@@ -26,16 +26,20 @@ namespace NWQSim
                    OptimizerSettings opt_settings = OptimizerSettings()): 
                                       SV_MPI(a->num_qubits()),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
-        obs.xmasks = xmasks.data();
-        obs.zmasks = zmasks.data();
-        obs.numterms = xmasks.size();
-        obs.coeffs = coeffs.data();
         expvals.resize(1);
+        initialize();
+      };
+
+      virtual void fill_obslist(IdxType index) override {
+        ObservableList& obs = obsvec[index];
+        obs.coeffs = coeffs[index].data();
+        obs.xmasks = xmasks[index].data();
+        obs.zmasks = zmasks[index].data();
+        obs.x_index_sizes = x_index_sizes[index].data();
         obs.exp_output = expvals.data();
-        obs.x_indices = x_indices.data();
-        obs.x_index_sizes = x_index_sizes.data();
-        // if (i_proc == 0)
-        ansatz->EXPECT(&obs);
+        obs.x_indices = x_indices[index].data();
+        obs.numterms = xmasks[index].size();
+        ansatz->EXPECT(&obs); 
       };
       virtual void call_simulator() override {  
         if (iteration > 0){
@@ -61,6 +65,8 @@ namespace NWQSim
         std::fill(expvals.begin(), expvals.end(), 0);
         reset_state();
         sim(ansatz);
+        std::vector<ValType> exptemp(expvals.begin(), expvals.end());
+        MPI_Reduce(exptemp.data(), expvals.data(), expvals.size(),  MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
         if (i_proc != 0) {
           stat = WAIT;
         }

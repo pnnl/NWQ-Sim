@@ -7,6 +7,7 @@
 #include "circuit/measurement.hpp"
 #include "gradient/sa_gradient.hpp"
 #include "observable/hamiltonian.hpp"
+#include "circuit_pass/fusion.hpp"
 #include "nlopt.hpp"
 #include <memory>
 #include <cmath>
@@ -40,7 +41,7 @@ namespace NWQSim
                                       g_est(seed),
                                       optimizer_settings(opt_settings)
                                       {
-          optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
+           optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
           // Set the termination criteria
           optimizer.set_maxeval(optimizer_settings.max_evals);
           optimizer.set_maxtime(optimizer_settings.max_time);
@@ -51,21 +52,62 @@ namespace NWQSim
           for (auto& kv_pair: optimizer_settings.parameter_map) {
               optimizer.set_param(kv_pair.first.c_str(), kv_pair.second);
           }
-          
-          auto& pauli_operators = hamil->getPauliOperators();        
+        }
+        void initialize() {
+            // 0 3.273514e-01
+// Evaluation 0, fval = 21.949690
+
+// Finished VQE loop.
+        // Final value: 2.194969e+01
+         //   0.519016 (0.00324322 + 0i)IIIIZIIIIIXX
+         //-0.263524 (-0.00210224 + 0i)YZZZZYZIIIII
+            // -0.264174 (-5.01215e-05 + 0i)YZZZZYIIIZII
+            // 0.00287325 (0.00444125 + 0i)IIIXXIIIIXZX
+            // 0.158064 (3.65849e-18 + 0i)IYYIIIIIIIIIIIIIIIII
+            // 0.0981487 (3.65855e-18 + 0i)IIIIIIIIIIIYYIIIIIII
+            // 0.829777 (0.094532 + 0i)IIIIIIIIIIIZIZIIIIII
+            // 0.0108362 (0.0108748 + 0i)XZXIIIIIIIXZXIIIIIII
+          const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators();  
+          IdxType index = 0;    
+          obsvec.resize(pauli_operators.size());
+          xmasks.resize(pauli_operators.size());
+          zmasks.resize(pauli_operators.size());
+          x_index_sizes.resize(pauli_operators.size());
+          x_indices.resize(pauli_operators.size());
+          coeffs.resize(pauli_operators.size());
+          std::vector<IdxType> mapping (ansatz->num_qubits());
+          std::iota(mapping.begin(), mapping.end(), 0);
           for (auto& pauli_list: pauli_operators) {
+            xmasks[index].reserve(pauli_list.size());
+            zmasks[index].reserve(pauli_list.size());
+            coeffs[index].reserve(pauli_list.size());
+            x_index_sizes[index].reserve(pauli_list.size());
+            IdxType composite_xmask = 0;
+            IdxType composite_zmask = 0;
+            IdxType ncommute = pauli_list.size();
             for (const PauliOperator& pauli: pauli_list) {
               std::vector<IdxType> xinds;
               pauli.get_xindices(xinds);
-              xmasks.push_back(pauli.get_xmask());
-              zmasks.push_back(pauli.get_zmask());
-              x_index_sizes.push_back(xinds.size());
-              for (auto i: xinds) {
-                x_indices.push_back(i);
-              }
+              coeffs[index].push_back(pauli.getCoeff().real());
+              composite_xmask |= pauli.get_xmask();
+              xmasks[index].push_back(0);
+              coeffs[index].back() *= (pauli.count_y() % 2) ? -1.0 : 1.0;
+              x_index_sizes[index].push_back(0);
+              zmasks[index].push_back(pauli.get_zmask() | pauli.get_xmask());
+              composite_zmask |= pauli.get_zmask();
             }
+
+            PauliOperator common(composite_xmask, composite_zmask, ansatz->num_qubits());
+            
+            Measurement circ1(common);
+            ansatz->compose(circ1, mapping);
+            
+            fill_obslist(index);
+            
+            Measurement circ2(common, true);
+            ansatz->compose(circ2, mapping);
+            index++;
           }
-          hamil->get_pauli_coeffs(coeffs);
                                           
           // Check if the chosen algorithm requires derivatives
           compute_gradient = std::string(optimizer.get_algorithm_name()).find("no-derivative") == std::string::npos;
@@ -76,6 +118,7 @@ namespace NWQSim
           optimizer.set_upper_bounds(upper_bounds);
           
         };
+      virtual void fill_obslist(IdxType index) {};
       // function for the NLOpt plugin
       double cost_function(const std::vector<double> x, std::vector<double>& gradient) {
         if (iteration > 0){
@@ -138,7 +181,7 @@ namespace NWQSim
           if (parameters.size() == 0) {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }
-          // energy(parameters);
+          // final_ene = energy(parameters);
           nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
       }
       virtual void call_simulator() {};
@@ -148,7 +191,16 @@ namespace NWQSim
         call_simulator();
 
         // ExpectationMap emap;
-        auto& pauli_operators = hamil->getPauliOperators();
+
+      
+        // const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators();    
+        // auto& pauli_operators = hamil->getPauliOperators();
+        // double expval = 0.0;
+        // for (auto& clique: pauli_operators) {
+        //   for (auto& pauli: clique) {
+        //     expval += getPauliExpectation(pauli) * pauli.getCoeff().real();
+        //   }
+        // }
         IdxType index = 0;
         ValType expectation = hamil->getEnv().constant + expvals.front();
         // ValType ene = 0.0;
@@ -165,12 +217,12 @@ namespace NWQSim
         Callback callback;
         OptimizerSettings optimizer_settings;
         IdxType iteration;
-        ObservableList obs;
-        std::vector<IdxType> x_index_sizes;
-        std::vector<IdxType> xmasks;
-        std::vector<IdxType> zmasks;
-        std::vector<IdxType> x_indices;
-        std::vector<ValType> coeffs;
+        std::vector<ObservableList> obsvec;
+        std::vector<std::vector<IdxType> >  x_index_sizes;
+        std::vector<std::vector<IdxType> > xmasks;
+        std::vector<std::vector<IdxType> > zmasks;
+        std::vector<std::vector<IdxType> > x_indices;
+        std::vector<std::vector<ValType> > coeffs;
         std::vector<ValType> expvals;
 
       
