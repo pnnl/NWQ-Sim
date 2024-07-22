@@ -7,7 +7,6 @@
 #include "AllGateVisitor.hpp"
 
 #include "nwq_accelerator.hpp"
-#include "../include/state.hpp"
 #include "../include/circuit.hpp"
 #include "../include/backendManager.hpp"
 #include "../include/nwq_util.hpp"

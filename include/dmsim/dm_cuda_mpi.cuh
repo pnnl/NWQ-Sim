@@ -44,7 +44,7 @@ namespace NWQSim
     class DM_CUDA_MPI : public QuantumState
     {
     public:
-        DM_CUDA_MPI(IdxType _n_qubits) : QuantumState(_n_qubits)
+        DM_CUDA_MPI(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::DM)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -900,6 +900,8 @@ namespace NWQSim
                 grid.sync();
             }
         }
+        virtual ValType *get_real() const override {return dm_real;};
+        virtual ValType *get_imag() const override {return dm_imag;};
 
         __device__ __inline__ IdxType get_term(IdxType idx, IdxType p, IdxType q, IdxType r, IdxType s)
         {

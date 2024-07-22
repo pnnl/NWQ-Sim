@@ -40,7 +40,7 @@ namespace NWQSim
     class DM_CUDA : public QuantumState
     {
     public:
-        DM_CUDA(IdxType _n_qubits) : QuantumState(_n_qubits)
+        DM_CUDA(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::DM)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -465,6 +465,8 @@ namespace NWQSim
             return term;
         }
 
+        virtual ValType *get_real() const override {return dm_real;};
+        virtual ValType *get_imag() const override {return dm_imag;};
 #ifdef FP64_TC_AVAILABLE
         //============== Unified 4-qubit Gate with TC V1 ================
         // This is with tensorcore optimization
@@ -899,5 +901,73 @@ namespace NWQSim
             }
             grid.sync();
         }
+        __global__ void fidelity_kernel(ValType* sv_real, ValType* sv_imag) {
+            const IdxType tid = threadIdx.x + blockIdx.x * blockDim.x; 
+            IdxType vector_dim = 1 << n_qubits;
+            ValType local_real = 0;
+            if (tid > vector_dim) {
+                return;
+            }
+            m_real[tid] = 0;
+            for (size_t i = tid; i < dim; i += blockDim.x * gridDim.x) {
+                
+                ValType a = 0;
+                local_real = dm_real
+            }
+        }
+        virtual ValType fidelity(std::shared_ptr<QuantumState> other) override {
+            ValType result_real = 0;
+            ValType result_imag = 0;
+            const IdxType block_size = 32;
+            IdxType vector_dim = 1 << n_qubits;
+            double* sv_real = other->get_real();
+            double* sv_imag = other->get_imag();
+            IdxType i = 0;
+            if (block_size > vector_dim)
+                goto EPILOGUE;
+            for (i = 0; i < vector_dim && block_size <= vector_dim; i+=block_size) {
+                // $\bra{\psi}$: vector in dual space
+                double* block_bra_real = sv_real + i;
+                double* block_bra_imag = sv_imag + i;
+                // individual block
+                for (IdxType j = 0; j < vector_dim; j += block_size) {
+                    // $\ket{\psi}$: vector in primal space
+                    double* block_ket_real = sv_real + i;
+                    double* block_ket_imag = sv_imag + i;
+                    // $\rho$: density matrix
+                    double* block_dm_real = dm_real + i * vector_dim + j;
+                    double* block_dm_imag = dm_real + i * vector_dim + j;
+                    #pragma unroll
+                    for (IdxType k = i * block_size; k < block_size; k++) {
+                        ValType a = block_bra_real[k];
+                        ValType b = -block_bra_imag[k];
+                        #pragma unroll
+                        for (IdxType r = j * block_size; r < block_size; r++) {
+                            ValType c = block_dm_real[k * vector_dim + r];
+                            ValType d = block_dm_imag[k * vector_dim + r];
+                            ValType g = block_ket_real[r];
+                            ValType f = block_ket_imag[r];
+                            result_real += a * c * g - a * d * f - b * c * f - b * d * g;
+                            result_imag += a * c * f + a * d * g + b * c * g - b * d * f;
+                        }
+                    }
+                }
+            }
+            EPILOGUE:
+            for (IdxType ind = i; ind < vector_dim; ind++) {
+                ValType a = sv_real[ind];
+                ValType b = -sv_imag[ind];
+                for (IdxType j = 0; j < vector_dim; j ++) {
+                    ValType c = dm_real[ind * vector_dim + j];
+                    ValType d = dm_imag[ind * vector_dim + j];
+                    ValType g = sv_real[j];
+                    ValType f = sv_real[j];
+                    result_real += a * c * g - a * d * f - b * c * f - b * d * g;
+                    result_imag += a * c * f + a * d * g + b * c * g - b * d * f;
+                }
+            }
+            assert(abs(result_imag) <= 1e-10);
+            return result_real;
+        };
     }
 } // namespace NWQSim

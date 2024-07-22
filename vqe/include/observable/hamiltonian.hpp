@@ -6,7 +6,6 @@
 #include "observable/pauli_operator.hpp"
 #include "transform/transform.hpp"
 #include "utils.hpp" 
-#include "state.hpp" 
 
 
 namespace NWQSim {
