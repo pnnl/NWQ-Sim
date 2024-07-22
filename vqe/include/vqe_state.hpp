@@ -149,7 +149,7 @@ namespace NWQSim
         // gradient
         // get the single-direction starting vector
         g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, params, gradient, delta, n_grad_est);
-        IdxType step = 0;
+        iteration = 0;
         do {
           for (size_t i = 0; i < params.size(); i++) {
             params[i] -= eta * gradient[i];
@@ -166,13 +166,13 @@ namespace NWQSim
           } else {
             ene_prev = ene_curr;
           }
-          step++;
+          iteration++;
           // auto s2 =  std::chrono::high_resolution_clock::now();
           // std::cout << (s2-s1).count()/1e9 << std::endl;
         } while(true);
         // std::cout << "Ended loop\n" << std::endl;
         std::vector<std::string> fermi_strings = ansatz->getFermionicOperatorStrings();
-
+        
         std::vector<std::pair<std::string, ValType>> result = ansatz->getFermionicOperatorParameters();
         return result;
       }
@@ -207,6 +207,7 @@ namespace NWQSim
         // ValType ene = hamil.expectation(emap);
         return expectation;
       }
+      IdxType get_iteration() const {return iteration;};
       protected:
         std::shared_ptr<Ansatz> ansatz;
         std::shared_ptr<Hamiltonian> hamil;

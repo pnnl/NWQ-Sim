@@ -46,8 +46,10 @@ if(MPI_FOUND)
     target_compile_definitions(nwq_vqe PUBLIC MPI_ENABLED)
     target_link_libraries(nwq_qflow PUBLIC MPI::MPI_CXX)
     target_compile_definitions(nwq_qflow PUBLIC MPI_ENABLED)
+
     # target_link_libraries(nwqflow PUBLIC MPI::MPI_CXX)
     # target_compile_definitions(nwqflow PUBLIC MPI_ENABLED)
+
 endif()
 
 # If CUDA Toolkit is available, set the CUDA standard and definitions
@@ -64,8 +66,10 @@ if(CUDAToolkit_FOUND)
     target_compile_features(nwq_qflow PRIVATE cuda_std_17)
     target_compile_definitions(nwq_qflow PUBLIC CUDA_ENABLED)
 
+
     # target_compile_features(nwqflow PRIVATE cuda_std_17)
     # target_compile_definitions(nwqflow PUBLIC CUDA_ENABLED)
+
 
     # If NVSHMEM is available, link against it and set the definitions
     if(NVSHMEM_FOUND AND TARGET nvshmem::nvshmem)
