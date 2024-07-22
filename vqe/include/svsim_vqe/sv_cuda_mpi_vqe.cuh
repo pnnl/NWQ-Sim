@@ -79,14 +79,12 @@ namespace NWQSim
         cudaSafeCall(cudaMemcpy(expvals.data(), expvals_dev, expvals.size() * sizeof(ValType),
                                     cudaMemcpyDeviceToHost));
         MPI_Barrier(MPI_COMM_WORLD);
-        printf("%lld %e\n", i_proc, expvals[0]);
         std::vector<ValType> temp(expvals.begin(), expvals.end());
           MPI_Reduce(temp.data(), expvals.data(), expvals.size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
         if (i_proc != 0) {
           stat = WAIT;
         }else {
         
-        printf("Result %e %lld\n", expvals[0], m_gpu);}
         MPI_Barrier(MPI_COMM_WORLD);              
         
       };

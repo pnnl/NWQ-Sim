@@ -181,8 +181,8 @@ namespace NWQSim
           if (parameters.size() == 0) {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }
-          final_ene = energy(parameters);
-          // nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
+          // final_ene = energy(parameters);
+          nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
       }
       virtual void call_simulator() {};
       virtual ValType energy(const std::vector<double>& x) {
