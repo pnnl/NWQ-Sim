@@ -128,6 +128,28 @@ typedef struct GPU_Timer
     cudaEvent_t stop;
 } gpu_timer;
 
+__device__
+inline 
+uint64_t swapBits_cu (uint64_t n, uint64_t p1, uint64_t p2) {
+
+    /* Move p1'th to rightmost side */
+    uint64_t bit1 =  (n >> p1) & 1;
+
+    /* Move p2'th to rightmost side */
+    uint64_t bit2 =  (n >> p2) & 1;
+
+    /* XOR the two bits */
+    uint64_t x = (bit1 ^ bit2);
+
+    /* Put the xor bit back to their original positions */
+    x = (x << p1) | (x << p2);
+
+    /* XOR 'x' with the original number so that the
+    two sets are swapped */
+    uint64_t result = n ^ x;
+    return result;
+}
+
 /***********************************************
  * VQE Related Functions
  ***********************************************/
@@ -144,7 +166,18 @@ __device__ bool hasEvenParity(unsigned long long x, const size_t *in_bits, const
     }
     return (count % 2) == 0;
 }
-
+__device__ bool hasEvenParity_cu(unsigned long long x, const size_t in_bits_size)
+{
+    size_t count = 0;
+    for (size_t i = 0; i < in_bits_size; ++i)
+    {
+        if (x & (1ULL << i))
+        {
+            count++;
+        }
+    }
+    return (count % 2) == 0;
+}
 __device__ double parity(unsigned long long num)
 {
     num ^= num >> 32;
@@ -155,6 +188,8 @@ __device__ double parity(unsigned long long num)
     num ^= num >> 1;
     return num & 1; // Return the last bit, which is the parity of the original number
 }
+
+
 
 __global__ void gpu_exp_z(const double *sv_real, const double *sv_imag, double *result, const unsigned long long dim, const int offset)
 {

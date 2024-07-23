@@ -7,6 +7,7 @@
 #include "utils.hpp"
 #include "state.hpp"
 #include "svsim_vqe/sv_cpu_vqe.hpp"
+#include "svsim_vqe/sv_cuda_vqe.cuh"
 #include "gradient/sa_gradient.hpp"
 
 
@@ -26,17 +27,16 @@ void callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fv
 int main(int argc, char** argv) {
   NWQSim::IdxType n_particles = 10; // Set the number of particles
   // Note: path relative to presumed build directory
-  std::string hamiltonian_path = "../NWQ-VQE/examples/h2O.hamil"; //  Effective Hamiltonian file path
+  std::string hamiltonian_path = "../vqe/example_hamiltonians/h2O.hamil"; //  Effective Hamiltonian file path
 
-  Hamiltonian hamil(hamiltonian_path, n_particles); // Build the Hamiltonian object (used for energy calculation)
+  std::shared_ptr<Hamiltonian> hamil = std::make_shared<Hamiltonian>(hamiltonian_path, n_particles, false); // Build the Hamiltonian object (used for energy calculation)
   Transformer jw_transform = getJordanWignerTransform; // Choose a transformation function
 
   // Build the ansatz circuit using the Hamiltonian Molecular environment and JW mapping
   //      (shared_ptr used to match baseline NWQ-Sim functionality)
-  std::shared_ptr<Ansatz> ansatz = std::make_shared<UCCSD>(hamil.getEnv(), jw_transform, 1);
-  
+  std::shared_ptr<Ansatz> ansatz = std::make_shared<UCCSD>(hamil->getEnv(), jw_transform, 1);
   // Build the Quantum State object
-  NWQSim::VQE::SV_CPU_VQE state(ansatz, // reference to ansatz
+  NWQSim::VQE::SV_CUDA_VQE state(ansatz, // reference to ansatz
                                 hamil,  // reference to Hamiltonian
                                 nlopt::algorithm::LN_COBYLA, // NLOpt algorithm for optimization
                                 callback_function, // Callback function for each energy evaluation
@@ -53,6 +53,8 @@ int main(int argc, char** argv) {
 
   // Start the VQE optimization
   state.optimize(parameters, fval);
+  std::cout << "Final Parameters: " << parameters << std::endl;
+  std::cout << "Final Energy: " << fval << std::endl;
 
   return 0;
 }

@@ -1,6 +1,7 @@
-#ifndef VQE_STATE
-#define VQE_STATE
+#ifndef VQE_CPU_STATE
+#define VQE_CPU_STATE
 #include "svsim/sv_cpu.hpp"
+#include "vqe_state.hpp"
 #include "observable/pauli_operator.hpp"
 #include "utils.hpp"
 #include "circuit/ansatz.hpp"
@@ -8,136 +9,68 @@
 #include "gradient/sa_gradient.hpp"
 #include "observable/hamiltonian.hpp"
 #include "nlopt.hpp"
+#include <memory>
+#include <cmath>
 
 namespace NWQSim
 {
   namespace VQE {
-    const std::unordered_map<std::string, nlopt::algorithm> algomap = {
-      {"cobyla", nlopt::algorithm::LN_COBYLA},
-      {"neldermead", nlopt::algorithm::LN_NELDERMEAD},
-      {"bfgs", nlopt::algorithm::LD_LBFGS}
-    };
-
-
-    inline
-    ValType normsq(ValType real, ValType imag) {
-      return (real * real + imag * imag);
-    }
-
-    
-    inline
-    IdxType count_ones(IdxType val) {
-      IdxType count = 0;
-      IdxType mask = 1;
-      for (size_t i = 0; i < sizeof(IdxType) * 8 - 1; i++) {
-        count += (val & mask) > 0;
-        mask = mask << 1;
-      }
-      return count;
-    }
-
-    typedef std::function<void(const std::vector<ValType>& x, ValType ene, IdxType iter)> Callback;
-
-    double nl_opt_function(const std::vector<double>& x, std::vector<double>& gradient, void* val);
-    class SV_CPU_VQE: public SV_CPU {
+    class SV_CPU_VQE: public VQEState, public SV_CPU {
       public:
-      
         SV_CPU_VQE(std::shared_ptr<Ansatz> a, 
-                   const Hamiltonian& h, 
+                   std::shared_ptr<Hamiltonian> h, 
                    nlopt::algorithm optimizer_algorithm,
                    Callback _callback,
-                  IdxType seed = 0): SV_CPU(a->num_qubits()),
-                                      hamil(h),
-                                      ansatz(a),
-                                      callback(_callback),
-                                      g_est(seed)
-                                      {
-          optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
-          // Check if the chosen algorithm is flagged as requiring a derivative
-          compute_gradient = std::string(optimizer.get_algorithm_name()).find("D_") != std::string::npos;
-          optimizer.set_min_objective(nl_opt_function, (void*)this);
-          std::vector<double> lower_bounds(ansatz->numParams(), 0);
-          std::vector<double> upper_bounds(ansatz->numParams(), 2 * PI);
-          optimizer.set_lower_bounds(lower_bounds);
-          optimizer.set_upper_bounds(upper_bounds);
-          
-        };
-      // function for the NLOpt plugin
-      double cost_function(const std::vector<double> x, std::vector<double>& gradient) {
-        if (compute_gradient) {
-          gradient.resize(x.size());
-          g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, x, gradient, 1e-4);
-        }
-        double ene = energy(x);
-        callback(x, ene, iteration);
-        iteration++;
-        return ene;
-      }
-        void optimize(std::vector<ValType>& parameters, ValType& final_ene) {
-          iteration = 0;
-          Config::PRINT_SIM_TRACE = false;
-          if (parameters.size() == 0) {
-            parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
-          }
-          nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
-        }
+                   IdxType seed = 0,
+                   OptimizerSettings opt_settings = OptimizerSettings()): 
+                                      SV_CPU(a->num_qubits()),
+                                      VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
+        expvals.resize(1);
+        initialize();
 
-      ValType energy(const std::vector<double>& x) {
-        ansatz->setParams(x);
+        
+        
+      };
+      virtual void call_simulator() override {        
         reset_state();
+        std::fill(expvals.begin(), expvals.end(), 0.0);
         sim(ansatz);
+                  std::vector<std::vector<PauliOperator>> paulis = hamil->getPauliOperators();
+        // for (auto paulivec: paulis) {
+        //     for (auto op: paulivec) {
+        //     double exp = getPauliExpectation(op);
+        //     // if (abs(exp) > 1e-10) {
+        //     //     std::cout << exp << " " << op  << std::endl;
+        //     // }
+        //     }
+        // }
+      };
 
-        ExpectationMap emap;
-        auto& pauli_operators = hamil.getPauliOperators();
-        for (auto& pauli_list: pauli_operators) {
-          for (const PauliOperator& pauli: pauli_list) {
-            ValType expectation = getPauliExpectation(pauli);
-            emap[pauli] = expectation;
-          }
-        }
-        ValType energy = hamil.expectation(emap);
-        return energy;
-      }
-      protected:
-        std::shared_ptr<Ansatz> ansatz;
-        const Hamiltonian& hamil;
-        SPSA g_est;
-        nlopt::opt optimizer;
-        bool compute_gradient;
-        Callback callback;
-        IdxType iteration;
-
-
-      
-
-
-        ValType getPauliExpectation(const PauliOperator& op) {
-          IdxType qubit = 0;
-          IdxType xmask = 0;
-          IdxType zmask = 0;
+      virtual void fill_obslist(IdxType index) override {
+        ObservableList& obs = obsvec[index];
+        obs.coeffs = coeffs[index].data();
+        obs.xmasks = xmasks[index].data();
+        obs.zmasks = zmasks[index].data();
+        obs.x_index_sizes = x_index_sizes[index].data();
+        obs.exp_output = expvals.data();
+        obs.x_indices = x_indices[index].data();
+        obs.numterms = xmasks[index].size();
+        ansatz->EXPECT(&obs); 
+      };
+      virtual ValType getPauliExpectation(const PauliOperator& op) override {
+          IdxType qubit = op.get_dim();
+          IdxType xmask = op.get_xmask();
+          IdxType zmask = op.get_zmask();
           IdxType y_phase = 0;
           IdxType max_x = 0;
-          for (auto pauli_op: *op.getOps()) {
-            switch (pauli_op)
-            {
-              case PauliOp::X:
-                xmask = xmask | (1 << qubit);
-                max_x = qubit;
-                break;
-              case PauliOp::Y:
-                xmask = xmask | (1 << qubit);
-                zmask = zmask | (1 << qubit);
-                max_x = qubit;
-                y_phase += 1;
-                break;
-              case PauliOp::Z:
-                zmask = zmask | (1ll << qubit);
-                break;
-              default:
-                break;
-            }
-            qubit++;
+          for (IdxType i = 0; i < qubit; i++) {
+            bool xbit = (xmask >> i) & 1;
+            bool zbit = (zmask >> i) & 1;
+            y_phase += (xbit && zbit);
+            if (xbit)
+              max_x = std::max(i, max_x);
           }
+
           ValType expectation = 0.0;
           if (xmask == 0) {
             for (IdxType i = 0; i < dim; i++) {
@@ -153,10 +86,13 @@ namespace NWQSim
           ValType phase = y_phase % 2;
           size_t mask_u = ~((1lu << (max_x + 1)) - 1);
           size_t mask_l = (1lu << (max_x)) - 1;
+          double val = 0.0;
           for (IdxType i = 0; i < half_dim; i++) {
             IdxType idx0 = ((i << 1) & mask_u) | (i & mask_l);
             IdxType idx1 = xmask ^ idx0;
             ValType v0, v1;
+            val += sv_imag[idx1] * sv_imag[idx1]  + sv_real[idx1] * sv_real[idx1];
+            val += sv_imag[idx0] * sv_imag[idx0]  + sv_real[idx0] * sv_real[idx0];
             if (phase) {
               v0 = -sv_imag[idx1] * sv_real[idx0] + sv_imag[idx0] * sv_real[idx1];
               v1 = -sv_imag[idx0] * sv_real[idx1] + sv_imag[idx1] * sv_real[idx0];
@@ -170,6 +106,7 @@ namespace NWQSim
             if ((count_ones(idx0 & zmask) & 1) != 0) {
               thisval *= -1;
             }
+
             if ((count_ones(idx1 & zmask) & 1) != 0) {
               thisval -= v1;
             } else {
@@ -180,9 +117,6 @@ namespace NWQSim
           return expectation;
         }       
 
-    };
-    double nl_opt_function(const std::vector<double>& x, std::vector<double>& gradient, void* val) {
-        return ((SV_CPU_VQE*)val)->cost_function(x, gradient);
     };
   };
 } // namespace NWQSim

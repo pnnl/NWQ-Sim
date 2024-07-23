@@ -21,30 +21,36 @@ namespace NWQSim {
         PauliOperator diagonal_op;
         double sign;
       public:
-        Measurement(const PauliOperator& _op): op(_op), Circuit(_op.numQubits()) {
+        Measurement(const PauliOperator& _op, bool inverse = false): op(_op), Circuit(_op.numQubits()) {
           size_t index = 0;
           sign = 1.0;
-          std::vector<PauliOp> opstring;
-          opstring.reserve(op.numQubits());
-          for (PauliOp opval: *op.getOps()) {
-            if (opval == PauliOp::I) {
-              opstring.push_back(PauliOp::I);
-              index++;
-              continue;
-            }
-            if (opval == PauliOp::X) {
+          IdxType dim = _op.get_dim();
+          IdxType xmask = _op.get_xmask();
+          IdxType zmask = _op.get_zmask();
+
+          for (IdxType index = 0; index < dim; index++) {
+            IdxType xbit = (xmask >> index) & 1;
+            IdxType zbit = (zmask >> index) & 1;
+            switch (xbit + 2 * zbit)
+            {
+            case 1: // X
+              /* code */
               H(index);
+              break;
+            case 3: // Y
+              if (inverse) {
+                H(index);
+                RZ(PI/2, index);
+              } else {
+                RZ(-PI/2, index);
+                H(index);
+              }
+            default:
+              break;
             }
-            if (opval == PauliOp::Y) {
-              S(index);
-              H(index);
-              sign *= -1;
-            }
-            opstring.push_back(PauliOp::Z);
-            index++;
           }
-          diagonal_op = PauliOperator(opstring);
-          std::cout << diagonal_op << std::endl;
+          
+          diagonal_op = PauliOperator(0, op.get_xmask() | op.get_zmask(), op.get_dim());
         };
         ValType operatorExpectation(std::unordered_map<IdxType, IdxType> counts) {
           ValType v = diagonal_op.sample_expectation(counts);

@@ -24,16 +24,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if (NOT XACC_DIR)
   set(XACC_DIR "$ENV{HOME}/.xacc")
 endif()
-if (NOT NLOPT_DIR)
-  set(NLOPT_DIR "$ENV{HOME}/.nlopt")
-endif()
+
 # Find required packages
 find_package(CUDAToolkit)
 find_package(MPI)
 find_package(OpenMP)
 find_package(XACC QUIET)
 find_package(HIP QUIET)
-find_package(NLOpt QUIET)
 
 set(ma_enable "N/A") 
 if(CUDAToolkit_FOUND)
@@ -51,6 +48,8 @@ if(CUDAToolkit_FOUND)
     else()
         set(CMAKE_CUDA_ARCHITECTURES "${CUDA_ARCH}")
     endif()
+    
+    set(CMAKE_CUDA_FLAGS_DEBUG "-g -G")
 
 
     set(CMAKE_CUDA_FLAGS_RELEASE "-O3")
@@ -87,12 +86,6 @@ else()
     set(xacc_found_str "FALSE")
 endif()
 
-
-if(NLOpt_FOUND)
-    set(nlopt_found_str "TRUE")
-else()
-    set(nlopt_found_str "FALSE")
-endif()
 
 if(HIP_FOUND)
     set(hip_found_str "TRUE")
@@ -151,9 +144,7 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 
 # Subdirectories
 add_subdirectory(qasm)
-if(NLOpt_FOUND)
-    add_subdirectory(vqe)
-endif()
+add_subdirectory(vqe)
 
 
 if(XACC_FOUND)
