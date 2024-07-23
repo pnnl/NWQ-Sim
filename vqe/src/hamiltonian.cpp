@@ -12,7 +12,7 @@ namespace NWQSim{
       FermionOpType typeval;
       IdxType term_index;
     };
-    const std::regex pattern("\\(([\\d\\.e\\+-]+),\\s*([\\d\\.]+)\\)([\\d^\\s]+)");
+    const std::regex pattern("\\(\\s*([\\d\\.e\\+-]+),\\s*([\\d\\.]+)\\)([\\d^\\s]+)");
     Hamiltonian::Hamiltonian(std::string input_path, IdxType n_particles, 
                     Transformer transform) {
       std::ifstream input_file(input_path);
