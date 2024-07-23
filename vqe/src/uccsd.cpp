@@ -1,4 +1,8 @@
 #include "circuit/ansatz.hpp"
+#include "environment.hpp"
+#include "observable/fermionic_operator.hpp"
+#include "utils.hpp"
+#include <unordered_map>
 namespace NWQSim {
   namespace VQE {
     void UCCSD::getFermionOps()
@@ -133,26 +137,49 @@ namespace NWQSim {
     std::cout << fermion_operators.size() << " " << unique_params << std::endl;
 #endif
     };
-    /*
-    8 0 4 6^ 2^
-    9 0 4 6^ 3^
-    10 0 4 7^ 2^
-    11 0 4 7^ 3^
-    12 0 5 6^ 2^
-    13 0 5 6^ 3^
-    14 0 5 7^ 2^
-    15 0 5 7^ 3^
-    16 1 4 6^ 2^
-    17 1 4 6^ 3^
-    18 5 4 7^ 6^
-    19 1 0 3^ 2^
-    20 1 4 7^ 2^
-    21 1 4 7^ 3^
-    22 1 5 6^ 2^
-    23 1 5 6^ 3^
-    24 1 5 7^ 2^
-    25 1 5 7^ 3^
-    */
+    struct
+    FermiHash {
+      size_t operator()(const std::vector<FermionOperator>& op) const {
+        size_t value = 1;
+        for (auto i: op) {
+          value *= std::hash<IdxType>{}(i.getType() + 1 + i.getOrbitalType() * 2 + i.getType()*4 + i.getSpin()*8);
+        }
+        return value;
+      }
+    };
+    struct
+    FermiEq {
+      bool operator()(const std::vector<FermionOperator>& op, const std::vector<FermionOperator>& op2) const {
+        if (op.size() != op2.size()) {
+          return false;
+        }
+        auto it1 = op.begin();
+        auto it2 = op2.begin();
+        for (size_t i = 0; i < op.size(); i++) {
+          if (*it1 != *it2) {
+            return false;
+          }
+        }
+        return true;
+      }
+    };
+    using FermiMap = std::unordered_map<std::vector<FermionOperator>, double, FermiHash, FermiEq>;
+    void UCCSD::loadParameters(std::string amplitude_path) {
+      std::vector<std::vector<FermionOperator>> provided_excitations;
+      MolecularEnvironment env2 = env;
+      read_fermion_operators(amplitude_path, provided_excitations, env2, env.n_part, env.xacc_scheme);
+      FermiMap mp;
+      for (auto i: provided_excitations) {
+        mp[i] = i.front().getCoeff().real();
+      }
+      IdxType index = 0;
+      for (auto i: fermion_operators) {
+        if (mp.find(i) != mp.end()) {
+          theta->assign(index++, mp[i]);
+        }
+      }
+
+    }
     void UCCSD::buildAnsatz(std::vector<std::vector<PauliOperator> > pauli_oplist) {
       unique_params *= trotter_n;
       for (IdxType i = 0; i < env.n_occ; i++) {

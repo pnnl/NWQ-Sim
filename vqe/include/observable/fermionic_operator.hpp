@@ -3,6 +3,7 @@
 #include <vector>
 #include <complex>
 #include "utils.hpp"
+#include "environment.hpp"
 namespace NWQSim {
   /* Basic data type for indices */
   using IdxType = long long int;
@@ -57,18 +58,31 @@ namespace NWQSim {
         xacc_scheme = other.xacc_scheme;
         return *this;
       }
+      bool operator==(const FermionOperator& other)const  {
+        return (orbital_index == other.orbital_index && spin == other.spin && orb_type == other.orb_type && type == other.type);
+      }
+      bool operator!=(const FermionOperator& other)const  {
+        return !(orbital_index != other.orbital_index || spin != other.spin || orb_type != other.orb_type || type != other.type);
+      }
       IdxType qubitIndex(IdxType n_occ, IdxType n_virt) const {
         // Flattened indexing scheme
         return getQubitIndex(orbital_index, spin, orb_type, n_occ, n_virt, xacc_scheme);
       }
       std::complex<ValType> getCoeff() const { return coeff; }
       FermionOpType getType() const { return type; }
+      Spin getSpin() const { return spin; }
+      OrbitalType getOrbitalType() const { return orb_type; }
       std::string toString (IdxType n_occ, IdxType n_virt) const {
         std::stringstream ss;
         ss  << qubitIndex(n_occ, n_virt) << ((type==Creation) ? "^": "");
         return ss.str();
       };
     };
+    void read_fermion_operators(std::string input_path,
+                                std::vector<std::vector<FermionOperator>>& fermi_operators,
+                                MolecularEnvironment& env,
+                                size_t n_particles,
+                                bool xacc_scheme);
   };// namespace vqe
 };// namespace nwqsim
 

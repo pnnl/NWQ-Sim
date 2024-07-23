@@ -270,6 +270,7 @@ namespace NWQSim {
         std::vector<IdxType> fermion_ops_to_params; // map from fermion operators to parameters (used in update)
         std::vector<std::vector<FermionOperator> > fermion_operators;
         void getFermionOps();
+        void loadParameters(std::string param_path);
         void buildAnsatz(std::vector<std::vector<PauliOperator> > pauli_oplist);
       public:
         UCCSD(const MolecularEnvironment& _env, Transformer transform, IdxType _trotter_n = 1): 

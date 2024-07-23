@@ -1,4 +1,6 @@
 #include "observable/hamiltonian.hpp"
+#include "environment.hpp"
+#include "observable/fermionic_operator.hpp"
 #include <fstream>
 #include <sstream>
 #include <regex>
@@ -13,9 +15,13 @@ namespace NWQSim{
       IdxType term_index;
     };
     const std::regex pattern("\\(\\s*([\\d\\.e\\+-]+),\\s*([\\d\\.]+)\\)([\\d^\\s]+)");
-    Hamiltonian::Hamiltonian(std::string input_path, IdxType n_particles, bool xacc_scheme,
-                    Transformer transform) {
-      std::ifstream input_file(input_path);
+
+    void read_fermion_operators(std::string input_path,
+                                std::vector<std::vector<FermionOperator>>& fermi_operators,
+                                MolecularEnvironment& env,
+                                size_t n_particles,
+                                bool xacc_scheme) {
+       std::ifstream input_file(input_path);
       if (!input_file.is_open()) {
         throw std::runtime_error("Could not open file");
       }
@@ -107,6 +113,12 @@ namespace NWQSim{
                           xacc_scheme,
                           args.coeff));
       };
+    }
+
+
+    Hamiltonian::Hamiltonian(std::string input_path, IdxType n_particles, bool xacc_scheme,
+                    Transformer transform) {
+      read_fermion_operators(input_path, fermi_operators, env, n_particles, xacc_scheme);
       transform(env, fermi_operators, pauli_operators, false);
       n_ops = 0;
       for (auto& i : pauli_operators) {
