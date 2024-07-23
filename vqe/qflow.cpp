@@ -135,7 +135,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
   std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, fval, delta, eta, num_trials);
   std::ostringstream strstream;
   for (auto& i: param_tuple) {
-    strstream << i.first << ": " << i.second / PI << " rad"<<  std::endl;
+    strstream << i.first << ": " << i.second << std::endl;
   }
   manager.safe_print("%s", strstream.str().c_str());
 }
