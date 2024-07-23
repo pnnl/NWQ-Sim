@@ -13,7 +13,7 @@ namespace NWQSim{
       IdxType term_index;
     };
     const std::regex pattern("\\(\\s*([\\d\\.e\\+-]+),\\s*([\\d\\.]+)\\)([\\d^\\s]+)");
-    Hamiltonian::Hamiltonian(std::string input_path, IdxType n_particles, 
+    Hamiltonian::Hamiltonian(std::string input_path, IdxType n_particles, bool xacc_scheme,
                     Transformer transform) {
       std::ifstream input_file(input_path);
       if (!input_file.is_open()) {
