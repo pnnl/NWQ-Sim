@@ -168,7 +168,7 @@ int main(int argc, char **argv)
             dm_state->print_config(simulation_method);
             map<string, IdxType> *counts_dm = parser.execute(dm_state, total_shots, print_metrics);
             ValType fidelity = dm_state->fidelity(sv_state);
-            BackendManager::safe_print("State Fidelity: %e", fidelity);
+            BackendManager::safe_print("State Fidelity: %e\n", fidelity);
         }
         
     }

@@ -13,6 +13,8 @@
 #include "../circuit_pass/fusion.hpp"
 
 #include <assert.h>
+#include <cuda_runtime_api.h>
+#include <driver_types.h>
 #include <random>
 #include <complex.h>
 #include <cooperative_groups.h>
@@ -36,6 +38,10 @@ namespace NWQSim
     // Simulation kernel runtime
     class DM_CUDA;
     __global__ void dm_simulation_kernel_cuda(DM_CUDA *dm_gpu, IdxType n_gates, IdxType n_qubits, bool tensor_core);
+    __global__ void fidelity_kernel(DM_CUDA* dm_gpu,
+                                   ValType* sv_real, 
+                                   ValType* sv_imag, 
+                                   ValType* result);
 
     class DM_CUDA : public QuantumState
     {
@@ -856,8 +862,91 @@ namespace NWQSim
             }
             BARR_CUDA;
         }
-    };
+        
+        virtual ValType fidelity(std::shared_ptr<QuantumState> other) override {
+            ValType* result_cu;
+            ValType result;
+            int numBlocksPerSm;
+            int smem_size = 0;
+            cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
+                                                                       fidelity_kernel, THREADS_CTA_CUDA, smem_size));
+            
+            dim3 gridDim(1, 1, 1);
 
+            cudaDeviceProp deviceProp;
+            cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
+            gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
+
+            DM_CUDA *dm_gpu;
+            SAFE_ALOC_GPU(dm_gpu, sizeof(DM_CUDA));
+            SAFE_ALOC_GPU(result_cu, sizeof(ValType));
+            // Copy the simulator instance to GPU
+            cudaSafeCall(cudaMemcpy(dm_gpu, this,
+                                    sizeof(DM_CUDA), cudaMemcpyHostToDevice));
+            ValType* sv_real = other->get_real();
+            ValType* sv_imag = other->get_imag();
+            void* args[] = {&dm_gpu, &sv_real, &sv_imag, &result_cu};
+            cudaLaunchCooperativeKernel((void *)fidelity_kernel, gridDim,
+                                        THREADS_CTA_CUDA, args, smem_size);
+            cudaSafeCall(cudaDeviceSynchronize());
+            cudaSafeCall(cudaMemcpy(&result, result_cu, sizeof(ValType), cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaFree(result_cu));
+            cudaSafeCall(cudaFree(dm_gpu));
+            return result;
+        };
+        __device__ void fidelity_device(ValType* sv_real, 
+                                        ValType* sv_imag, 
+                                        ValType* result) {
+            const IdxType tid = threadIdx.x + blockIdx.x * blockDim.x; 
+            grid_group grid = this_grid();
+            IdxType vector_dim = 1 << n_qubits;
+            ValType local_real = 0;
+            if (tid < dim) {
+                m_real[tid] = 0;
+                m_imag[tid] = 0;
+                for (size_t i = tid; i < dim; i += blockDim.x * gridDim.x) {
+                    IdxType r = i >> n_qubits;
+                    IdxType s = i & (vector_dim - 1);
+                    ValType a = sv_real[s]; // ket
+                    ValType b = sv_imag[s];
+                    ValType c = dm_real[r * vector_dim + s]; 
+                    ValType d = dm_imag[r * vector_dim + s];
+                    ValType g = sv_real[r]; // bra
+                    ValType f = -sv_imag[r];
+                    ValType real_contrib =  a * c * g - a * d * f - b * c * f - b * d * g;
+                    ValType imag_contrib = a * c * f + a * d * g + b * c * g - b * d * f;
+                    m_real[tid] += a * c * g - a * d * f - b * c * f - b * d * g;
+                    m_imag[tid] += a * c * f + a * d * g + b * c * g - b * d * f;
+                }
+            }
+
+            grid.sync();
+            IdxType gridlog2 = 63 - __clz(blockDim.x * gridDim.x);
+            if (blockDim.x * gridDim.x > (1 << gridlog2)) {
+                gridlog2 += 1;
+            }
+
+            IdxType reduce_lim = min((1ll << gridlog2), dim);
+            for (IdxType k = reduce_lim >> 1; k > 0; k >>= 1) {
+                if (tid < k) {
+                    m_real[tid] += m_real[tid + k];
+                    m_imag[tid] += m_imag[tid + k];
+                }
+                grid.sync();
+            }
+            if (tid == 0) {
+                assert(abs(m_imag[tid]) <=1e-10);
+                *result = m_real[tid];
+            }                               
+        }
+    };
+__global__ 
+void fidelity_kernel(DM_CUDA* dm_gpu,
+                                ValType* sv_real, 
+                                ValType* sv_imag, 
+                                ValType* result) {
+    dm_gpu->fidelity_device(sv_real, sv_imag, result);           
+}
     __global__ void dm_simulation_kernel_cuda(DM_CUDA *dm_gpu, IdxType n_gates, IdxType n_qubits, bool tensor_core)
     {
         IdxType cur_index = 0;
@@ -901,73 +990,6 @@ namespace NWQSim
             }
             grid.sync();
         }
-        __global__ void fidelity_kernel(ValType* sv_real, ValType* sv_imag) {
-            const IdxType tid = threadIdx.x + blockIdx.x * blockDim.x; 
-            IdxType vector_dim = 1 << n_qubits;
-            ValType local_real = 0;
-            if (tid > vector_dim) {
-                return;
-            }
-            m_real[tid] = 0;
-            for (size_t i = tid; i < dim; i += blockDim.x * gridDim.x) {
-                
-                ValType a = 0;
-                local_real = dm_real
-            }
-        }
-        virtual ValType fidelity(std::shared_ptr<QuantumState> other) override {
-            ValType result_real = 0;
-            ValType result_imag = 0;
-            const IdxType block_size = 32;
-            IdxType vector_dim = 1 << n_qubits;
-            double* sv_real = other->get_real();
-            double* sv_imag = other->get_imag();
-            IdxType i = 0;
-            if (block_size > vector_dim)
-                goto EPILOGUE;
-            for (i = 0; i < vector_dim && block_size <= vector_dim; i+=block_size) {
-                // $\bra{\psi}$: vector in dual space
-                double* block_bra_real = sv_real + i;
-                double* block_bra_imag = sv_imag + i;
-                // individual block
-                for (IdxType j = 0; j < vector_dim; j += block_size) {
-                    // $\ket{\psi}$: vector in primal space
-                    double* block_ket_real = sv_real + i;
-                    double* block_ket_imag = sv_imag + i;
-                    // $\rho$: density matrix
-                    double* block_dm_real = dm_real + i * vector_dim + j;
-                    double* block_dm_imag = dm_real + i * vector_dim + j;
-                    #pragma unroll
-                    for (IdxType k = i * block_size; k < block_size; k++) {
-                        ValType a = block_bra_real[k];
-                        ValType b = -block_bra_imag[k];
-                        #pragma unroll
-                        for (IdxType r = j * block_size; r < block_size; r++) {
-                            ValType c = block_dm_real[k * vector_dim + r];
-                            ValType d = block_dm_imag[k * vector_dim + r];
-                            ValType g = block_ket_real[r];
-                            ValType f = block_ket_imag[r];
-                            result_real += a * c * g - a * d * f - b * c * f - b * d * g;
-                            result_imag += a * c * f + a * d * g + b * c * g - b * d * f;
-                        }
-                    }
-                }
-            }
-            EPILOGUE:
-            for (IdxType ind = i; ind < vector_dim; ind++) {
-                ValType a = sv_real[ind];
-                ValType b = -sv_imag[ind];
-                for (IdxType j = 0; j < vector_dim; j ++) {
-                    ValType c = dm_real[ind * vector_dim + j];
-                    ValType d = dm_imag[ind * vector_dim + j];
-                    ValType g = sv_real[j];
-                    ValType f = sv_real[j];
-                    result_real += a * c * g - a * d * f - b * c * f - b * d * g;
-                    result_imag += a * c * f + a * d * g + b * c * g - b * d * f;
-                }
-            }
-            assert(abs(result_imag) <= 1e-10);
-            return result_real;
-        };
+        
     }
 } // namespace NWQSim
