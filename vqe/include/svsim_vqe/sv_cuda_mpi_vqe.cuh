@@ -42,7 +42,7 @@ namespace NWQSim
         IdxType isize = obs.numterms * sizeof(IdxType);
         IdxType vsize = obs.numterms * sizeof(ValType);
         SAFE_ALOC_GPU(obs.zmasks, isize);
-        obs.exp_output = expvals_dev;
+        obs.exp_output = 0;
         SAFE_ALOC_GPU(obs.coeffs, vsize);
         cudaSafeCall(cudaMemcpy(obs.zmasks, zmasks[index].data(), isize,
                                     cudaMemcpyHostToDevice));

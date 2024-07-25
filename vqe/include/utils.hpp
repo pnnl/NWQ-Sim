@@ -69,6 +69,11 @@ std::stringstream& operator<<(std::stringstream& out, const std::vector<T>& targ
 
 namespace NWQSim{
   namespace VQE{
+  enum class Commute {
+    GC,  // general commutativity (aka "FC")
+    QWC, // qubit-wise commutativity
+    TRC  // topology-restricted commutativity
+  };
   using IdxType = long long;
   using ValType = double;
   struct OptimizerSettings {
@@ -146,7 +151,19 @@ IdxType count_ones(IdxType val) {
 void sorted_insertion(const std::vector<PauliOperator>& paulilist, std::list<std::vector<IdxType> >& cliques, bool overlap);
   // Convert an integer to an  `n_qubits`-digit binary string
   std::string to_binary_string(IdxType val, IdxType n_qubits);
-
+template <typename T>
+std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
+  out << "[";
+  size_t len = target.size();
+  if (len > 0) {
+      for (size_t i = 0; i < len - 1; i++) {
+          out << target[i] << ", ";
+      }
+      out << target[len-1];
+  }
+  out << "]";
+  return out;
+}
 };};
 
 #endif

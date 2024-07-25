@@ -11,6 +11,8 @@
 #include "nlopt.hpp"
 #include <memory>
 #include <cmath>
+#include <numeric>
+#include <vector>
 
 namespace NWQSim
 {
@@ -19,12 +21,17 @@ namespace NWQSim
     ValType normsq(ValType real, ValType imag) {
       return (real * real + imag * imag);
     }
-
     
 
 
     typedef std::function<void(const std::vector<ValType>& x, ValType ene, IdxType iter)> Callback;
-
+    class VQEState;
+        void make_group_measurement_circuits(const std::vector<std::vector<PauliOperator> >& commutator_list,
+                                           std::shared_ptr<Ansatz> measurement_circuit,
+                                           std::vector<std::vector<IdxType> >& commutator_zmasks,
+                                           std::vector<std::vector<ValType> >& commutator_coeffs,
+                                           std::vector<std::vector<ObservableList*> >& gradient_observables,
+                                           VQEState* state);
     double nl_opt_function(const std::vector<double>& x, std::vector<double>& gradient, void* val);
     class VQEState {
       public:
@@ -70,18 +77,13 @@ namespace NWQSim
           const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators();  
           IdxType index = 0;    
           obsvec.resize(pauli_operators.size());
-          xmasks.resize(pauli_operators.size());
           zmasks.resize(pauli_operators.size());
-          x_index_sizes.resize(pauli_operators.size());
-          x_indices.resize(pauli_operators.size());
           coeffs.resize(pauli_operators.size());
           std::vector<IdxType> mapping (ansatz->num_qubits());
           std::iota(mapping.begin(), mapping.end(), 0);
           for (auto& pauli_list: pauli_operators) {
-            xmasks[index].reserve(pauli_list.size());
             zmasks[index].reserve(pauli_list.size());
             coeffs[index].reserve(pauli_list.size());
-            x_index_sizes[index].reserve(pauli_list.size());
             IdxType composite_xmask = 0;
             IdxType composite_zmask = 0;
             IdxType ncommute = pauli_list.size();
@@ -90,9 +92,7 @@ namespace NWQSim
               pauli.get_xindices(xinds);
               coeffs[index].push_back(pauli.getCoeff().real());
               composite_xmask |= pauli.get_xmask();
-              xmasks[index].push_back(0);
               coeffs[index].back() *= (pauli.count_y() % 2) ? -1.0 : 1.0;
-              x_index_sizes[index].push_back(0);
               zmasks[index].push_back(pauli.get_zmask() | pauli.get_xmask());
               composite_zmask |= pauli.get_zmask();
             }
@@ -138,7 +138,20 @@ namespace NWQSim
         iteration++;
         return ene;
       }
-      virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& final_ene, ValType delta, ValType eta, IdxType n_grad_est) {
+      virtual void get_exp_values(const std::vector<std::vector<ObservableList*>>& observables, std::vector<ValType>& output) {
+        for (size_t i = 0; i < observables.size(); i++) {
+          for (auto obs_ptr: observables[i]) {
+            output[i] += obs_ptr->exp_output;
+          }
+          // output.at(i) = observables.at(i)->exp_output;
+        }
+      };
+      virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, 
+                                                                                 ValType& final_ene, 
+                                                                                 ValType delta, 
+                                                                                 ValType eta, 
+                                                                                 IdxType n_grad_est,
+                                                                                 bool use_commutator) {
         Config::PRINT_SIM_TRACE = false;
         std::vector<ValType> gradient (x0.size(),1.0);
         std::vector<ValType> params(x0);
@@ -147,8 +160,29 @@ namespace NWQSim
         ValType ene_curr = energy(params);
 
         // gradient
+        if (use_commutator) {
+          std::vector<std::vector<PauliOperator>> commutators;
+          make_commutators(hamil, ansatz->getPauliOperators(), commutators);
+          std::shared_ptr<Ansatz> grad_measurement = std::make_shared<Ansatz>(ansatz->num_qubits());
+          std::vector<std::vector<ObservableList*> > obsvecs;
+          std::vector<std::vector<IdxType> > commutator_zmasks;
+          std::vector<std::vector<ValType> > commutator_coeffs;
+          IdxType num_comm = std::accumulate(commutators.begin(), commutators.end(), 0, [] (IdxType value, auto i) {return value + i.size();} );
+          
+          make_group_measurement_circuits(commutators, grad_measurement, commutator_zmasks, commutator_coeffs, obsvecs, this);
+          std::cout << std::endl;
+          for (auto i : commutator_zmasks) {
+            std::cout << i << std::endl;
+          }
+          std::cout << commutator_zmasks.size() << std::endl;
+          getchar();
+          call_simulator(grad_measurement, obsvecs);
+          get_exp_values(obsvecs, gradient);
+        } else {
+          g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, params, gradient, delta, n_grad_est);
+        }
+        std::cout << "Initial Gradient: " << gradient << std::endl;
         // get the single-direction starting vector
-        g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, params, gradient, delta, n_grad_est);
         iteration = 0;
         do {
           for (size_t i = 0; i < params.size(); i++) {
@@ -184,10 +218,17 @@ namespace NWQSim
           // final_ene = energy(parameters);
           nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
       }
+      virtual void set_exp_gate(std::shared_ptr<Ansatz> circuit, ObservableList*& o, std::vector<IdxType>& _zmasks, std::vector<ValType>& _coeffs) {
+        o = new ObservableList;
+        o->zmasks = _zmasks.data();
+        o->coeffs = _coeffs.data();
+        o->numterms = _coeffs.size();
+        circuit->EXPECT(o);
+      };
       virtual void call_simulator() {};
+      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement, std::vector<std::vector<ObservableList*> >& observables) {};
       virtual ValType energy(const std::vector<double>& x) {
         ansatz->setParams(x);
-
         call_simulator();
 
         // ExpectationMap emap;
@@ -217,7 +258,7 @@ namespace NWQSim
         Callback callback;
         OptimizerSettings optimizer_settings;
         IdxType iteration;
-        std::vector<ObservableList> obsvec;
+        std::vector<ObservableList*> obsvec;
         std::vector<std::vector<IdxType> >  x_index_sizes;
         std::vector<std::vector<IdxType> > xmasks;
         std::vector<std::vector<IdxType> > zmasks;
@@ -236,6 +277,7 @@ namespace NWQSim
     double nl_opt_function(const std::vector<double>& x, std::vector<double>& gradient, void* val) {
         return ((VQEState*)val)->cost_function(x, gradient);
     };
+
   };
 } // namespace NWQSim
 

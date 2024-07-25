@@ -136,6 +136,7 @@ namespace NWQSim {
           // return composition;
         }
         // Accessors
+        virtual const std::vector<std::vector<PauliOperator>> & getPauliOperators() const {};
         virtual IdxType numParams() const { return theta->size(); };
         const std::shared_ptr<std::vector<IdxType> > getParamGateIndices() const {return parameterized_gates;}
         const std::shared_ptr<std::vector<std::vector<std::pair<IdxType, ValType> > > > getParamGatePointers() const {return gate_parameter_pointers;}
@@ -269,10 +270,13 @@ namespace NWQSim {
         std::vector<std::vector<std::pair<IdxType, ValType> > > symmetries;
         std::vector<IdxType> fermion_ops_to_params; // map from fermion operators to parameters (used in update)
         std::vector<std::vector<FermionOperator> > fermion_operators;
+        std::vector<std::vector<PauliOperator> > pauli_operators;
         void getFermionOps();
         void loadParameters(std::string param_path);
         void buildAnsatz(std::vector<std::vector<PauliOperator> > pauli_oplist);
+
       public:
+
         UCCSD(const MolecularEnvironment& _env, Transformer transform, IdxType _trotter_n = 1): 
                                   env(_env),
                                   trotter_n(_trotter_n),
@@ -288,11 +292,11 @@ namespace NWQSim {
           getFermionOps();
           theta->resize(unique_params * trotter_n);
           // exit(0);
-          std::vector<std::vector<PauliOperator> > pauli_ops;
-          pauli_ops.reserve(4 * n_singles + 16 * n_doubles);
-          transform(env, fermion_operators, pauli_ops, true);  
-          buildAnsatz(pauli_ops);
+          pauli_operators.reserve(4 * n_singles + 16 * n_doubles);
+          transform(env, fermion_operators, pauli_operators, true);  
+          buildAnsatz(pauli_operators);
         };
+        virtual const std::vector<std::vector<PauliOperator> >& getPauliOperators() const override {return pauli_operators;}
         virtual std::vector<std::string> getFermionicOperatorStrings() const override {
           std::vector<std::string> result;
           result.reserve(fermion_operators.size());

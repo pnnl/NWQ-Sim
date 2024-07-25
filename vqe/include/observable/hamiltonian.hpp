@@ -79,6 +79,9 @@ namespace NWQSim {
         const std::vector<std::vector<PauliOperator> >& getPauliOperators() const {return pauli_operators;};
         const std::vector<std::vector<FermionOperator> >& getFermionicOperators() const {return fermi_operators;};
     };
+    void make_commutators(std::shared_ptr<Hamiltonian> hamil,
+                          const std::vector<std::vector<PauliOperator> >& pauli_op_pool,
+                          std::vector<std::vector<PauliOperator> >& commutator_list);
   };// namespace vqe
 };// namespace nwqsim
 #endif

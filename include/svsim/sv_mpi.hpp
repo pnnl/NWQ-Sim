@@ -342,7 +342,7 @@ namespace NWQSim
                 else if (g.op_name == OP::EXPECT)
                 {
                     BARR_MPI;
-                    ObservableList o = *(ObservableList*)(g.data);
+                    ObservableList* o = (ObservableList*)(g.data);
                     EXPECT_GATE(o);
                     BARR_MPI;
                 }
@@ -1069,13 +1069,13 @@ namespace NWQSim
             return exp_val;
             
         }
-        void EXPECT_GATE(ObservableList o)  {
+        void EXPECT_GATE(ObservableList* o)  {
             ValType expect = 0;
-            for (size_t i = 0; i < o.numterms; i++) {
-                expect += o.coeffs[i] * EXPECT_C0_GATE(o.zmasks[i]);
+            for (size_t i = 0; i < o->numterms; i++) {
+                expect += o->coeffs[i] * EXPECT_C0_GATE(o->zmasks[i]);
             }
             // printf("%lld %f\n", i_proc, result);
-            *o.exp_output += expect;
+            o->exp_output = expect;
            
         }
         // We first do a local reduction, then we do a MPI scan, then update local vector

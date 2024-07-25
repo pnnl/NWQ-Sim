@@ -1,5 +1,6 @@
 #ifndef VQE_MPI_STATE
 #define VQE_MPI_STATE
+#include "state.hpp"
 #include "svsim/sv_mpi.hpp"
 #include "vqe_state.hpp"
 #include "observable/pauli_operator.hpp"
@@ -31,15 +32,13 @@ namespace NWQSim
       };
 
       virtual void fill_obslist(IdxType index) override {
-        ObservableList& obs = obsvec[index];
-        obs.coeffs = coeffs[index].data();
-        obs.xmasks = xmasks[index].data();
-        obs.zmasks = zmasks[index].data();
-        obs.x_index_sizes = x_index_sizes[index].data();
-        obs.exp_output = expvals.data();
-        obs.x_indices = x_indices[index].data();
-        obs.numterms = xmasks[index].size();
-        ansatz->EXPECT(&obs); 
+        ObservableList*& obs = obsvec[index];
+        obs = new ObservableList;
+        obs->coeffs = coeffs[index].data();
+        obs->zmasks = zmasks[index].data();
+        obs->exp_output = 0;
+        obs->numterms = xmasks[index].size();
+        ansatz->EXPECT(obs); 
       };
       virtual void call_simulator() override {  
         if (iteration > 0){

@@ -1,5 +1,6 @@
 #ifndef VQE_CPU_STATE
 #define VQE_CPU_STATE
+#include "state.hpp"
 #include "svsim/sv_cpu.hpp"
 #include "vqe_state.hpp"
 #include "observable/pauli_operator.hpp"
@@ -11,6 +12,7 @@
 #include "nlopt.hpp"
 #include <memory>
 #include <cmath>
+#include <vector>
 
 namespace NWQSim
 {
@@ -33,9 +35,12 @@ namespace NWQSim
       };
       virtual void call_simulator() override {        
         reset_state();
-        std::fill(expvals.begin(), expvals.end(), 0.0);
         sim(ansatz);
                   std::vector<std::vector<PauliOperator>> paulis = hamil->getPauliOperators();
+
+        for (auto i: obsvec) {
+          expvals[0] += i->exp_output;
+        }
         // for (auto paulivec: paulis) {
         //     for (auto op: paulivec) {
         //     double exp = getPauliExpectation(op);
@@ -45,17 +50,24 @@ namespace NWQSim
         //     }
         // }
       };
-
+    virtual void call_simulator(std::shared_ptr<Ansatz> _measurement, std::vector<std::vector<ObservableList*> >& obsvecs) override {    
+        reset_state();
+        for (auto i : obsvecs) {
+          for (auto j : i) {
+            j->exp_output = 0;
+          }
+        }
+        sim(ansatz);
+        sim(_measurement);
+      };
       virtual void fill_obslist(IdxType index) override {
-        ObservableList& obs = obsvec[index];
-        obs.coeffs = coeffs[index].data();
-        obs.xmasks = xmasks[index].data();
-        obs.zmasks = zmasks[index].data();
-        obs.x_index_sizes = x_index_sizes[index].data();
-        obs.exp_output = expvals.data();
-        obs.x_indices = x_indices[index].data();
-        obs.numterms = xmasks[index].size();
-        ansatz->EXPECT(&obs); 
+        ObservableList*& obs = obsvec[index];
+        obs = new ObservableList;
+        obs->coeffs = coeffs[index].data();
+        obs->zmasks = zmasks[index].data();
+        obs->exp_output = 0;
+        obs->numterms = zmasks[index].size();
+        ansatz->EXPECT(obs); 
       };
       virtual ValType getPauliExpectation(const PauliOperator& op) override {
           IdxType qubit = op.get_dim();

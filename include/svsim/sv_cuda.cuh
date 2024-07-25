@@ -760,9 +760,7 @@ namespace NWQSim
 
             if (tid == 0)
             {
-                ValType expectation = m_real[0];
-                ValType prev_exp = LOCAL_G_CUDA(output, 0);
-                LOCAL_P_CUDA(output, 0, prev_exp + expectation);
+                LOCAL_P_CUDA(output, 0, m_real[0]);
             }
 
             BARR_CUDA;
@@ -772,16 +770,16 @@ namespace NWQSim
         #define QbI(o, i, ind)  ((o->zmasks[ind] & (1 << QI(o, i))) >> (1 << QI(o, i))) << i
         #define QV2(o, ind) (QbI(o, 0, ind) + QbI(o, 1, ind))
         #define QV4(o, ind) (QbI(o, 0, ind) + QbI(o, 1, ind) + QbI(o, 2, ind) + QbI(o, 3, ind))
-        __device__ __inline__ void Expect_GATE(ObservableList o)  {
+        __device__ __inline__ void Expect_GATE(ObservableList* o)  {
             grid_group grid = this_grid();
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             if (tid < dim)
                 m_real[tid] = 0;
-            for (IdxType obs_ind = 0; obs_ind < o.numterms; obs_ind++) {
-                Expect_C0(o.zmasks[obs_ind], o.coeffs[obs_ind]);
+            for (IdxType obs_ind = 0; obs_ind < o->numterms; obs_ind++) {
+                Expect_C0(o->zmasks[obs_ind], o->coeffs[obs_ind]);
             }
             BARR_CUDA;
-            EXP_REDUCE_GATE(o.exp_output, dim);
+            EXP_REDUCE_GATE(&o->exp_output, dim);
         }
 
         __device__ __inline__ void RESET_GATE(const IdxType qubit)
@@ -945,7 +943,7 @@ namespace NWQSim
             {
 
                 grid.sync();
-                o = *(ObservableList*)((sv_gpu->gates_gpu)[t].data);
+                o = (ObservableList*)((sv_gpu->gates_gpu)[t].data);
                 sv_gpu->Expect_GATE(o);
             }
             grid.sync();

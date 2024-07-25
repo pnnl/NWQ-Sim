@@ -131,8 +131,8 @@ void optimize_ansatz(const VQEBackendManager& manager,
   params.resize(ansatz->numParams());
   std::generate(params.begin(), params.end(), 
       [&random_engine, &initdist] () {return initdist(random_engine);});
-
-  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, fval, delta, eta, num_trials);
+  state->initialize();
+  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, fval, delta, eta, num_trials, true);
   std::ostringstream strstream;
   for (auto& i: param_tuple) {
     strstream << i.first << ": " << i.second << std::endl;
