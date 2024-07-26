@@ -83,10 +83,8 @@ namespace NWQSim
           MPI_Reduce(temp.data(), expvals.data(), expvals.size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
         if (i_proc != 0) {
           stat = WAIT;
-        }else {
-        
-        MPI_Barrier(MPI_COMM_WORLD);              
-        
+        }
+        MPI_Barrier(MPI_COMM_WORLD);     
       };
       virtual void process_loop() {
         assert(i_proc != 0);
