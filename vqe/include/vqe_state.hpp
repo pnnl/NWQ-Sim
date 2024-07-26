@@ -70,18 +70,13 @@ namespace NWQSim
           const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators();  
           IdxType index = 0;    
           obsvec.resize(pauli_operators.size());
-          xmasks.resize(pauli_operators.size());
           zmasks.resize(pauli_operators.size());
-          x_index_sizes.resize(pauli_operators.size());
-          x_indices.resize(pauli_operators.size());
           coeffs.resize(pauli_operators.size());
           std::vector<IdxType> mapping (ansatz->num_qubits());
           std::iota(mapping.begin(), mapping.end(), 0);
           for (auto& pauli_list: pauli_operators) {
-            xmasks[index].reserve(pauli_list.size());
             zmasks[index].reserve(pauli_list.size());
             coeffs[index].reserve(pauli_list.size());
-            x_index_sizes[index].reserve(pauli_list.size());
             IdxType composite_xmask = 0;
             IdxType composite_zmask = 0;
             IdxType ncommute = pauli_list.size();
@@ -90,9 +85,7 @@ namespace NWQSim
               pauli.get_xindices(xinds);
               coeffs[index].push_back(pauli.getCoeff().real());
               composite_xmask |= pauli.get_xmask();
-              xmasks[index].push_back(0);
               coeffs[index].back() *= (pauli.count_y() % 2) ? -1.0 : 1.0;
-              x_index_sizes[index].push_back(0);
               zmasks[index].push_back(pauli.get_zmask() | pauli.get_xmask());
               composite_zmask |= pauli.get_zmask();
             }
@@ -112,7 +105,7 @@ namespace NWQSim
           // Check if the chosen algorithm requires derivatives
           compute_gradient = std::string(optimizer.get_algorithm_name()).find("no-derivative") == std::string::npos;
           optimizer.set_min_objective(nl_opt_function, (void*)this);
-          std::vector<double> lower_bounds(ansatz->numParams(), 0);
+          std::vector<double> lower_bounds(ansatz->numParams(), -2 * PI);
           std::vector<double> upper_bounds(ansatz->numParams(), 2 * PI);
           optimizer.set_lower_bounds(lower_bounds);
           optimizer.set_upper_bounds(upper_bounds);

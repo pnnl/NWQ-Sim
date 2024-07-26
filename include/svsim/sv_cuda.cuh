@@ -909,6 +909,7 @@ namespace NWQSim
         grid_group grid = this_grid();
         // Put the observable data structure in shared memory to reduce register pressure
         __shared__ ObservableList o;
+
         for (IdxType t = 0; t < n_gates; t++)
         {
             auto op_name = (sv_gpu->gates_gpu)[t].op_name;
@@ -946,6 +947,7 @@ namespace NWQSim
 
                 grid.sync();
                 o = *(ObservableList*)((sv_gpu->gates_gpu)[t].data);
+
                 sv_gpu->Expect_GATE(o);
             }
             grid.sync();

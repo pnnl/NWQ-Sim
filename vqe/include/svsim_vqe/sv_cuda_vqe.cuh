@@ -34,23 +34,13 @@ namespace NWQSim
       virtual void fill_obslist(IdxType index) override {
         ObservableList& obs = obsvec[index];
         
-        obs.x_indices = x_indices[index].data();
-        obs.numterms = xmasks[index].size();
+        obs.numterms = zmasks[index].size();
         IdxType isize = obs.numterms * sizeof(IdxType);
         IdxType vsize = obs.numterms * sizeof(ValType);
-        SAFE_ALOC_GPU(obs.xmasks, isize);
         SAFE_ALOC_GPU(obs.zmasks, isize);
-        SAFE_ALOC_GPU(obs.x_index_sizes, isize);
-        SAFE_ALOC_GPU(obs.x_indices, x_indices[index].size() * sizeof(IdxType));
         obs.exp_output = expvals_dev;
         SAFE_ALOC_GPU(obs.coeffs, vsize);
-        cudaSafeCall(cudaMemcpy(obs.xmasks, xmasks[index].data(), isize,
-                                    cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(obs.zmasks, zmasks[index].data(), isize,
-                                    cudaMemcpyHostToDevice));
-        cudaSafeCall(cudaMemcpy(obs.x_index_sizes, x_index_sizes[index].data(), isize,
-                                    cudaMemcpyHostToDevice));
-        cudaSafeCall(cudaMemcpy(obs.x_indices, x_indices[index].data(), x_indices[index].size() * sizeof(IdxType),
                                     cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(obs.coeffs, coeffs[index].data(), coeffs[index].size() * sizeof(ValType),
                                     cudaMemcpyHostToDevice));
