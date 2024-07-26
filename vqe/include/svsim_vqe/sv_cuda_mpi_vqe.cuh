@@ -21,9 +21,10 @@ namespace NWQSim
                    std::shared_ptr<Hamiltonian> h, 
                    nlopt::algorithm optimizer_algorithm,
                    Callback _callback,
+                   const std::string& configpath,
                    IdxType seed = 0,
                    OptimizerSettings opt_settings = OptimizerSettings()): 
-                                      SV_CUDA_MPI(a->num_qubits()),
+                                      SV_CUDA_MPI(a->num_qubits(), configpath),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
         
         // Pauli term data sizes
@@ -36,20 +37,19 @@ namespace NWQSim
 
       };
       virtual void fill_obslist(IdxType index) override {
-        ObservableList& obs = obsvec[index];
-        
-        obs.numterms = xmasks[index].size();
+        ObservableList obs;
+        obs.numterms = zmasks[index].size();
         IdxType isize = obs.numterms * sizeof(IdxType);
         IdxType vsize = obs.numterms * sizeof(ValType);
-        SAFE_ALOC_GPU(obs.zmasks, isize);
-        obs.exp_output = expvals_dev;
-        SAFE_ALOC_GPU(obs.coeffs, vsize);
+        SAFE_ALOC_GPU(obs->zmasks, isize);
+        SAFE_ALOC_GPU(obs->coeffs, vsize);
         cudaSafeCall(cudaMemcpy(obs.zmasks, zmasks[index].data(), isize,
                                     cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(obs.coeffs, coeffs[index].data(), coeffs[index].size() * sizeof(ValType),
                                     cudaMemcpyHostToDevice));
         ObservableList* obs_device;
         SAFE_ALOC_GPU(obs_device, sizeof(ObservableList));
+        obsvec[index] = obs_device;
         cudaSafeCall(cudaMemcpy(obs_device, &obs, sizeof(ObservableList),
                                     cudaMemcpyHostToDevice));
         ansatz->EXPECT(obs_device); 

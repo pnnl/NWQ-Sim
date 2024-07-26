@@ -32,6 +32,7 @@ find_package(OpenMP)
 find_package(XACC QUIET)
 find_package(HIP QUIET)
 
+set(ma_enable "N/A") 
 if(CUDAToolkit_FOUND)
 
     # Set CUDA architecture
@@ -57,6 +58,9 @@ if(CUDAToolkit_FOUND)
 
     if("$ENV{MY_CUDA_ARCH}" STREQUAL "80")
         add_compile_definitions(FP64_TC_AVAILABLE)
+        set(ma_enable "TRUE")
+    else()
+        set(ma_enable "FALSE")
     endif()
 
     # Set the nvshmem home directory
@@ -98,6 +102,28 @@ if(HIP_FOUND)
         set(CMAKE_HIP_ARCHITECTURES "${HIP_ARCH}")
     endif()
     # set(CMAKE_HIP_ARCHITECTURES "$ENV{MY_HIP_ARCH}")
+    # Check for HIP architecture and rocWMMA library
+    if("$ENV{MY_HIP_ARCH}" MATCHES "gfx908|gfx90a|gfx940|gfx942")
+      # Check if rocWMMA is installed
+      find_path(ROCWMMA_INCLUDE_DIR
+        NAMES rocwmma/rocwmma.hpp
+        PATHS /opt/rocm-5.4.0/include
+        NO_DEFAULT_PATH
+      )
+
+      if(ROCWMMA_INCLUDE_DIR)
+        # Both conditions are met, add the definition
+        add_compile_definitions(FP64_HIPMC_AVAILABLE)
+        set(ma_enable "TRUE") 
+        else()
+        # HIP architecture matches, but rocWMMA not found
+        set(ma_enable "FALSE, rocWMMA not found ") 
+      endif()
+    else()
+      # HIP architecture doesn't match
+      message(WARNING "FP64_HIPMC_AVAILABLE not defined: ")
+      set(ma_enable "FALSE, MY_HIP_ARCH does not match required architectures (gfx90a|gfx940|gfx942)") 
+    endif()
 else()
     set(hip_found_str "FALSE")
 endif()
@@ -110,6 +136,7 @@ message(STATUS "CUDA found: ${CUDAToolkit_FOUND}")
 message(STATUS "HIP found: ${hip_found_str}")
 message(STATUS "NVSHMEM found: ${nvshmem_found_str}")
 message(STATUS "XACC found: ${xacc_found_str}")
+message(STATUS "Matrix Accleator ENABLED: ${ma_enable}")
 message(STATUS "==========================================================================\n")
 
 # Include directories
@@ -123,3 +150,4 @@ add_subdirectory(vqe)
 if(XACC_FOUND)
     add_subdirectory(xacc)
 endif()
+

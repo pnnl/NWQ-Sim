@@ -141,8 +141,8 @@ namespace NWQSim
                                         dm_size, cudaMemcpyDeviceToHost));
                 cudaSafeCall(cudaMemcpy(dm_imag_cpu, dm_imag, 
                                         dm_size, cudaMemcpyDeviceToHost));
-                outstream.write((char*)sv_real_cpu, sizeof(ValType) * dim);
-                outstream.write((char*)sv_imag_cpu, sizeof(ValType) * dim);
+                outstream.write((char*)dm_real_cpu, sizeof(ValType) * dim);
+                outstream.write((char*)dm_imag_cpu, sizeof(ValType) * dim);
                 outstream.close();
             }
         };

@@ -16,7 +16,7 @@ namespace NWQSim
     {
 
     public:
-        SV_OMP(IdxType _n_qubits) : SV_CPU(_n_qubits)
+        SV_OMP(IdxType _n_qubits, const std::string& config_path) : SV_CPU(_n_qubits, config_path)
         {
             n_cpu = omp_get_max_threads();
         } // constructor

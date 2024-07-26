@@ -1,7 +1,6 @@
 #ifndef VQE_MPI_STATE
 #define VQE_MPI_STATE
 #include "mpi.h"
-#include "mpi_proto.h"
 #include "state.hpp"
 #include "svsim/sv_mpi.hpp"
 #include "vqe_state.hpp"
