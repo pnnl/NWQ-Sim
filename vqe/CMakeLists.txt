@@ -9,7 +9,7 @@ add_executable(nwq_qflow "qflow.cpp")
 # set(PYHEADER ${Python3_EXECUTABLE})
 # add_subdirectory(pybind11)
 # pybind11_add_module(nwqflow "qflow_py.cpp")
-
+add_subdirectory(nlopt)
 add_library(vqe SHARED ${SOURCEFILES})
 
 target_compile_features(nwq_vqe PRIVATE cxx_std_17)

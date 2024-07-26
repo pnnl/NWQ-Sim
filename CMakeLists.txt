@@ -144,7 +144,7 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 
 # Subdirectories
 add_subdirectory(qasm)
-#add_subdirectory(vqe)
+add_subdirectory(vqe)
 
 
 if(XACC_FOUND)
