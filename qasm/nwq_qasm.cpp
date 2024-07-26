@@ -177,20 +177,45 @@ int main(int argc, char **argv)
         const char *qasmString = getCmdOption(argv, argv + argc, "-qs");
         qasm_parser parser;
         parser.load_qasm_string(std::string(qasmString)+";\n");
-        // Create the backend
-        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method);
-        if (!state)
-        {
-            std::cerr << "Failed to create backend\n";
-            return 1;
+        if (!report_fidelity) {
+            // Create the backend
+            std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method);
+            if (!state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            state->print_config(simulation_method);
+            map<string, IdxType> *counts = parser.execute(state, total_shots, print_metrics);
+            if (state->i_proc == 0)
+            {
+                print_counts(counts, total_shots);
+            }
+            delete counts;
+        } else {
+            // Run both statevector and density matrix
+            BackendManager::safe_print("Starting Statevector Simulation...");
+            std::shared_ptr<NWQSim::QuantumState> sv_state = BackendManager::create_state(backend, parser.num_qubits(), "sv");
+            if (!sv_state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            sv_state->print_config(simulation_method);
+            map<string, IdxType> *counts_sv = parser.execute(sv_state, total_shots, print_metrics);
+
+            BackendManager::safe_print("Starting Density Matrix Simulation...");
+            std::shared_ptr<NWQSim::QuantumState> dm_state = BackendManager::create_state(backend, parser.num_qubits(), "dm");
+            if (!dm_state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            dm_state->print_config(simulation_method);
+            map<string, IdxType> *counts_dm = parser.execute(dm_state, total_shots, print_metrics);
+            ValType fidelity = dm_state->fidelity(sv_state);
+            BackendManager::safe_print("State Fidelity: %e\n", fidelity);
         }
-        state->print_config(simulation_method);
-        map<string, IdxType> *counts = parser.execute(state, total_shots, print_metrics);
-        if (state->i_proc == 0)
-        {
-            print_counts(counts, total_shots);
-        }
-        delete counts;
     }
     if (cmdOptionExists(argv, argv + argc, "-j"))
     {
