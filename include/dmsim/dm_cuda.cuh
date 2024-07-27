@@ -940,13 +940,15 @@ namespace NWQSim
             }                               
         }
     };
-__global__ 
-void fidelity_kernel(DM_CUDA* dm_gpu,
-                                ValType* sv_real, 
-                                ValType* sv_imag, 
-                                ValType* result) {
-    dm_gpu->fidelity_device(sv_real, sv_imag, result);           
-}
+    
+    __global__ 
+    void fidelity_kernel(DM_CUDA* dm_gpu,
+                                    ValType* sv_real, 
+                                    ValType* sv_imag, 
+                                    ValType* result) {
+        dm_gpu->fidelity_device(sv_real, sv_imag, result);           
+    }
+    
     __global__ void dm_simulation_kernel_cuda(DM_CUDA *dm_gpu, IdxType n_gates, IdxType n_qubits, bool tensor_core)
     {
         IdxType cur_index = 0;

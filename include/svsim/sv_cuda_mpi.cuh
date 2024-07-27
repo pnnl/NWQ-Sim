@@ -1237,6 +1237,8 @@ namespace NWQSim
             }
             BARR_NVSHMEM;
         }
+        virtual ValType *get_real() const override {return sv_real;};
+        virtual ValType *get_imag() const override {return sv_imag;};
     };
 
     __global__ void simulation_kernel_cuda_mpi(SV_CUDA_MPI *sv_gpu, IdxType n_gates)
@@ -1314,7 +1316,5 @@ namespace NWQSim
             }
             grid.sync();
         }
-        virtual ValType *get_real() const override {return sv_real;};
-        virtual ValType *get_imag() const override {return sv_imag;};
     }
 }
