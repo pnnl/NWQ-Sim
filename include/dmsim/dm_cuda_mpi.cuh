@@ -40,11 +40,15 @@ namespace NWQSim
     // Simulation kernel runtime
     class DM_CUDA_MPI;
     __global__ void dm_simulation_kernel_cuda_mpi(DM_CUDA_MPI *dm_gpu, IdxType n_gates, IdxType n_qubits, bool enable_tc);
+    __global__ void fidelity_kernel_local(DM_CUDA_MPI* dm_gpu,
+                                   ValType* sv_real, 
+                                   ValType* sv_imag, 
+                                   ValType* result);
 
     class DM_CUDA_MPI : public QuantumState
     {
     public:
-        DM_CUDA_MPI(IdxType _n_qubits) : QuantumState(_n_qubits)
+        DM_CUDA_MPI(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::DM)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -906,6 +910,8 @@ namespace NWQSim
                 grid.sync();
             }
         }
+        virtual ValType *get_real() const override {return dm_real;};
+        virtual ValType *get_imag() const override {return dm_imag;};
 
         __device__ __inline__ IdxType get_term(IdxType idx, IdxType p, IdxType q, IdxType r, IdxType s)
         {
@@ -1693,8 +1699,109 @@ namespace NWQSim
             }
             BARR_NVSHMEM;
         }
-    };
+        virtual ValType fidelity(std::shared_ptr<QuantumState> other) override {
+            ValType* result_cu;
+            ValType result;
+            int numBlocksPerSm;
+            int smem_size = 0;
+            cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
+                                                                       fidelity_kernel_local, THREADS_CTA_CUDA, smem_size));
+            
+            dim3 gridDim(1, 1, 1);
 
+            cudaDeviceProp deviceProp;
+            cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
+            gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
+
+            DM_CUDA_MPI *dm_gpu;
+            SAFE_ALOC_GPU(dm_gpu, sizeof(DM_CUDA_MPI));
+            SAFE_ALOC_GPU(result_cu, sizeof(ValType));
+            // Copy the simulator instance to GPU
+            cudaSafeCall(cudaMemcpy(dm_gpu, this,
+                                    sizeof(DM_CUDA_MPI), cudaMemcpyHostToDevice));
+            // Copy the ideal statevector from host to device
+            ValType* sv_real_cpu = new ValType[1 << n_qubits];
+            ValType* sv_imag_cpu = new ValType[1 << n_qubits];
+            ValType* sv_real, *sv_imag;
+            SAFE_ALOC_GPU(sv_real, (1 << n_qubits) * sizeof(ValType));
+            SAFE_ALOC_GPU(sv_imag, (1 << n_qubits) * sizeof(ValType));
+            if (i_proc == 0) {
+                cudaSafeCall(cudaMemcpy(sv_real_cpu, other->get_real(), (1 << n_qubits) * sizeof(ValType), cudaMemcpyDeviceToHost));
+                cudaSafeCall(cudaMemcpy(sv_imag_cpu, other->get_imag(), (1 << n_qubits) * sizeof(ValType), cudaMemcpyDeviceToHost));
+            }
+            MPI_Bcast(sv_real_cpu, (1 << n_qubits), MPI_DOUBLE, 0, comm_global);
+            MPI_Bcast(sv_imag_cpu, (1 << n_qubits), MPI_DOUBLE, 0, comm_global);
+            
+            cudaSafeCall(cudaMemcpy(sv_real, sv_real_cpu, (1 << n_qubits) * sizeof(ValType), cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu, (1 << n_qubits) * sizeof(ValType), cudaMemcpyHostToDevice));
+            void* args[] = {&dm_gpu, &sv_real, &sv_imag, &result_cu};
+            cudaLaunchCooperativeKernel((void *)fidelity_kernel_local, gridDim,
+                                        THREADS_CTA_CUDA, args, smem_size);
+            cudaSafeCall(cudaDeviceSynchronize());
+            cudaSafeCall(cudaMemcpy(&result, result_cu, sizeof(ValType), cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaFree(result_cu));
+            cudaSafeCall(cudaFree(dm_gpu));
+            cudaSafeCall(cudaFree(sv_real));
+            cudaSafeCall(cudaFree(sv_imag));
+            delete[] sv_real_cpu;
+            delete[] sv_imag_cpu;
+            ValType result_reduced = 0;
+            MPI_Reduce(&result, &result_reduced, 1, MPI_DOUBLE, MPI_SUM, 0, comm_global);
+            return result_reduced;
+        };
+        __device__ void fidelity_device(ValType* sv_real, 
+                                        ValType* sv_imag, 
+                                        ValType* result) {
+            const IdxType tid = threadIdx.x + blockIdx.x * blockDim.x; 
+            grid_group grid = this_grid();
+            IdxType vector_dim = 1 << n_qubits;
+            ValType local_real = 0;
+            const IdxType per_pe_work = ((dim) >> (gpu_scale));
+            IdxType gridlog2 = 63 - __clz(blockDim.x * gridDim.x);
+            if (blockDim.x * gridDim.x > (1 << gridlog2)) {
+                gridlog2 += 1;
+            }
+            if (tid < per_pe_work) {
+                m_real[tid] = 0;
+                
+                for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work; i += blockDim.x * gridDim.x) {
+                    IdxType r = i >> n_qubits;
+                    IdxType s = i & (vector_dim - 1);
+                    ValType a = sv_real[s]; // ket
+                    ValType b = sv_imag[s];
+                    ValType c = LOCAL_G_CUDA_MPI(dm_real, i);
+                    ValType d = LOCAL_G_CUDA_MPI(dm_imag, i);
+                    ValType g = sv_real[r]; // bra
+                    ValType f = -sv_imag[r];
+                    ValType real_contrib =  a * c * g - a * d * f - b * c * f - b * d * g;
+                    m_real[tid] += real_contrib;
+                }
+            }
+
+            grid.sync();
+
+
+            IdxType reduce_lim = min((1ll << gridlog2), dim >> gpu_scale);
+            for (IdxType k = reduce_lim >> 1; k > 0; k >>= 1) {
+                if (tid < k) {
+                    m_real[tid] += m_real[tid + k];
+                }
+                grid.sync();
+            }
+            if (tid == 0) {
+                 *result = m_real[tid];
+            }                               
+        }
+    };
+    
+    __global__ 
+    void fidelity_kernel_local(DM_CUDA_MPI* dm_gpu,
+                               ValType* sv_real, 
+                               ValType* sv_imag, 
+                               ValType* result) {
+        dm_gpu->fidelity_device(sv_real, sv_imag, result);           
+    }
+    
     __global__ void dm_simulation_kernel_cuda_mpi(DM_CUDA_MPI *dm_gpu, IdxType n_gates, IdxType n_qubits, bool enable_tc)
     {
         IdxType cur_index = 0;

@@ -471,6 +471,8 @@ namespace NWQSim
             }
             BARR;
         }
+        virtual ValType *get_real() const override {return sv_real;};
+        virtual ValType *get_imag() const override {return sv_imag;};
     };
 
 } // namespace NWQSim

@@ -9,7 +9,7 @@
 
 namespace NWQSim
 {
-
+    inline
     std::vector<DMGate> getDMGates(const std::vector<Gate> &gates, const IdxType n_qubits)
     {
         std::vector<DMGate> sim_dm_gates;

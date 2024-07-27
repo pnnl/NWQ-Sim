@@ -9,6 +9,8 @@
 #include <vector>
 #include <string>
 
+
+
 namespace NWQSim
 {
     struct ObservableList {
@@ -24,7 +26,7 @@ namespace NWQSim
     class QuantumState
     {
     public:
-        QuantumState(IdxType _n_qubits)
+        QuantumState(IdxType _n_qubits, SimType _sim_type): sim_type(_sim_type)
         {
             Config::Load();
             registerGates();
@@ -43,10 +45,14 @@ namespace NWQSim
         virtual IdxType *get_results() = 0;
         virtual IdxType measure(IdxType qubit) = 0;
         virtual IdxType *measure_all(IdxType repetition) = 0;
+        virtual ValType *get_real() const = 0;
+        virtual ValType *get_imag() const = 0;
 
         virtual ValType get_exp_z() = 0;
         virtual ValType get_exp_z(const std::vector<size_t> &in_bits) = 0;
-
+        virtual ValType fidelity(std::shared_ptr<QuantumState> other) {
+            throw std::runtime_error("Fidelity computation not implemented");
+        };
         virtual void print_res_state() = 0;
 
         virtual void save_state()
@@ -70,8 +76,8 @@ namespace NWQSim
         }
 
         IdxType i_proc = 0; // process id
-
         ValType *buffer_state = nullptr;
+        SimType sim_type;
     };
 
 } // namespace NWQSim

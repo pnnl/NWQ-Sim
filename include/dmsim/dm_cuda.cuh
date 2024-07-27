@@ -13,6 +13,8 @@
 #include "../circuit_pass/fusion.hpp"
 
 #include <assert.h>
+#include <cuda_runtime_api.h>
+#include <driver_types.h>
 #include <random>
 #include <complex.h>
 #include <cooperative_groups.h>
@@ -36,11 +38,15 @@ namespace NWQSim
     // Simulation kernel runtime
     class DM_CUDA;
     __global__ void dm_simulation_kernel_cuda(DM_CUDA *dm_gpu, IdxType n_gates, IdxType n_qubits, bool tensor_core);
+    __global__ void fidelity_kernel(DM_CUDA* dm_gpu,
+                                   ValType* sv_real, 
+                                   ValType* sv_imag, 
+                                   ValType* result);
 
     class DM_CUDA : public QuantumState
     {
     public:
-        DM_CUDA(IdxType _n_qubits) : QuantumState(_n_qubits)
+        DM_CUDA(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::DM)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -465,6 +471,8 @@ namespace NWQSim
             return term;
         }
 
+        virtual ValType *get_real() const override {return dm_real;};
+        virtual ValType *get_imag() const override {return dm_imag;};
 #ifdef FP64_TC_AVAILABLE
         //============== Unified 4-qubit Gate with TC V1 ================
         // This is with tensorcore optimization
@@ -854,8 +862,93 @@ namespace NWQSim
             }
             BARR_CUDA;
         }
-    };
+        
+        virtual ValType fidelity(std::shared_ptr<QuantumState> other) override {
+            ValType* result_cu;
+            ValType result;
+            int numBlocksPerSm;
+            int smem_size = 0;
+            cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
+                                                                       fidelity_kernel, THREADS_CTA_CUDA, smem_size));
+            
+            dim3 gridDim(1, 1, 1);
 
+            cudaDeviceProp deviceProp;
+            cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
+            gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
+
+            DM_CUDA *dm_gpu;
+            SAFE_ALOC_GPU(dm_gpu, sizeof(DM_CUDA));
+            SAFE_ALOC_GPU(result_cu, sizeof(ValType));
+            // Copy the simulator instance to GPU
+            cudaSafeCall(cudaMemcpy(dm_gpu, this,
+                                    sizeof(DM_CUDA), cudaMemcpyHostToDevice));
+            ValType* sv_real = other->get_real();
+            ValType* sv_imag = other->get_imag();
+            void* args[] = {&dm_gpu, &sv_real, &sv_imag, &result_cu};
+            cudaLaunchCooperativeKernel((void *)fidelity_kernel, gridDim,
+                                        THREADS_CTA_CUDA, args, smem_size);
+            cudaSafeCall(cudaDeviceSynchronize());
+            cudaSafeCall(cudaMemcpy(&result, result_cu, sizeof(ValType), cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaFree(result_cu));
+            cudaSafeCall(cudaFree(dm_gpu));
+            return result;
+        };
+        __device__ void fidelity_device(ValType* sv_real, 
+                                        ValType* sv_imag, 
+                                        ValType* result) {
+            const IdxType tid = threadIdx.x + blockIdx.x * blockDim.x; 
+            grid_group grid = this_grid();
+            IdxType vector_dim = 1 << n_qubits;
+            ValType local_real = 0;
+            if (tid < dim) {
+                m_real[tid] = 0;
+                m_imag[tid] = 0;
+                for (size_t i = tid; i < dim; i += blockDim.x * gridDim.x) {
+                    IdxType r = i >> n_qubits;
+                    IdxType s = i & (vector_dim - 1);
+                    ValType a = sv_real[s]; // ket
+                    ValType b = sv_imag[s];
+                    ValType c = dm_real[r * vector_dim + s]; 
+                    ValType d = dm_imag[r * vector_dim + s];
+                    ValType g = sv_real[r]; // bra
+                    ValType f = -sv_imag[r];
+                    ValType real_contrib =  a * c * g - a * d * f - b * c * f - b * d * g;
+                    ValType imag_contrib = a * c * f + a * d * g + b * c * g - b * d * f;
+                    m_real[tid] += a * c * g - a * d * f - b * c * f - b * d * g;
+                    m_imag[tid] += a * c * f + a * d * g + b * c * g - b * d * f;
+                }
+            }
+
+            grid.sync();
+            IdxType gridlog2 = 63 - __clz(blockDim.x * gridDim.x);
+            if (blockDim.x * gridDim.x > (1 << gridlog2)) {
+                gridlog2 += 1;
+            }
+
+            IdxType reduce_lim = min((1ll << gridlog2), dim);
+            for (IdxType k = reduce_lim >> 1; k > 0; k >>= 1) {
+                if (tid < k) {
+                    m_real[tid] += m_real[tid + k];
+                    m_imag[tid] += m_imag[tid + k];
+                }
+                grid.sync();
+            }
+            if (tid == 0) {
+                assert(abs(m_imag[tid]) <=1e-10);
+                *result = m_real[tid];
+            }                               
+        }
+    };
+    
+    __global__ 
+    void fidelity_kernel(DM_CUDA* dm_gpu,
+                                    ValType* sv_real, 
+                                    ValType* sv_imag, 
+                                    ValType* result) {
+        dm_gpu->fidelity_device(sv_real, sv_imag, result);           
+    }
+    
     __global__ void dm_simulation_kernel_cuda(DM_CUDA *dm_gpu, IdxType n_gates, IdxType n_qubits, bool tensor_core)
     {
         IdxType cur_index = 0;
@@ -899,5 +992,6 @@ namespace NWQSim
             }
             grid.sync();
         }
+        
     }
 } // namespace NWQSim

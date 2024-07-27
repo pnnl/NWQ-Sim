@@ -41,7 +41,7 @@ namespace NWQSim
     class SV_CUDA_MPI : public QuantumState
     {
     public:
-        SV_CUDA_MPI(IdxType _n_qubits) : QuantumState(_n_qubits)
+        SV_CUDA_MPI(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::SV)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -1689,6 +1689,8 @@ __device__ __inline__ void EXPECT_GATE(ObservableList o)  {
             }
             BARR_NVSHMEM;
         }
+        virtual ValType *get_real() const override {return sv_real;};
+        virtual ValType *get_imag() const override {return sv_imag;};
     };
 
     __global__ void simulation_kernel_cuda_mpi(SV_CUDA_MPI *sv_gpu, IdxType n_gates)

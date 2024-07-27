@@ -43,7 +43,7 @@ namespace NWQSim
     class DM_HIP : public QuantumState
     {
     public:
-        DM_HIP(IdxType _n_qubits) : QuantumState(_n_qubits)
+        DM_HIP(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::DM)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -123,6 +123,8 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
+        virtual ValType *get_real() const override {return dm_real;};
+        virtual ValType *get_imag() const override {return dm_imag;};
 
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {

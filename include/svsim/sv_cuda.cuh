@@ -37,7 +37,7 @@ namespace NWQSim
     class SV_CUDA : public QuantumState
     {
     public:
-        SV_CUDA(IdxType _n_qubits) : QuantumState(_n_qubits)
+        SV_CUDA(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::SV)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -901,6 +901,9 @@ namespace NWQSim
             }
             BARR;
         }
+
+        virtual ValType *get_real() const override {return sv_real;};
+        virtual ValType *get_imag() const override {return sv_imag;};
     };
 
     __global__ void simulation_kernel_cuda(SV_CUDA *sv_gpu, IdxType n_gates)

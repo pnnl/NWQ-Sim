@@ -70,6 +70,7 @@ namespace NWQSim
     /**
      * Kronecker product with scalar multiplication (if necessary) between two square matrices, A \otimes B = res, where dim is the dimension of A and B
      */
+     inline
     void kronProd(std::complex<double> *A, std::complex<double> *B, double c, std::complex<double> *res, int dim)
     {
         int bigdim = dim * dim; // dimsion of res

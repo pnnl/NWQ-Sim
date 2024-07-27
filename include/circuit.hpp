@@ -26,7 +26,7 @@ namespace NWQSim
         Circuit(IdxType _n_qubits) : n_qubits(_n_qubits), n_expect(0)
         {
             // Implementation of constructor
-            gates = std::make_shared<std::vector<Gate>>();
+            gates = std::make_shared<std::vector<Gate> >();
         }
         ~Circuit(){};
 
@@ -44,7 +44,7 @@ namespace NWQSim
         }
         void set_gates(std::vector<Gate> new_gates)
         {
-            gates = std::make_shared<std::vector<Gate>>(new_gates);
+            gates = std::make_shared<std::vector<Gate> >(new_gates);
         }
         void set_num_qubits(IdxType _n_qubits)
         {

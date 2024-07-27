@@ -27,22 +27,19 @@
 #include "../private/gate_factory/sv_gates.hpp"
 #include "../private/gate_factory/dm_gates.hpp"
 
-#define vec_dim_1q(sim_type) (sim_type == SV ? 2 : 4)
-#define vec_dim_2q(sim_type) (sim_type == SV ? 4 : 16)
-#define vec_length_1q(sim_type) (sim_type == SV ? 4 : 16)
-#define vec_length_2q(sim_type) (sim_type == SV ? 16 : 256)
+#define vec_dim_1q(sim_type) (sim_type == SimType::SV ? 2 : 4)
+#define vec_dim_2q(sim_type) (sim_type == SimType::SV ? 4 : 16)
+#define vec_length_1q(sim_type) (sim_type == SimType::SV ? 4 : 16)
+#define vec_length_2q(sim_type) (sim_type == SimType::SV ? 16 : 256)
 
 namespace NWQSim
 {
-    enum SimType
-    {
-        SV,
-        DM
-    };
 
+
+    inline 
     enum OP get_op(IdxType n_qubits, SimType sim_type)
     {
-        if (sim_type == SV)
+        if (sim_type == SimType::SV)
         {
             return n_qubits == 1 ? OP::C1 : OP::C2;
         }
@@ -104,7 +101,7 @@ namespace NWQSim
 
         GateType SWAP(SWAP_SV);
 
-        if (sim_type == DM)
+        if (sim_type == SimType::DM)
             kron(SWAP_SV, SWAP_SV, SWAP, 4); // create SWAP superop for DM
 
         GateType tmp_g(get_op(2, sim_type), -1, -1);
@@ -118,7 +115,7 @@ namespace NWQSim
     {
         GateType gI(get_op(1, sim_type), ctrl, -1);
 
-        if (sim_type == SV)
+        if (sim_type == SimType::SV)
             gI.gm_real[0] = gI.gm_real[3] = 1; // set I for SV
         else
             gI.gm_real[0] = gI.gm_real[5] = gI.gm_real[10] = gI.gm_real[15] = 1; // set I for DM
@@ -131,7 +128,7 @@ namespace NWQSim
     {
         GateType gI(get_op(1, sim_type), qubit, -1);
 
-        if (sim_type == SV)
+        if (sim_type == SimType::SV)
             gI.gm_real[0] = gI.gm_real[3] = 1; // set I for SV
         else
             gI.gm_real[0] = gI.gm_real[5] = gI.gm_real[10] = gI.gm_real[15] = 1; // set I for DM
@@ -606,6 +603,7 @@ namespace NWQSim
         return fused_circuit;
     }
 
+    inline
     std::vector<SVGate> fuse_circuit_sv(std::shared_ptr<NWQSim::Circuit> circuit)
     {
         std::vector<SVGate> gates = GateFactory::getInstance().getSVGates(circuit->get_gates());
@@ -616,9 +614,9 @@ namespace NWQSim
         }
         IdxType n_qubits = circuit->num_qubits();
 
-        return fuse_circuit_gates(gates, n_qubits, SV);
+        return fuse_circuit_gates(gates, n_qubits, SimType::SV);
     }
-
+    inline
     std::vector<DMGate> fuse_circuit_dm(std::shared_ptr<NWQSim::Circuit> circuit)
     {
         std::vector<DMGate> gates = getDMGates(circuit->get_gates(), circuit->num_qubits());
@@ -632,8 +630,8 @@ namespace NWQSim
         std::vector<DMGate> tmp1_circuit;
         std::vector<DMGate> fused_circuit;
 
-        gate_fusion_1q(gates, tmp1_circuit, n_qubits, DM);
-        gate_fusion_2q(tmp1_circuit, fused_circuit, n_qubits, DM);
+        gate_fusion_1q(gates, tmp1_circuit, n_qubits, SimType::DM);
+        gate_fusion_2q(tmp1_circuit, fused_circuit, n_qubits, SimType::DM);
 
         return fused_circuit;
     }

@@ -35,7 +35,7 @@ namespace NWQSim
     class SV_HIP : public QuantumState
     {
     public:
-        SV_HIP(IdxType _n_qubits) : QuantumState(_n_qubits)
+        SV_HIP(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::SV)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -713,6 +713,8 @@ namespace NWQSim
             }
             grid.sync();
         }
+        virtual ValType *get_real() const override {return sv_real;};
+        virtual ValType *get_imag() const override {return sv_imag;};
     }
 
 } // namespace NWQSim

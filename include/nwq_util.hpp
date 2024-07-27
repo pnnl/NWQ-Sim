@@ -30,7 +30,11 @@ namespace NWQSim
     using IdxType = long long int;
     /* Basic data type for value */
     using ValType = double;
-
+    enum class SimType
+    {
+        SV,
+        DM
+    };
     inline std::string formatDuration(std::chrono::seconds input_seconds)
     {
         using namespace std::chrono;
