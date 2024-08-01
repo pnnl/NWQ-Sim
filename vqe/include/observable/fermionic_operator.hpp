@@ -64,6 +64,15 @@ namespace NWQSim {
       bool operator!=(const FermionOperator& other)const  {
         return !(orbital_index != other.orbital_index || spin != other.spin || orb_type != other.orb_type || type != other.type);
       }
+      FermionOperator operator*(const std::complex<double> scalar) const  {
+        FermionOperator newop = *this;
+        newop.coeff *= scalar;
+        return newop;
+      }
+      FermionOperator& operator*=(const std::complex<double> scalar) {
+        coeff *= scalar;
+        return *this;
+      }
       IdxType qubitIndex(IdxType n_occ, IdxType n_virt) const {
         // Flattened indexing scheme
         return getQubitIndex(orbital_index, spin, orb_type, n_occ, n_virt, xacc_scheme);

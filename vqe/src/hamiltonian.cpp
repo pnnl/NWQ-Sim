@@ -21,7 +21,7 @@ namespace NWQSim{
       FermionOpType typeval;
       IdxType term_index;
     };
-    const std::regex pattern("\\(\\s*([\\d\\.e\\+-]+),\\s*([\\d\\.]+)\\)([\\d^\\s]+)");
+    const std::regex pattern("\\(\\s*([\\d\\.e\\+-]+),\\s*([\\d\\.]+)\\)([\\d^\\s]+){0,1}");
 
     void read_fermion_operators(std::string input_path,
                                 std::vector<std::vector<FermionOperator>>& fermi_operators,
@@ -126,7 +126,19 @@ namespace NWQSim{
     Hamiltonian::Hamiltonian(std::string input_path, IdxType n_particles, bool xacc_scheme,
                     Transformer transform) {
       read_fermion_operators(input_path, fermi_operators, env, n_particles, xacc_scheme);
-      transform(env, fermi_operators, pauli_operators, false);
+      std::vector<PauliOperator> single_oplist;
+      transform(env, fermi_operators, single_oplist, false);
+      std::list<std::vector<IdxType>> pauli_cliques;
+      sorted_insertion(single_oplist, pauli_cliques, false);
+      pauli_operators.resize(pauli_cliques.size());
+      IdxType index = 0;
+      for (auto& clique: pauli_cliques) {
+        pauli_operators[index].reserve(clique.size());
+        for (IdxType pauli_idx: clique) {
+          pauli_operators[index].push_back(single_oplist[pauli_idx]);
+        }
+        index++;
+      }
       n_ops = 0;
       for (auto& i : pauli_operators) {
         n_ops += i.size();
@@ -219,7 +231,19 @@ namespace NWQSim{
                           xacc_scheme,
                           args.coeff));
       };
-      transform(env, fermi_operators, pauli_operators, false);
+      std::vector<PauliOperator> single_oplist;
+      transform(env, fermi_operators, single_oplist, false);
+      std::list<std::vector<IdxType>> pauli_cliques;
+      sorted_insertion(single_oplist, pauli_cliques, false);
+      pauli_operators.resize(pauli_cliques.size());
+      IdxType index = 0;
+      for (auto& clique: pauli_cliques) {
+        pauli_operators[index].reserve(clique.size());
+        for (IdxType pauli_idx: clique) {
+          pauli_operators[index].push_back(single_oplist[pauli_idx]);
+        }
+        index++;
+      }
       n_ops = 0;
       for (auto& i : pauli_operators) {
         n_ops += i.size();
@@ -279,6 +303,10 @@ namespace NWQSim{
           commutator_list.push_back(comm_ops);
         }
       }
+      /**
+      * Make a common Pauli operator in the diagonal basis out of a commuting group
+      * 
+      * */
     PauliOperator make_common_op(const std::vector<PauliOperator>& pauli_list, 
                                std::vector<IdxType>& zmasks,
                                std::vector<ValType>& coeffs) {
@@ -288,7 +316,9 @@ namespace NWQSim{
       IdxType composite_zmask = 0;
       IdxType dim = -1;
       for (const PauliOperator& pauli: pauli_list) {
+        // 
         dim = std::max(dim, pauli.get_dim());
+
         composite_xmask |= pauli.get_xmask();
         coeffs.push_back(pauli.getCoeff().real());
         coeffs.back() *= (pauli.count_y() % 2) ? -1.0 : 1.0;
@@ -298,10 +328,11 @@ namespace NWQSim{
       return PauliOperator(composite_xmask, composite_zmask, dim);
       
     }
+    // one vector for each commutator, one vector for each commuting group within each commutator, one vector 
     void make_group_measurement_circuits(const std::vector<std::vector<PauliOperator> >& commutator_list,
                                            std::shared_ptr<Ansatz> measurement_circuit,
-                                           std::vector<std::vector<IdxType> >& commutator_zmasks,
-                                           std::vector<std::vector<ValType> >& commutator_coeffs,
+                                           std::vector<std::vector<std::vector<IdxType> > >& commutator_zmasks,
+                                           std::vector<std::vector<std::vector<ValType> > >& commutator_coeffs,
                                            std::vector<std::vector<ObservableList*> >& gradient_observables,
                                            VQEState* state) {
         IdxType num_qubits = commutator_list.front().front().get_dim();
@@ -315,6 +346,8 @@ namespace NWQSim{
           sorted_insertion(comm_ops, cliques, false);
           auto cliqueiter = cliques.begin();
           gradient_observables[i].resize(cliques.size());
+          commutator_coeffs[i].resize(cliques.size());
+          commutator_zmasks[i].resize(cliques.size());
           std::vector<IdxType> qubit_mapping (num_qubits);
           std::iota(qubit_mapping.begin(), qubit_mapping.end(), 0);
           // For each clique, construct a measurement circuit and append
@@ -323,14 +356,18 @@ namespace NWQSim{
             std::vector<PauliOperator> commuting_group (clique.size());
             std::transform(clique.begin(), clique.end(),
               commuting_group.begin(), [&] (IdxType ind) {return comm_ops.at(ind);});
-            // NOTE: IN PROCESS OF API UPDATE!!!! PPOD!!!!!
+            // for (auto i : commuting_group) {
+            //   std::cout << i.pauliToString() << std::endl;
+            // }
+            // getchar();
+            // Make a common Pauli operation to diagonalize the circuits. Also store the commutator masks/coefficients as we go
             PauliOperator common = make_common_op(commuting_group, 
-                                                  commutator_zmasks[i], 
-                                                  commutator_coeffs[i]);
+                                                  commutator_zmasks[i][j], 
+                                                  commutator_coeffs[i][j]);
             
             Measurement circ1 (common, false);
             measurement_circuit->compose(circ1, qubit_mapping);            
-            state->set_exp_gate(measurement_circuit, gradient_observables[i][j], commutator_zmasks[i], commutator_coeffs[i]);
+            state->set_exp_gate(measurement_circuit, gradient_observables[i][j], commutator_zmasks[i][j], commutator_coeffs[i][j]);
             Measurement circ2 (common, true);
             measurement_circuit->compose(circ2, qubit_mapping);      
             cliqueiter++;  

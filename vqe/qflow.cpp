@@ -130,9 +130,10 @@ void optimize_ansatz(const VQEBackendManager& manager,
   std::mt19937_64 random_engine (seed);
   params.resize(ansatz->numParams());
   std::generate(params.begin(), params.end(), 
-      [&random_engine, &initdist] () {return initdist(random_engine);});
+      [&random_engine, &initdist] () {return 0.0;});
+      // [&random_engine, &initdist] () {return initdist(random_engine);});
   state->initialize();
-  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, fval, delta, eta, num_trials, true);
+  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, fval, delta, eta, num_trials, false);
   std::ostringstream strstream;
   for (auto& i: param_tuple) {
     strstream << i.first << ": " << i.second << std::endl;
@@ -178,6 +179,12 @@ int main(int argc, char** argv) {
   optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, n_trials, params, delta, eta, fval);
   std::ostringstream paramstream;
   paramstream << params;
+
+  std::string qasm_string = ansatz->toQASM3();
+  std::ofstream outfile;
+  outfile.open("../uccsd.qasm", std::fstream::out);
+  outfile << qasm_string;
+  outfile.close();
   manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters: %s\n", fval, paramstream.str().c_str());
 #ifdef MPI_ENABLED
   if (backend == "MPI" || backend == "NVGPU_MPI")

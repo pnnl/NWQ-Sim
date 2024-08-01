@@ -107,6 +107,9 @@ std::vector<IdxType> sorted_nodes;
             
             bool commutes = true;
             for (auto other: clique) {
+                if (paulilist[other] == PauliOperator("IYZZZY") && paulilist[node] == PauliOperator("ZYZZZY")) {
+                  std::cout << paulilist[node].QWC(paulilist[other]) << std::endl;
+                }
                 if (!paulilist[node].QWC(paulilist[other])) {
                     commutes = false;
                     break;

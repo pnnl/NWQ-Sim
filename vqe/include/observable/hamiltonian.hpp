@@ -33,7 +33,19 @@ namespace NWQSim {
                     const std::vector<std::vector<FermionOperator> > _fermion_operators, 
                     Transformer transform = getJordanWignerTransform): env(_env), fermi_operators(_fermion_operators) {
           n_ops = 0;
-          transform(env, fermi_operators, pauli_operators, false);
+          std::vector<PauliOperator> single_oplist;
+          transform(env, fermi_operators, single_oplist, false);
+          std::list<std::vector<IdxType>> pauli_cliques;
+          sorted_insertion(single_oplist, pauli_cliques, false);
+          pauli_operators.resize(pauli_cliques.size());
+          IdxType index = 0;
+          for (auto& clique: pauli_cliques) {
+            pauli_operators[index].reserve(clique.size());
+            for (IdxType pauli_idx: clique) {
+              pauli_operators[index].push_back(single_oplist[pauli_idx]);
+            }
+            index++;
+          }
           for (auto& i : pauli_operators) {
             n_ops += i.size();
           }

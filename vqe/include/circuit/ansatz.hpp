@@ -269,7 +269,8 @@ namespace NWQSim {
          */
         std::vector<std::vector<std::pair<IdxType, ValType> > > symmetries;
         std::vector<IdxType> fermion_ops_to_params; // map from fermion operators to parameters (used in update)
-        std::vector<std::vector<FermionOperator> > fermion_operators;
+        // each outer vector corresponds to a parameter, each middle vector corresponds to a sum over fermionic operators, each inner vector is a product
+        std::vector<std::vector<std::vector<FermionOperator>> > fermion_operators; 
         std::vector<std::vector<PauliOperator> > pauli_operators;
         void getFermionOps();
         void loadParameters(std::string param_path);
@@ -288,28 +289,38 @@ namespace NWQSim {
           symmetries = std::vector<std::vector<std::pair<IdxType, ValType> > >((n_singles + n_doubles));
           fermion_ops_to_params.resize(n_doubles + n_singles);
           std::fill(fermion_ops_to_params.begin(), fermion_ops_to_params.end(), -1);
-          unique_params = 0;
           getFermionOps();
+          unique_params = fermion_operators.size();
+
           theta->resize(unique_params * trotter_n);
           // exit(0);
-          pauli_operators.reserve(4 * n_singles + 16 * n_doubles);
-          transform(env, fermion_operators, pauli_operators, true);  
+          pauli_operators.resize(fermion_operators.size());
+          size_t index = 0;
+          for (auto fermi_symmetry: fermion_operators) {
+            transform(env, fermi_symmetry, pauli_operators[index++], true);  
+
+          }
           buildAnsatz(pauli_operators);
         };
         virtual const std::vector<std::vector<PauliOperator> >& getPauliOperators() const override {return pauli_operators;}
         virtual std::vector<std::string> getFermionicOperatorStrings() const override {
           std::vector<std::string> result;
           result.reserve(fermion_operators.size());
-          for (auto& oplist : fermion_operators) {
+          for (size_t i = 0; i < fermion_operators.size(); i++) {
+            const auto &opgroup = fermion_operators.at(i);
             std::string opstring = "";
             bool first = true;
-            for (auto& op: oplist) {
-              if (!first) {
-                opstring = " " + opstring;
-              } else {
-                first = false;
+            for (auto oplist: opgroup) {
+              for (auto& op: oplist) {
+                if (!first) {
+                  opstring = " " + opstring;
+                } else {
+                  first = false;
+                }
+                opstring = op.toString(env.n_occ, env.n_virt) + opstring;
               }
-              opstring = op.toString(env.n_occ, env.n_virt) + opstring;
+              if (opgroup.size() > 1)
+                opstring = opstring + ", ";
             }
             result.push_back(opstring);
           }
@@ -319,29 +330,29 @@ namespace NWQSim {
           std::vector<std::pair<std::string, ValType> > result;
           result.reserve(fermion_operators.size());
           for (size_t i = 0; i < fermion_operators.size(); i++) {
-            const auto &oplist = fermion_operators.at(i);
-            const std::vector<std::pair<IdxType, ValType> > &param_expr = symmetries[i];
-            ValType param = 0.0;
-            for (auto& i: param_expr) {
-              param += i.second * theta->at(fermion_ops_to_params[i.first]);
-            }
+            const auto &opgroup = fermion_operators.at(i);
+            ValType param = theta->at(i);
             std::string opstring = "";
             bool first = true;
-            for (auto& op: oplist) {
+            for (auto oplist: opgroup) {
               if (!first) {
-                opstring = " " + opstring;
+                opstring = opstring + " ";
               } else {
                 first = false;
               }
-              opstring = op.toString(env.n_occ, env.n_virt) + opstring;
+              std::string term = "";
+              size_t index = 0;
+              for (auto& op: oplist) {
+                term = op.toString(env.n_occ, env.n_virt) + " " + term;
+              }
+              opstring += "(" + term + ")";
+              if ((index++) < oplist.size() - 1)
+                opstring = opstring + ",";
             }
             result.push_back(std::make_pair(opstring, param));
           }
           return result;
         };
-        
-        const MolecularEnvironment& getEnv() const {return env;};
-        virtual IdxType numParams() const override { return unique_params; };
     };
   };// namespace vqe
 };// namespace nwqsim

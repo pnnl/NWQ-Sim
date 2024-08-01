@@ -28,7 +28,7 @@ namespace NWQSim
                                       SV_CPU(a->num_qubits()),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
         expvals.resize(1);
-        initialize();
+        // initialize();
 
         
         
@@ -36,8 +36,9 @@ namespace NWQSim
       virtual void call_simulator() override {        
         reset_state();
         sim(ansatz);
-                  std::vector<std::vector<PauliOperator>> paulis = hamil->getPauliOperators();
-
+        sim(measurement);
+        std::vector<std::vector<PauliOperator>> paulis = hamil->getPauliOperators();
+        expvals[0] = 0;
         for (auto i: obsvec) {
           expvals[0] += i->exp_output;
         }
@@ -67,7 +68,7 @@ namespace NWQSim
         obs->zmasks = zmasks[index].data();
         obs->exp_output = 0;
         obs->numterms = zmasks[index].size();
-        ansatz->EXPECT(obs); 
+        measurement->EXPECT(obs); 
       };
       virtual ValType getPauliExpectation(const PauliOperator& op) override {
           IdxType qubit = op.get_dim();
