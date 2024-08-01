@@ -123,17 +123,18 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      int num_trials,
                      std::vector<double>& params,
                      double delta,
-                     double eta,
-                     double& fval) {
+                     double eta) {
   std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, callback_function, seed, settings);  
   std::uniform_real_distribution<double> initdist(0, 2 * PI);
   std::mt19937_64 random_engine (seed);
   params.resize(ansatz->numParams());
   std::generate(params.begin(), params.end(), 
       [&random_engine, &initdist] () {return initdist(random_engine);});
-
-  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, fval, delta, eta, num_trials);
+  double initial_ene, final_ene;
+  long long num_iterations = 0;
+  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, initial_ene, final_ene, num_iterations, delta, eta, num_trials);
   std::ostringstream strstream;
+  manager.safe_print("Finished in %llu iterations. Initial Energy %f, Final Energy %f\nPrinting excitation amplitudes:\n", num_iterations, initial_ene, final_ene);
   for (auto& i: param_tuple) {
     strstream << i.first << ": " << i.second << std::endl;
   }
@@ -173,12 +174,8 @@ int main(int argc, char** argv) {
     1
   );
   std::vector<double> params;
-  double fval;
   manager.safe_print("Beginning VQE loop...\n");
-  optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, n_trials, params, delta, eta, fval);
-  std::ostringstream paramstream;
-  paramstream << params;
-  manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters: %s\n", fval, paramstream.str().c_str());
+  optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, n_trials, params, delta, eta);
 #ifdef MPI_ENABLED
   if (backend == "MPI" || backend == "NVGPU_MPI")
   {

@@ -138,14 +138,14 @@ namespace NWQSim
         iteration++;
         return ene;
       }
-      virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& final_ene, ValType delta, ValType eta, IdxType n_grad_est) {
+      virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& initial_ene, ValType& final_ene, IdxType& num_iterations, ValType delta, ValType eta, IdxType n_grad_est) {
         Config::PRINT_SIM_TRACE = false;
         std::vector<ValType> gradient (x0.size(),1.0);
         std::vector<ValType> params(x0);
         std::vector<ValType> minima_params(x0);
         ValType ene_prev = MAXFLOAT;
         ValType ene_curr = energy(params);
-
+        initial_ene = ene_curr;
         // gradient
         // get the single-direction starting vector
         g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, params, gradient, delta, n_grad_est);
@@ -170,9 +170,10 @@ namespace NWQSim
           // auto s2 =  std::chrono::high_resolution_clock::now();
           // std::cout << (s2-s1).count()/1e9 << std::endl;
         } while(true);
+        num_iterations = iteration;
         // std::cout << "Ended loop\n" << std::endl;
         std::vector<std::string> fermi_strings = ansatz->getFermionicOperatorStrings();
-        
+        final_ene = ene_curr;
         std::vector<std::pair<std::string, ValType>> result = ansatz->getFermionicOperatorParameters();
         return result;
       }
