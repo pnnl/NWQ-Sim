@@ -132,7 +132,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
       [&random_engine, &initdist] () {return initdist(random_engine);});
   double initial_ene, final_ene;
   long long num_iterations = 0;
-  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, initial_ene, final_ene, num_iterations, delta, eta, num_trials);
+  std::vector<std::pair<std::string, double> > param_tuple = state->follow_fixed_gradient(params, initial_ene, final_ene, num_iterations, delta, eta, 100);
   std::ostringstream strstream;
   manager.safe_print("Finished in %llu iterations. Initial Energy %f, Final Energy %f\nPrinting excitation amplitudes:\n", num_iterations, initial_ene, final_ene);
   for (auto& i: param_tuple) {

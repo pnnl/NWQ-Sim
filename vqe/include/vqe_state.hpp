@@ -157,6 +157,11 @@ namespace NWQSim
           // auto s1 =  std::chrono::high_resolution_clock::now();
           // ene_curr = 0;
           ene_curr = energy(params);
+          // for (auto d: gradient) {
+          //   std::cout << d << " ";
+          // }
+          // std::cout << std::endl;
+          
           // std::cout << step << " " << ene_curr << " " << ene_prev << std::endl;
           if (ene_curr >= ene_prev) {
             for (size_t i = 0; i < params.size(); i++) {
