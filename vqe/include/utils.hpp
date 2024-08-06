@@ -7,25 +7,39 @@
 #include <math.h>
 #include <sstream>
 #include <list>
+// #include "nwq_util.hpp"
+
 
 
 
 
 // Templated print function for std::vector
-// template <typename T>
-// std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
-//   out << "[";
-//   size_t len = target.size();
-//   if (len > 0) {
-//       for (size_t i = 0; i < len - 1; i++) {
-//           out << target[i] << ", ";
-//       }
-//       out << target[len-1];
-//   }
-//   out << "]";
-//   return out;
-// }
-
+template <typename T>
+std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
+  out << "[";
+  size_t len = target.size();
+  if (len > 0) {
+      for (size_t i = 0; i < len - 1; i++) {
+          out << target[i] << ", ";
+      }
+      out << target[len-1];
+  }
+  out << "]";
+  return out;
+}
+template <typename T>
+inline
+T factorial(T n) {
+    return (n == 1 || n == 0) ? 1 : factorial(n - 1) * n;
+ }
+template <typename T>
+inline
+T choose2(T n) {
+    if (n >= 2) {
+        return factorial(n) / (factorial(n-2) * 2);
+    }
+    return 1;
+}
 // Status enum for MPI processes
 enum STATUS {
     CALL_SIMULATOR,
@@ -59,19 +73,19 @@ std::stringstream& operator<<(std::stringstream& out, const std::vector<T>& targ
 
 namespace NWQSim{
   namespace VQE{
-    template <typename T>
-std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
-  out << "[";
-  size_t len = target.size();
-  if (len > 0) {
-      for (size_t i = 0; i < len - 1; i++) {
-          out << target[i] << ", ";
-      }
-      out << target[len-1];
-  }
-  out << "]";
-  return out;
-}
+    // template <typename T>
+// std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
+//   out << "[";
+//   size_t len = target.size();
+//   if (len > 0) {
+//       for (size_t i = 0; i < len - 1; i++) {
+//           out << target[i] << ", ";
+//       }
+//       out << target[len-1];
+//   }
+//   out << "]";
+//   return out;
+// }
   using IdxType = long long;
   using ValType = double;
   enum class Commute {

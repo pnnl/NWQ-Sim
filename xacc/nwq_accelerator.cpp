@@ -11,6 +11,8 @@
 #include "../include/circuit.hpp"
 #include "../include/backendManager.hpp"
 #include "../include/nwq_util.hpp"
+
+
 namespace xacc
 {
     namespace quantum
@@ -148,6 +150,7 @@ namespace xacc
 
         void NWQAccelerator::initialize(const HeterogeneousMap &params)
         {
+            
             if (params.stringExists("sim-type"))
             {
                 simulation_type = params.getString("sim-type");
@@ -314,6 +317,7 @@ namespace xacc
                 }
                 m_state->clear_state();
             }
+            
 
         }
 

@@ -7,6 +7,7 @@
 #include "circuit/measurement.hpp"
 #include "gradient/sa_gradient.hpp"
 #include "observable/hamiltonian.hpp"
+#include "circuit_pass/fusion.hpp"
 #include "nlopt.hpp"
 #include <memory>
 #include <cmath>
@@ -108,18 +109,18 @@ namespace NWQSim
       void swap_hamil(std::shared_ptr<Hamiltonian>& _hamil) {
         hamil.swap(_hamil);
       }
-      virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& final_ene, ValType delta, ValType eta, IdxType n_grad_est) {
+      virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& initial_ene, ValType& final_ene, IdxType& num_iterations, ValType delta, ValType eta, IdxType n_grad_est) {
         Config::PRINT_SIM_TRACE = false;
         std::vector<ValType> gradient (x0.size(),1.0);
         std::vector<ValType> params(x0);
         std::vector<ValType> minima_params(x0);
         ValType ene_prev = MAXFLOAT;
         ValType ene_curr = energy(params);
-
+        initial_ene = ene_curr;
         // gradient
         // get the single-direction starting vector
         g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, params, gradient, delta, n_grad_est);
-        IdxType step = 0;
+        iteration = 0;
         do {
           for (size_t i = 0; i < params.size(); i++) {
             params[i] -= eta * gradient[i];
@@ -127,6 +128,11 @@ namespace NWQSim
           // auto s1 =  std::chrono::high_resolution_clock::now();
           // ene_curr = 0;
           ene_curr = energy(params);
+          // for (auto d: gradient) {
+          //   std::cout << d << " ";
+          // }
+          // std::cout << std::endl;
+          
           // std::cout << step << " " << ene_curr << " " << ene_prev << std::endl;
           if (ene_curr >= ene_prev) {
             for (size_t i = 0; i < params.size(); i++) {
@@ -136,13 +142,14 @@ namespace NWQSim
           } else {
             ene_prev = ene_curr;
           }
-          step++;
+          iteration++;
           // auto s2 =  std::chrono::high_resolution_clock::now();
           // std::cout << (s2-s1).count()/1e9 << std::endl;
         } while(true);
+        num_iterations = iteration;
         // std::cout << "Ended loop\n" << std::endl;
         std::vector<std::string> fermi_strings = ansatz->getFermionicOperatorStrings();
-
+        final_ene = ene_curr;
         std::vector<std::pair<std::string, ValType>> result = ansatz->getFermionicOperatorParameters();
         return result;
       }
@@ -207,6 +214,7 @@ namespace NWQSim
       }
       
       std::shared_ptr<Hamiltonian> get_hamiltonian() const { return hamil; }
+      IdxType get_iteration() const {return iteration;};
       protected:
         std::shared_ptr<Ansatz> ansatz;
         std::shared_ptr<Ansatz> measurement;

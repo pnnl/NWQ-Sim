@@ -5,6 +5,7 @@
 #include "environment.hpp"
 #include "utils.hpp"
 #include "circuit/dynamic_ansatz.hpp"
+#include <cstddef>
 namespace NWQSim {
   namespace VQE {
     class AdaptVQE {
@@ -121,12 +122,6 @@ namespace NWQSim {
         maxiter = 50;
         std::uniform_real_distribution<ValType> dist(0, 2 * PI);
         std::mt19937_64 rng (2423);
-        // IdxType init_ind = rand() % pauli_op_pool.size();
-        // ValType paramval = dist(rng);
-        // ansatz->add_operator(init_ind, paramval);
-        // state->initialize();
-        // parameters.push_back(paramval);
-        // state->optimize(parameters, ene);
         while(iter < maxiter) {
           prev_ene = ene;
           IdxType max_ind = 0; 
@@ -141,7 +136,12 @@ namespace NWQSim {
           max_ind = std::max_element(gradient_magnitudes.begin(),
                                      gradient_magnitudes.end(),
                                      [] (ValType a, ValType b) {return abs(a) < abs(b);}) - gradient_magnitudes.begin();
-          std::cout << gradient_magnitudes << std::endl;
+          for (auto i: gradient_magnitudes) {
+            std::cout << i << " ";
+          }
+          std::cout << std::endl;
+          getchar();
+          // std::cout << gradient_magnitudes << std::endl;
           if (std::sqrt(grad_norm) < reltol) {
             break;
           }

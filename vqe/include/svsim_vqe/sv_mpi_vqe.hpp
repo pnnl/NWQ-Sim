@@ -96,7 +96,6 @@ namespace NWQSim
         sim(ansatz);
         BARR_MPI;
         sim(measurement);
-        BARR_MPI;
         if (i_proc != 0) {
           stat = WAIT;
         }

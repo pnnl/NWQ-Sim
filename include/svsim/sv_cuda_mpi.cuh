@@ -1233,12 +1233,15 @@ virtual void set_initial (std::string fpath) override {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             // Parallel reduction
-            // if (tid < m_gpu && abs(m_real[tid]) > 1e-10 ) {
-            //     printf("%lld %e\n", tid, m_real[tid]);
-            // }
-            for (IdxType k = (dim >> (gpu_scale + 1)); k > 0; k >>= 1)
+            IdxType gridlog2 = 63 - __clzll(blockDim.x * gridDim.x);
+            if (blockDim.x * gridDim.x & ((1 << gridlog2) - 1)) {
+                gridlog2 += 1;
+            }
+            IdxType reduce_limit = 1 << gridlog2;
+            reduce_limit = min(reduce_limit, dim >> gpu_scale);
+            for (IdxType k = (reduce_limit >> 1); k > 0; k >>= 1)
             {
-                if (tid < k) {
+                if (tid < k && tid + k < blockDim.x * gridDim.x) {
                     m_real[tid] += m_real[tid + k];
                     LOCAL_P_CUDA_MPI(m_imag, tid + k, 1);
                     

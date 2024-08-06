@@ -73,27 +73,36 @@ namespace NWQSim
         void print_metrics()
         {
             // Initialize a vector to track the current depth of each qubit
-            std::vector<int> qubit_depth(n_qubits, 0);
+            std::vector<IdxType> qubit_depth(n_qubits, 0);
             // Initialize a vector to track the number of two-qubit gates applied to each qubit
-            std::vector<int> qubit_g2_gates(n_qubits, 0);
+            std::vector<IdxType> qubit_g2_gates(n_qubits, 0);
 
             // Track the total number of single-qubit gates and two-qubit gates in the circuit
             IdxType g1_gates = 0;
             IdxType g2_gates = 0;
+            IdxType n_measure = 0;
 
             // Loop over each gate in the circuit and update the depth of the corresponding qubits
-            int max_depth = 0;
-
-            int two_q_gates = 0;
-            for (int i = 0; i < gates->size(); i++)
+            IdxType max_depth = 0;
+            IdxType one_q_gates = 0;
+            IdxType two_q_gates = 0;
+            for (IdxType i = 0; i < gates->size(); i++)
             {
                 if (gates->at(i).op_name == OP::MA)
+                {
+                    n_measure += n_qubits;
                     continue;
-                int ctrl = gates->at(i).ctrl;
-                int target = gates->at(i).qubit;
+                }
+                if (gates->at(i).op_name == OP::M)
+                {
+                    n_measure++;
+                    continue;
+                }
+                IdxType ctrl = gates->at(i).ctrl;
+                IdxType target = gates->at(i).qubit;
 
                 // Calculate the depth of this gate based on the depths of the control and target qubits
-                int depth;
+                IdxType depth;
                 if (ctrl == -1)
                 {
                     // Single-qubit gate
@@ -111,28 +120,29 @@ namespace NWQSim
                     qubit_g2_gates[target]++;
 
                     if (ctrl == target)
-                        printf("Wrong\n");
+                        printf("Exception: target==ctrl\n");
                 }
-
                 // Update the depth of the control and target qubits
-                if (ctrl != -1)
+                if (ctrl == -1)
+                {
+                    one_q_gates++;
+                }
+                else
                 {
                     qubit_depth[ctrl] = depth;
                     two_q_gates++;
                 }
-
                 qubit_depth[target] = depth;
-
                 // Update the maximum depth if the current depth is greater than the previous maximum
                 if (depth > max_depth)
                 {
                     max_depth = depth;
                 }
             }
-
             // Calculate the gate density, retention lifespan, and entanglement variance of the circuit
             ValType gate_density = (g1_gates + 2 * g2_gates) / (ValType)(max_depth * n_qubits);
             ValType retention_lifespan = log(max_depth);
+            ValType measurement_density = log((ValType)max_depth * n_qubits)/(ValType)n_measure;
 
             IdxType sum_g2_gates = 0;
             for (auto val : qubit_g2_gates)
@@ -149,7 +159,8 @@ namespace NWQSim
             entanglement_var /= n_qubits;
 
             // Print the results to the console
-            printf("Circuit Depth: %d; Two-qubit Gate Count: %d; Gate Density: %.4f; Retention Lifespan: %.4f; Entanglement Variance: %.4f\n\n", max_depth, two_q_gates, gate_density, retention_lifespan, entanglement_var);
+            printf("Circuit Depth: %lld; One-qubit Gates: %lld; Two-qubit Gates: %lld; Gate Density: %.4lf; Retention Lifespan: %.4lf; Measurement Density: %.4lf; Entanglement Variance: %.4lf\n\n", 
+                    max_depth, one_q_gates, two_q_gates, gate_density, retention_lifespan, measurement_density, entanglement_var);
         }
 
         // ===================== Standard Gates =========================

@@ -3,19 +3,13 @@ file(GLOB SOURCEFILES "src/*.cpp")
 add_executable(nwq_vqe "main.cpp")
 add_executable(nwq_qflow "qflow.cpp")
 # find_path(PYHEADER "Python.h")
-find_package(Python3 COMPONENTS Interpreter Development)
+# find_package(Python3 COMPONENTS Interpreter Development)
 # add_library(nwqflow "qflow_py.cpp")
 # set(PYTHON_EXECUTABLE ${Python3_EXECUTABLE})
-# set(Python_EXECUTABLE ${Python3_EXECUTABLE})
-# message("${Python3_EXECUTABLE}")
-# include(${PROJECT_SOURCE_DIR}/vqe/FindPythonModule.cmake)
-# find_python_module(mpi4py REQUIRED)
-
-
-add_subdirectory(pybind11)
+# set(PYHEADER ${Python3_EXECUTABLE})
+# add_subdirectory(pybind11)
 # pybind11_add_module(nwqflow "qflow_py.cpp")
-# message("${Python3_INCLUDE_DIRS}")
-# target_include_directories(nwqflow BEFORE PRIVATE ${mpi4py_INCLUDE_DIRS})
+add_subdirectory(nlopt)
 add_library(vqe SHARED ${SOURCEFILES})
 
 target_compile_features(nwq_vqe PRIVATE cxx_std_17)
@@ -52,8 +46,10 @@ if(MPI_FOUND)
     target_compile_definitions(nwq_vqe PUBLIC MPI_ENABLED)
     target_link_libraries(nwq_qflow PUBLIC MPI::MPI_CXX)
     target_compile_definitions(nwq_qflow PUBLIC MPI_ENABLED)
+
     # target_link_libraries(nwqflow PUBLIC MPI::MPI_CXX)
     # target_compile_definitions(nwqflow PUBLIC MPI_ENABLED)
+
 endif()
 
 # If CUDA Toolkit is available, set the CUDA standard and definitions
@@ -70,8 +66,10 @@ if(CUDAToolkit_FOUND)
     target_compile_features(nwq_qflow PRIVATE cuda_std_17)
     target_compile_definitions(nwq_qflow PUBLIC CUDA_ENABLED)
 
+
     # target_compile_features(nwqflow PRIVATE cuda_std_17)
     # target_compile_definitions(nwqflow PUBLIC CUDA_ENABLED)
+
 
     # If NVSHMEM is available, link against it and set the definitions
     if(NVSHMEM_FOUND AND TARGET nvshmem::nvshmem)
