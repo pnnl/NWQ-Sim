@@ -2,7 +2,7 @@
 
 int main()
 {
-    saveMapAsJson(NWQSim::getBsDMGateSP(), "basis_gate_sp.json");
+    saveMapAsJson(NWQSim::getBsDMGateSP(), "customized_basis_gates.json");
     // NWQSim::getBsDMGateSP();
     return 0;
 }

@@ -27,9 +27,11 @@ namespace NWQSim
     // A utility function to get the OP values for the input basis gates
     OP getGateOp(const std::string &gateName)
     {
-        for (int i = 0; i < sizeof(OP_NAMES) / sizeof(OP_NAMES[0]); ++i)
+        std::string gateNameCopy = gateName;
+        std::transform(gateNameCopy.begin(), gateNameCopy.end(), gateNameCopy.begin(), ::toupper);
+            for (int i = 0; i < sizeof(OP_NAMES) / sizeof(OP_NAMES[0]); ++i)
         {
-            if (gateName == OP_NAMES[i])
+            if (gateNameCopy == OP_NAMES[i])
             {
                 return static_cast<OP>(i);
             }
@@ -52,7 +54,6 @@ namespace NWQSim
         IdxType num_qubits = Config::backend_config["num_qubits"];
         for (auto getName : basisGates)
         {
-            std::transform(getName.begin(), getName.end(), getName.begin(), ::toupper);
             OP gate_op = getGateOp(getName);
             Gate G(OP::ID, qubit);
             if(gate_op == OP::CX){
@@ -70,7 +71,7 @@ namespace NWQSim
                 }
             }
             else if (gate_op == OP::RESET){
-                dm_qubit_gates[gate_op].emplace("0",DMGate(OP::RESET,0, 0));  
+                // dm_qubit_gates[gate_op].emplace("0",DMGate(OP::RESET,0, 0));  
             }
             else if (gate_op == OP::X || 
                     gate_op == OP::ID || 
@@ -146,5 +147,90 @@ void saveMapAsJson(const std::map<OP, std::map<std::string, DMGate>> &dm_qubit_g
     }
 }
 
+
+std::map<OP, std::map<std::string, DMGate>> readDMGatesFromJson(const std::string &filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("Unable to open the file custmized gates");
+    }
+
+    nlohmann::json j;
+    file >> j;
+    file.close();
+
+    std::map<OP, std::map<std::string, DMGate>> dm_gates;
+
+    for (auto it = j.begin(); it != j.end(); ++it) {
+        OP gate_op = getGateOp(it.key());
+        for (auto gate_it = it.value().begin(); gate_it != it.value().end(); ++gate_it) {
+            std::string key = gate_it.key();
+            const auto &superoperator = gate_it.value()["superoperator"];
+
+            // Determine dimension
+            IdxType dim, qubit, ctrl;
+            
+            if (gate_op == OP::CX) {
+                dim = 16;
+                size_t pos = key.find('_');
+                qubit = std::stoi(key.substr(0, pos));
+                ctrl = std::stoi(key.substr(pos + 1));
+            } else if (gate_op == OP::X || gate_op == OP::ID || gate_op == OP::DELAY || 
+                       gate_op == OP::RX || gate_op == OP::SX || gate_op == OP::RZ) {
+                dim = 4;
+                qubit = std::stoi(key);
+                ctrl = -1; // No control qubit for single-qubit gates
+            } else {
+                throw std::invalid_argument("Unsupported basis gate!");
+            }
+
+            // Create the matrix
+            // std::vector<std::vector<std::complex<ValType>>> matrix(dim, std::vector<std::complex<ValType>>(dim));
+            std::complex<ValType> matrix[dim][dim];
+            for (IdxType i = 0; i < dim; ++i) {
+                for (IdxType j = 0; j < dim; ++j) {
+                    const std::string &element = superoperator[i][j];
+                    size_t pos = element.find('+');
+                    ValType real = std::stod(element.substr(0, pos));
+                    ValType imag = std::stod(element.substr(pos + 1, element.length() - pos - 2)); // remove "i"
+                    matrix[i][j] = std::complex<ValType>(real, imag);
+                }
+            }
+
+            // Determine qubit and ctrl
+            // IdxType qubit, ctrl;
+            // if (gate_op == OP::CX) {
+            //     size_t pos = key.find('_');
+            //     qubit = std::stoi(key.substr(0, pos));
+            //     ctrl = std::stoi(key.substr(pos + 1));
+            // } else {
+            //     qubit = std::stoi(key);
+            //     ctrl = -1; // No control qubit for single-qubit gates
+            // }
+
+            DMGate dm_gate(gate_op, qubit, ctrl);
+            dm_gate.set_gm(matrix[0], dim);
+            dm_gates[gate_op].emplace(key,dm_gate);
+        }
+    }
+
+    return dm_gates;
+}
+
+    DMGate getCustomizedDMGate(OP gate_op, int q1, int q2, const std::map<OP, std::map<std::string, DMGate>> &basis_gates_sp) 
+    {
+        std::string key = (q2 == -1) ? std::to_string(q1) : std::to_string(q1) + "_" + std::to_string(q2);
+        auto op_it = basis_gates_sp.find(gate_op);
+        if (op_it != basis_gates_sp.end()) {
+            const auto &qubit_map = op_it->second;
+            auto key_it = qubit_map.find(key);
+            if (key_it != qubit_map.end()) {
+                return key_it->second;
+            } else {
+                throw std::invalid_argument("Gate for the given qubits not found in the basis gates: " + key);
+            }
+        } else {
+            throw std::invalid_argument("Unsupported basis gate operation: " + std::string(OP_NAMES[gate_op]));
+        }
+    }
 
 }

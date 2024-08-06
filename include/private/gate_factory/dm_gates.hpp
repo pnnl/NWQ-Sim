@@ -3,6 +3,7 @@
 #include <vector>
 #include <complex>
 
+#include "../../interface/interface_util.hpp"
 #include "device_noise.hpp"
 #include "../sim_gate.hpp"
 #include "../config.hpp"
@@ -13,6 +14,10 @@ namespace NWQSim
     std::vector<DMGate> getDMGates(const std::vector<Gate> &gates, const IdxType n_qubits)
     {
         std::vector<DMGate> sim_dm_gates;
+        std::map<OP, std::map<std::string, DMGate>> basis_gates_sp;
+        if(Config::CUSTOMIZED_SP){
+            basis_gates_sp = readDMGatesFromJson(Config::CUSTMOIZED_GATES_FILE);
+        }
 
         for (const auto &g : gates)
         {
@@ -55,6 +60,10 @@ namespace NWQSim
             }
             else
             {
+                if (Config::CUSTOMIZED_SP)
+                {
+                    sim_dm_gates.push_back(getCustomizedDMGate(g.op_name, g.qubit, g.ctrl, basis_gates_sp));
+                }
                 sim_dm_gates.push_back(generateDMGate(g.op_name, g.qubit, g.ctrl, g.theta));
             }
         }

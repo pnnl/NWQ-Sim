@@ -12,9 +12,11 @@ namespace NWQSim::Config
     inline bool ENABLE_NOISE = false;
     inline bool ENABLE_FUSION = true;
     inline bool ENABLE_TENSOR_CORE = false;
+    inline bool CUSTOMIZED_SP = false; 
 
-    inline std::string DEVICE_CONFIG_PATH = "~/NWQ-Sim/data/device/";
+    inline std::string DEVICE_CONFIG_PATH = "/people/lixi149/NWQ-Sim/data/device/";
     inline std::string DEVICE_CONFIG_FILE = "dummy_ibmq12";
+    inline std::string CUSTMOIZED_GATES_FILE = "customized_basis_gates.json";
 
     inline nlohmann::json backend_config = {};
 
@@ -51,6 +53,10 @@ namespace NWQSim::Config
                 j.at("DEVICE_CONFIG_PATH").get_to(DEVICE_CONFIG_PATH);
                 j.at("DEVICE_CONFIG_FILE").get_to(DEVICE_CONFIG_FILE);
             }
+
+            if(CUSTOMIZED_SP){
+                j.at("CUSTMOIZED_GATES_FILE").get_to(CUSTMOIZED_GATES_FILE);
+            }
         }
         else
         {
@@ -65,12 +71,19 @@ namespace NWQSim::Config
 
             if (j.find("ENABLE_TENSOR_CORE") != j.end())
                 j.at("ENABLE_TENSOR_CORE").get_to(ENABLE_TENSOR_CORE);
-
+           
+            if (j.find("CUSTOMIZED_SP") != j.end())
+                j.at("CUSTOMIZED_SP").get_to(CUSTMOIZED_GATES_FILE);
+           
             if (j.find("DEVICE_CONFIG_PATH") != j.end())
                 j.at("DEVICE_CONFIG_PATH").get_to(DEVICE_CONFIG_PATH);
 
             if (j.find("DEVICE_CONFIG_FILE") != j.end())
                 j.at("DEVICE_CONFIG_FILE").get_to(DEVICE_CONFIG_FILE);
+
+            if(j.find("CUSTMOIZED_GATES_FILE") != j.end())
+                j.at("CUSTMOIZED_GATES_FILE").get_to(CUSTMOIZED_GATES_FILE);
+
         }
     }
 
