@@ -14,7 +14,7 @@ namespace NWQSim::Config
     inline bool ENABLE_TENSOR_CORE = false;
     inline bool CUSTOMIZED_SP = false; 
 
-    inline std::string DEVICE_CONFIG_PATH = "/people/lixi149/NWQ-Sim/data/device/";
+    inline std::string DEVICE_CONFIG_PATH = "~/NWQ-Sim/data/device/";
     inline std::string DEVICE_CONFIG_FILE = "dummy_ibmq12";
     inline std::string CUSTMOIZED_GATES_FILE = "customized_basis_gates.json";
 
@@ -47,6 +47,8 @@ namespace NWQSim::Config
             j.at("ENABLE_NOISE").get_to(ENABLE_NOISE);
             j.at("ENABLE_FUSION").get_to(ENABLE_FUSION);
             j.at("ENABLE_TENSOR_CORE").get_to(ENABLE_TENSOR_CORE);
+            j.at("CUSTOMIZED_SP").get_to(CUSTOMIZED_SP);
+
 
             if (ENABLE_NOISE)
             {
@@ -73,7 +75,7 @@ namespace NWQSim::Config
                 j.at("ENABLE_TENSOR_CORE").get_to(ENABLE_TENSOR_CORE);
            
             if (j.find("CUSTOMIZED_SP") != j.end())
-                j.at("CUSTOMIZED_SP").get_to(CUSTMOIZED_GATES_FILE);
+                j.at("CUSTOMIZED_SP").get_to(CUSTOMIZED_SP);
            
             if (j.find("DEVICE_CONFIG_PATH") != j.end())
                 j.at("DEVICE_CONFIG_PATH").get_to(DEVICE_CONFIG_PATH);
@@ -100,10 +102,14 @@ namespace NWQSim::Config
                       << "\033[1;32m" << (ENABLE_NOISE ? "Enabled" : "Disabled") << "\033[0m" << std::endl;
             std::cout << std::left << std::setw(40) << "\033[1;33mTensor Core:\033[0m"
                       << "\033[1;32m" << (ENABLE_TENSOR_CORE ? "Enabled" : "Disabled") << "\033[0m" << std::endl;
+            std::cout << std::left << std::setw(40) << "\033[1;33mCustmized Superoperator:\033[0m"
+                      << "\033[1;32m" << (CUSTOMIZED_SP ? "Enabled" : "Disabled") << "\033[0m" << std::endl;
             std::cout << std::left << std::setw(40) << "\033[1;33mDevice Config Path:\033[0m"
                       << "\033[1;32m" << (DEVICE_CONFIG_PATH.empty() ? "Not Set" : DEVICE_CONFIG_PATH) << "\033[0m" << std::endl;
             std::cout << std::left << std::setw(40) << "\033[1;33mDevice Config File:\033[0m"
                       << "\033[1;32m" << (DEVICE_CONFIG_FILE.empty() ? "Not Set" : DEVICE_CONFIG_FILE) << "\033[0m" << std::endl;
+            std::cout << std::left << std::setw(40) << "\033[1;33mCustmized Superoperator File:\033[0m"
+                      << "\033[1;32m" << (CUSTMOIZED_GATES_FILE.empty() ? "Not Set" : CUSTMOIZED_GATES_FILE) << "\033[0m" << std::endl;
             std::cout << std::left << std::setw(40) << "\033[1;33mSimulation Backend:\033[0m"
                       << "\033[1;32m" << (sim_backend == "sv" ? "SVSim" : "DMSim") << "\033[0m" << std::endl;
             if (Config::PRINT_SIM_TRACE)

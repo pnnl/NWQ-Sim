@@ -40,8 +40,8 @@ namespace NWQSim
     }
     std::map<OP, std::map<std::string, DMGate>> getBsDMGateSP()
     {
-        Config::ENABLE_NOISE = true;
         Config::readConfigFile();
+        Config::ENABLE_NOISE = true;
         std::map<OP, std::map<std::string, DMGate>> dm_qubit_gates;
 
         // TODO: Make these parameters can be defined by the users
@@ -151,7 +151,7 @@ void saveMapAsJson(const std::map<OP, std::map<std::string, DMGate>> &dm_qubit_g
 std::map<OP, std::map<std::string, DMGate>> readDMGatesFromJson(const std::string &filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
-        throw std::runtime_error("Unable to open the file custmized gates");
+        throw std::runtime_error("Unable to open the file: " + filename);
     }
 
     nlohmann::json j;
