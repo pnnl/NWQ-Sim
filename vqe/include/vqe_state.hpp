@@ -85,7 +85,6 @@ namespace NWQSim
         if (iteration > 0){
           Config::PRINT_SIM_TRACE = false;
         }
-        std::cout << measurement->num_gates() << std::endl;
         if (compute_gradient) {
           gradient.resize(x.size());
           g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, x, gradient, 1e-4);
@@ -175,41 +174,31 @@ namespace NWQSim
       }
       virtual void call_simulator() {};
       virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) {};
-      virtual void set_exp_gate(std::shared_ptr<Ansatz> circuit, ObservableList*& o, std::vector<IdxType>& zmasks, std::vector<ValType>& coeffs) {
-        o = new ObservableList;
+      virtual void set_exp_gate(std::shared_ptr<Ansatz> circuit, ObservableList* o, std::vector<IdxType>& zmasks, std::vector<ValType>& coeffs) {
         o->zmasks = zmasks.data();
         o->coeffs = coeffs.data();
         o->numterms = coeffs.size();
         circuit->EXPECT(o);
       };
-      virtual void get_exp_values(const std::vector<std::vector<ObservableList*>>& observables, std::vector<ValType>& output) {
+      virtual void get_exp_values(const std::vector<ObservableList*>& observables, std::vector<IdxType> sizes, std::vector<ValType>& output) {
         for (size_t i = 0; i < observables.size(); i++) {
-          for (auto obs_ptr: observables[i]) {
-            output[i] += obs_ptr->exp_output;
+          for (size_t j = 0; j < sizes[i]; j++) {
+            output[i] += observables[i][j].exp_output;
           }
           // output.at(i) = observables.at(i)->exp_output;
         }
+      };
+      virtual void allocate_observables(ObservableList*& observables, IdxType size) {
+        observables = new ObservableList[size];
+      };
+      virtual void delete_observables(ObservableList* observables) {
+        delete[] observables;
       };
       virtual ValType energy(const std::vector<double>& x) {
         ansatz->setParams(x);
 
         call_simulator();
-
-        // ExpectationMap emap;
-
-      
-        // const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators();    
-        // auto& pauli_operators = hamil->getPauliOperators();
-        // double expval = 0.0;
-        // for (auto& clique: pauli_operators) {
-        //   for (auto& pauli: clique) {
-        //     expval += getPauliExpectation(pauli) * pauli.getCoeff().real();
-        //   }
-        // }
-        IdxType index = 0;
-        ValType expectation = hamil->getEnv().constant + expvals.front();
-        // ValType ene = 0.0;
-        // ValType ene = hamil.expectation(emap);
+        ValType expectation = hamil->getEnv().constant + expectation_value;
         return expectation;
       }
       
@@ -230,7 +219,7 @@ namespace NWQSim
         std::vector<std::vector<IdxType> > zmasks;
         std::vector<std::vector<IdxType> > x_indices;
         std::vector<std::vector<ValType> > coeffs;
-        std::vector<ValType> expvals;
+        double expectation_value;
         nlopt::algorithm optimizer_algorithm;
 
       

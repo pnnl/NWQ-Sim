@@ -30,9 +30,9 @@ namespace NWQSim
                    OptimizerSettings opt_settings = OptimizerSettings()): 
                                       SV_MPI(a->num_qubits(), configpath),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
-        expvals.resize(1);
         size_t index = 0;
         size_t curr_ptr = 0;
+        // initialize();
       };
 
       virtual void fill_obslist(IdxType index) override {
@@ -45,6 +45,24 @@ namespace NWQSim
       };
       virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) override { 
         Config::PRINT_SIM_TRACE = false; 
+        if (iteration > 0){
+          Config::PRINT_SIM_TRACE = false;
+        }
+        MPI_Barrier(comm_global);
+        std::vector<ValType> xparams;
+        if (i_proc == 0) {
+          std::vector<double>* ansatz_params = ansatz->getParams();
+          stat = CALL_SIMULATOR;
+          for(IdxType i = 1; i < n_cpus; i++) {
+            MPI_Send(ansatz_params->data(), ansatz->numParams(), MPI_DOUBLE, i, 1, MPI_COMM_WORLD);
+          }
+        } else {
+          xparams.resize(ansatz->numParams());
+          MPI_Recv(xparams.data(),
+                   ansatz->numParams(), 
+                        MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+          ansatz->setParams(xparams);
+        }
         BARR_MPI;
         reset_state();
         BARR_MPI;
@@ -54,11 +72,11 @@ namespace NWQSim
         BARR_MPI;
       };
 
-      virtual void get_exp_values(const std::vector<std::vector<ObservableList*>>& observables, std::vector<ValType>& output) override {
+      virtual void get_exp_values(const std::vector<ObservableList*>& observables, std::vector<IdxType> sizes, std::vector<ValType>& output) override {
         std::vector<ValType> temp(output.size(), 0);
         for (size_t i = 0; i < observables.size(); i++) {
-          for (auto obs_ptr: observables[i]) {
-            temp[i] += obs_ptr->exp_output;
+          for (size_t j = 0; j < sizes[i]; j++) {
+            temp[i] += observables[i][j].exp_output;
           }
           // output.at(i) = observables.at(i)->exp_output;
         }
@@ -99,12 +117,15 @@ namespace NWQSim
         if (i_proc != 0) {
           stat = WAIT;
         }
-        std::fill(expvals.begin(), expvals.end(), 0);
+        expectation_value = 0;
         for (auto i: obsvec) {
-          expvals[0] += i->exp_output;
+          expectation_value += i->exp_output;
         }
-        std::vector<double> expval_temp(expvals);
-        MPI_Allreduce(expval_temp.data(), expvals.data(), expvals.size(), MPI_DOUBLE, MPI_SUM, comm_global);
+        double temp = expectation_value;
+        expectation_value = 0;
+        MPI_Allreduce(&temp, &expectation_value, 1, MPI_DOUBLE, MPI_SUM, comm_global);
+        std::cout << expectation_value << std::endl;
+        BARR_MPI;
       };
       virtual void process_loop() {
         assert(i_proc != 0);
@@ -124,7 +145,7 @@ namespace NWQSim
           BARR_MPI;
           nlopt::opt optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
           optimizer.set_min_objective(nl_opt_function, (void*)this);
-          std::vector<double> lower_bounds(ansatz->numParams(), 0);
+          std::vector<double> lower_bounds(ansatz->numParams(), -2 * PI);
           std::vector<double> upper_bounds(ansatz->numParams(), 2 * PI);
           optimizer.set_lower_bounds(lower_bounds);
           optimizer.set_upper_bounds(upper_bounds);
@@ -142,7 +163,7 @@ namespace NWQSim
           if (parameters.size() == 0) {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }
-          MPI_Bcast(parameters.data(), ansatz->numParams(), MPI_DOUBLE, 0, comm_global);
+          MPI_Bcast(parameters.data(), parameters.size(), MPI_DOUBLE, 0, comm_global);
           if (i_proc == 0) {
             nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
             // energy(parameters);
@@ -153,7 +174,9 @@ namespace NWQSim
           } else {
             process_loop();
           }
+          parameters = ansatz->getParamRef();
           MPI_Bcast(&final_ene, 1, MPI_DOUBLE, 0, comm_global);
+          BARR_MPI;
       }
       
       protected:

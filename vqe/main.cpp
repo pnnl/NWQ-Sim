@@ -169,6 +169,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
 
     NWQSim::VQE::AdaptVQE adapt_instance(dyn_ansatz, state, hamil);
     adapt_instance.make_commutators();
+    state->initialize();
     adapt_instance.optimize(params, fval, 100);
   } else {
     state->initialize();

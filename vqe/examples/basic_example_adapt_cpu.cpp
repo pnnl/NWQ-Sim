@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
   // Note: path relative to presumed build directory
   std::string hamiltonian_path = "../vqe/example_hamiltonians/BeH2_6_2.4_xacc.hamil"; //  Effective Hamiltonian file path
   std::vector<std::vector<Pauli> > op = {{Pauli("IIIIIIIIIIII")}};
-  std::shared_ptr<Hamiltonian> hamil = std::make_shared<Hamiltonian>(op, n_particles, true); // Build the Hamiltonian object (used for energy calculation)
+  std::shared_ptr<Hamiltonian> hamil = std::make_shared<Hamiltonian>(op, "../default_config.json", n_particles, true); // Build the Hamiltonian object (used for energy calculation)
   Transformer jw_transform = getJordanWignerTransform; // Choose a transformation function
 
   // Build the ansatz circuit using the Hamiltonian Molecular environment and JW mapping

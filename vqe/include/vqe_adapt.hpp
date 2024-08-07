@@ -18,7 +18,8 @@ namespace NWQSim {
         const std::complex<ValType> imag = {0, 1.0};
         std::vector<std::vector<std::vector<double> > > commutator_coeffs;
         std::vector<std::vector<std::vector<IdxType> > > commutator_zmasks;
-        std::vector<std::vector<ObservableList*> > gradient_observables;
+        std::vector<ObservableList*> gradient_observables;
+        std::vector<IdxType> observable_sizes;
     public:
       AdaptVQE(std::shared_ptr<DynamicAnsatz> _ans, std::shared_ptr<VQEState> backend, std::shared_ptr<Hamiltonian> _hamil): 
             ansatz(_ans), 
@@ -27,11 +28,8 @@ namespace NWQSim {
         gradient_measurement = std::make_shared<Ansatz>(_ans->num_qubits());
       }
       ~AdaptVQE() {
-        for (auto obslist: gradient_observables) {
-          for (ObservableList* i: obslist) {
-            delete i;
-          }
-        }
+        for (auto i: gradient_observables)
+          state->delete_observables(i);
       }
       void commutator(std::vector<PauliOperator>& oplist1, 
                       std::vector<PauliOperator>& oplist2, 
@@ -66,6 +64,7 @@ namespace NWQSim {
         commutator_zmasks.resize(pauli_op_pool.size());
         gradient_magnitudes.resize(pauli_op_pool.size());
         gradient_observables.resize(pauli_op_pool.size());
+        observable_sizes.resize(pauli_op_pool.size());
         for (size_t i = 0; i < pauli_op_pool.size(); i++) {
           std::unordered_map<PauliOperator,  std::complex<double>, PauliHash> pmap;
           std::vector<PauliOperator> oplist = pauli_op_pool[i];
@@ -87,9 +86,10 @@ namespace NWQSim {
           auto cliqueiter = cliques.begin();
           commutator_coeffs[i].resize(cliques.size());
           commutator_zmasks[i].resize(cliques.size());
-          gradient_observables[i].resize(cliques.size());
+          state->allocate_observables(gradient_observables[i], cliques.size());
           std::vector<IdxType> qubit_mapping (ansatz->num_qubits());
           std::iota(qubit_mapping.begin(), qubit_mapping.end(), 0);
+          observable_sizes[i] = cliques.size();
           // For each clique, construct a measurement circuit and append
           for (size_t j = 0; j < cliques.size(); j++) {
             std::vector<IdxType>& clique = *cliqueiter;
@@ -104,7 +104,7 @@ namespace NWQSim {
             
             Measurement circ1 (common, false);
             gradient_measurement->compose(circ1, qubit_mapping);            
-            state->set_exp_gate(gradient_measurement, gradient_observables[i][j], commutator_zmasks[i][j], commutator_coeffs[i][j]);
+            state->set_exp_gate(gradient_measurement, &gradient_observables[i][j], commutator_zmasks[i][j], commutator_coeffs[i][j]);
             Measurement circ2 (common, true);
             gradient_measurement->compose(circ2, qubit_mapping);      
             cliqueiter++;  
@@ -129,7 +129,7 @@ namespace NWQSim {
           // std::fill(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0);
           state->call_simulator(gradient_measurement);
           std::fill(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0);
-          state->get_exp_values(gradient_observables, gradient_magnitudes);
+          state->get_exp_values(gradient_observables, observable_sizes, gradient_magnitudes);
           double grad_norm = std::accumulate(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0.0, [] (ValType a, ValType b) {
             return a + b * b;
           });
@@ -140,7 +140,6 @@ namespace NWQSim {
             std::cout << i << " ";
           }
           std::cout << std::endl;
-          getchar();
           // std::cout << gradient_magnitudes << std::endl;
           if (std::sqrt(grad_norm) < reltol) {
             break;
