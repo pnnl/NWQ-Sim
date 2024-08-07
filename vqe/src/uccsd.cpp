@@ -55,7 +55,7 @@ namespace NWQSim {
                   virt_down_1});
             IdxType beta_term = fermion_operators.size();
             fermion_operators.push_back({
-                  occ_up_1,
+                  occ_up_1, 
                   occ_up_2,
                   virt_up_2,
                   virt_up_1});

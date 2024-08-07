@@ -18,6 +18,8 @@
 #include <chrono>
 #include <ctime>
 
+#include <mpi.h>
+
 #include "xacc.hpp"
 #include "xacc_service.hpp"
 #include "Optimizer.hpp"
@@ -53,40 +55,51 @@ std::string readFile(const std::string &filename)
 
 int main(int argc, char **argv)
 {
-  xacc::Initialize(argc, argv);
+    xacc::Initialize(argc, argv);
 
-  
-  // Get reference to the Accelerator
-  std::shared_ptr<xacc::Accelerator> accelerator = std::make_shared<xacc::quantum::NWQAccelerator>();
-  accelerator->updateConfiguration({std::make_pair("vqe_mode", true)});
+    MPI_Init(&argc, &argv);
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-  auto str = readFile("../xacc/examples/be-5.txt");
-  auto be_vqe = xacc::quantum::getObservable("fermion", str);
 
-  auto optimizer_vqe = xacc::getOptimizer("nlopt", {std::make_pair("nlopt-optimizer", "cobyla")});
+    std::shared_ptr<xacc::Accelerator> accelerator = std::make_shared<xacc::quantum::NWQAccelerator>();
+    accelerator->updateConfiguration({std::make_pair("backend", "NVGPU"), std::make_pair("vqe_mode", true)});
+    
+    if (argc == 2)
+         accelerator->updateConfiguration({std::make_pair("backend", argv[1])});
+    
 
-  auto adapt_vqe = xacc::getService<xacc::Algorithm>("adapt");
-  int nElectrons = 4;
-  int nOrbitals = 5;
-  auto pool_vqe = "qubit-pool";
-  auto subAlgo_vqe = "vqe";
+    auto str = readFile("../xacc/examples/be-5.txt");
+    auto be_vqe = xacc::quantum::getObservable("fermion", str);
 
-  auto buffer_vqe = xacc::qalloc(nOrbitals * 2);
+    auto optimizer_vqe = xacc::getOptimizer("nlopt", {std::make_pair("nlopt-optimizer", "cobyla")});
 
-  adapt_vqe->initialize({
+    auto adapt_vqe = xacc::getService<xacc::Algorithm>("adapt");
+    int nElectrons = 4;
+    int nOrbitals = 5;
+    auto pool_vqe = "qubit-pool";
+    auto subAlgo_vqe = "vqe";
+
+    auto buffer_vqe = xacc::qalloc(nOrbitals * 2);
+
+    adapt_vqe->initialize({
       std::make_pair("accelerator", accelerator),
       std::make_pair("observable", be_vqe),
       std::make_pair("optimizer", optimizer_vqe),
       std::make_pair("pool", pool_vqe),
       std::make_pair("n-electrons", nElectrons),
       std::make_pair("sub-algorithm", subAlgo_vqe),
-      std::make_pair("maxiter", 20),
-      std::make_pair("print-operators", true),
-  });
+      std::make_pair("maxiter", 1),
+    });
+    
+    std::cout << rank << std::endl;
+    if (rank == 0)
+        std::cout << "started" << std::endl;
+                                      
+    adapt_vqe->execute(buffer_vqe);
+                                      
+    if (rank == 0)
+        std::cout << buffer_vqe->getInformation("opt-val").as<double>() << std::endl;
 
-  std::cout << "started" << std::endl;
-  adapt_vqe->execute(buffer_vqe);
-  std::cout << buffer_vqe->getInformation("opt-val").as<double>() << std::endl;
-
-  xacc::Finalize();
+    xacc::Finalize();
 }

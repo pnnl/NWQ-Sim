@@ -7,6 +7,7 @@
 #include "circuit/measurement.hpp"
 #include "gradient/sa_gradient.hpp"
 #include "observable/hamiltonian.hpp"
+#include "circuit_pass/fusion.hpp"
 #include "nlopt.hpp"
 #include <memory>
 #include <cmath>
@@ -84,7 +85,6 @@ namespace NWQSim
         if (iteration > 0){
           Config::PRINT_SIM_TRACE = false;
         }
-        std::cout << measurement->num_gates() << std::endl;
         if (compute_gradient) {
           gradient.resize(x.size());
           g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, x, gradient, 1e-4);
@@ -108,18 +108,18 @@ namespace NWQSim
       void swap_hamil(std::shared_ptr<Hamiltonian>& _hamil) {
         hamil.swap(_hamil);
       }
-      virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& final_ene, ValType delta, ValType eta, IdxType n_grad_est) {
+      virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& initial_ene, ValType& final_ene, IdxType& num_iterations, ValType delta, ValType eta, IdxType n_grad_est) {
         Config::PRINT_SIM_TRACE = false;
         std::vector<ValType> gradient (x0.size(),1.0);
         std::vector<ValType> params(x0);
         std::vector<ValType> minima_params(x0);
         ValType ene_prev = MAXFLOAT;
         ValType ene_curr = energy(params);
-
+        initial_ene = ene_curr;
         // gradient
         // get the single-direction starting vector
         g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, params, gradient, delta, n_grad_est);
-        IdxType step = 0;
+        iteration = 0;
         do {
           for (size_t i = 0; i < params.size(); i++) {
             params[i] -= eta * gradient[i];
@@ -127,6 +127,11 @@ namespace NWQSim
           // auto s1 =  std::chrono::high_resolution_clock::now();
           // ene_curr = 0;
           ene_curr = energy(params);
+          // for (auto d: gradient) {
+          //   std::cout << d << " ";
+          // }
+          // std::cout << std::endl;
+          
           // std::cout << step << " " << ene_curr << " " << ene_prev << std::endl;
           if (ene_curr >= ene_prev) {
             for (size_t i = 0; i < params.size(); i++) {
@@ -136,13 +141,14 @@ namespace NWQSim
           } else {
             ene_prev = ene_curr;
           }
-          step++;
+          iteration++;
           // auto s2 =  std::chrono::high_resolution_clock::now();
           // std::cout << (s2-s1).count()/1e9 << std::endl;
         } while(true);
+        num_iterations = iteration;
         // std::cout << "Ended loop\n" << std::endl;
         std::vector<std::string> fermi_strings = ansatz->getFermionicOperatorStrings();
-
+        final_ene = ene_curr;
         std::vector<std::pair<std::string, ValType>> result = ansatz->getFermionicOperatorParameters();
         return result;
       }
@@ -168,45 +174,36 @@ namespace NWQSim
       }
       virtual void call_simulator() {};
       virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) {};
-      virtual void set_exp_gate(std::shared_ptr<Ansatz> circuit, ObservableList*& o, std::vector<IdxType>& zmasks, std::vector<ValType>& coeffs) {
-        o = new ObservableList;
+      virtual void set_exp_gate(std::shared_ptr<Ansatz> circuit, ObservableList* o, std::vector<IdxType>& zmasks, std::vector<ValType>& coeffs) {
         o->zmasks = zmasks.data();
         o->coeffs = coeffs.data();
         o->numterms = coeffs.size();
         circuit->EXPECT(o);
       };
-      virtual void get_exp_values(const std::vector<std::vector<ObservableList*>>& observables, std::vector<ValType>& output) {
+      virtual void get_exp_values(const std::vector<ObservableList*>& observables, std::vector<IdxType> sizes, std::vector<ValType>& output) {
         for (size_t i = 0; i < observables.size(); i++) {
-          for (auto obs_ptr: observables[i]) {
-            output[i] += obs_ptr->exp_output;
+          for (size_t j = 0; j < sizes[i]; j++) {
+            output[i] += observables[i][j].exp_output;
           }
           // output.at(i) = observables.at(i)->exp_output;
         }
+      };
+      virtual void allocate_observables(ObservableList*& observables, IdxType size) {
+        observables = new ObservableList[size];
+      };
+      virtual void delete_observables(ObservableList* observables) {
+        delete[] observables;
       };
       virtual ValType energy(const std::vector<double>& x) {
         ansatz->setParams(x);
 
         call_simulator();
-
-        // ExpectationMap emap;
-
-      
-        // const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators();    
-        // auto& pauli_operators = hamil->getPauliOperators();
-        // double expval = 0.0;
-        // for (auto& clique: pauli_operators) {
-        //   for (auto& pauli: clique) {
-        //     expval += getPauliExpectation(pauli) * pauli.getCoeff().real();
-        //   }
-        // }
-        IdxType index = 0;
-        ValType expectation = hamil->getEnv().constant + expvals.front();
-        // ValType ene = 0.0;
-        // ValType ene = hamil.expectation(emap);
+        ValType expectation = hamil->getEnv().constant + expectation_value;
         return expectation;
       }
       
       std::shared_ptr<Hamiltonian> get_hamiltonian() const { return hamil; }
+      IdxType get_iteration() const {return iteration;};
       protected:
         std::shared_ptr<Ansatz> ansatz;
         std::shared_ptr<Ansatz> measurement;
@@ -222,7 +219,7 @@ namespace NWQSim
         std::vector<std::vector<IdxType> > zmasks;
         std::vector<std::vector<IdxType> > x_indices;
         std::vector<std::vector<ValType> > coeffs;
-        std::vector<ValType> expvals;
+        double expectation_value;
         nlopt::algorithm optimizer_algorithm;
 
       

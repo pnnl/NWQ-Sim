@@ -53,14 +53,17 @@ public:
             if (rank == 0)
             {
                 printf(format, args...);
+                fflush(stdout);
             }
         }
         else
         {
             printf(format, args...);
+                fflush(stdout);
         }
 #else
         printf(format, args...);
+        fflush(stdout);
 #endif
     }
 

@@ -623,11 +623,9 @@ void qasm_parser::classify_measurements()
 map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::string initpath, IdxType repetition, bool print_metrics)
 {
     IdxType *results;
-
     if (contains_if)
     {
         results = new IdxType[repetition];
-
         for (IdxType i = 0; i < repetition; i++)
         {
             IdxType *sub_result = sub_execute(state, initpath, 1, print_metrics);
@@ -638,9 +636,7 @@ map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::
     {
         results = sub_execute(state, initpath, repetition, print_metrics);
     }
-
     map<IdxType, IdxType> result_dict;
-
     for (IdxType i = 0; i < repetition; i++)
     {
         if (result_dict.find(results[i]) != result_dict.end())
@@ -648,7 +644,6 @@ map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::
         else
             result_dict.insert({results[i], 1});
     }
-
     if (measure_all)
         return to_binary_dictionary(global_qubit_offset, result_dict);
     else
@@ -664,7 +659,6 @@ IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string in
     }
 
     std::shared_ptr<NWQSim::Circuit> circuit = std::make_shared<Circuit>(num_qubits());
-
     for (auto gate : *list_gates)
     {
         if (gate.name == IF)
@@ -682,16 +676,17 @@ IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string in
             execute_gate(state, circuit, gate);
         }
     }
-
     if (!circuit->is_empty())
     {
         circuit->MA(repetition);
-
         if (print_metrics)
+        {
             circuit->print_metrics();
+            circuit->clear(); //This clears circuit since for print metrics, we do not need to actually run the circuit
+            circuit->MA(repetition);
+        }
         state->sim(circuit);
     }
-
     return state->get_results();
 }
 

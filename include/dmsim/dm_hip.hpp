@@ -23,7 +23,7 @@
 #include <hip/hip_runtime.h>
 #include <hip/hip_cooperative_groups.h>
 
-#ifdef HIP_TC_AVAILABLE
+#ifdef FP64_HIPMC_AVAILABLE 
 #include <rocwmma/rocwmma.hpp>
 #include <hip/hip_ext.h>
 #include <hip/hip_fp16.h>
@@ -165,10 +165,10 @@ namespace NWQSim
 
             IdxType n_gates = cpu_vec.size();
 
-            bool is_tc = false;
+            bool is_mc = false;
 
-#ifdef HIP_TC_AVAILABLE
-            is_tc = Config::ENABLE_TENSOR_CORE;
+#ifdef FP64_HIPMC_AVAILABLE
+            is_mc = Config::ENABLE_TENSOR_CORE;
 #endif
 
             DM_HIP *dm_gpu;
@@ -190,15 +190,15 @@ namespace NWQSim
             hipSafeCall(hipGetDeviceProperties(&deviceProp, 0));
             // 8*16 is per warp shared-memory usage for C4 TC, with real and imag
             unsigned smem_size;
-            if (is_tc)
-                smem_size = THREADS_CTA_HIP / 32 * 8 * 16 * 2 * sizeof(ValType);
+            if (is_mc)
+                smem_size = THREADS_CTA_HIP / 32 * 16 * 16 * 2 * sizeof(ValType);
             else
                 smem_size = 0;
             int numBlocksPerSm;
             hipSafeCall(hipOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
                                                                      dm_simulation_kernel_hip, THREADS_CTA_HIP, smem_size));
             gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
-            void *args[] = {&dm_gpu, &n_gates, &n_qubits, &is_tc};
+            void *args[] = {&dm_gpu, &n_gates, &n_qubits, &is_mc};
             hipSafeCall(hipDeviceSynchronize());
 
             sim_timer.start_timer();
@@ -217,8 +217,8 @@ namespace NWQSim
             if (Config::PRINT_SIM_TRACE)
             {
                 printf("\n============== DM-Sim (HIP) ===============\n");
-                printf("n_qubits:%lld, n_gates:%lld, sim_gates:%lld, ngpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_gpu:%.3lf MB\n",
-                       n_qubits, origional_gates, n_gates, 1, sim_time, 0.,
+                printf("n_qubits:%lld, n_gates:%lld, sim_gates:%lld, ngpus:%d, MatrixCore: %s, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_gpu:%.3lf MB\n",
+                       n_qubits, origional_gates, n_gates, 1, (Config::ENABLE_TENSOR_CORE ? "Enabled" : "Disabled"), sim_time, 0.,
                        sim_time, gpu_mem / 1024 / 1024, gpu_mem / 1024 / 1024);
                 printf("=====================================\n");
             }
@@ -493,38 +493,19 @@ namespace NWQSim
             return term;
         }
 
-#ifdef HIP_TC_AVAILABLE
-        // TC GATE OPERATIONS
-        __device__ __inline__ IdxType get_term(IdxType idx, IdxType p, IdxType q, IdxType r, IdxType s)
-        {
-            const IdxType term0 = MOD2E(idx, p);
-            const IdxType term1 = MOD2E(DIV2E(idx, p), q - p - 1) * EXP2E(p + 1);
-            const IdxType term2 = MOD2E(DIV2E(DIV2E(idx, p), q - p - 1), r - q - 1) * EXP2E(q + 1);
-            const IdxType term3 = MOD2E(DIV2E(DIV2E(DIV2E(idx, p), q - p - 1), r - q - 1), s - r - 1) * EXP2E(r + 1);
-            const IdxType term4 = DIV2E(DIV2E(DIV2E(DIV2E(idx, p), q - p - 1), r - q - 1), s - r - 1) * EXP2E(s + 1);
-            const IdxType term = term4 + term3 + term2 + term1 + term0;
-            return term;
-        }
-
+#ifdef FP64_HIPMC_AVAILABLE
         //============== Unified 4-qubit Gate with TC V1 ================
         // This is with tensorcore optimization
-        __device__ __inline__ void C4TCV1_GATE(const Simulation *sim, ValType *sv_real, ValType *sv_imag,
-                const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1,
-                const IdxType qubit2, const IdxType qubit3)
+        __device__ __inline__ void C4TCV1_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1,
+                                               const IdxType qubit2, const IdxType qubit3)
         {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
-            const int laneid = (threadIdx.x & 31);
-            const int warpid = (tid >> 5);
-            const int wid = (threadIdx.x >> 5);
-            const int nwarps = ((blockDim.x * gridDim.x) >> 5);
-            const IdxType per_pe_work = ((sim->dim) >> 4); 
-            // Our design require at least (gpu_scale + 4 + log(8)) qubits, because
-            // tensorcore demands [8,4]*[4,8], we need at least 8 on B's row dim. // If use AMD GPU, we could just set B's row as 8, no need for two GPUs.
-            // This implies for 2 GPUs, we need at least 8 qubit for SV, thus 4 qubit for DM.
-            // The smaller condition is difficult to handle due to the complex get_term function,
-            // We need to figure out, after the get_term, which row/col it maps to and filter out.
-            // But the row and col will be quite difficult to obtain.
+            const int laneid = (threadIdx.x & 63);
+            const int warpid = (tid >> 6);
+            const int wid = (threadIdx.x >> 6);
+            const int nwarps = ((blockDim.x * gridDim.x) >> 6);
+            const IdxType per_pe_work = ((dim) >> 4);
 
             extern __shared__ ValType els[];
             ValType *el_real_s = &els[wid * 16 * 16 * 2];          // per warp 16*16 for real
@@ -547,243 +528,76 @@ namespace NWQSim
             const IdxType r = max(min(v2, v3), max(v0, v1));
             const IdxType s = max(v2, v3);
 
-            // rocwmma::fragment<rocwmma::matrix_a,16,16,16 , ValType, rocwmma::row_major> a_frag_real_up;
-            // rocwmma::fragment<rocwmma::matrix_a,16,16,16 , ValType, rocwmma::row_major> a_frag_imag_up;
-            // rocwmma::fragment<rocwmma::matrix_a,16,16,16 , ValType, rocwmma::row_major> a_frag_real_dn;
-            // rocwmma::fragment<rocwmma::matrix_a,16,16,16 , ValType, rocwmma::row_major> a_frag_imag_dn;
-            // rocwmma::fragment<rocwmma::matrix_b,16,16,16 , ValType, rocwmma::col_major> b_frag_real;
-            // rocwmma::fragment<rocwmma::matrix_b,16,16,16 , ValType, rocwmma::col_major> b_frag_imag;
-            // rocwmma::fragment<rocwmma::accumulator,16,16,16 , ValType> c_frag_real_up;
-            // rocwmma::fragment<rocwmma::accumulator,16,16,16 , ValType> c_frag_imag_up;
-            // ;
-            // rocwmma::fragment<rocwmma::accumulator,16,16,16 , ValType> c_frag_real_dn;
-            // rocwmma::fragment<rocwmma::accumulator,16,16,16 , ValType> c_frag_imag_dn;
-            // ;
+            rocwmma::fragment<rocwmma::matrix_a,16,16,16, ValType, rocwmma::row_major> a_frag_real;
+            rocwmma::fragment<rocwmma::matrix_a,16,16,16, ValType, rocwmma::row_major> a_frag_imag;
+            rocwmma::fragment<rocwmma::matrix_b,16,16,16, ValType, rocwmma::col_major> b_frag_real;
+            rocwmma::fragment<rocwmma::matrix_b,16,16,16, ValType, rocwmma::col_major> b_frag_imag;
+            rocwmma::fragment<rocwmma::accumulator,16,16,16, ValType> c_frag_real;
+            rocwmma::fragment<rocwmma::accumulator,16,16,16, ValType> c_frag_imag;
 
-            rocwmma::fragment<rocwmma::matrix_a,16,16,16 , ValType, rocwmma::row_major> a_frag_real;
-            rocwmma::fragment<rocwmma::matrix_a,16,16,16 , ValType, rocwmma::row_major> a_frag_imag;
-            rocwmma::fragment<rocwmma::matrix_b,16,16,16 , ValType, rocwmma::col_major> b_frag_real;
-            rocwmma::fragment<rocwmma::matrix_b,16,16,16 , ValType, rocwmma::col_major> b_frag_imag;
-            rocwmma::fragment<rocwmma::accumulator,16,16,16 , ValType> c_frag_real;
-            rocwmma::fragment<rocwmma::accumulator,16,16,16 , ValType> c_frag_imag;
-            // if (threadIdx.x == 0 && blockIdx.x == 0)
-            // printf("GPU-%lld: dim:%lld, per_pe_work:%lld, nwarps:%d, start:%lld, end:%lld, step:%lld\n",sim->i_gpu, sim->dim,per_pe_work, nwarps,
-            //(sim->i_gpu)*per_pe_work+(warpid<<3), (sim->i_gpu+1)*per_pe_work, (nwarps<<3));
-
-            for (IdxType i = (warpid << 4); i < per_pe_work; i += (nwarps << 4)) // TODO:change from 3 to 4 (8 to 16) should load the another half of B 
+            for (IdxType i = (warpid << 4); i < per_pe_work; i += (nwarps << 4))
             {
-                // if (laneid == 0) printf("=== warpid: %d ==== \n",warpid);
-#pragma unroll 
-                for (int j = 0; j < 16; j++)
-                { 
-                    const IdxType term = get_term(i + j, p, q, r, s);
-                    if (laneid < 16)
-                    {
-                        IdxType addr = term + SV16IDX(laneid);
-                        el_real_s[j * 16 + laneid] = LOCAL_G(sv_real, addr);
-                    }
-                    else
-                    {
-                        IdxType addr = term + SV16IDX(laneid - 16);
-                        el_imag_s[j * 16 + laneid - 16] = LOCAL_G(sv_imag, addr);
-                    }
+                #pragma unroll 
+                for (int j = 0; j < 16; j+=4)
+                {
+                    const int jj = j + (laneid>>4);
+                    const int ii = (laneid&15);
+                    const IdxType term = get_term(i + jj, p, q, r, s);
+                    IdxType addr = term + SV16IDX(ii);
+                    el_real_s[jj * 16 + ii] = LOCAL_G_HIP(dm_real, addr);
+                    el_imag_s[jj * 16 + ii] = LOCAL_G_HIP(dm_imag, addr);
                 }
-                __syncwarp();
                 rocwmma::fill_fragment(c_frag_real, 0.0);
                 rocwmma::fill_fragment(c_frag_imag, 0.0);
-                // rocwmma::fill_fragment(c_frag_real_up, 0.0);
-                // rocwmma::fill_fragment(c_frag_imag_up, 0.0);
-                // rocwmma::fill_fragment(c_frag_real_dn, 0.0);
-                // rocwmma::fill_fragment(c_frag_imag_dn, 0.0);
-                // #pragma unroll
-                //             for (unsigned c = 0; c < 4; c++)
-                //             {
+
                 // load A from const mem
                 load_matrix_sync(a_frag_real, &gm_real[0], 16);
                 load_matrix_sync(a_frag_imag, &gm_imag[0], 16);
-                // load_matrix_sync(a_frag_real_dn, &gm_real[16 * 16], 16);
-                // load_matrix_sync(a_frag_imag_dn, &gm_imag[16 * 16], 16);
-
                 // load B from shared mem
                 load_matrix_sync(b_frag_real, &el_real_s[0], 16);
                 load_matrix_sync(b_frag_imag, &el_imag_s[0], 16);
-                // complex multiplication
-                // mma_sync(c_frag_imag_up, a_frag_real_up, b_frag_imag, c_frag_imag_up);
-                // mma_sync(c_frag_imag_up, a_frag_imag_up, b_frag_real, c_frag_imag_up);
-                // mma_sync(c_frag_real_up, a_frag_real_up, b_frag_real, c_frag_real_up);
-                // a_frag_imag_up.x[0] = -a_frag_imag_up.x[0];
-                // mma_sync(c_frag_real_up, a_frag_imag_up, b_frag_imag, c_frag_real_up);
-                //
-                // mma_sync(c_frag_imag_dn, a_frag_real_dn, b_frag_imag, c_frag_imag_dn);
-                // mma_sync(c_frag_imag_dn, a_frag_imag_dn, b_frag_real, c_frag_imag_dn);
-                // mma_sync(c_frag_real_dn, a_frag_real_dn, b_frag_real, c_frag_real_dn);
-                // a_frag_imag_dn.x[0] = -a_frag_imag_dn.x[0];
-                // mma_sync(c_frag_real_dn, a_frag_imag_dn, b_frag_imag, c_frag_real_dn);
-                // }
+
                 mma_sync(c_frag_imag, a_frag_real, b_frag_imag, c_frag_imag);
                 mma_sync(c_frag_imag, a_frag_imag, b_frag_real, c_frag_imag);
                 mma_sync(c_frag_real, a_frag_real, b_frag_real, c_frag_real);
                 a_frag_imag.x[0] = -a_frag_imag.x[0];
+                a_frag_imag.x[1] = -a_frag_imag.x[1];
+                a_frag_imag.x[2] = -a_frag_imag.x[2];
+                a_frag_imag.x[3] = -a_frag_imag.x[3];
                 mma_sync(c_frag_real, a_frag_imag, b_frag_imag, c_frag_real);
+
+                //CUDA use X[0], X[1] of the first lane for the first two resulting elements.
+                //However, HIP use X[0] of all the 64 lanes for the first 64 resulting elements;
+                //X[1] of all the 64 lanes for the next 64 elements, etc.
+
                 // Store first result per segment-C
-                // TODO: From my understand, only need to load twice since you are getting two new segment-C using matrix cores. 
-                // Since here one more load for x[1], we align this, that is we load four times.  
-                IdxType j0 = ((laneid) & 15);
-                IdxType k0 = ((laneid) >> 4);
+                IdxType j0 = (laneid & 15);
+                IdxType k0 = (laneid >> 4);
                 const IdxType term0 = get_term(i + j0, p, q, r, s) + SV16IDX(k0);
-                LOCAL_P(sv_real, term0, c_frag_real.x[0]);
-                LOCAL_P(sv_imag, term0, c_frag_imag.x[0]);
-
+                LOCAL_P_HIP(dm_real, term0, c_frag_real.x[0]);
+                LOCAL_P_HIP(dm_imag, term0, c_frag_imag.x[0]);
                 // Store second result per segment-C
-                IdxType j1 = ((laneid + 1) & 15);
-                IdxType k1 = ((laneid + 1) >> 4);
+                IdxType j1 = (laneid & 15);
+                IdxType k1 = (laneid >> 4)+4;
                 const IdxType term1 = get_term(i + j1, p, q, r, s) + SV16IDX(k1);
-                LOCAL_P(sv_real, term1, c_frag_real.x[1]);
-                LOCAL_P(sv_imag, term1, c_frag_imag.x[1]);
-
-                // // Store first result per segment-C
-                // IdxType j2 = ((2 * laneid) & 7);
-                // IdxType k2 = ((2 * laneid) >> 3) + 8;
-                // const IdxType term2 = get_term(i + j2, p, q, r, s) + SV16IDX(k2);
-                // LOCAL_P(sv_real, term2, c_frag_real_dn.x[0]);
-                // LOCAL_P(sv_imag, term2, c_frag_imag_dn.x[0]);
-                //
-                // // Store second result per segment-C
-                // IdxType j3 = ((2 * laneid + 1) & 7);
-                // IdxType k3 = ((2 * laneid + 1) >> 3) + 8;
-                // const IdxType term3 = get_term(i + j3, p, q, r, s) + SV16IDX(k3);
-                // LOCAL_P(sv_real, term3, c_frag_real_dn.x[1]);
-                // LOCAL_P(sv_imag, term3, c_frag_imag_dn.x[1]);
-            }
-            // BARR;
-        }
-
-        //============== Unified 4-qubit Gate with TC V2 ================
-        // This is with further tensorcore optimization
-        __device__ __inline__ void C4TCV2_GATE(const Simulation *sim, ValType *sv_real, ValType *sv_imag,
-                const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1,
-                const IdxType qubit2, const IdxType qubit3)
-        {
-            grid_group grid = this_grid();
-            const int tid = blockDim.x * blockIdx.x + threadIdx.x;
-            const int laneid = (threadIdx.x & 31);
-            const int warpid = (tid >> 5);
-            const int wid = (threadIdx.x >> 5);
-            const int nwarps = ((blockDim.x * gridDim.x) >> 5);
-            const IdxType per_pe_work = ((sim->dim) >> 4);
-            // Our design require at least (gpu_scale + 4 + log(8)) qubits, because
-            // tensorcore demands [8,4]*[4,8], we need at least 8 on B's row dim.
-            // This implies for 2 GPUs, we need at least 8 qubit for SV, thus 4 qubit for DM.
-            // The smaller condition is difficult to handle due to the complex get_term function,
-            // We need to figure out, after the get_term, which row/col it maps to and filter out.
-            // But the row and col will be quite difficult to obtain.
-
-            extern __shared__ ValType els[];
-            ValType *el_real_s = &els[wid * 8 * 16 * 2];          // per warp 8*16 for real
-            ValType *el_imag_s = &els[wid * 8 * 16 * 2 + 8 * 16]; // per warp 8*16 for imag
-
-            assert(qubit0 != qubit1); // Non-cloning
-            assert(qubit0 != qubit2); // Non-cloning
-            assert(qubit0 != qubit3); // Non-cloning
-            assert(qubit1 != qubit2); // Non-cloning
-            assert(qubit1 != qubit3); // Non-cloning
-            assert(qubit2 != qubit3); // Non-cloning
-
-            // need to sort qubits: min->max: p, q, r, s
-            const IdxType v0 = min(qubit0, qubit1);
-            const IdxType v1 = min(qubit2, qubit3);
-            const IdxType v2 = max(qubit0, qubit1);
-            const IdxType v3 = max(qubit2, qubit3);
-            const IdxType p = min(v0, v1);
-            const IdxType q = min(min(v2, v3), max(v0, v1));
-            const IdxType r = max(min(v2, v3), max(v0, v1));
-            const IdxType s = max(v2, v3);
-
-            rocwmma::fragment<rocwmma::matrix_a, 8, 8, 4, ValType, rocwmma::row_major> a_frag_real;
-            rocwmma::fragment<rocwmma::matrix_a, 8, 8, 4, ValType, rocwmma::row_major> a_frag_imag;
-            rocwmma::fragment<rocwmma::matrix_b, 8, 8, 4, ValType, rocwmma::col_major> b_frag_real;
-            rocwmma::fragment<rocwmma::matrix_b, 8, 8, 4, ValType, rocwmma::col_major> b_frag_imag;
-            rocwmma::fragment<rocwmma::accumulator, 8, 8, 4, ValType> c_frag_real;
-            rocwmma::fragment<rocwmma::accumulator, 8, 8, 4, ValType> c_frag_imag;
-
-            for (IdxType i = (warpid << 3); i < per_pe_work; i += (nwarps << 3))
-            {
-                // load from matrix-B
-                for (int j = 0; j < 8; j++)
-                {
-                    const IdxType term = get_term(i + j, p, q, r, s);
-                    if (laneid < 16)
-                        el_real_s[j * 16 + laneid] = LOCAL_G(sv_real, term + SV16IDX(laneid));
-                    else
-                        el_imag_s[j * 16 + laneid - 16] = LOCAL_G(sv_imag, term + SV16IDX(laneid - 16));
-                }
-                __syncwarp();
-
-                //============= For matrix-A upper-part ============
-                rocwmma::fill_fragment(c_frag_real, 0.0);
-                rocwmma::fill_fragment(c_frag_imag, 0.0);
-                for (unsigned c = 0; c < 4; c++)
-                {
-                    // load A from const mem
-                    load_matrix_sync(a_frag_real, &gm_real[c * 4], 16);
-                    load_matrix_sync(a_frag_imag, &gm_imag[c * 4], 16);
-                    // load B from shared mem
-                    load_matrix_sync(b_frag_real, &el_real_s[c * 4], 16);
-                    load_matrix_sync(b_frag_imag, &el_imag_s[c * 4], 16);
-                    // complex multiplication
-                    mma_sync(c_frag_imag, a_frag_real, b_frag_imag, c_frag_imag);
-                    mma_sync(c_frag_imag, a_frag_imag, b_frag_real, c_frag_imag);
-                    mma_sync(c_frag_real, a_frag_real, b_frag_real, c_frag_real);
-                    a_frag_imag.x[0] = -a_frag_imag.x[0];
-                    mma_sync(c_frag_real, a_frag_imag, b_frag_imag, c_frag_real);
-                }
-                // Store first result per segment-C
-                IdxType j0 = ((2 * laneid) & 7);
-                IdxType k0 = ((2 * laneid) >> 3);
-                const IdxType term0 = get_term(i + j0, p, q, r, s) + SV16IDX(k0);
-                LOCAL_P(sv_real, term0, c_frag_real.x[0]);
-                LOCAL_P(sv_imag, term0, c_frag_imag.x[0]);
-                // Store second result per segment-C
-                IdxType j1 = ((2 * laneid + 1) & 7);
-                IdxType k1 = ((2 * laneid + 1) >> 3);
-                const IdxType term1 = get_term(i + j1, p, q, r, s) + SV16IDX(k1);
-                LOCAL_P(sv_real, term1, c_frag_real.x[1]);
-                LOCAL_P(sv_imag, term1, c_frag_imag.x[1]);
-
-                //============= For matrix-A lower-part ============
-                rocwmma::fill_fragment(c_frag_real, 0.0);
-                rocwmma::fill_fragment(c_frag_imag, 0.0);
-                for (unsigned c = 0; c < 4; c++)
-                {
-                    // load A from const mem
-                    load_matrix_sync(a_frag_real, &gm_real[16 * 8 + c * 4], 16);
-                    load_matrix_sync(a_frag_imag, &gm_imag[16 * 8 + c * 4], 16);
-                    // load B from shared mem
-                    load_matrix_sync(b_frag_real, &el_real_s[c * 4], 16);
-                    load_matrix_sync(b_frag_imag, &el_imag_s[c * 4], 16);
-                    // complex multiplication
-                    mma_sync(c_frag_imag, a_frag_real, b_frag_imag, c_frag_imag);
-                    mma_sync(c_frag_imag, a_frag_imag, b_frag_real, c_frag_imag);
-                    mma_sync(c_frag_real, a_frag_real, b_frag_real, c_frag_real);
-                    a_frag_imag.x[0] = -a_frag_imag.x[0];
-                    mma_sync(c_frag_real, a_frag_imag, b_frag_imag, c_frag_real);
-                }
-                // Store first result per segment-C
-                IdxType j2 = ((2 * laneid) & 7);
-                IdxType k2 = ((2 * laneid) >> 3) + 8;
+                LOCAL_P_HIP(dm_real, term1, c_frag_real.x[1]);
+                LOCAL_P_HIP(dm_imag, term1, c_frag_imag.x[1]);
+                // Store third result per segment-C
+                IdxType j2 = (laneid & 15);
+                IdxType k2 = (laneid >> 4)+8;
                 const IdxType term2 = get_term(i + j2, p, q, r, s) + SV16IDX(k2);
-                LOCAL_P(sv_real, term2, c_frag_real.x[0]);
-                LOCAL_P(sv_imag, term2, c_frag_imag.x[0]);
-
-                // Store second result per segment-C
-                IdxType j3 = ((2 * laneid + 1) & 7);
-                IdxType k3 = ((2 * laneid + 1) >> 3) + 8;
+                LOCAL_P_HIP(dm_real, term2, c_frag_real.x[2]);
+                LOCAL_P_HIP(dm_imag, term2, c_frag_imag.x[2]);
+                // Store forth result per segment-C
+                IdxType j3 = (laneid & 15);
+                IdxType k3 = (laneid >> 4)+12;
                 const IdxType term3 = get_term(i + j3, p, q, r, s) + SV16IDX(k3);
-                LOCAL_P(sv_real, term3, c_frag_real.x[1]);
-                LOCAL_P(sv_imag, term3, c_frag_imag.x[1]);
+                LOCAL_P_HIP(dm_real, term3, c_frag_real.x[3]);
+                LOCAL_P_HIP(dm_imag, term3, c_frag_imag.x[3]);
             }
             // BARR;
         }
+
 #endif
         __device__ __inline__ void M_GATE(ValType *gm_real, ValType *gm_imag,
                                           const IdxType qubit, const IdxType cur_index)
@@ -947,7 +761,7 @@ namespace NWQSim
             }
             else if (op_name == OP::C4)
             {
-#ifdef HIP_TC_AVAILABLE
+#ifdef FP64_HIPMC_AVAILABLE
                 // TC GATE OPERATIONS
                 if (tensor_core)
                     dm_gpu->C4TCV1_GATE(gm_real, gm_imag, ctrl, qubit, ctrl + (n_qubits), qubit + (n_qubits));

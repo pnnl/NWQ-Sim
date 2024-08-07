@@ -12,7 +12,7 @@ namespace NWQSim{
       FermionOpType typeval;
       IdxType term_index;
     };
-    const std::regex pattern("\\(([\\d\\.e\\+-]+),\\s*([\\d\\.]+)\\)([\\d^\\s]+){0,1}");
+    const std::regex pattern("\\(\\s*([\\d\\.e\\+-]+),\\s*([\\d\\.]+)\\)([\\d^\\s]+){0,1}");
     Hamiltonian::Hamiltonian(std::string input_path, IdxType n_particles, bool xacc_scheme,
                     Transformer transform) {
       std::ifstream input_file(input_path);
@@ -27,6 +27,7 @@ namespace NWQSim{
       std::complex<ValType> coeff;
       std::smatch match;
       IdxType max_index = 0;
+        
       std::queue<FermiArgs> arglist;
       IdxType term_counter = 0;
       ValType energy_constant = 0;
@@ -78,6 +79,7 @@ namespace NWQSim{
       if ((max_index + 1) % 2) {
         throw std::runtime_error("Odd number of spin orbitals");  
       }
+        
       fermi_operators.resize(term_counter);
       IdxType n_spatial_orbitals = (max_index + 1) / 2;
       IdxType n_occ = n_particles / 2;

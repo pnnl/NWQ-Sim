@@ -101,7 +101,7 @@ wget https://developer.download.nvidia.com/compute/redist/nvshmem/2.9.0/source/n
 
 tar -xf nvshmem_src_2.9.0-2.tar.xz
 ```
-* Replace the mem.cpp file in nvshmem_src
+* For NVSHMEM version older than 2.10, replace the mem.cpp file in nvshmem_src
 
 ```bash
 cp ~/NWQ-Sim/nvshmem_util/mem.cpp ~/nvshmem_src_2.9.0-2/src/mem/mem.cpp
@@ -113,6 +113,7 @@ cp ~/NWQ-Sim/nvshmem_util/scripts/build_nvshmem_summit.sh ~/nvshmem_src_2.9.0-2/
 cd ~/nvshmem_src_2.9.0-2
 ./build_nvshmem_summit.sh
 ```
+Note, the current bootstrape of nvshmem on Summit requires gcc 9 or 10. 
 
 Finally, build NWQ-Sim using the steps in [Build from Source](#build_base)
 
@@ -230,7 +231,11 @@ source ~/NWQ-Sim/environment/setup_frontier.sh
 ```
 Launch multi-CPU execution for regular or interactive jobs:
 ```bash
-srun -N<nodes> -n<CPUS> ./qasm/nwq_qasm <NWQ-Sim Command> -backend MPI
+srun -N <nodes> -n <CPUS> ./qasm/nwq_qasm <NWQ-Sim Command> -backend MPI
+```
+For example:
+```bash
+srun -N 4 -n 32 ./qasm/nwq_qasm -backend MPI -q ../data/openqasm/adder_n28.qasm
 ```
 
 ### Running on Summit HPC
@@ -243,6 +248,10 @@ source ~/NWQ-Sim/environment/setup_summit.sh
 Launch multi-GPU execution for regular or interactive jobs:
 ```bash
 jsrun -n<GPUS> -a1 -g1 -c1 -brs <NWQ-Sim Command> -backend NVGPU_MPI
+```
+When using multi-nodes, nvshmem requires the same number of PEs for all nodes. Since each Summit node has 6 GPUs, we need to specify 4 per nodes. An example is given in the following:
+```bash
+jsrun -n 64 -a1 -g1 -c1 -r4 ./qasm/nwq_qasm -q ../data/openqasm/bv_n14.qasm -backend NVGPU_MPI
 ```
 
 Replace <GPUS> with the total number of GPUs, and <NWQ-Sim Command> with the NWQ-Sim execution command.
