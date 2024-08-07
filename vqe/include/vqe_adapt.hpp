@@ -28,8 +28,9 @@ namespace NWQSim {
         gradient_measurement = std::make_shared<Ansatz>(_ans->num_qubits());
       }
       ~AdaptVQE() {
+        size_t index = 0;
         for (auto i: gradient_observables)
-          state->delete_observables(i);
+          state->delete_observables(i, observable_sizes[index++]);
       }
       void commutator(std::vector<PauliOperator>& oplist1, 
                       std::vector<PauliOperator>& oplist2, 

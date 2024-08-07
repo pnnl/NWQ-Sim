@@ -46,9 +46,6 @@ namespace NWQSim
           
         }
         ~VQEState(){
-        for (auto i: obsvec) {
-            delete i;
-        }
       }
         void initialize() {
           const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators(); 
@@ -57,9 +54,10 @@ namespace NWQSim
           obsvec.clear();
           zmasks.clear();
           coeffs.clear();
-          obsvec.resize(pauli_operators.size());
+          allocate_observables(pauli_operators.size());
           zmasks.resize(pauli_operators.size());
           coeffs.resize(pauli_operators.size());
+          std::cout << pauli_operators.size() << std::endl;
           std::vector<IdxType> mapping (ansatz->num_qubits());
           std::iota(mapping.begin(), mapping.end(), 0);
           for (auto& pauli_list: pauli_operators) {
@@ -191,7 +189,10 @@ namespace NWQSim
       virtual void allocate_observables(ObservableList*& observables, IdxType size) {
         observables = new ObservableList[size];
       };
-      virtual void delete_observables(ObservableList* observables) {
+      virtual void allocate_observables(IdxType size) {
+        obsvec.resize(size);
+      };
+      virtual void delete_observables(ObservableList* observables, IdxType size) {
         delete[] observables;
       };
       virtual ValType energy(const std::vector<double>& x) {

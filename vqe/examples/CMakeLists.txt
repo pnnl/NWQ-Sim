@@ -27,17 +27,17 @@ if(CUDAToolkit_FOUND)
             target_compile_definitions(basic_example_cuda_mpi PUBLIC MPI_ENABLED)
             
             
-        add_executable(cuda_bug_reproduce "cuda_bug_reproduce.cu")
+        # add_executable(cuda_bug_reproduce "cuda_bug_reproduce.cu")
         
-        set_source_files_properties("cuda_bug_reproduce.cu" PROPERTIES LANGUAGE CUDA)
+        # set_source_files_properties("cuda_bug_reproduce.cu" PROPERTIES LANGUAGE CUDA)
 
-        target_compile_features(cuda_bug_reproduce PRIVATE cuda_std_17)
-        target_compile_definitions(cuda_bug_reproduce PUBLIC CUDA_ENABLED)
-        set_target_properties(cuda_bug_reproduce PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-        target_link_libraries(cuda_bug_reproduce PUBLIC nvshmem::nvshmem)
-        target_compile_definitions(cuda_bug_reproduce PUBLIC CUDA_MPI_ENABLED)
-            target_link_libraries(cuda_bug_reproduce PUBLIC MPI::MPI_CXX)
-            target_compile_definitions(cuda_bug_reproduce PUBLIC MPI_ENABLED)
+        # target_compile_features(cuda_bug_reproduce PRIVATE cuda_std_17)
+        # target_compile_definitions(cuda_bug_reproduce PUBLIC CUDA_ENABLED)
+        # set_target_properties(cuda_bug_reproduce PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+        # target_link_libraries(cuda_bug_reproduce PUBLIC nvshmem::nvshmem)
+        # target_compile_definitions(cuda_bug_reproduce PUBLIC CUDA_MPI_ENABLED)
+        #     target_link_libraries(cuda_bug_reproduce PUBLIC MPI::MPI_CXX)
+        #     target_compile_definitions(cuda_bug_reproduce PUBLIC MPI_ENABLED)
     endif()
 endif()
 

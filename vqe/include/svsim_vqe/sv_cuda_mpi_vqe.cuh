@@ -30,18 +30,15 @@ namespace NWQSim
         // Pauli term data sizes
         int size;
         MPI_Comm_size(MPI_COMM_WORLD, &size);
-        n_cpus = size;        
-        expvals.resize(1);
-        SAFE_ALOC_GPU(expvals_dev, expvals.size()* sizeof(ValType));
-        // initialize();
+        n_cpus = size;    
       };
       virtual void fill_obslist(IdxType index) override {
         ObservableList obs;
         obs.numterms = zmasks[index].size();
         IdxType isize = obs.numterms * sizeof(IdxType);
         IdxType vsize = obs.numterms * sizeof(ValType);
-        SAFE_ALOC_GPU(obs->zmasks, isize);
-        SAFE_ALOC_GPU(obs->coeffs, vsize);
+        SAFE_ALOC_GPU(obs.zmasks, isize);
+        SAFE_ALOC_GPU(obs.coeffs, vsize);
         cudaSafeCall(cudaMemcpy(obs.zmasks, zmasks[index].data(), isize,
                                     cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(obs.coeffs, coeffs[index].data(), coeffs[index].size() * sizeof(ValType),
@@ -71,15 +68,10 @@ namespace NWQSim
           ansatz->setParams(xparams);
         }
         MPI_Barrier(MPI_COMM_WORLD);
-        cudaSafeCall(cudaMemset(expvals_dev, 0, expvals.size() * sizeof(ValType)));
         reset_state();
         sim(ansatz);
         cudaDeviceSynchronize();
-        cudaSafeCall(cudaMemcpy(expvals.data(), expvals_dev, expvals.size() * sizeof(ValType),
-                                    cudaMemcpyDeviceToHost));
         MPI_Barrier(MPI_COMM_WORLD);
-        std::vector<ValType> temp(expvals.begin(), expvals.end());
-          MPI_Reduce(temp.data(), expvals.data(), expvals.size(), MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
         if (i_proc != 0) {
           stat = WAIT;
         }
@@ -97,6 +89,22 @@ namespace NWQSim
 
       }
       virtual void optimize(std::vector<ValType>& parameters, ValType& final_ene) override {
+          nlopt::opt optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
+          optimizer.set_min_objective(nl_opt_function, (void*)this);
+          std::vector<double> lower_bounds(ansatz->numParams(), -2 * PI);
+          std::vector<double> upper_bounds(ansatz->numParams(), 2 * PI);
+          optimizer.set_lower_bounds(lower_bounds);
+          optimizer.set_upper_bounds(upper_bounds);
+          // Set the termination criteria
+          optimizer.set_maxeval(optimizer_settings.max_evals);
+          optimizer.set_maxtime(optimizer_settings.max_time);
+          optimizer.set_ftol_abs(optimizer_settings.abs_tol);
+          optimizer.set_ftol_rel(optimizer_settings.rel_tol);
+          optimizer.set_stopval(optimizer_settings.stop_val);
+          // Set any specified optimizer parameters
+          for (auto& kv_pair: optimizer_settings.parameter_map) {
+              optimizer.set_param(kv_pair.first.c_str(), kv_pair.second);
+          }
           iteration = 0;
           if (parameters.size() == 0) {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
@@ -117,11 +125,13 @@ namespace NWQSim
       }
       ~SV_CUDA_MPI_VQE()
         {
-          for (auto& obs: obsvec) {
+          cudaSafeCall(cudaMemcpy(obsvals.data(), obsvals_dev, obsvals.size() * sizeof(ObservableList),
+                                    cudaMemcpyDeviceToHost));
+          for (auto& obs: obsvals) {
               SAFE_FREE_GPU(obs.zmasks);
               SAFE_FREE_GPU(obs.coeffs);
           }
-            SAFE_FREE_GPU(expvals_dev);
+          SAFE_FREE_GPU(obsvals_dev);
           for (auto g: *ansatz->gates) {
               if (g.op_name == OP::EXPECT) {
                   SAFE_FREE_GPU(g.data);
@@ -133,10 +143,27 @@ namespace NWQSim
             // SAFE_FREE_HOST_CUDA(randoms);
             // SAFE_FREE_HOST_CUDA(results);
         }
+         virtual void get_exp_values(const std::vector<ObservableList*>& observables, std::vector<IdxType> sizes, std::vector<ValType>& output) override {
+        for (size_t i = 0; i < observables.size(); i++) {
+          std::vector<ObservableList> host_temp(sizes[i]);
+          cudaSafeCall(cudaMemcpy(host_temp.data(), observables[i], sizes[i] * sizeof(ObservableList),
+                                    cudaMemcpyDeviceToHost));
+          
+          for (ObservableList obs: host_temp) {
+            output[i] += obs.exp_output;
+          }
+          // output.at(i) = observables.at(i)->exp_output;
+        }
+      };
+
+      virtual void allocate_observables(ObservableList*& observables, IdxType size) override {
+        SAFE_ALOC_GPU(observables, size * sizeof(ObservableList));
+      };
     protected:
         IdxType n_cpus;
         STATUS stat; 
-        ValType* expvals_dev;
+        ObservableList* obsvals_dev;
+        std::vector<ObservableList> obsvals;
    
   };
 }; // namespace NWQSim

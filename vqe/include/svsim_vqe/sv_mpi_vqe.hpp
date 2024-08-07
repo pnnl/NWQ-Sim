@@ -31,7 +31,6 @@ namespace NWQSim
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
         size_t index = 0;
         size_t curr_ptr = 0;
-        // initialize();
       };
 
       virtual void fill_obslist(IdxType index) override {
@@ -81,6 +80,12 @@ namespace NWQSim
         }
         MPI_Allreduce(temp.data(), output.data(), temp.size(), MPI_DOUBLE, MPI_SUM, comm_global);
       };
+      ~SV_MPI_VQE() {
+
+        for (auto i: obsvec) {
+            delete i;
+        }
+      }
       virtual void call_simulator() override { 
         /**
          * @brief Prepares the trial state and computes the Hamiltonian expectation value

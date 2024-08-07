@@ -764,14 +764,20 @@ namespace NWQSim
         }
         
         
-        __device__ __inline__ void EXP_REDUCE_GATE(ValType* output, IdxType reduce_dim)
+        __device__ __inline__ void EXP_REDUCE_GATE(ValType* output)
         {
             grid_group grid = this_grid();
             
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             // ValType *m_real = m_real;
+            IdxType gridlog2 = 63 - __clzll(blockDim.x * gridDim.x);
+            if (blockDim.x * gridDim.x & ((1 << gridlog2) - 1)) {
+                gridlog2 += 1;
+            }
+            IdxType reduce_limit = 1 << gridlog2;
+            reduce_limit = min(reduce_limit, dim);
             // Parallel reduction
-            for (IdxType k = (reduce_dim >> 1); k > 0; k >>= 1)
+            for (IdxType k = (reduce_limit >> 1); k > 0; k >>= 1)
             {
                 if (tid < k) {
                     m_real[tid] += m_real[tid + k];
@@ -783,8 +789,7 @@ namespace NWQSim
             if (tid == 0)
             {
                 ValType expectation = m_real[0];
-                ValType prev_exp = LOCAL_G_CUDA(output, 0);
-                LOCAL_P_CUDA(output, 0, prev_exp + expectation);
+                LOCAL_P_CUDA(output, 0, expectation);
             }
 
             BARR_CUDA;
@@ -803,7 +808,7 @@ namespace NWQSim
                 Expect_C0(o->zmasks[obs_ind], o->coeffs[obs_ind]);
             }
             BARR_CUDA;
-            EXP_REDUCE_GATE(&o->exp_output, dim);
+            EXP_REDUCE_GATE(&o->exp_output);
         }
 
         __device__ __inline__ void RESET_GATE(const IdxType qubit)

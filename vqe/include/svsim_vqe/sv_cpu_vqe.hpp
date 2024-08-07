@@ -27,7 +27,6 @@ namespace NWQSim
                    OptimizerSettings opt_settings = OptimizerSettings()): 
                                       SV_CPU(a->num_qubits(), configpath),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
-        // initialize();
         /*1.75702 6.23383 0.24862 3.75417 3.40728 0.359146 3.96801 2.66137 5.29208 5.69446 2.65872 4.11879 5.84607 2.16384 1.59979 2.79395 4.96491 4.36946 3.50401 1.80598 
         * 51(0.124291, -2.32453e-16), 
 53(0.0854489, 1.04083e-16), 
@@ -72,8 +71,10 @@ namespace NWQSim
         sim(ansatz);
         sim(measurement);
         for (auto i: obsvec) {
+          std::cout << i->exp_output << std::endl;
           expectation_value += i->exp_output;
         }
+        std::cout << expectation_value << std::endl;
       };
 
       virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) override {    
@@ -149,6 +150,12 @@ namespace NWQSim
           return expectation;
         }       
 
+      ~SV_CPU_VQE() {
+
+        for (auto i: obsvec) {
+            delete i;
+        }
+      }
     };
   };
 } // namespace NWQSim
