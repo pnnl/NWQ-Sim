@@ -36,7 +36,6 @@ namespace NWQSim
         SAFE_ALOC_GPU(obsvals_dev, size * sizeof(ObservableList));
         obsvals.resize(size);
         obsvec.resize(size);
-        std::cout << size << std::endl;
       };
       virtual void fill_obslist(IdxType index) override {
         ObservableList obs;
@@ -69,8 +68,6 @@ namespace NWQSim
         }
       virtual void call_simulator() override {        
         reset_state();
-
-        cudaDeviceSynchronize();
         sim(ansatz);
         sim(measurement);
         cudaDeviceSynchronize();
@@ -82,7 +79,6 @@ namespace NWQSim
           std::cout << o.exp_output << std::endl;
           expectation_value += o.exp_output;
         }
-        std::cout << expectation_value << std::endl;
       };
       virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) override {        
         reset_state();
