@@ -28,7 +28,7 @@ namespace NWQSim
                                       SV_CUDA(a->num_qubits()),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
         // resize the expectation value data structure (to-do, just make a double)
-        initialize(); // initialize ansatz, measurement circuit
+        // initialize(); // initialize ansatz, measurement circuit
         // allocate space for host, device memory for observable lists
         SAFE_ALOC_GPU(obsvals_dev, zmasks.size() * sizeof(ObservableList));
         obsvals_host = new ObservableList[zmasks.size()];

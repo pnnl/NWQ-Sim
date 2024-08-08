@@ -124,7 +124,6 @@ namespace NWQSim
         double temp = expectation_value;
         expectation_value = 0;
         MPI_Allreduce(&temp, &expectation_value, 1, MPI_DOUBLE, MPI_SUM, comm_global);
-        std::cout << expectation_value << std::endl;
         BARR_MPI;
       };
       virtual void process_loop() {
