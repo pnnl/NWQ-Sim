@@ -112,7 +112,7 @@ namespace NWQSim
           // Check if the chosen algorithm requires derivatives
           compute_gradient = std::string(optimizer.get_algorithm_name()).find("no-derivative") == std::string::npos;
           optimizer.set_min_objective(nl_opt_function, (void*)this);
-          std::vector<double> lower_bounds(ansatz->numParams(), 0);
+          std::vector<double> lower_bounds(ansatz->numParams(), -2 * PI);
           std::vector<double> upper_bounds(ansatz->numParams(), 2 * PI);
           optimizer.set_lower_bounds(lower_bounds);
           optimizer.set_upper_bounds(upper_bounds);
