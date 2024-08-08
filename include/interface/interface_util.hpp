@@ -40,8 +40,10 @@ namespace NWQSim
     }
     std::map<OP, std::map<std::string, DMGate>> getBsDMGateSP()
     {
-        Config::readConfigFile();
+        Config::LoadConfigFromFile("../../default_config.json");
+        Config::CUSTOMIZED_SP = false;
         Config::ENABLE_NOISE = true;
+        Config::readConfigFile();
         std::map<OP, std::map<std::string, DMGate>> dm_qubit_gates;
 
         // TODO: Make these parameters can be defined by the users
