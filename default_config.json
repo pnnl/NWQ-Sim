@@ -1,8 +1,10 @@
 {
     "PRINT_SIM_TRACE": true,
     "ENABLE_FUSION": true,
-    "ENABLE_NOISE": false,
+    "ENABLE_NOISE": true,
     "ENABLE_TENSOR_CORE": false,
+    "CUSTOMIZED_SP": true,
     "DEVICE_CONFIG_PATH": "../data/device/",
-    "DEVICE_CONFIG_FILE": "dummy_ibmq15"
+    "DEVICE_CONFIG_FILE": "dummy_ibmq15",
+    "CUSTMOIZED_GATES_FILE": "../include/interface/customized_basis_gates.json"
 }
