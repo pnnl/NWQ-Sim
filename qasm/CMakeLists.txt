@@ -35,8 +35,22 @@ endif()
 if(HIP_FOUND)
     enable_language(HIP)
     set_source_files_properties(${SOURCE_FILE} PROPERTIES LANGUAGE HIP)
-
     # target_compile_features(nwq_qasm PRIVATE hip_std_17)
     target_compile_definitions(nwq_qasm PUBLIC HIP_ENABLED)
+
+    if(rocshmem_FOUND)
+        # If ROC_SHMEM is available, link against it and set the definitions
+        target_include_directories(nwq_qasm PRIVATE rocshmem::rocshmem)
+        #target_link_libraries(nwq_qasm PRIVATE rocshmem::rocshmem hip::host -fgpu-rdc --hipcc-func-supp)
+        target_link_libraries(
+            nwq_qasm
+            PRIVATE
+            rocshmem::rocshmem
+            hip::host
+            -fgpu-rdc
+        )
+
+        target_compile_definitions(nwq_qasm PUBLIC HIP_MPI_ENABLED)
+    endif()
 
 endif()

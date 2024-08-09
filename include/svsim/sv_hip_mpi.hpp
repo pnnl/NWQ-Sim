@@ -6,7 +6,7 @@
 #include "../gate.hpp"
 #include "../circuit.hpp"
 #include "../private/config.hpp"
-#include "../private/hip_util.cuh"
+#include "../private/hip_util.hpp"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
 #include "../circuit_pass/fusion.hpp"
@@ -19,7 +19,6 @@
 #include <string>
 #include <iostream>
 #include <hip/hip_runtime.h>
-#include <mma.h>
 #include <mpi.h>
 
 #include <roc_shmem.hpp>
@@ -28,10 +27,11 @@ namespace NWQSim
 {
     using namespace cooperative_groups;
     using namespace std;
+    using namespace rocshmem;
 
     // Simulation kernel runtime
     class SV_HIP_MPI;
-    __global__ void simulation_kernel_cuda_mpi(SV_HIP_MPI *sv_gpu, IdxType n_gates);
+    __global__ void simulation_kernel_hip_mpi(SV_HIP_MPI *sv_gpu, IdxType n_gates);
 
     class SV_HIP_MPI : public QuantumState
     {
@@ -79,7 +79,7 @@ namespace NWQSim
             sv_imag = (ValType *)roc_shmem_malloc(sv_size_per_gpu);
             m_real = (ValType *)roc_shmem_malloc(sv_size_per_gpu);
             m_imag = (ValType *)roc_shmem_malloc(sv_size_per_gpu);
-            cudaCheckError();
+            hipCheckError();
             gpu_mem += sv_size_per_gpu * 4;
 
             // GPU memory initilization
@@ -149,7 +149,7 @@ namespace NWQSim
             IdxType n_gates = cpu_vec.size();
 
             SV_HIP_MPI *sv_gpu;
-            SAFE_ALOC_GPU(sv_gpu, sizeof(SV_HIP_MPI));
+            SAFE_ALOC_GPU_HIP(sv_gpu, sizeof(SV_HIP_MPI));
 
             // Copy the simulator instance to GPU
             hipSafeCall(hipMemcpy(sv_gpu, this,
@@ -181,10 +181,9 @@ namespace NWQSim
                 MPI_Barrier(MPI_COMM_WORLD);
             sim_timer.start_timer();
 
-            roc_shmem_CHECK(hipLaunchCooperativeKernel((const void *)simulation_kernel_cuda_mpi, gridDim,
-                                                     THREADS_CTA_HIP, args, smem_size, 0));
+            hipSafeCall(hipLaunchCooperativeKernel((const void *)simulation_kernel_hip_mpi, gridDim, THREADS_CTA_HIP, args, smem_size, 0));
+            
             hipSafeCall(hipDeviceSynchronize());
-
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
 
@@ -197,10 +196,10 @@ namespace NWQSim
                 roc_shmem_free(results_gpu);
 
                 SAFE_FREE_HOST_HIP(randoms);
-                SAFE_FREE_GPU(randoms_gpu);
+                SAFE_FREE_GPU_HIP(randoms_gpu);
             }
 
-            cudaCheckError();
+            hipCheckError();
 
             if (Config::PRINT_SIM_TRACE)
             {
@@ -224,7 +223,7 @@ namespace NWQSim
                 }
             }
 
-            SAFE_FREE_GPU(sv_gpu);
+            SAFE_FREE_GPU_HIP(sv_gpu);
         }
 
         IdxType *get_results() override
@@ -237,13 +236,13 @@ namespace NWQSim
             // copy these vectors to device
             size_t *in_bits_gpu;
 
-            SAFE_ALOC_GPU(in_bits_gpu, in_bits.size() * sizeof(size_t));
+            SAFE_ALOC_GPU_HIP(in_bits_gpu, in_bits.size() * sizeof(size_t));
             hipSafeCall(hipMemcpy(in_bits_gpu, in_bits.data(), in_bits.size() * sizeof(size_t), hipMemcpyHostToDevice));
 
             // result
             double result = 0.0;
             double *result_gpu;
-            SAFE_ALOC_GPU(result_gpu, sizeof(ValType));
+            SAFE_ALOC_GPU_HIP(result_gpu, sizeof(ValType));
             hipSafeCall(hipMemcpy(result_gpu, &result, sizeof(double), hipMemcpyHostToDevice));
 
             // call kernel
@@ -257,8 +256,8 @@ namespace NWQSim
             // copy result back
             hipSafeCall(hipMemcpy(&result, result_gpu, sizeof(ValType), hipMemcpyDeviceToHost));
 
-            SAFE_FREE_GPU(in_bits_gpu);
-            SAFE_FREE_GPU(result_gpu);
+            SAFE_FREE_GPU_HIP(in_bits_gpu);
+            SAFE_FREE_GPU_HIP(result_gpu);
 
             double final_result;
             MPI_Allreduce(&result, &final_result, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
@@ -271,7 +270,7 @@ namespace NWQSim
             // result
             double result = 0.0;
             double *result_gpu;
-            SAFE_ALOC_GPU(result_gpu, sizeof(double));
+            SAFE_ALOC_GPU_HIP(result_gpu, sizeof(double));
             hipSafeCall(hipMemcpy(result_gpu, &result, sizeof(double), hipMemcpyHostToDevice));
 
             // call kernel
@@ -285,7 +284,7 @@ namespace NWQSim
             // copy result back
             hipSafeCall(hipMemcpy(&result, result_gpu, sizeof(double), hipMemcpyDeviceToHost));
 
-            SAFE_FREE_GPU(result_gpu);
+            SAFE_FREE_GPU_HIP(result_gpu);
 
             double final_result;
             MPI_Allreduce(&result, &final_result, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
@@ -407,8 +406,8 @@ namespace NWQSim
             size_t vec_size = cpu_vec.size() * sizeof(SVGate);
 
             // Allocate memory on GPU
-            SAFE_FREE_GPU(gates_gpu);
-            SAFE_ALOC_GPU(gates_gpu, vec_size);
+            SAFE_FREE_GPU_HIP(gates_gpu);
+            SAFE_ALOC_GPU_HIP(gates_gpu, vec_size);
             hipSafeCall(hipMemcpy(gates_gpu, cpu_vec.data(), vec_size, hipMemcpyHostToDevice));
         }
 
@@ -440,7 +439,7 @@ namespace NWQSim
                 for (IdxType i = 0; i < n_measures; i++)
                     randoms[i] = uni_dist(rng);
 
-                SAFE_ALOC_GPU(randoms_gpu, sizeof(ValType) * n_measures);
+                SAFE_ALOC_GPU_HIP(randoms_gpu, sizeof(ValType) * n_measures);
                 hipSafeCall(hipMemcpy(randoms_gpu, randoms,
                                         sizeof(ValType) * n_measures, hipMemcpyHostToDevice));
             }
@@ -481,11 +480,12 @@ namespace NWQSim
         /** The C1V1 version relies on bidirectional communication between each GPU pair. However, on Perlmutter ss11 with the recent slingshot-V2 upgrade, bidirectional communication
           encounters a bug. If that is the case, we use C1V2.
         */
-        __device__ __inline__ void C1V1_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit)
+        __device__ __inline__ void C1V1_GATE(roc_shmem_ctx_t* p_ctx, const ValType *gm_real, const ValType *gm_imag, const IdxType qubit)
         {
             grid_group grid = this_grid();
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType per_pe_work = ((half_dim) >> (gpu_scale));
+            const IdxType per_pe_bytes = per_pe_work * sizeof(ValType);
 
             if (qubit < lg2_m_gpu)
             {
@@ -505,8 +505,10 @@ namespace NWQSim
                     sv_imag_pos0 = sv_imag;
                     sv_real_pos1 = m_real;
                     sv_imag_pos1 = m_imag;
-                    if (tid == 0) roc_shmem_ctx_getmem(ctx, sv_real_pos1, sv_real, per_pe_work, pair_gpu);
-                    if (tid == 0) roc_shmem_ctx_getmem(ctx, sv_imag_pos1, sv_imag, per_pe_work, pair_gpu);
+                    if (tid == 0) roc_shmem_ctx_getmem(*p_ctx, sv_real_pos1, sv_real, 
+                            per_pe_bytes, pair_gpu);
+                    if (tid == 0) roc_shmem_ctx_getmem(*p_ctx, sv_imag_pos1, sv_imag, 
+                            per_pe_bytes, pair_gpu);
                 }
                 else // copy left to local
                 {
@@ -514,10 +516,12 @@ namespace NWQSim
                     sv_imag_pos0 = m_imag;
                     sv_real_pos1 = &sv_real[per_pe_work];
                     sv_imag_pos1 = &sv_imag[per_pe_work];
-                    if (tid == 0) roc_shmem_ctx_getmem(ctx, sv_real_pos0, &sv_real[per_pe_work], per_pe_work, pair_gpu);
-                    if (tid == 0) roc_shmem_ctx_getmem(ctx, sv_imag_pos0, &sv_imag[per_pe_work], per_pe_work, pair_gpu);
+                    if (tid == 0) roc_shmem_ctx_getmem(*p_ctx, sv_real_pos0, 
+                            &sv_real[per_pe_work], per_pe_bytes, pair_gpu);
+                    if (tid == 0) roc_shmem_ctx_getmem(*p_ctx, sv_imag_pos0,
+                            &sv_imag[per_pe_work], per_pe_bytes, pair_gpu);
                 }
-                grid.sync();
+                BARR_ROC_SHMEM;
                 for (IdxType i = tid; i < per_pe_work; i += blockDim.x * gridDim.x)
                 {
                     const ValType el0_real = LOCAL_G_HIP_MPI(sv_real_pos0, i);
@@ -536,16 +540,27 @@ namespace NWQSim
                 grid.sync();
                 if (flag == 0) // copy local to right
                 {
-                    if (tid == 0) roc_shmem_ctx_putmem(ctx, sv_real, sv_real_pos1, per_pe_work, pair_gpu);
-                    if (tid == 0) roc_shmem_ctx_putmem(ctx, sv_imag, sv_imag_pos1, per_pe_work, pair_gpu);
+                    if (tid == 0)
+                    {
+                        roc_shmem_ctx_putmem(*p_ctx, sv_real, 
+                                sv_real_pos1, per_pe_bytes, pair_gpu); 
+                        roc_shmem_ctx_putmem(*p_ctx, sv_imag, 
+                                sv_imag_pos1, per_pe_bytes, pair_gpu);
+                        roc_shmem_ctx_quiet(*p_ctx);
+                    }
                 }
                 else // copy local to left
                 {
                     if (tid == 0)
-                        roc_shmem_ctx_putmem(ctx, &sv_real[per_pe_work], sv_real_pos0, per_pe_work, pair_gpu);
-                    if (tid == 0)
-                        roc_shmem_ctx_putmem(ctx, &sv_imag[per_pe_work], sv_imag_pos0, per_pe_work, pair_gpu);
+                    {
+                        roc_shmem_ctx_putmem(*p_ctx, &sv_real[per_pe_work], 
+                                sv_real_pos0, per_pe_bytes, pair_gpu);
+                        roc_shmem_ctx_putmem(*p_ctx, &sv_imag[per_pe_work], 
+                                sv_imag_pos0, per_pe_bytes, pair_gpu);
+                        roc_shmem_ctx_quiet(*p_ctx);
+                    }
                 }
+                BARR_ROC_SHMEM;
             }
         }
 
@@ -557,6 +572,7 @@ namespace NWQSim
             grid_group grid = this_grid();
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType per_pe_work = ((dim) >> (gpu_scale));
+            const IdxType per_pe_bytes = per_pe_work * sizeof(ValType);
 
             if (qubit < lg2_m_gpu)
             {
@@ -564,37 +580,47 @@ namespace NWQSim
             }
             else
             {
+                BARR_ROC_SHMEM;
                 IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (qubit - (lg2_m_gpu)));
-                if (i_proc > pair_gpu) return;
-                ValType *sv_real_remote = m_real;
-                ValType *sv_imag_remote = m_imag;
-                if (tid == 0)
-                    roc_shmem_ctx_getmem(*p_ctx, sv_real_remote, sv_real, per_pe_work, pair_gpu);
-                if (tid == 0)
-                    roc_shmem_ctx_getmem(*p_ctx, sv_imag_remote, sv_imag, per_pe_work, pair_gpu);
-                grid.sync();
-
-                for (IdxType i = tid; i < per_pe_work; i += blockDim.x * gridDim.x)
+                if (i_proc < pair_gpu && tid == 0)
                 {
-                    const ValType el0_real = LOCAL_G_HIP_MPI(sv_real, i);
-                    const ValType el0_imag = LOCAL_G_HIP_MPI(sv_imag, i);
-                    const ValType el1_real = LOCAL_G_HIP_MPI(sv_real_remote, i);
-                    const ValType el1_imag = LOCAL_G_HIP_MPI(sv_imag_remote, i);
+                    roc_shmem_ctx_getmem(*p_ctx, m_real, sv_real, per_pe_bytes, pair_gpu);
+                    roc_shmem_ctx_quiet(*p_ctx);
+                    roc_shmem_ctx_getmem(*p_ctx, m_imag, sv_imag, per_pe_bytes, pair_gpu);
+                    roc_shmem_ctx_quiet(*p_ctx);
+                }
+                BARR_ROC_SHMEM;
 
-                    ValType real_pos0 = (gm_real[0] * el0_real) - (gm_imag[0] * el0_imag) + (gm_real[1] * el1_real) - (gm_imag[1] * el1_imag);
-                    ValType imag_pos0 = (gm_real[0] * el0_imag) + (gm_imag[0] * el0_real) + (gm_real[1] * el1_imag) + (gm_imag[1] * el1_real);
-                    ValType real_pos1 = (gm_real[2] * el0_real) - (gm_imag[2] * el0_imag) + (gm_real[3] * el1_real) - (gm_imag[3] * el1_imag);
-                    ValType imag_pos1 = (gm_real[2] * el0_imag) + (gm_imag[2] * el0_real) + (gm_real[3] * el1_imag) + (gm_imag[3] * el1_real);
-                    LOCAL_P_HIP_MPI(sv_real, i, real_pos0);
-                    LOCAL_P_HIP_MPI(sv_imag, i, imag_pos0);
-                    LOCAL_P_HIP_MPI(sv_real_remote, i, real_pos1);
-                    LOCAL_P_HIP_MPI(sv_imag_remote, i, imag_pos1);
+                if (i_proc < pair_gpu)
+                {
+                    for (IdxType i = tid; i < per_pe_work; i += blockDim.x * gridDim.x)
+                    {
+                        const ValType el0_real = LOCAL_G_HIP_MPI(sv_real, i);
+                        const ValType el0_imag = LOCAL_G_HIP_MPI(sv_imag, i);
+                        const ValType el1_real = LOCAL_G_HIP_MPI(m_real, i);
+                        const ValType el1_imag = LOCAL_G_HIP_MPI(m_imag, i);
+
+                        ValType real_pos0 = (gm_real[0] * el0_real) - (gm_imag[0] * el0_imag) + (gm_real[1] * el1_real) - (gm_imag[1] * el1_imag);
+                        ValType imag_pos0 = (gm_real[0] * el0_imag) + (gm_imag[0] * el0_real) + (gm_real[1] * el1_imag) + (gm_imag[1] * el1_real);
+                        ValType real_pos1 = (gm_real[2] * el0_real) - (gm_imag[2] * el0_imag) + (gm_real[3] * el1_real) - (gm_imag[3] * el1_imag);
+                        ValType imag_pos1 = (gm_real[2] * el0_imag) + (gm_imag[2] * el0_real) + (gm_real[3] * el1_imag) + (gm_imag[3] * el1_real);
+                        LOCAL_P_HIP_MPI(sv_real, i, real_pos0);
+                        LOCAL_P_HIP_MPI(sv_imag, i, imag_pos0);
+                        LOCAL_P_HIP_MPI(m_real, i, real_pos1);
+                        LOCAL_P_HIP_MPI(m_imag, i, imag_pos1);
+                    }
                 }
                 grid.sync();
-                if (tid == 0)
-                    roc_shmem_ctx_putmem(*p_ctx, sv_real, sv_real_remote, per_pe_work, pair_gpu);
-                if (tid == 0)
-                    roc_shmem_ctx_putmem(*p_ctx, sv_imag, sv_imag_remote, per_pe_work, pair_gpu);
+                BARR_ROC_SHMEM;
+
+                if (i_proc < pair_gpu && tid == 0)
+                {
+                    roc_shmem_ctx_putmem(*p_ctx, sv_real, m_real, per_pe_bytes, pair_gpu);
+                    roc_shmem_ctx_quiet(*p_ctx);
+                    roc_shmem_ctx_putmem(*p_ctx, sv_imag, m_imag, per_pe_bytes, pair_gpu);
+                    roc_shmem_ctx_quiet(*p_ctx);
+                }
+                BARR_ROC_SHMEM;
             }
         }
 
@@ -665,6 +691,7 @@ namespace NWQSim
                 const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1)
         {
             assert(qubit0 != qubit1); // Non-cloning
+            grid_group grid = this_grid();
 
             if (qubit0 < lg2_m_gpu && qubit1 < lg2_m_gpu)
             {
@@ -681,85 +708,93 @@ namespace NWQSim
                 // Therefore, here it is gpu_scale+1 not gpu_scale+2
                 const IdxType per_pe_work = ((dim) >> (gpu_scale + 1));
                 const IdxType per_pe_num = ((dim) >> (gpu_scale));
+                const IdxType per_pe_bytes = per_pe_num * sizeof(ValType);
                 const IdxType p = min(qubit0, qubit1);
                 const IdxType q = max(qubit0, qubit1);
 
                 // load data from pair GPU
                 IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (q - (lg2_m_gpu)));
-                if (i_proc > pair_gpu) return;
-                ValType *sv_real_remote = m_real;
-                ValType *sv_imag_remote = m_imag;
-                if (tid == 0)
-                    roc_shmem_ctx_getmem(*p_ctx, sv_real_remote, sv_real, per_pe_num, pair_gpu);
-                if (tid == 0)
-                    roc_shmem_ctx_getmem(*p_ctx, sv_imag_remote, sv_imag, per_pe_num, pair_gpu);
-                grid.sync();
 
-                for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
-                     i += blockDim.x * gridDim.x)
+                if (i_proc < pair_gpu && tid == 0)
                 {
-                    ValType el_real[4];
-                    ValType el_imag[4];
-                    ValType res_real[4] = {0};
-                    ValType res_imag[4] = {0};
-                    const IdxType term0 = MOD2E(i, p);
-                    const IdxType term1 = MOD2E(DIV2E(i, p), q - p - 1) * EXP2E(p + 1);
-                    const IdxType term2 = DIV2E(DIV2E(i, p), q - p - 1) * EXP2E(q + 1);
-                    const IdxType term = term2 + term1 + term0;
-                    el_real[0] = LOCAL_G_HIP_MPI(sv_real, term + SV4IDX(0));
-                    el_imag[0] = LOCAL_G_HIP_MPI(sv_imag, term + SV4IDX(0));
-                    el_real[3] = LOCAL_G_HIP_MPI(sv_real_remote, term + SV4IDX(3));
-                    el_imag[3] = LOCAL_G_HIP_MPI(sv_imag_remote, term + SV4IDX(3));
+                    roc_shmem_ctx_getmem(*p_ctx, m_real, sv_real, per_pe_bytes, pair_gpu);
+                    roc_shmem_ctx_getmem(*p_ctx, m_imag, sv_imag, per_pe_bytes, pair_gpu);
+                }
+                BARR_ROC_SHMEM;
 
-                    if (qubit0 == q) // qubit0 is the remote qubit
+                if (i_proc < pair_gpu)
+                {
+                    for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
+                            i += blockDim.x * gridDim.x)
                     {
-                        el_real[1] = LOCAL_G_HIP_MPI(sv_real, term + SV4IDX(1));
-                        el_imag[1] = LOCAL_G_HIP_MPI(sv_imag, term + SV4IDX(1));
-                        el_real[2] = LOCAL_G_HIP_MPI(sv_real_remote, term + SV4IDX(2));
-                        el_imag[2] = LOCAL_G_HIP_MPI(sv_imag_remote, term + SV4IDX(2));
-                    }
-                    else // qubit1 is the remote qubit
-                    {
-                        el_real[1] = LOCAL_G_HIP_MPI(sv_real_remote, term + SV4IDX(1));
-                        el_imag[1] = LOCAL_G_HIP_MPI(sv_imag_remote, term + SV4IDX(1));
-                        el_real[2] = LOCAL_G_HIP_MPI(sv_real, term + SV4IDX(2));
-                        el_imag[2] = LOCAL_G_HIP_MPI(sv_imag, term + SV4IDX(2));
-                    }
-#pragma unroll
-                    for (unsigned j = 0; j < 4; j++)
-                    {
-#pragma unroll
-                        for (unsigned k = 0; k < 4; k++)
+                        ValType el_real[4];
+                        ValType el_imag[4];
+                        ValType res_real[4] = {0};
+                        ValType res_imag[4] = {0};
+                        const IdxType term0 = MOD2E(i, p);
+                        const IdxType term1 = MOD2E(DIV2E(i, p), q - p - 1) * EXP2E(p + 1);
+                        const IdxType term2 = DIV2E(DIV2E(i, p), q - p - 1) * EXP2E(q + 1);
+                        const IdxType term = term2 + term1 + term0;
+                        el_real[0] = LOCAL_G_HIP_MPI(sv_real, term + SV4IDX(0));
+                        el_imag[0] = LOCAL_G_HIP_MPI(sv_imag, term + SV4IDX(0));
+                        el_real[3] = LOCAL_G_HIP_MPI(m_real, term + SV4IDX(3));
+                        el_imag[3] = LOCAL_G_HIP_MPI(m_imag, term + SV4IDX(3));
+
+                        if (qubit0 == q) // qubit0 is the remote qubit
                         {
-                            res_real[j] += (el_real[k] * gm_real[j * 4 + k]) - (el_imag[k] * gm_imag[j * 4 + k]);
-                            res_imag[j] += (el_real[k] * gm_imag[j * 4 + k]) + (el_imag[k] * gm_real[j * 4 + k]);
+                            el_real[1] = LOCAL_G_HIP_MPI(sv_real, term + SV4IDX(1));
+                            el_imag[1] = LOCAL_G_HIP_MPI(sv_imag, term + SV4IDX(1));
+                            el_real[2] = LOCAL_G_HIP_MPI(m_real, term + SV4IDX(2));
+                            el_imag[2] = LOCAL_G_HIP_MPI(m_imag, term + SV4IDX(2));
+                        }
+                        else // qubit1 is the remote qubit
+                        {
+                            el_real[1] = LOCAL_G_HIP_MPI(m_real, term + SV4IDX(1));
+                            el_imag[1] = LOCAL_G_HIP_MPI(m_imag, term + SV4IDX(1));
+                            el_real[2] = LOCAL_G_HIP_MPI(sv_real, term + SV4IDX(2));
+                            el_imag[2] = LOCAL_G_HIP_MPI(sv_imag, term + SV4IDX(2));
+                        }
+#pragma unroll
+                        for (unsigned j = 0; j < 4; j++)
+                        {
+#pragma unroll
+                            for (unsigned k = 0; k < 4; k++)
+                            {
+                                res_real[j] += (el_real[k] * gm_real[j * 4 + k]) 
+                                    - (el_imag[k] * gm_imag[j * 4 + k]);
+                                res_imag[j] += (el_real[k] * gm_imag[j * 4 + k]) 
+                                    + (el_imag[k] * gm_real[j * 4 + k]);
+                            }
+                        }
+                        LOCAL_P_HIP_MPI(sv_real, term + SV4IDX(0), res_real[0]);
+                        LOCAL_P_HIP_MPI(sv_imag, term + SV4IDX(0), res_imag[0]);
+                        LOCAL_P_HIP_MPI(m_real, term + SV4IDX(3), res_real[3]);
+                        LOCAL_P_HIP_MPI(m_imag, term + SV4IDX(3), res_imag[3]);
+
+                        if (qubit0 == q) // qubit0 is the remote qubit
+                        {
+                            LOCAL_P_HIP_MPI(sv_real, term + SV4IDX(1), res_real[1]);
+                            LOCAL_P_HIP_MPI(sv_imag, term + SV4IDX(1), res_imag[1]);
+                            LOCAL_P_HIP_MPI(m_real, term + SV4IDX(2), res_real[2]);
+                            LOCAL_P_HIP_MPI(m_imag, term + SV4IDX(2), res_imag[2]);
+                        }
+                        else // qubit1 is the remote qubit
+                        {
+                            LOCAL_P_HIP_MPI(m_real, term + SV4IDX(1), res_real[1]);
+                            LOCAL_P_HIP_MPI(m_imag, term + SV4IDX(1), res_imag[1]);
+                            LOCAL_P_HIP_MPI(sv_real, term + SV4IDX(2), res_real[2]);
+                            LOCAL_P_HIP_MPI(sv_imag, term + SV4IDX(2), res_imag[2]);
                         }
                     }
-                    LOCAL_P_HIP_MPI(sv_real, term + SV4IDX(0), res_real[0]);
-                    LOCAL_P_HIP_MPI(sv_imag, term + SV4IDX(0), res_imag[0]);
-                    LOCAL_P_HIP_MPI(sv_real_remote, term + SV4IDX(3), res_real[3]);
-                    LOCAL_P_HIP_MPI(sv_imag_remote, term + SV4IDX(3), res_imag[3]);
-
-                    if (qubit0 == q) // qubit0 is the remote qubit
-                    {
-                        LOCAL_P_HIP_MPI(sv_real, term + SV4IDX(1), res_real[1]);
-                        LOCAL_P_HIP_MPI(sv_imag, term + SV4IDX(1), res_imag[1]);
-                        LOCAL_P_HIP_MPI(sv_real_remote, term + SV4IDX(2), res_real[2]);
-                        LOCAL_P_HIP_MPI(sv_imag_remote, term + SV4IDX(2), res_imag[2]);
-                    }
-                    else // qubit1 is the remote qubit
-                    {
-                        LOCAL_P_HIP_MPI(sv_real_remote, term + SV4IDX(1), res_real[1]);
-                        LOCAL_P_HIP_MPI(sv_imag_remote, term + SV4IDX(1), res_imag[1]);
-                        LOCAL_P_HIP_MPI(sv_real, term + SV4IDX(2), res_real[2]);
-                        LOCAL_P_HIP_MPI(sv_imag, term + SV4IDX(2), res_imag[2]);
-                    }
                 }
-                grid.sync();
-                if (tid == 0)
-                    roc_shmem_ctx_putmem(*p_ctx, sv_real, sv_real_remote, per_pe_num, pair_gpu);
-                if (tid == 0)
-                    roc_shmem_ctx_putmem(*p_ctx, sv_imag, sv_imag_remote, per_pe_num, pair_gpu);
+                BARR_ROC_SHMEM;
+                if (i_proc < pair_gpu && tid == 0)
+                {
+                    roc_shmem_ctx_putmem(*p_ctx, sv_real, m_real, per_pe_bytes, pair_gpu);
+                    roc_shmem_ctx_putmem(*p_ctx, sv_imag, m_imag, per_pe_bytes, pair_gpu);
+                    roc_shmem_ctx_quiet(*p_ctx);
+                }
+                BARR_ROC_SHMEM;
             }
         }
 
@@ -798,7 +833,9 @@ namespace NWQSim
             }
 
             if (tid == 0 && i_proc != 0)
+            {
                 m_real[0] = PGAS_G(m_real, 0);
+            }
             grid.sync();
             ValType prob_of_one = m_real[0];
             grid.sync();
@@ -855,6 +892,13 @@ namespace NWQSim
                 m_real[i] = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
             }
             BARR_ROC_SHMEM;
+            //if (tid == 0)
+            //{
+                //printf("\n GPU:-%llu: \n",i_proc);
+                //for (IdxType r=0; r<m_gpu; r++)
+                    //printf("%lf ",m_real[r]);
+                //printf("\n");
+            //}
 
             // Parallel prefix sum
             for (IdxType d = 0; d < (n_qubits); d++)
@@ -871,6 +915,7 @@ namespace NWQSim
                     }
                 }
                 BARR_ROC_SHMEM;
+
             }
 
             if (i_proc == (n_gpus - 1) && tid == 0) // last GPU
@@ -897,12 +942,12 @@ namespace NWQSim
                         ValType tmp = PGAS_G(m_real, remote_idx);
                         ValType tmp2 = m_real[local_idx];
                         PGAS_P(m_real, remote_idx, tmp2);
+                        roc_shmem_ctx_quiet(*p_ctx);
                         m_real[local_idx] = tmp + tmp2;
                     }
                 }
                 BARR_ROC_SHMEM;
             }
-
             for (IdxType j = tid; j < n_size; j += blockDim.x * gridDim.x)
             {
                 IdxType local_gpu = j >> (lg2_m_gpu);
@@ -914,24 +959,33 @@ namespace NWQSim
                     {
                         ValType r = randoms_gpu[cur_index + i];
                         if (lower <= r && r < upper)
-                            roc_shmem_longlong_p(&results_gpu[cur_index + i], j, 0);
+                        {
+                            if (i_proc == 0)
+                            {
+                                results_gpu[cur_index+i] = j;
+                            }
+                            else
+                            {
+                                roc_shmem_ctx_longlong_p(*p_ctx, &results_gpu[cur_index + i], j, 0);
+                                roc_shmem_ctx_quiet(*p_ctx);
+                            }
+                        }
                     }
                 }
             }
-
             BARR_ROC_SHMEM;
             if (i_proc != 0 && tid == 0)
-                roc_shmem_getmem(results_gpu, results_gpu, repetition, 0);
+                roc_shmem_ctx_getmem(*p_ctx, results_gpu, results_gpu,
+                        repetition*sizeof(IdxType), 0);
             BARR_ROC_SHMEM;
         }
 
-        __device__ __inline__ void MAV1_GATE(const IdxType repetition, const IdxType cur_index)
+        __device__ __inline__ void MAV1_GATE(roc_shmem_ctx_t* p_ctx, const IdxType repetition, 
+                const IdxType cur_index)
         {
             grid_group grid = this_grid();
             const IdxType n_size = (IdxType)1 << (n_qubits);
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
-            // ValType *m_real = m_real;
-            // ValType *m_imag = m_imag;
             for (IdxType i = tid; i < m_gpu; i += blockDim.x * gridDim.x)
             {
                 m_real[i] = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
@@ -1000,13 +1054,24 @@ namespace NWQSim
                     {
                         ValType r = randoms_gpu[cur_index + i];
                         if (lower <= r && r < upper)
-                            roc_shmem_longlong_p(&results_gpu[cur_index + i], j, 0);
+                        {
+                            if (i_proc == 0)
+                            {
+                                results_gpu[cur_index+i] = j;
+                            }
+                            else
+                            {
+                                roc_shmem_ctx_longlong_p(*p_ctx, &results_gpu[cur_index + i], j, 0);
+                                roc_shmem_ctx_quiet(*p_ctx);
+                            }
+                        }
                     }
                 }
             }
             BARR_ROC_SHMEM;
             if (i_proc != 0 && tid == 0)
-                roc_shmem_getmem(results_gpu, results_gpu, repetition, 0);
+                roc_shmem_ctx_getmem(*p_ctx, results_gpu, results_gpu, 
+                        repetition*sizeof(IdxType), 0);
             BARR_ROC_SHMEM;
         }
 
@@ -1015,6 +1080,7 @@ namespace NWQSim
             grid_group grid = this_grid();
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType per_pe_work = ((dim) >> (gpu_scale));
+            const IdxType per_pe_bytes = per_pe_work * sizeof(ValType); 
             // ValType *m_real = m_real;
             IdxType mask = ((IdxType)1 << qubit);
 
@@ -1044,7 +1110,10 @@ namespace NWQSim
             }
 
             if (tid == 0 && i_proc != 0)
+            {
                 m_real[0] = PGAS_G(m_real, 0);
+                roc_shmem_ctx_quiet(*p_ctx);
+            }
             grid.sync();
             ValType prob_of_one = m_real[0];
             grid.sync();
@@ -1076,9 +1145,9 @@ namespace NWQSim
                     ValType *sv_real_remote = m_real;
                     ValType *sv_imag_remote = m_imag;
                     if (tid == 0)
-                        roc_shmem_ctx_getmem(ctx, sv_real_remote, sv_real, per_pe_work, pair_gpu);
+                        roc_shmem_ctx_getmem(*p_ctx, sv_real_remote, sv_real, per_pe_bytes, pair_gpu);
                     if (tid == 0)
-                        roc_shmem_ctx_getmem(ctx, sv_imag_remote, sv_imag, per_pe_work, pair_gpu);
+                        roc_shmem_ctx_getmem(*p_ctx, sv_imag_remote, sv_imag, per_pe_bytes, pair_gpu);
                     BARR_ROC_SHMEM;
                     for (IdxType i = tid; i < m_gpu; i += blockDim.x * gridDim.x)
                     {
@@ -1124,101 +1193,158 @@ namespace NWQSim
             // Therefore, here it is gpu_scale+1 not gpu_scale+2
             const IdxType per_pe_work = ((dim) >> (gpu_scale + 1));
             const IdxType per_pe_num = ((dim) >> (gpu_scale));
+            const IdxType per_pe_bytes = per_pe_num * sizeof(ValType);
             const IdxType p = min(qubit0, qubit1);
             const IdxType q = max(qubit0, qubit1);
             // load data from pair GPU
             IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (q - (lg2_m_gpu)));
-            if (i_proc > pair_gpu) return;
-            ValType *sv_real_remote = m_real;
-            ValType *sv_imag_remote = m_imag;
-            if (tid == 0)
-                roc_shmem_ctx_getmem(*p_ctx, sv_real_remote, sv_real, per_pe_num, pair_gpu);
-            if (tid == 0)
-                roc_shmem_ctx_getmem(*p_ctx, sv_imag_remote, sv_imag, per_pe_num, pair_gpu);
-            grid.sync();
-
-            for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
-                 i += blockDim.x * gridDim.x)
+            if (i_proc < pair_gpu && tid == 0)
             {
-                ValType el_real[4];
-                ValType el_imag[4];
-                ValType res_real[4] = {0};
-                ValType res_imag[4] = {0};
-                const IdxType term0 = MOD2E(i, p);
-                const IdxType term1 = MOD2E(DIV2E(i, p), q - p - 1) * EXP2E(p + 1);
-                const IdxType term2 = DIV2E(DIV2E(i, p), q - p - 1) * EXP2E(q + 1);
-                const IdxType term = term2 + term1 + term0;
+                roc_shmem_ctx_getmem(*p_ctx, m_real, sv_real, per_pe_bytes, pair_gpu);
+                roc_shmem_ctx_getmem(*p_ctx, m_imag, sv_imag, per_pe_bytes, pair_gpu);
+            }
+            BARR_ROC_SHMEM;
 
-                el_real[1] = LOCAL_G_HIP_MPI(sv_real_remote, term + SV4IDX(1));
-                el_imag[1] = LOCAL_G_HIP_MPI(sv_imag_remote, term + SV4IDX(1));
-                el_real[2] = LOCAL_G_HIP_MPI(sv_real, term + SV4IDX(2));
-                el_imag[2] = LOCAL_G_HIP_MPI(sv_imag, term + SV4IDX(2));
+            if (i_proc < pair_gpu)
+            {
+                for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
+                        i += blockDim.x * gridDim.x)
+                {
+                    ValType el_real[4];
+                    ValType el_imag[4];
+                    ValType res_real[4] = {0};
+                    ValType res_imag[4] = {0};
+                    const IdxType term0 = MOD2E(i, p);
+                    const IdxType term1 = MOD2E(DIV2E(i, p), q - p - 1) * EXP2E(p + 1);
+                    const IdxType term2 = DIV2E(DIV2E(i, p), q - p - 1) * EXP2E(q + 1);
+                    const IdxType term = term2 + term1 + term0;
 
-                res_real[1] = el_real[2];
-                res_imag[1] = el_imag[2];
-                res_real[2] = el_real[1];
-                res_imag[2] = el_imag[1];
+                    el_real[1] = LOCAL_G_HIP_MPI(m_real, term + SV4IDX(1));
+                    el_imag[1] = LOCAL_G_HIP_MPI(m_imag, term + SV4IDX(1));
+                    el_real[2] = LOCAL_G_HIP_MPI(sv_real, term + SV4IDX(2));
+                    el_imag[2] = LOCAL_G_HIP_MPI(sv_imag, term + SV4IDX(2));
 
-                LOCAL_P_HIP_MPI(sv_real_remote, term + SV4IDX(1), res_real[1]);
-                LOCAL_P_HIP_MPI(sv_imag_remote, term + SV4IDX(1), res_imag[1]);
-                LOCAL_P_HIP_MPI(sv_real, term + SV4IDX(2), res_real[2]);
-                LOCAL_P_HIP_MPI(sv_imag, term + SV4IDX(2), res_imag[2]);
+                    res_real[1] = el_real[2];
+                    res_imag[1] = el_imag[2];
+                    res_real[2] = el_real[1];
+                    res_imag[2] = el_imag[1];
+
+                    LOCAL_P_HIP_MPI(m_real, term + SV4IDX(1), res_real[1]);
+                    LOCAL_P_HIP_MPI(m_imag, term + SV4IDX(1), res_imag[1]);
+                    LOCAL_P_HIP_MPI(sv_real, term + SV4IDX(2), res_real[2]);
+                    LOCAL_P_HIP_MPI(sv_imag, term + SV4IDX(2), res_imag[2]);
+                }
             }
             grid.sync();
-            if (tid == 0)
-                roc_shmem_ctx_putmem(*p_ctx, sv_real, sv_real_remote, per_pe_num, pair_gpu);
-            if (tid == 0)
-                roc_shmem_ctx_putmem(*p_ctx, sv_imag, sv_imag_remote, per_pe_num, pair_gpu);
+            if (i_proc < pair_gpu && tid == 0)
+            {
+                roc_shmem_ctx_putmem(*p_ctx, sv_real, m_real, per_pe_bytes, pair_gpu);
+                roc_shmem_ctx_putmem(*p_ctx, sv_imag, m_imag, per_pe_bytes, pair_gpu);
+                roc_shmem_ctx_quiet(*p_ctx);
+            }
         }
 
-        __device__ __inline__ void Purity_Check(const IdxType t)
+        __device__ __inline__ void Purity_Check(roc_shmem_ctx_t* p_ctx, const IdxType t)
         {
             grid_group grid = this_grid();
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType per_pe_work = ((dim) >> (gpu_scale));
-            // ValType *m_real = m_real;
-
-            for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work; i += blockDim.x * gridDim.x)
+            //if (tid == 0)
+            //{
+                //printf("\nbefore:\n");
+                //printf("\n GPU-%llu [", i_proc);
+                //for (int i=0; i<8; i++) printf("%lf, ", m_real[i]);
+                //printf("] \n");
+            //}
+            BARR_ROC_SHMEM;
+            for (IdxType i = tid; i < m_gpu; i += blockDim.x * gridDim.x)
             {
-                ValType val_real = PGAS_G(sv_real, i);
-                ValType val_imag = PGAS_G(sv_imag, i);
-                PGAS_P(m_real, i, (val_real * val_real) + (val_imag * val_imag));
+                m_real[i] = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
+            }
+            grid.sync();
+
+
+            //if (i_proc == 1 && tid == 0)
+            //{
+                //for (IdxType j=0; j<m_gpu; j++)
+                    //if (m_real[j] > 0)
+                        //printf("j:%lld(%lf)", j,m_real[j]);
+            //}
+
+
+            //if (tid==1) 
+            //{
+                //ValType res = 0;
+                //for (IdxType i=0; i<m_gpu; i++) 
+                    //res += m_real[i];
+                //printf("\n GPU-%llu_pre-check %lf\n", i_proc, res);
+            //}
+            //if (tid == 0)
+            //{
+                //printf("\nafter:\n");
+                //printf("\n GPU-%llu [", i_proc);
+                //for (int i=0; i<8; i++) printf("%lf, ", m_real[i]);
+                //printf("] \n");
+            //}
+            //BARR_ROC_SHMEM;
+
+            //if (i_proc == 1 && tid == 0)
+            //{
+                //IdxType gridx = gridDim.x;
+                //IdxType blockx = blockDim.x;
+                //printf("======= threads:%lld,%lld ========\n", gridx, blockx);
+            //}
+
+            for (IdxType k = (m_gpu>>1); k > 0; k >>= 1)
+            {
+                for (IdxType i = tid; i < k; i += blockDim.x * gridDim.x)
+                    m_real[i] += m_real[i+k];
+                grid.sync();
+            }
+            BARR_ROC_SHMEM;
+            if (i_proc == 1 && tid == 0)
+            {
+                printf("\n === GPU-1: local is :%lf\n", m_real[0]);
+
+                //if (abs(m_real[0] - 1.0) > ERROR_BAR) 
+                //{
+                //for (IdxType j=0; j<m_gpu; j++) printf("(%lf,%lf )",sv_real[j], m_real[j]);
+                //}
             }
             BARR_ROC_SHMEM;
 
-            if (i_proc == 0)
+            if (i_proc == 0 && tid == 0)
             {
-                for (IdxType k = ((IdxType)1 << (n_qubits - 1)); k > 0; k >>= 1)
+                ValType beff = m_real[0];
+                for (IdxType m = 1; m < n_gpus; m++)
                 {
-                    for (IdxType i = tid; i < k; i += blockDim.x * gridDim.x)
-                    {
-                        ValType a = PGAS_G(m_real, i);
-                        ValType b = PGAS_G(m_real, i + k);
-                        PGAS_P(m_real, i, a + b);
-                    }
-                    grid.sync();
+                    ValType remote = roc_shmem_ctx_double_g(*p_ctx, &m_real[0], m);
+                    m_real [0] += remote; 
+                    printf("\n remote:%lf\n", remote);
                 }
-                if (threadIdx.x == 0 && blockIdx.x == 0)
-                {
-                    ValType purity = m_real[0];
-                    if (abs(purity - 1.0) > ERROR_BAR)
-                    {
-                        printf("Purity Check fails after Gate-%lld with %lf\n", t, purity);
-                        // Gate *g = &circuit_handle_gpu[t];
-                        // printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld,theta:%lf) with %lf\n", t, OP_NAMES_HIP[g->op_name], g->ctrl, g->qubit, g->theta, purity);
-                    }
+                
+                ValType purity = m_real[0];
+                printf("Purity after Gate-%lld with %lf (local:%lf)\n", t, purity, beff);
+                /*
+                   if (abs(purity - 1.0) > ERROR_BAR)
+                   {
+                   printf("Purity Check fails after Gate-%lld with %lf\n", t, purity);
+                //Gate *g = &(sv_gpu->gates_gpu)[t];
+                //printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld,theta:%lf) with %lf\n", t, OP_NAMES[g->op_name], g->ctrl, g->qubit, g->theta, purity);
                 }
+                */
             }
             BARR_ROC_SHMEM;
         }
     };
 
-    __global__ void simulation_kernel_cuda_mpi(SV_HIP_MPI *sv_gpu, IdxType n_gates)
+    __global__ void simulation_kernel_hip_mpi(SV_HIP_MPI *sv_gpu, IdxType n_gates)
     {
         IdxType cur_index = 0;
         IdxType lg2_m_gpu = sv_gpu->lg2_m_gpu;
         grid_group grid = this_grid();
         bool already_sync = false;
+        const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
         //Initialization of ROC_SHMEM
         __shared__ roc_shmem_ctx_t ctx; 
         roc_shmem_ctx_t* p_ctx = &ctx;
@@ -1228,7 +1354,6 @@ namespace NWQSim
             roc_shmem_wg_ctx_create(8, p_ctx);
         } 
         __syncthreads();
-
         //Execute the circuit
         for (IdxType t = 0; t < n_gates; t++)
         {
@@ -1248,8 +1373,17 @@ namespace NWQSim
             if (op_name == OP::C1)
             {
                 sv_gpu->C1V2_GATE(p_ctx, gm_real, gm_imag, qubit);
-                // sv_gpu->C1V1_GATE(gm_real, gm_imag, qubit);
+                //if (tid == 0)
+                //{
+                //printf("\n GPU-%llu [", sv_gpu->i_proc);
+                //for (int i=0; i<64; i++) printf("%lf+%lf, ", sv_gpu->sv_real[i], sv_gpu->sv_imag[i]);
+                //printf("] \n");
+                //}
+
+                //// sv_gpu->C1V1_GATE(gm_real, gm_imag, qubit);
+                sv_gpu->Purity_Check(p_ctx, t);
             }
+            /*
             else if (op_name == OP::C2)
             {
                 if ((ctrl >= lg2_m_gpu) && (qubit >= lg2_m_gpu))
@@ -1276,18 +1410,20 @@ namespace NWQSim
             }
             else if (op_name == OP::MA)
             {
-                sv_gpu->MA_GATE(repetition, cur_index);
+                sv_gpu->MA_GATE(p_ctx, repetition, cur_index);
                 cur_index += repetition;
             }
+            */
 
             // only need sync when operating on remote qubits
             if ((ctrl >= lg2_m_gpu) || (qubit >= lg2_m_gpu))
             {
                 if (threadIdx.x == 0 && blockIdx.x == 0)
-                    roc_shmem_barrier_all();
+                    roc_shmem_ctx_wg_barrier_all(*p_ctx);
                 already_sync = true;
             }
             grid.sync();
+
         }
         //Finalizae ROC_SHMEM
         BARR_ROC_SHMEM;

@@ -12,15 +12,44 @@
 #define BARR_HIP grid.sync();
 
 // CLUSTER BASED
-
-#define PGAS_P(arr, i, val) roc_shmem_putmem(&(arr)[(i) & ((m_gpu) - 1)], (val), ((i) >> (lg2_m_gpu)))
-#define PGAS_G(arr, i) roc_nvshmem_getmem(&(arr)[(i) & ((m_gpu) - 1)], ((i) >> (lg2_m_gpu)))
 #define BARR_ROC_SHMEM                         \
     if (threadIdx.x == 0 && blockIdx.x == 0) \
         roc_shmem_ctx_wg_barrier_all(*p_ctx);               \
     grid.sync();
 
+#define LOCAL_G_HIP_MPI(arr, i) arr[(i) & (m_gpu - 1)]
+#define LOCAL_P_HIP_MPI(arr, i, val) arr[(i) & (m_gpu - 1)] = val;
 
+
+#define PGAS_OG(arr, i) roc_shmem_ctx_double_g(*p_ctx, &(arr)[(i) & ((m_gpu) - 1)], ((i) >> (lg2_m_gpu)))
+#define PGAS_OP(arr, i, val) roc_shmem_ctx_double_p(*p_ctx, &(arr)[(i) & ((m_gpu) - 1)], (val), ((i) >> (lg2_m_gpu)))
+
+#define PGAS_G(arr, i)  ((((i)>>(lg2_m_gpu))==i_proc) ? (LOCAL_G_HIP_MPI(arr, i)) : (PGAS_OG(arr, i)));
+#define PGAS_P(arr, i, val) if (((i)>>(lg2_m_gpu))==i_proc) { \
+    LOCAL_P_HIP_MPI(arr, i, val);} else { PGAS_OP(arr, i, val); roc_shmem_ctx_quiet(*p_ctx);}
+
+
+#define PGAS_GG(dst,src,i) if (((i)>>(lg2_m_gpu))==i_proc) { \
+    *(dst) = src[(i)&(m_gpu-1)];\
+} else { \
+    IdxType i_gpu = ((i)>>lg2_m_gpu); \
+    IdxType i_idx = ((i)&(m_gpu-1)); \
+    roc_shmem_ctx_getmem(*p_ctx, &m_imag[i_idx], &src[i_idx], sizeof(ValType), i_gpu);\
+    *(dst) = m_imag[i_idx]; } 
+    
+
+#define PGAS_PP(dst,i,val) if (((i)>>(lg2_m_gpu))==i_proc) { \
+    dst[(i)&(m_gpu-1)]=val;\
+} else { \
+    IdxType i_gpu = ((i)>>lg2_m_gpu); \
+    IdxType i_idx = ((i)&(m_gpu-1)); \
+    m_imag[i_idx] = val; \
+    roc_shmem_ctx_putmem(*p_ctx, &dst[i_idx], &m_imag[i_idx], sizeof(ValType), i_gpu);\
+    roc_shmem_ctx_quiet(*p_ctx);}
+
+
+
+                        
 
 /***********************************************
  * Error Checking:
@@ -139,30 +168,75 @@ __device__ double parity(unsigned long long num)
     return (0x6996 >> num) & 1;
 }
 
-__global__ void gpu_exp_z_bits(const size_t *in_bits, size_t in_bits_size, const double *sv_real, const double *sv_imag, double *result, const unsigned long long dim)
+__global__ void gpu_exp_z(const double *sv_real, const double *sv_imag, double *result, const unsigned long long dim, const int offset)
 {
-    unsigned long long idx = threadIdx.x + blockIdx.x * blockDim.x + blockIdx.y * blockDim.x * gridDim.x;
+    extern __shared__ double sdata[]; // Shared memory to store partial sums
+    int tid = threadIdx.x;
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    double temp_sum = 0.0;
 
-    if (idx < dim)
+    // Each thread computes its part
+    if (index < dim)
     {
-        double res = (hasEvenParity(idx, in_bits, in_bits_size) ? 1.0 : -1.0) *
-                     (sv_real[idx] * sv_real[idx] + sv_imag[idx] * sv_imag[idx]);
+        bool parityVal = parity(index + offset);
+        double magnitude_sq = sv_real[index] * sv_real[index] + sv_imag[index] * sv_imag[index];
+        temp_sum += (parityVal ? -1.0 : 1.0) * magnitude_sq;
+    }
 
-        atomicAdd(result, res);
+    // Store the computed value in shared memory and synchronize
+    sdata[tid] = temp_sum;
+    __syncthreads();
+
+    // Reduction in shared memory
+    for (int s = blockDim.x / 2; s > 0; s >>= 1)
+    {
+        if (tid < s)
+        {
+            sdata[tid] += sdata[tid + s];
+        }
+        __syncthreads();
+    }
+
+    // Only the thread 0 of each block writes back to global memory
+    if (tid == 0)
+    {
+        atomicAdd(result, sdata[0]);
     }
 }
 
-__global__ void gpu_exp_z(const double *sv_real, const double *sv_imag, double *result, const unsigned long long dim)
+__global__ void gpu_exp_z_bits(const size_t *in_bits, size_t in_bits_size, const double *sv_real, const double *sv_imag, double *result, const unsigned long long dim, const int offset)
 {
-    unsigned long long idx = threadIdx.x + blockIdx.x * blockDim.x + blockIdx.y * blockDim.x * gridDim.x;
+    extern __shared__ double sdata[]; // Shared memory to store partial sums
+    int tid = threadIdx.x;
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    double temp_sum = 0.0;
 
-    if (idx < dim)
+    // Each thread computes its part
+    if (index < dim)
     {
-        bool parityVal = parity(idx);
-        double res = (parityVal ? -1.0 : 1.0) * (sv_real[idx] * sv_real[idx] + sv_imag[idx] * sv_imag[idx]);
+        bool parityVal = hasEvenParity(index + offset, in_bits, in_bits_size);
 
-        atomicAdd(result, res);
+        double magnitude_sq = sv_real[index] * sv_real[index] + sv_imag[index] * sv_imag[index];
+        temp_sum += (parityVal ? -1.0 : 1.0) * magnitude_sq;
+    }
+
+    // Store the computed value in shared memory and synchronize
+    sdata[tid] = temp_sum;
+    __syncthreads();
+
+    // Reduction in shared memory
+    for (int s = blockDim.x / 2; s > 0; s >>= 1)
+    {
+        if (tid < s)
+        {
+            sdata[tid] += sdata[tid + s];
+        }
+        __syncthreads();
+    }
+
+    // Only the thread 0 of each block writes back to global memory
+    if (tid == 0)
+    {
+        atomicAdd(result, sdata[0]);
     }
 }
-
-    

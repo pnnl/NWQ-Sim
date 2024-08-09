@@ -1,6 +1,6 @@
 {
-    "PRINT_SIM_TRACE": false,
-    "ENABLE_FUSION": true,
+    "PRINT_SIM_TRACE": true,
+    "ENABLE_FUSION": false,
     "ENABLE_NOISE": false,
     "ENABLE_TENSOR_CORE": false,
     "DEVICE_CONFIG_PATH": "../data/device/",

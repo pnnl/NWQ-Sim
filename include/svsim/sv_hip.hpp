@@ -227,7 +227,7 @@ namespace NWQSim
             dim3 blockDim(THREADS_CTA_HIP, 1, 1);
 
             // call the kernels
-            gpu_exp_z_bits<<<gridDim, blockDim>>>(in_bits_gpu, in_bits.size(), sv_real, sv_imag, result_gpu, dim);
+            gpu_exp_z_bits<<<gridDim, blockDim>>>(in_bits_gpu, in_bits.size(), sv_real, sv_imag, result_gpu, dim, 0);
 
             // copy result back
             hipSafeCall(hipMemcpy(&result, result_gpu, sizeof(ValType), hipMemcpyDeviceToHost));
@@ -259,7 +259,7 @@ namespace NWQSim
             dim3 blockDim(THREADS_CTA_HIP, 1, 1);
 
             // call the kernels
-            gpu_exp_z<<<gridDim, blockDim>>>(sv_real, sv_imag, result_gpu, dim);
+            gpu_exp_z<<<gridDim, blockDim>>>(sv_real, sv_imag, result_gpu, dim, 0);
 
             // copy result back
             hipSafeCall(hipMemcpy(&result, result_gpu, sizeof(ValType), hipMemcpyDeviceToHost));

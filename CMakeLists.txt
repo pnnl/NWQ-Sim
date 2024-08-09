@@ -31,6 +31,7 @@ find_package(MPI)
 find_package(OpenMP)
 find_package(XACC QUIET)
 find_package(HIP QUIET)
+find_package(rocshmem QUIET)
 
 if(CUDAToolkit_FOUND)
 
@@ -64,7 +65,6 @@ if(CUDAToolkit_FOUND)
 
     if(NVSHMEM_FOUND)
         set(nvshmem_found_str "TRUE")
-
         set(CMAKE_CUDA_HOST_COMPILER mpicxx)
     else()
         set(nvshmem_found_str "FALSE")
@@ -107,6 +107,7 @@ message(STATUS "CUDA found: ${CUDAToolkit_FOUND}")
 message(STATUS "HIP found: ${hip_found_str}")
 message(STATUS "NVSHMEM found: ${nvshmem_found_str}")
 message(STATUS "XACC found: ${xacc_found_str}")
+message(STATUS "ROC_SHMEM found: ${rocshmem_FOUND}")
 message(STATUS "==========================================================================\n")
 
 # Include directories
@@ -116,5 +117,5 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 add_subdirectory(qasm)
 
 if(XACC_FOUND)
-    add_subdirectory(xacc)
+    #add_subdirectory(xacc)
 endif()
