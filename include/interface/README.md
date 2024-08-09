@@ -1,7 +1,7 @@
-### Before starting
+## Before starting
 To ensure the reproducibility, change the 63rd line `rng.seed(time(0));` in `dm_cpu.hpp` as `rng.seed(12345);`. 
 
-### Generate the superoperator for basis gates
+## Generate the superoperator for basis gates
 1. Change `DEVICE_CONFIG_PATH` in `default_config.json` as `../../data/device/`
 2. Generate superoperators
 ```bash
@@ -11,7 +11,7 @@ srun -N 1 <confirguration paras> ./test
 ```
 
 This will generate a file which will store the superoperators for basis gates define in the device file. 
-### Use the customized superoperator for simulation
+## Use the customized superoperator for simulation
 1. Comment `add_subdirectory(vqe)` in `CMakeList.txt`
 ```bash
 # add_subdirectory(vqe)
