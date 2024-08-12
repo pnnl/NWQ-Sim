@@ -5,6 +5,8 @@
 #include <sstream>
 #include "circuit/dynamic_ansatz.hpp"
 #include "vqe_adapt.hpp"
+#include <chrono>
+
 #define UNDERLINE "\033[4m"
 
 #define CLOSEUNDERLINE "\033[0m"
@@ -156,7 +158,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      bool& adapt,
                      std::vector<double>& params,
                      double& fval) {
-  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, configfile, ansatz, hamil, algo, callback_function, seed, settings);  
+  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, configfile, ansatz, hamil, algo, carriage_return_callback_function, seed, settings);  
   std::uniform_real_distribution<double> initdist(0, 2 * PI);
   std::mt19937_64 random_engine (seed);
   params.resize(ansatz->numParams());
@@ -164,13 +166,20 @@ void optimize_ansatz(const VQEBackendManager& manager,
       [&random_engine, &initdist] () {return initdist(random_engine);});
 
   if (adapt) {
+
+    // state->initialize();
     std::shared_ptr<NWQSim::VQE::DynamicAnsatz> dyn_ansatz = std::reinterpret_pointer_cast<NWQSim::VQE::DynamicAnsatz>(ansatz);
     dyn_ansatz->make_op_pool(hamil->getTransformer());
-
     NWQSim::VQE::AdaptVQE adapt_instance(dyn_ansatz, state, hamil);
+    auto start_time = std::chrono::high_resolution_clock::now();
     adapt_instance.make_commutators();
-    state->initialize();
+    auto end_commutators = std::chrono::high_resolution_clock::now();
+    double commutator_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_commutators - start_time).count() / 1e9;
+    manager.safe_print("Constructed ADAPT-VQE Commutators in %.2e seconds\n", commutator_time);
     adapt_instance.optimize(params, fval, 100);
+    auto end_optimization = std::chrono::high_resolution_clock::now();
+    double optimization_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_optimization - end_commutators ).count() / 1e9;
+    manager.safe_print("Completed ADAPT-VQE Optimization in %.2e seconds\n", optimization_time);
   } else {
     state->initialize();
     state->optimize(params, fval);

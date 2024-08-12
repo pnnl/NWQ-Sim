@@ -66,12 +66,14 @@ namespace NWQSim {
         gradient_magnitudes.resize(pauli_op_pool.size());
         gradient_observables.resize(pauli_op_pool.size());
         observable_sizes.resize(pauli_op_pool.size());
+        size_t num_pauli_terms_total = 0;
         for (size_t i = 0; i < pauli_op_pool.size(); i++) {
           std::unordered_map<PauliOperator,  std::complex<double>, PauliHash> pmap;
           std::vector<PauliOperator> oplist = pauli_op_pool[i];
           for (auto hamil_oplist: pauli_strings) {
             commutator(hamil_oplist, oplist, pmap);
           }
+          num_pauli_terms_total += oplist.size();
           std::vector<PauliOperator> comm_ops;
           comm_ops.reserve(pmap.size());
           for (auto pair: pmap) {
@@ -96,22 +98,22 @@ namespace NWQSim {
             std::vector<IdxType>& clique = *cliqueiter;
             std::vector<PauliOperator> commuting_group (clique.size());
             std::transform(clique.begin(), clique.end(),
-              commuting_group.begin(), [&] (IdxType ind) {return comm_ops[ind];});
-            // NOTE: IN PROCESS OF API UPDATE!!!! PPOD!!!!!
- 
+              commuting_group.begin(), [&] (IdxType ind) {return comm_ops[ind];}); 
             PauliOperator common = make_common_op(commuting_group, 
                                                   commutator_zmasks[i][j], 
                                                   commutator_coeffs[i][j]);
             
-            Measurement circ1 (common, false);
-            gradient_measurement->compose(circ1, qubit_mapping);            
-            state->set_exp_gate(gradient_measurement, &gradient_observables[i][j], commutator_zmasks[i][j], commutator_coeffs[i][j]);
-            Measurement circ2 (common, true);
-            gradient_measurement->compose(circ2, qubit_mapping);      
+            Measurement circ1 (common, false); // QWC measurement circuit $U_M$
+            gradient_measurement->compose(circ1, qubit_mapping);         // add to gradient measurement
+            // add a gate to compute the expectation values   
+            state->set_exp_gate(gradient_measurement, gradient_observables[i] + j, commutator_zmasks[i][j], commutator_coeffs[i][j]);
+            Measurement circ2 (common, true); // inverse of the measurement circuit $U_M^\dagger$
+            gradient_measurement->compose(circ2, qubit_mapping);  // add the inverse
             cliqueiter++;  
           }
           // commutators[i] = std::make_shared<Hamiltonian>(hamil->getEnv(), comm_ops_grouped);
         }
+        std::cout << "Generated " << pauli_op_pool.size() << " commutators with " << num_pauli_terms_total << " (possibly degenerate) Individual Pauli Strings" << std::endl;
       }
       void optimize(std::vector<double>& parameters, ValType& ene, IdxType maxiter, ValType reltol = 1e-5, ValType reltol_fval = 1e-7) {
         ene = hamil->getEnv().constant;
@@ -137,10 +139,6 @@ namespace NWQSim {
           max_ind = std::max_element(gradient_magnitudes.begin(),
                                      gradient_magnitudes.end(),
                                      [] (ValType a, ValType b) {return abs(a) < abs(b);}) - gradient_magnitudes.begin();
-          for (auto i: gradient_magnitudes) {
-            std::cout << i << " ";
-          }
-          std::cout << std::endl;
           // std::cout << gradient_magnitudes << std::endl;
           if (std::sqrt(grad_norm) < reltol) {
             break;

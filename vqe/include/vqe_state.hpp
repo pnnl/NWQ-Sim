@@ -49,6 +49,7 @@ namespace NWQSim
       }
         void initialize() {
           const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators(); 
+          // std::vector<std::vector<PauliOperator> > pauli_operators = {{PauliOperator("IIII")}};
           IdxType index = 0;    
           measurement.reset(new Ansatz(ansatz->num_qubits()));
           obsvec.clear();
@@ -57,7 +58,6 @@ namespace NWQSim
           allocate_observables(pauli_operators.size());
           zmasks.resize(pauli_operators.size());
           coeffs.resize(pauli_operators.size());
-          std::cout << pauli_operators.size() << std::endl;
           std::vector<IdxType> mapping (ansatz->num_qubits());
           std::iota(mapping.begin(), mapping.end(), 0);
           for (auto& pauli_list: pauli_operators) {
@@ -79,13 +79,14 @@ namespace NWQSim
         };
       virtual void fill_obslist(IdxType index) {};
       // function for the NLOpt plugin
-      double cost_function(const std::vector<double> x, std::vector<double>& gradient) {
+      double cost_function(const std::vector<double>& x, std::vector<double>& gradient) {
         if (iteration > 0){
           Config::PRINT_SIM_TRACE = false;
         }
         if (compute_gradient) {
           gradient.resize(x.size());
-          g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, x, gradient, 1e-4);
+          g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, x, gradient, 1e-4, 1);
+          std::cout << gradient[0] << " " << gradient[1] << std::endl;
         }
         if (iteration > 0){
           Config::PRINT_SIM_TRACE = false;
@@ -114,7 +115,6 @@ namespace NWQSim
         ValType ene_prev = MAXFLOAT;
         ValType ene_curr = energy(params);
         initial_ene = ene_curr;
-        // gradient
         // get the single-direction starting vector
         g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, params, gradient, delta, n_grad_est);
         iteration = 0;

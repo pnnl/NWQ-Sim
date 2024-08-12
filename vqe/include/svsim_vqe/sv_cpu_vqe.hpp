@@ -71,10 +71,8 @@ namespace NWQSim
         sim(ansatz);
         sim(measurement);
         for (auto i: obsvec) {
-          std::cout << i->exp_output << std::endl;
           expectation_value += i->exp_output;
         }
-        std::cout << expectation_value << std::endl;
       };
 
       virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) override {    

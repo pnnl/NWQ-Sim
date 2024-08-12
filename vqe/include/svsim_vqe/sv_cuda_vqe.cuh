@@ -3,11 +3,8 @@
 #include "state.hpp"
 #include "svsim/sv_cuda.cuh"
 #include "vqe_state.hpp"
-#include "observable/pauli_operator.hpp"
 #include "utils.hpp"
 #include "circuit/ansatz.hpp"
-#include "circuit/measurement.hpp"
-#include "gradient/sa_gradient.hpp"
 #include "observable/hamiltonian.hpp"
 #include "nlopt.hpp"
 #include "private/cuda_util.cuh"
@@ -38,6 +35,9 @@ namespace NWQSim
         obsvec.resize(size);
       };
       virtual void fill_obslist(IdxType index) override {
+        /**
+         * @brief Add an entry to the ObservableList data structure
+         */
         ObservableList obs;
         
         obs.numterms = zmasks[index].size();
@@ -46,14 +46,15 @@ namespace NWQSim
         SAFE_ALOC_GPU(obs.zmasks, isize);
         obs.exp_output = 0;
         SAFE_ALOC_GPU(obs.coeffs, vsize);
+        // allocate memory for the zmasks and coefficients
         cudaSafeCall(cudaMemcpy(obs.zmasks, zmasks[index].data(), isize,
                                 cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(obs.coeffs, coeffs[index].data(), vsize,
                                 cudaMemcpyHostToDevice));
+          // std::cout << "Filling list: " << index << " " <<(obsvals_dev + index) << std::endl;
         ObservableList* obs_device = (ObservableList*)((void*)obsvals_dev + index * sizeof(ObservableList));
+        obsvals[index] = obs;
         obsvec[index] = obs_device;
-        cudaSafeCall(cudaMemcpy(obs_device, &obs, sizeof(ObservableList),
-                                cudaMemcpyHostToDevice));
         measurement->EXPECT(obs_device); 
       };
       ~SV_CUDA_VQE()
@@ -66,7 +67,10 @@ namespace NWQSim
             }
             SAFE_FREE_GPU(obsvals_dev);
         }
-      virtual void call_simulator() override {        
+      virtual void call_simulator() override {
+
+        cudaSafeCall(cudaMemcpy(obsvals_dev, obsvals.data(), obsvals.size() * sizeof(ObservableList),
+                                    cudaMemcpyHostToDevice));
         reset_state();
         sim(ansatz);
         sim(measurement);
@@ -74,38 +78,48 @@ namespace NWQSim
         cudaSafeCall(cudaMemcpy(obsvals.data(), obsvals_dev, obsvals.size() * sizeof(ObservableList),
                                     cudaMemcpyDeviceToHost));
         cudaDeviceSynchronize();
+        cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, dim * sizeof(ValType),
+                                    cudaMemcpyDeviceToHost));
+        cudaSafeCall(cudaMemcpy(sv_imag_cpu, sv_imag, dim * sizeof(ValType),
+                                    cudaMemcpyDeviceToHost));
+        cudaDeviceSynchronize();
+        // for (size_t i = 0; i < dim; i++) {
+        //   std::cout << "(" << sv_real_cpu[i] * sv_real_cpu[i] + sv_imag_cpu[i] * sv_imag_cpu[i] << "), ";
+        // }
+        // std::cout << std::endl;
         expectation_value = 0;
+        size_t index = 0;
         for (auto o: obsvals) {
-          std::cout << o.exp_output << std::endl;
           expectation_value += o.exp_output;
+          index++;
         }
       };
-      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) override {        
+      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) override {     
         reset_state();
         sim(ansatz);
         sim(_measurement);
         cudaDeviceSynchronize();
       };
-      virtual void set_exp_gate(std::shared_ptr<Ansatz> circuit, ObservableList* o, std::vector<IdxType>& zmasks, std::vector<ValType>& coeffs) override {
+      virtual void set_exp_gate(std::shared_ptr<Ansatz> circuit, ObservableList* o, std::vector<IdxType>& _zmasks, std::vector<ValType>& _coeffs) override {
         ObservableList obs;
         
-        obs.numterms = zmasks.size();
+        obs.numterms = _zmasks.size();
         IdxType isize = obs.numterms * sizeof(IdxType);
         IdxType vsize = obs.numterms * sizeof(ValType);
         SAFE_ALOC_GPU(obs.zmasks, isize);
         obs.exp_output = 0;
         SAFE_ALOC_GPU(obs.coeffs, vsize);
-        cudaSafeCall(cudaMemcpy(obs.zmasks, zmasks.data(), isize,
+        cudaSafeCall(cudaMemcpy(obs.zmasks, _zmasks.data(), isize,
                                 cudaMemcpyHostToDevice));
-        cudaSafeCall(cudaMemcpy(obs.coeffs, coeffs.data(), coeffs.size() * sizeof(ValType),
+        cudaSafeCall(cudaMemcpy(obs.coeffs, _coeffs.data(), _coeffs.size() * sizeof(ValType),
                                 cudaMemcpyHostToDevice));
         cudaSafeCall(cudaMemcpy(o, &obs, sizeof(ObservableList),
                                 cudaMemcpyHostToDevice));
-        measurement->EXPECT(o);
+        circuit->EXPECT(o);
       };
       virtual void delete_observables(ObservableList* observables, IdxType size) override {
         std::vector<ObservableList> obs_temp (size);
-            cudaSafeCall(cudaMemcpy(obs_temp.data(), observables, obs_temp.size() * sizeof(ObservableList),
+            cudaSafeCall(cudaMemcpy(obs_temp.data(), observables, size * sizeof(ObservableList),
                                     cudaMemcpyDeviceToHost));
         for (auto o: obs_temp) {
           SAFE_FREE_GPU(o.zmasks);
@@ -115,12 +129,14 @@ namespace NWQSim
       };
 
       virtual void get_exp_values(const std::vector<ObservableList*>& observables, std::vector<IdxType> sizes, std::vector<ValType>& output) override {
+        std::fill(output.begin(), output.end(), 0);
         for (size_t i = 0; i < observables.size(); i++) {
           std::vector<ObservableList> host_temp(sizes[i]);
           cudaSafeCall(cudaMemcpy(host_temp.data(), observables[i], sizes[i] * sizeof(ObservableList),
                                     cudaMemcpyDeviceToHost));
           
           for (ObservableList obs: host_temp) {
+            // std::cout << obs.exp_output << std::endl;
             output[i] += obs.exp_output;
           }
           // output.at(i) = observables.at(i)->exp_output;
