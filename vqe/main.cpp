@@ -216,7 +216,7 @@ int main(int argc, char** argv) {
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
   if (adapt)
   {
-    ansatz = std::make_shared<NWQSim::VQE::DynamicAnsatz>(hamil->getEnv());
+    ansatz = std::make_shared<NWQSim::VQE::DynamicAnsatz>(hamil->getEnv(), NWQSim::VQE::PoolType::Fermionic);
   } else {
     ansatz  = std::make_shared<NWQSim::VQE::UCCSD>(
       hamil->getEnv(),
@@ -239,6 +239,7 @@ int main(int argc, char** argv) {
   outstream.close();
   std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters();
   manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters:\n", fval);
+  std::cout << param_map << std::endl;
   for (auto& pair: param_map) {
     manager.safe_print("%s :: %e\n", pair.first.c_str(), pair.second);
 

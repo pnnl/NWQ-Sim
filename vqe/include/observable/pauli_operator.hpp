@@ -166,9 +166,9 @@ namespace NWQSim {
           return zmask;
         }
         // Dump the Pauli operator to string
-        std::string pauliToString() const {
+        std::string pauliToString(bool print_coeff = true) const {
           std::stringstream ss;
-          if (coeff != 1.0) {
+          if (coeff != 1.0 || !print_coeff) {
             ss << "(" << coeff.real() << " ";
             if (coeff.imag() >= 0) {
               ss << "+ " << coeff.imag() << "i)";

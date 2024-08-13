@@ -59,21 +59,20 @@ namespace NWQSim {
         const auto& pauli_strings = hamil->getPauliOperators();
 
         const auto& pauli_op_pool = ansatz->get_pauli_op_pool();
-
-        commutator_coeffs.resize(pauli_op_pool.size());
+        IdxType poolsize = pauli_op_pool.size();
+        commutator_coeffs.resize(poolsize);
         // gradient_observables.reserve(pauli_op_pool.size());
-        commutator_zmasks.resize(pauli_op_pool.size());
-        gradient_magnitudes.resize(pauli_op_pool.size());
-        gradient_observables.resize(pauli_op_pool.size());
-        observable_sizes.resize(pauli_op_pool.size());
+        commutator_zmasks.resize(poolsize);
+        gradient_magnitudes.resize(poolsize);
+        gradient_observables.resize(poolsize);
+        observable_sizes.resize(poolsize);
         size_t num_pauli_terms_total = 0;
-        for (size_t i = 0; i < pauli_op_pool.size(); i++) {
+        for (size_t i = 0; i <poolsize; i++) {
           std::unordered_map<PauliOperator,  std::complex<double>, PauliHash> pmap;
           std::vector<PauliOperator> oplist = pauli_op_pool[i];
           for (auto hamil_oplist: pauli_strings) {
             commutator(hamil_oplist, oplist, pmap);
           }
-          num_pauli_terms_total += oplist.size();
           std::vector<PauliOperator> comm_ops;
           comm_ops.reserve(pmap.size());
           for (auto pair: pmap) {
@@ -81,8 +80,10 @@ namespace NWQSim {
               PauliOperator op(pair.first);
               op.setCoeff(pair.second);
               comm_ops.push_back(op);
+              std::cout << op.pauliToString(false) << std::endl;
             }
           }
+          num_pauli_terms_total += comm_ops.size();
           // Create commuting groups using the (nonoverlapping) Sorted Insertion heuristic (see Crawford et. al 2021)
           std::list<std::vector<IdxType>> cliques;
           sorted_insertion(comm_ops, cliques, false);
@@ -133,9 +134,13 @@ namespace NWQSim {
           state->call_simulator(gradient_measurement);
           std::fill(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0);
           state->get_exp_values(gradient_observables, observable_sizes, gradient_magnitudes);
+          for (size_t i = 0; i < gradient_magnitudes.size(); i++) {
+            std::cout << gradient_magnitudes[i] << std::endl;
+          }
           double grad_norm = std::accumulate(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0.0, [] (ValType a, ValType b) {
             return a + b * b;
           });
+
           max_ind = std::max_element(gradient_magnitudes.begin(),
                                      gradient_magnitudes.end(),
                                      [] (ValType a, ValType b) {return abs(a) < abs(b);}) - gradient_magnitudes.begin();

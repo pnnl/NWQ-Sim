@@ -75,7 +75,12 @@ namespace NWQSim {
         return result;
       }
     };
-    void generate_excitations(std::vector<std::vector< std::vector<FermionOperator> > >& _fermion_operators,
+    void generate_fermionic_excitations(std::vector<std::vector< std::vector<FermionOperator> > >& _fermion_operators,
+                                    const MolecularEnvironment& _env);
+    void generate_pauli_excitations(std::vector<std::vector<PauliOperator > >& _pauli_operators,
+                                    const MolecularEnvironment& _env);
+    // Construct the minimal operator pool G from Tang et al. 2021 ("Qubit-ADAPT VQE")
+    void generate_minimal_pauli_excitations(std::vector<std::vector<PauliOperator > >& _pauli_operators,
                                     const MolecularEnvironment& _env);
   };// namespace vqe
 };// namespace nwqsim
