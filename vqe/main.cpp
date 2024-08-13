@@ -136,8 +136,9 @@ void optimize_ansatz(const VQEBackendManager& manager,
   std::uniform_real_distribution<double> initdist(0, 2 * PI);
   std::mt19937_64 random_engine (seed);
   params.resize(ansatz->numParams());
-  std::generate(params.begin(), params.end(), 
-      [&random_engine, &initdist] () {return initdist(random_engine);});
+  std::fill(params.begin(), params.end(), 0);
+  // std::generate(params.begin(), params.end(), 
+      // [&random_engine, &initdist] () {return initdist(random_engine);});
   state->optimize(params, fval);
 }
 
