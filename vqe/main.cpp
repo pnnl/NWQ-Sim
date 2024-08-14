@@ -91,7 +91,7 @@ int parse_args(int argc, char** argv,
     if (argname == "--seed") {
       params.seed = (unsigned)std::atoi(argv[++i]);
     }  else 
-    if (argname == "--adapt-pool ") {
+    if (argname == "--adapt-pool") {
       params.adapt_pool_size = (long long)std::atoi(argv[++i]);
     } else if (argname == "--xacc") {
       params.xacc = true;
@@ -196,8 +196,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
   std::uniform_real_distribution<double> initdist(0, 2 * PI);
   std::mt19937_64 random_engine (params.seed);
   x.resize(ansatz->numParams());
-  std::generate(x.begin(), x.end(), 
-      [&random_engine, &initdist] () {return initdist(random_engine);});
+  std::fill(x.begin(), x.end(), 0);
 
   if (params.adapt) {
 
