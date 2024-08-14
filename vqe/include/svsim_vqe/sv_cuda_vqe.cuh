@@ -58,15 +58,15 @@ namespace NWQSim
         measurement->EXPECT(obs_device); 
       };
       ~SV_CUDA_VQE()
-        {
-            cudaSafeCall(cudaMemcpy(obsvals.data(), obsvals_dev, obsvals.size() * sizeof(ObservableList),
-                                    cudaMemcpyDeviceToHost));
-            for (auto o: obsvals) {
-              SAFE_FREE_GPU(o.zmasks);
-              SAFE_FREE_GPU(o.coeffs);
-            }
-            SAFE_FREE_GPU(obsvals_dev);
-        }
+      {
+          cudaSafeCall(cudaMemcpy(obsvals.data(), obsvals_dev, obsvals.size() * sizeof(ObservableList),
+                                  cudaMemcpyDeviceToHost));
+          for (auto o: obsvals) {
+            SAFE_FREE_GPU(o.zmasks);
+            SAFE_FREE_GPU(o.coeffs);
+          }
+          SAFE_FREE_GPU(obsvals_dev);
+      }
       virtual void call_simulator() override {
 
         cudaSafeCall(cudaMemcpy(obsvals_dev, obsvals.data(), obsvals.size() * sizeof(ObservableList),
@@ -77,12 +77,6 @@ namespace NWQSim
         cudaDeviceSynchronize();
         cudaSafeCall(cudaMemcpy(obsvals.data(), obsvals_dev, obsvals.size() * sizeof(ObservableList),
                                     cudaMemcpyDeviceToHost));
-        cudaDeviceSynchronize();
-        cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, dim * sizeof(ValType),
-                                    cudaMemcpyDeviceToHost));
-        cudaSafeCall(cudaMemcpy(sv_imag_cpu, sv_imag, dim * sizeof(ValType),
-                                    cudaMemcpyDeviceToHost));
-        cudaDeviceSynchronize();
         // for (size_t i = 0; i < dim; i++) {
         //   std::cout << "(" << sv_real_cpu[i] * sv_real_cpu[i] + sv_imag_cpu[i] * sv_imag_cpu[i] << "), ";
         // }

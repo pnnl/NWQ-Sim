@@ -80,7 +80,6 @@ namespace NWQSim {
               PauliOperator op(pair.first);
               op.setCoeff(pair.second);
               comm_ops.push_back(op);
-              std::cout << op.pauliToString(false) << std::endl;
             }
           }
           num_pauli_terms_total += comm_ops.size();
@@ -114,18 +113,16 @@ namespace NWQSim {
           }
           // commutators[i] = std::make_shared<Hamiltonian>(hamil->getEnv(), comm_ops_grouped);
         }
-        std::cout << "Generated " << pauli_op_pool.size() << " commutators with " << num_pauli_terms_total << " (possibly degenerate) Individual Pauli Strings" << std::endl;
+        if (state->get_process_rank() == 0)
+          std::cout << "Generated " << pauli_op_pool.size() << " commutators with " << num_pauli_terms_total << " (possibly degenerate) Individual Pauli Strings" << std::endl;
       }
-      void optimize(std::vector<double>& parameters, ValType& ene, IdxType maxiter, ValType reltol = 1e-5, ValType reltol_fval = 1e-7) {
+      void optimize(std::vector<double>& parameters, ValType& ene, IdxType maxiter, ValType abstol = 1e-5, ValType fvaltol = 1e-7) {
         ene = hamil->getEnv().constant;
         state->initialize();
         ValType constant = ene;
         IdxType iter = 0;
         ValType prev_ene = 1 + ene;
         const auto& pauli_op_pool = ansatz->get_pauli_op_pool();
-        maxiter = 50;
-        std::uniform_real_distribution<ValType> dist(0, 2 * PI);
-        std::mt19937_64 rng (2423);
         while(iter < maxiter) {
           prev_ene = ene;
           IdxType max_ind = 0; 
@@ -134,27 +131,26 @@ namespace NWQSim {
           state->call_simulator(gradient_measurement);
           std::fill(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0);
           state->get_exp_values(gradient_observables, observable_sizes, gradient_magnitudes);
-          for (size_t i = 0; i < gradient_magnitudes.size(); i++) {
-            std::cout << gradient_magnitudes[i] << std::endl;
-          }
-          double grad_norm = std::accumulate(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0.0, [] (ValType a, ValType b) {
+          double grad_norm = std::sqrt(std::accumulate(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0.0, [] (ValType a, ValType b) {
             return a + b * b;
-          });
-
+          }));
+          if (grad_norm < abstol) {
+            break;
+          }
           max_ind = std::max_element(gradient_magnitudes.begin(),
                                      gradient_magnitudes.end(),
                                      [] (ValType a, ValType b) {return abs(a) < abs(b);}) - gradient_magnitudes.begin();
-          // std::cout << gradient_magnitudes << std::endl;
-          if (std::sqrt(grad_norm) < reltol) {
-            break;
-          }
+
           ValType paramval = 0.0;//dist(rng);
           ansatz->add_operator(max_ind, paramval);
           // state->swap_hamil(hamil);
           parameters.push_back(paramval);
           state->optimize(parameters, ene);
-          ValType denom = abs(prev_ene) > 0 ? prev_ene : 1.0;
-          if (abs((ene - prev_ene) / denom) < reltol_fval) {
+          if (state->get_process_rank() == 0) {
+            std::cout << "ADAPT Iteration " << iter << ", Fval = " << ene << std::endl;
+            std::cout << "\tSelected Operator: " << ansatz->get_operator_string(max_ind) << ", Current gradient norm = " << grad_norm << std::endl;
+          }
+          if (abs((ene - prev_ene)) < fvaltol) {
             break;
           }
           iter++;

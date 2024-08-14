@@ -182,7 +182,6 @@ namespace NWQSim{
                                  n_particles,
                                  xacc_scheme,
                                  energy_constant);
-      IdxType coeff_index = 0;
       IdxType otypeval, spinval, orbital_index;
       Spin spin;
       OrbitalType orbitaltype;

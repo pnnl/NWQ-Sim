@@ -24,7 +24,7 @@ namespace NWQSim {
       public:
         DynamicAnsatz(const MolecularEnvironment& _env, PoolType _pool_type = PoolType::Fermionic): env(_env), Ansatz(_env.n_spatial * 2), pool_type(_pool_type) {}
         virtual void buildAnsatz() override;
-        void make_op_pool(Transformer tf) {
+        void make_op_pool(Transformer tf, IdxType seed, IdxType pool_size) {
           if (pool_type == PoolType::Fermionic) {
             generate_fermionic_excitations(fermi_op_pool, env);
             pauli_op_pool.resize(fermi_op_pool.size());
@@ -38,7 +38,7 @@ namespace NWQSim {
               }
             } 
           } else if (pool_type == PoolType::Pauli) {
-            generate_pauli_excitations(pauli_op_pool, env);
+            generate_pauli_excitations(pauli_op_pool, env, pool_size, seed);
           } else if (pool_type == PoolType::MinimalPauli) {
             generate_minimal_pauli_excitations(pauli_op_pool, env);
           }
@@ -46,6 +46,33 @@ namespace NWQSim {
         }
         const std::vector<std::vector<PauliOperator> >& get_pauli_op_pool() {
           return pauli_op_pool;
+        }
+        virtual std::string get_operator_string(IdxType operator_index) {
+          std::string opstring = "";
+          if (pool_type == PoolType::Fermionic) {
+                size_t index = 0;
+                auto symmetry_group = fermi_op_pool[operator_index];
+                bool first = true;
+                for (auto oplist: symmetry_group) {
+                  if (!first) {
+                    opstring = opstring + " ";
+                  } else {
+                    first = false;
+                  }
+                  std::string term = "";
+                  for (auto& op: oplist) {
+                    term = op.toString(env.n_occ, env.n_virt) + " " + term;
+                  }
+                  opstring += "(" + term + ")";
+                  if ((index++) < oplist.size() - 1)
+                    opstring = opstring + ",";
+                }
+          } else {
+            // since we know that each operator sum in the pool is a single Pauli string
+            PauliOperator pauli = pauli_op_pool[operator_index][0];
+            opstring = pauli.pauliToString(false);
+          }
+          return opstring;
         }
         virtual void add_operator(IdxType operator_index, ValType param) {
           theta->push_back(param);

@@ -1,8 +1,10 @@
 #ifndef GRADIENT
 #define GRADIENT
+#include <stdexcept>
 #include <string>
 #include <vector>
 #include <random>
+#include <functional>
 
 
 namespace NWQSim {
@@ -34,6 +36,9 @@ namespace NWQSim {
       std::bernoulli_distribution distribution;
     public:
       SPSA(IdxType seed): GradientEstimator("SPSA"), random_engine(seed), distribution(0.5) {}; 
+      virtual void estimate(Function function_oracle, const std::vector<ValType>& x, std::vector<ValType>& grad, ValType epsilon) override {
+        estimate(function_oracle, x, grad, epsilon, 1);
+      }
 
       virtual void estimate(Function function_oracle, const std::vector<ValType>& x, std::vector<ValType>& grad, ValType epsilon, IdxType n_trials = 1) override {
         std::vector<ValType> delta (x.size());

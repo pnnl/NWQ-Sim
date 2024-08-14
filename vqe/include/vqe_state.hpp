@@ -7,7 +7,6 @@
 #include "circuit/measurement.hpp"
 #include "gradient/sa_gradient.hpp"
 #include "observable/hamiltonian.hpp"
-#include "circuit_pass/fusion.hpp"
 #include "nlopt.hpp"
 #include <memory>
 #include <cmath>
@@ -43,13 +42,13 @@ namespace NWQSim
                                       optimizer_algorithm(_optimizer_algorithm),
                                       optimizer_settings(opt_settings)
                                       {
-          
+          process_rank = 0;
         }
         ~VQEState(){
       }
         void initialize() {
           const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators(); 
-          // std::vector<std::vector<PauliOperator> > pauli_operators = {{PauliOperator("IIII")}};
+          // std::vector<std::vector<PauliOperator> > pauli_operators = {{PauliOperator("IIIIIIII")}};
           IdxType index = 0;    
           measurement.reset(new Ansatz(ansatz->num_qubits()));
           obsvec.clear();
@@ -71,11 +70,9 @@ namespace NWQSim
             measurement->compose(circ2, mapping);
             index++;
           }
-                                          
+                            
           // Check if the chosen algorithm requires derivatives
-          compute_gradient = std::string(nlopt::algorithm_name(optimizer_algorithm)).find("no-derivative") == std::string::npos;
-          
-          
+          compute_gradient = std::string(nlopt::algorithm_name(optimizer_algorithm)).find("no-derivative") == std::string::npos;\          
         };
       virtual void fill_obslist(IdxType index) {};
       // function for the NLOpt plugin
@@ -202,6 +199,7 @@ namespace NWQSim
         ValType expectation = hamil->getEnv().constant + expectation_value;
         return expectation;
       }
+      IdxType get_process_rank() const { return process_rank; }
       
       std::shared_ptr<Hamiltonian> get_hamiltonian() const { return hamil; }
       IdxType get_iteration() const {return iteration;};
@@ -210,6 +208,7 @@ namespace NWQSim
         std::shared_ptr<Ansatz> measurement;
         std::shared_ptr<Hamiltonian> hamil;
         SPSA g_est;
+        IdxType process_rank;
         bool compute_gradient;
         Callback callback;
         OptimizerSettings optimizer_settings;

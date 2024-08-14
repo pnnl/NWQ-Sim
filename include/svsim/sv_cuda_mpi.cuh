@@ -1251,8 +1251,7 @@ virtual void set_initial (std::string fpath) override {
             }
             grid.sync();
             if (tid == 0) {
-                *output += m_real[0];
-                    LOCAL_P_CUDA_MPI(m_imag, 0, 1);
+                *output = m_real[0];
             }
         }
 
@@ -1263,8 +1262,11 @@ __device__ __inline__ void EXPECT_GATE(ObservableList* o)  {
                 m_real[tid] = 0;
             
             }
-            for (IdxType obs_ind = 0; obs_ind < o->numterms; obs_ind++) {
-                EXPECT_C0_GATE(o->zmasks[obs_ind], o->coeffs[obs_ind]);
+            size_t nterms = o->numterms;
+            IdxType* zmasks = o->zmasks;
+            ValType* coeffs = o->coeffs;
+            for (IdxType obs_ind = 0; obs_ind < nterms; obs_ind++) {
+                EXPECT_C0_GATE(zmasks[obs_ind], coeffs[obs_ind]);
             }
             BARR_NVSHMEM;
             EXPECT_REDUCE(&o->exp_output);
@@ -1797,7 +1799,6 @@ __device__ __inline__ void EXPECT_GATE(ObservableList* o)  {
             {
                 
                 ObservableList* o = (ObservableList*)((sv_gpu->gates_gpu)[t].data);
-                
                 BARR_NVSHMEM;
                 sv_gpu->EXPECT_GATE(o);
                     

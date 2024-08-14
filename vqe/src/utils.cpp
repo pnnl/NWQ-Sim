@@ -2,6 +2,8 @@
 #include "observable/fermionic_operator.hpp"
 #include "transform/transform.hpp"
 #include "utils.hpp"
+#include <algorithm>
+#include <random>
 #include <string>
 #include <iostream>
 #include <sstream>
@@ -264,23 +266,52 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
  * @retval None
  */
 void generate_pauli_excitations(std::vector<std::vector<PauliOperator> >& pauli_operators,
-                                    const MolecularEnvironment& env) {
+                                    const MolecularEnvironment& env,
+                                    IdxType subsample,
+                                    IdxType seed) {
   IdxType n_singles = env.n_occ * env.n_virt;
   IdxType n_doubles = env.n_occ * (env.n_occ) * env.n_virt * (env.n_virt) +\
               choose2(env.n_occ) * choose2(env.n_virt) * 2; 
   std::vector<std::vector<std::vector<FermionOperator> > > fermion_operators;
   fermion_operators.reserve(n_singles);
   generate_fermionic_excitations(fermion_operators, env);
+  pauli_operators.reserve(4 * n_singles + 8 * n_doubles);
+  std::vector<IdxType> selection;
+
+  // If we're subsampling, generate the list of operator indices to choose a priori
+  if (subsample > 0) {
+    std::vector<IdxType> indices(4 * n_singles + 8 * n_doubles);
+    std::iota(indices.begin(), indices.end(), 0);
+    std::mt19937_64 random_engine (seed);
+    std::shuffle(indices.begin(), indices.end(), random_engine);
+    // take the first N indices, where N is either the number of samples or the number of operators (whichever is smaller)
+    selection = std::vector<IdxType>(
+      indices.begin(),
+      indices.begin() + std::min(subsample, (IdxType)indices.size()));
+    std::sort(selection.begin(), selection.end());
+  }
+  IdxType index = 0;
+  std::vector<IdxType>::iterator iter = selection.begin();
   // NOTE: Not the most efficient way of doing this, kind of a workaround due to the data structures used elsewhere
   for (size_t i = 0; i < fermion_operators.size(); i++) {
-    std::vector<std::vector<PauliOperator> > operators_temp;
-    getJordanWignerTransform(env, fermion_operators[i], operators_temp, true);
-    for (auto pauli_list: operators_temp) {
+  // Perform the JordanWigner mapping for each Fermionic operator product
+    std::vector<std::vector<PauliOperator> > mapper_temp;
+    getJordanWignerTransform(env, fermion_operators[i], mapper_temp, true);
+    // Iterate ove the JW mapped Paulis and slap them on the operator pool
+    for (auto pauli_list: mapper_temp) {
       for (auto pauli: pauli_list) {
-        pauli_operators.push_back({pauli});
+        // If we're not subsampling or if this is a selected index
+        if (subsample < 0 || index == *iter) {
+          pauli_operators.push_back({pauli});
+          if (subsample > 0) {
+            iter++;
+          }
+        }
+        index++; // keep count of indices
       }
     }
   }
+  printf("Expected %lld operators, got %lld\n", 4 * n_singles + 8 * n_doubles, index);
 
   
 };

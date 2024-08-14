@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
 
   // Start the VQE optimization   
   std::shared_ptr<NWQSim::VQE::DynamicAnsatz> dyn_ansatz = std::reinterpret_pointer_cast<NWQSim::VQE::DynamicAnsatz>(ansatz);
-    dyn_ansatz->make_op_pool(hamil->getTransformer());
+    dyn_ansatz->make_op_pool(hamil->getTransformer(), 0, 40);
 
     NWQSim::VQE::AdaptVQE adapt_instance(dyn_ansatz, state, hamil);
     adapt_instance.make_commutators();

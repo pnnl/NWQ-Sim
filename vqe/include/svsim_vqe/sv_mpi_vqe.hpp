@@ -4,11 +4,8 @@
 #include "state.hpp"
 #include "svsim/sv_mpi.hpp"
 #include "vqe_state.hpp"
-#include "observable/pauli_operator.hpp"
 #include "utils.hpp"
 #include "circuit/ansatz.hpp"
-#include "circuit/measurement.hpp"
-#include "gradient/sa_gradient.hpp"
 #include "observable/hamiltonian.hpp"
 #include "nlopt.hpp"
 #include <iostream>
@@ -31,6 +28,9 @@ namespace NWQSim
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
         size_t index = 0;
         size_t curr_ptr = 0;
+        int rank = 0;
+        MPI_Comm_rank(comm_global, &rank);
+        process_rank = rank;
       };
 
       virtual void fill_obslist(IdxType index) override {

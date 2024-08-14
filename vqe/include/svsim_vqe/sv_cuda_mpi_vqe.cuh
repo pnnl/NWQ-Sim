@@ -26,31 +26,63 @@ namespace NWQSim
                    OptimizerSettings opt_settings = OptimizerSettings()): 
                                       SV_CUDA_MPI(a->num_qubits(), configpath),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
-        
+        iteration = 0;
         // Pauli term data sizes
         int size;
         MPI_Comm_size(MPI_COMM_WORLD, &size);
         n_cpus = size;    
+        int rank = 0;
+        MPI_Comm_rank(comm_global, &rank);
+        process_rank = rank;
       };
-      virtual void fill_obslist(IdxType index) override {
+      virtual void allocate_observables(IdxType size) override {
+        SAFE_ALOC_GPU(obsvals_dev, size * sizeof(ObservableList));
+        obsvals.resize(size);
+        obsvec.resize(size);
+      };
+virtual void fill_obslist(IdxType index) override {
+        /**
+         * @brief Add an entry to the ObservableList data structure
+         */
         ObservableList obs;
         obs.numterms = zmasks[index].size();
         IdxType isize = obs.numterms * sizeof(IdxType);
         IdxType vsize = obs.numterms * sizeof(ValType);
         SAFE_ALOC_GPU(obs.zmasks, isize);
+        obs.exp_output = 0;
         SAFE_ALOC_GPU(obs.coeffs, vsize);
+        // allocate memory for the zmasks and coefficients
         cudaSafeCall(cudaMemcpy(obs.zmasks, zmasks[index].data(), isize,
-                                    cudaMemcpyHostToDevice));
-        cudaSafeCall(cudaMemcpy(obs.coeffs, coeffs[index].data(), coeffs[index].size() * sizeof(ValType),
-                                    cudaMemcpyHostToDevice));
-        ObservableList* obs_device;
-        SAFE_ALOC_GPU(obs_device, sizeof(ObservableList));
+                                cudaMemcpyHostToDevice));
+        cudaSafeCall(cudaMemcpy(obs.coeffs, coeffs[index].data(), vsize,
+                                cudaMemcpyHostToDevice));
+          // std::cout << "Filling list: " << index << " " <<(obsvals_dev + index) << std::endl;
+        ObservableList* obs_device = (ObservableList*)((void*)obsvals_dev + index * sizeof(ObservableList));
+        obsvals[index] = obs;
         obsvec[index] = obs_device;
-        cudaSafeCall(cudaMemcpy(obs_device, &obs, sizeof(ObservableList),
-                                    cudaMemcpyHostToDevice));
-        ansatz->EXPECT(obs_device); 
+        measurement->EXPECT(obs_device); 
       };
+      virtual void set_exp_gate(std::shared_ptr<Ansatz> circuit, ObservableList* o, std::vector<IdxType>& _zmasks, std::vector<ValType>& _coeffs) override {
+        ObservableList obs;
+        
+        obs.numterms = _zmasks.size();
+        IdxType isize = obs.numterms * sizeof(IdxType);
+        IdxType vsize = obs.numterms * sizeof(ValType);
+        SAFE_ALOC_GPU(obs.zmasks, isize);
+        obs.exp_output = 0;
+        SAFE_ALOC_GPU(obs.coeffs, vsize);
+        cudaSafeCall(cudaMemcpy(obs.zmasks, _zmasks.data(), isize,
+                                cudaMemcpyHostToDevice));
+        cudaSafeCall(cudaMemcpy(obs.coeffs, _coeffs.data(), _coeffs.size() * sizeof(ValType),
+                                cudaMemcpyHostToDevice));
+        cudaSafeCall(cudaMemcpy(o, &obs, sizeof(ObservableList),
+                                cudaMemcpyHostToDevice));
+        circuit->EXPECT(o);
+      };
+      
       virtual void call_simulator() override {  
+        cudaSafeCall(cudaMemcpy(obsvals_dev, obsvals.data(), obsvals.size() * sizeof(ObservableList),
+                              cudaMemcpyHostToDevice));
         std::vector<ValType> xparams;   
         if (iteration > 0){
           Config::PRINT_SIM_TRACE = false;
@@ -70,12 +102,51 @@ namespace NWQSim
         MPI_Barrier(MPI_COMM_WORLD);
         reset_state();
         sim(ansatz);
+        sim(measurement);
         cudaDeviceSynchronize();
-        MPI_Barrier(MPI_COMM_WORLD);
+
+        cudaSafeCall(cudaMemcpy(obsvals.data(), obsvals_dev, obsvals.size() * sizeof(ObservableList),
+                                    cudaMemcpyDeviceToHost));
+        cudaDeviceSynchronize();
+        // for (size_t i = 0; i < dim; i++) {
+        //   std::cout << "(" << sv_real_cpu[i] * sv_real_cpu[i] + sv_imag_cpu[i] * sv_imag_cpu[i] << "), ";
+        // }
+        // std::cout << std::endl;
+        double temp = 0;
+        size_t index = 0;
+        for (auto o: obsvals) {
+          temp += o.exp_output;
+          index++;
+        }
+        MPI_Allreduce(&temp, &expectation_value, 1, MPI_DOUBLE, MPI_SUM, comm_global);
         if (i_proc != 0) {
           stat = WAIT;
         }
         MPI_Barrier(MPI_COMM_WORLD);     
+        
+      };
+      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) override {  
+        std::vector<ValType> xparams;   
+        if (iteration > 0){
+          Config::PRINT_SIM_TRACE = false;
+        }
+        if (i_proc == 0) {
+          std::vector<double>* ansatz_params = ansatz->getParams();
+          stat = CALL_SIMULATOR;
+          for(IdxType i = 1; i < n_gpus; i++) {
+            MPI_Send(ansatz_params->data(), ansatz->numParams(), MPI_DOUBLE, i, 1, MPI_COMM_WORLD);
+          }
+        } else {
+          xparams.resize(ansatz->numParams());
+          MPI_Recv(xparams.data(), ansatz->numParams(), MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+          ansatz->setParams(xparams);
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+        reset_state();
+        sim(ansatz);
+        sim(_measurement);
+        cudaDeviceSynchronize();
+        
       };
       virtual void process_loop() {
         assert(i_proc != 0);
@@ -120,6 +191,7 @@ namespace NWQSim
             }
 
           } else {
+            stat = WAIT;
             process_loop();
           }
       }
@@ -132,11 +204,6 @@ namespace NWQSim
               SAFE_FREE_GPU(obs.coeffs);
           }
           SAFE_FREE_GPU(obsvals_dev);
-          for (auto g: *ansatz->gates) {
-              if (g.op_name == OP::EXPECT) {
-                  SAFE_FREE_GPU(g.data);
-              }
-          }
             
             // SAFE_FREE_GPU(randoms_gpu);
             // SAFE_FREE_GPU(gates_gpu);
@@ -144,16 +211,18 @@ namespace NWQSim
             // SAFE_FREE_HOST_CUDA(results);
         }
          virtual void get_exp_values(const std::vector<ObservableList*>& observables, std::vector<IdxType> sizes, std::vector<ValType>& output) override {
-        for (size_t i = 0; i < observables.size(); i++) {
-          std::vector<ObservableList> host_temp(sizes[i]);
-          cudaSafeCall(cudaMemcpy(host_temp.data(), observables[i], sizes[i] * sizeof(ObservableList),
-                                    cudaMemcpyDeviceToHost));
-          
-          for (ObservableList obs: host_temp) {
-            output[i] += obs.exp_output;
+          std::vector<double> temp(output.size(), 0);
+          for (size_t i = 0; i < observables.size(); i++) {
+            std::vector<ObservableList> host_temp(sizes[i]);
+            cudaSafeCall(cudaMemcpy(host_temp.data(), observables[i], sizes[i] * sizeof(ObservableList),
+                                      cudaMemcpyDeviceToHost));
+            
+            for (ObservableList obs: host_temp) {
+              temp[i] += obs.exp_output;
+            }
+            // output.at(i) = observables.at(i)->exp_output;
           }
-          // output.at(i) = observables.at(i)->exp_output;
-        }
+          MPI_Allreduce(temp.data(), output.data(), temp.size(), MPI_DOUBLE, MPI_SUM, comm_global);
       };
 
       virtual void allocate_observables(ObservableList*& observables, IdxType size) override {
