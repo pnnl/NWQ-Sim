@@ -46,11 +46,7 @@ namespace NWQSim
     class DM_CUDA : public QuantumState
     {
     public:
-<<<<<<< HEAD
-        DM_CUDA(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits, config)
-=======
-        DM_CUDA(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::DM)
->>>>>>> main
+        DM_CUDA(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits,SimType::DM, config)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;

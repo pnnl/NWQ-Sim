@@ -275,23 +275,15 @@ void generate_pauli_excitations(std::vector<std::vector<PauliOperator> >& pauli_
   std::vector<std::vector<std::vector<FermionOperator> > > fermion_operators;
   fermion_operators.reserve(n_singles);
   generate_fermionic_excitations(fermion_operators, env);
-  pauli_operators.reserve(4 * n_singles + 8 * n_doubles);
-  std::vector<IdxType> selection;
 
-  // If we're subsampling, generate the list of operator indices to choose a priori
+  std::vector<PauliOperator> temporary_storage;
   if (subsample > 0) {
-    std::vector<IdxType> indices(4 * n_singles + 8 * n_doubles);
-    std::iota(indices.begin(), indices.end(), 0);
-    std::mt19937_64 random_engine (seed);
-    std::shuffle(indices.begin(), indices.end(), random_engine);
-    // take the first N indices, where N is either the number of samples or the number of operators (whichever is smaller)
-    selection = std::vector<IdxType>(
-      indices.begin(),
-      indices.begin() + std::min(subsample, (IdxType)indices.size()));
-    std::sort(selection.begin(), selection.end());
+    temporary_storage.reserve(4 * n_singles + 16 * n_doubles);
+  } else {
+    pauli_operators.reserve(4 * n_singles + 16 * n_doubles);
   }
+    
   IdxType index = 0;
-  std::vector<IdxType>::iterator iter = selection.begin();
   // NOTE: Not the most efficient way of doing this, kind of a workaround due to the data structures used elsewhere
   for (size_t i = 0; i < fermion_operators.size(); i++) {
   // Perform the JordanWigner mapping for each Fermionic operator product
@@ -301,17 +293,32 @@ void generate_pauli_excitations(std::vector<std::vector<PauliOperator> >& pauli_
     for (auto pauli_list: mapper_temp) {
       for (auto pauli: pauli_list) {
         // If we're not subsampling or if this is a selected index
-        if (subsample < 0 || index == *iter) {
-          pauli_operators.push_back({pauli});
-          if (subsample > 0) {
-            iter++;
-          }
+        if (subsample < 0) {
+          pauli_operators.push_back({pauli});\
+        } else {
+          temporary_storage.push_back(pauli);
         }
         index++; // keep count of indices
       }
     }
   }
-  printf("Expected %lld operators, got %lld\n", 4 * n_singles + 8 * n_doubles, index);
+  std::vector<IdxType> selection;
+  // If we're subsampling, generate the list of operator indices to choose a priori
+  if (subsample > 0) {
+    std::vector<IdxType> indices(temporary_storage.size());
+    std::iota(indices.begin(), indices.end(), 0);
+    std::mt19937_64 random_engine (seed);
+    std::shuffle(indices.begin(), indices.end(), random_engine);
+    // take the first N indices, where N is either the number of samples or the number of operators (whichever is smaller)
+    selection = std::vector<IdxType>(
+      indices.begin(),
+      indices.begin() + std::min(subsample, (IdxType)indices.size()));
+    pauli_operators.reserve(selection.size());
+    for (IdxType i : selection) {
+      pauli_operators.push_back({temporary_storage[i]});
+    }
+  }
+  std::vector<IdxType>::iterator iter = selection.begin();
 
   
 };

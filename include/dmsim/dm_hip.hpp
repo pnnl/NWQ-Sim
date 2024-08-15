@@ -43,7 +43,7 @@ namespace NWQSim
     class DM_HIP : public QuantumState
     {
     public:
-        DM_HIP(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits, config)
+        DM_HIP(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits,SimType::DM, config)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;

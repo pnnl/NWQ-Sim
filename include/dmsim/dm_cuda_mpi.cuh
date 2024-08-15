@@ -48,7 +48,7 @@ namespace NWQSim
     class DM_CUDA_MPI : public QuantumState
     {
     public:
-        DM_CUDA_MPI(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits, config)
+        DM_CUDA_MPI(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits,SimType::DM, config)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;

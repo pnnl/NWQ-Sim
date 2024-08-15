@@ -37,11 +37,7 @@ namespace NWQSim
     class SV_CUDA : public QuantumState
     {
     public:
-<<<<<<< HEAD
-        SV_CUDA(IdxType _n_qubits, const std::string& config_path) : QuantumState(_n_qubits, config_path)
-=======
-        SV_CUDA(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::SV)
->>>>>>> main
+        SV_CUDA(IdxType _n_qubits, const std::string& config_path) : QuantumState(_n_qubits, SimType::SV, config_path)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;

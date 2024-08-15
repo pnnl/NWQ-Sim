@@ -23,11 +23,7 @@ namespace NWQSim
     {
 
     public:
-<<<<<<< HEAD
-        SV_CPU(IdxType _n_qubits, const std::string& config_path) : QuantumState(_n_qubits, config_path)
-=======
-        SV_CPU(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::SV)
->>>>>>> main
+        SV_CPU(IdxType _n_qubits, const std::string& config_path) : QuantumState(_n_qubits, SimType::SV, config_path)
         {
             // Initialize CPU side
             n_qubits = _n_qubits;

@@ -24,7 +24,7 @@ namespace NWQSim
     {
 
     public:
-        DM_CPU(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits, config)
+        DM_CPU(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits, SimType::DM, config)
         {
             // Initialize CPU side
             n_qubits = _n_qubits;

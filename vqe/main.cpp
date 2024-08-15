@@ -16,8 +16,8 @@ using IdxType = NWQSim::IdxType;
 using ValType = NWQSim::ValType;
 
 struct VQEParams {
-  std::string hamiltonian_path;
-  IdxType nparticles;
+  std::string hamiltonian_path = "";
+  IdxType nparticles = -1;
   std::string backend = "CPU";
   uint32_t seed;
   std::string config = "../default_config.json";
@@ -202,6 +202,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
 
     // state->initialize();
     std::shared_ptr<NWQSim::VQE::DynamicAnsatz> dyn_ansatz = std::reinterpret_pointer_cast<NWQSim::VQE::DynamicAnsatz>(ansatz);
+    std::cout << "Pool Size " << params.adapt_pool_size << std::endl;
     dyn_ansatz->make_op_pool(hamil->getTransformer(),params.seed, params.adapt_pool_size);
     NWQSim::VQE::AdaptVQE adapt_instance(dyn_ansatz, state, hamil);
     auto start_time = std::chrono::high_resolution_clock::now();
@@ -247,7 +248,8 @@ int main(int argc, char** argv) {
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
   if (params.adapt)
   {
-    ansatz = std::make_shared<NWQSim::VQE::DynamicAnsatz>(hamil->getEnv(), NWQSim::VQE::PoolType::Fermionic);
+    NWQSim::VQE::PoolType pool = params.qubit ? NWQSim::VQE::PoolType::Pauli : NWQSim::VQE::PoolType::Fermionic;
+    ansatz = std::make_shared<NWQSim::VQE::DynamicAnsatz>(hamil->getEnv(), pool);
   } else {
     ansatz  = std::make_shared<NWQSim::VQE::UCCSD>(
       hamil->getEnv(),
