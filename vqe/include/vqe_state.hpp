@@ -72,7 +72,7 @@ namespace NWQSim
           }
                             
           // Check if the chosen algorithm requires derivatives
-          compute_gradient = std::string(nlopt::algorithm_name(optimizer_algorithm)).find("no-derivative") == std::string::npos;\          
+          compute_gradient = std::string(nlopt::algorithm_name(optimizer_algorithm)).find("no-derivative") == std::string::npos;     
         };
       virtual void fill_obslist(IdxType index) {};
       // function for the NLOpt plugin

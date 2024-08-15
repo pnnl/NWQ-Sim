@@ -136,7 +136,7 @@ message(STATUS "CUDA found: ${CUDAToolkit_FOUND}")
 message(STATUS "HIP found: ${hip_found_str}")
 message(STATUS "NVSHMEM found: ${nvshmem_found_str}")
 message(STATUS "XACC found: ${xacc_found_str}")
-message(STATUS "Matrix Accleator ENABLED: ${ma_enable}")
+message(STATUS "Matrix Accelerator ENABLED: ${ma_enable}")
 message(STATUS "==========================================================================\n")
 
 # Include directories

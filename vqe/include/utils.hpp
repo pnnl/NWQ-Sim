@@ -27,6 +27,12 @@ std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
   out << "]";
   return out;
 }
+// Templated print function for std::vector
+template <typename T, typename S>
+std::ostream& operator<<(std::ostream& out, const std::pair<T, S>& target) {
+  std::cout << "(" << target.first << ", " << target.second << ")" << std::endl;
+  return out;
+}
 template <typename T>
 inline
 T factorial(T n) {
@@ -47,16 +53,6 @@ enum STATUS {
     EXIT_LOOP
 };
 
-template <typename T, typename S>
-std::stringstream& operator<<(std::stringstream& out, const std::pair<T, S>& target) {
-  out << "(" << target.first << ", " << target.second << ")";
-  return out;
-}
-template <typename T, typename S>
-std::ostream& operator<<(std::ostream& out, const std::pair<T, S>& target) {
-  out << "(" << target.first << ", " << target.second << ")";
-  return out;
-}
 template <typename T>
 std::stringstream& operator<<(std::stringstream& out, const std::vector<T>& target) {
   out << "[";
