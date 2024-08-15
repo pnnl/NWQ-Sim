@@ -23,7 +23,11 @@ namespace NWQSim
     {
 
     public:
+<<<<<<< HEAD
         SV_CPU(IdxType _n_qubits, const std::string& config_path) : QuantumState(_n_qubits, config_path)
+=======
+        SV_CPU(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::SV)
+>>>>>>> main
         {
             // Initialize CPU side
             n_qubits = _n_qubits;
@@ -672,6 +676,11 @@ namespace NWQSim
                 printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld) with %lf\n", t, OP_NAMES[g.op_name], g.ctrl, g.qubit, purity);
             }
         }
+
+    
+        virtual ValType *get_real() const override {return sv_real;};
+        virtual ValType *get_imag() const override {return sv_imag;};
+
     };
 
 } // namespace NWQSim

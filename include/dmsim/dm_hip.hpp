@@ -123,6 +123,7 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
+<<<<<<< HEAD
         virtual void set_initial (std::string fpath) override {
             std::ifstream instream;
             instream.open(fpath, std::ios::in|std::ios::binary);
@@ -149,6 +150,10 @@ namespace NWQSim
                 outstream.close();
             }
         };
+=======
+        virtual ValType *get_real() const override {return dm_real;};
+        virtual ValType *get_imag() const override {return dm_imag;};
+>>>>>>> main
 
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {

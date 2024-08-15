@@ -48,7 +48,6 @@ namespace xacc
             std::string backend_name = "nvgpu";
             std::string simulation_type = "sv";
             bool vqe_mode = false;
-
             std::shared_ptr<NWQSim::QuantumState> m_state;
         };
 
