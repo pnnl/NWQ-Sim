@@ -23,7 +23,7 @@ namespace NWQSim
     {
 
     public:
-        SV_MPI(IdxType _n_qubits, const std::string& config_path) : QuantumState(_n_qubits, config_path)
+        SV_MPI(IdxType _n_qubits, const std::string& config_path) : QuantumState(_n_qubits, SimType::SV, config_path)
         {
             // SV initialization
             n_qubits = _n_qubits;
@@ -1325,6 +1325,8 @@ namespace NWQSim
             }
             // BARR_MPI;
         }
+        virtual ValType *get_real() const override {return sv_real;};
+        virtual ValType *get_imag() const override {return sv_imag;};
     };
 
 } // namespace NWQSim

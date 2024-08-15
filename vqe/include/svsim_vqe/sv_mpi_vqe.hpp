@@ -1,15 +1,11 @@
 #ifndef VQE_MPI_STATE
 #define VQE_MPI_STATE
 #include "mpi.h"
-#include "mpi_proto.h"
 #include "state.hpp"
 #include "svsim/sv_mpi.hpp"
 #include "vqe_state.hpp"
-#include "observable/pauli_operator.hpp"
 #include "utils.hpp"
 #include "circuit/ansatz.hpp"
-#include "circuit/measurement.hpp"
-#include "gradient/sa_gradient.hpp"
 #include "observable/hamiltonian.hpp"
 #include "nlopt.hpp"
 #include <iostream>
@@ -32,7 +28,9 @@ namespace NWQSim
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
         size_t index = 0;
         size_t curr_ptr = 0;
-        // initialize();
+        int rank = 0;
+        MPI_Comm_rank(comm_global, &rank);
+        process_rank = rank;
       };
 
       virtual void fill_obslist(IdxType index) override {
@@ -82,6 +80,12 @@ namespace NWQSim
         }
         MPI_Allreduce(temp.data(), output.data(), temp.size(), MPI_DOUBLE, MPI_SUM, comm_global);
       };
+      ~SV_MPI_VQE() {
+
+        for (auto i: obsvec) {
+            delete i;
+        }
+      }
       virtual void call_simulator() override { 
         /**
          * @brief Prepares the trial state and computes the Hamiltonian expectation value

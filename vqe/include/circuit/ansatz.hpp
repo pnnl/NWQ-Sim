@@ -111,13 +111,10 @@ namespace NWQSim {
         virtual std::vector<std::string> getFermionicOperatorStrings() const {
           std::vector<std::string> result;
           throw std::runtime_error("Fermionic operators not specified for this ansatz\n");
-          return result;
         };
         virtual std::vector<std::pair<std::string, ValType> > getFermionicOperatorParameters() const {
           std::vector<std::pair<std::string, ValType> > result;
           throw std::runtime_error("Fermionic operators not specified for this ansatz\n");
-          return result;
-
         }
         void compose(const Circuit& other, std::vector<IdxType>& qubit_mapping) {
           // Ansatz composition = Ansatz(*this);

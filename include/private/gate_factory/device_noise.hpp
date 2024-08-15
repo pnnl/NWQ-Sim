@@ -29,6 +29,7 @@ namespace NWQSim
     std::vector<OP> gates2q{OP::CX, OP::ECR};
 
     //================ Set gates =================
+    inline
     void set_X(std::complex<double> *res)
     {
         /******************************************
@@ -40,6 +41,7 @@ namespace NWQSim
                                                    {{1, 0}, {0, 0}}};
         std::copy(&x_gate[0][0], &x_gate[0][0] + 4, res);
     }
+    inline
     void set_ID(std::complex<double> *res)
     {
         /******************************************
@@ -50,6 +52,7 @@ namespace NWQSim
                                                     {{0, 0}, {1, 0}}};
         std::copy(&id_gate[0][0], &id_gate[0][0] + 4, res);
     }
+    inline
     void set_SX(std::complex<double> *res)
     {
         /******************************************
@@ -61,6 +64,7 @@ namespace NWQSim
                                                     {std::complex<double>(0.5, -0.5), std::complex<double>(0.5, 0.5)}};
         std::copy(&sx_gate[0][0], &sx_gate[0][0] + 4, res);
     }
+    inline
     void set_RZ(std::complex<double> *res, double theta)
     {
         /******************************************
@@ -73,6 +77,7 @@ namespace NWQSim
             {{0, 0}, {cos(theta / 2), sin(theta / 2)}}};
         std::copy(&rz_gate[0][0], &rz_gate[0][0] + 4, res);
     }
+    inline
     void set_CX(std::complex<double> *res)
     {
         /******************************************

@@ -12,7 +12,9 @@ namespace NWQSim::Config
     inline bool ENABLE_NOISE = false;
     inline bool ENABLE_FUSION = true;
     inline bool ENABLE_TENSOR_CORE = false;
-
+    inline bool DEVICE_READ = false;
+    using IdxType = long long;
+    using ValType = double;
     inline std::string DEVICE_CONFIG_PATH = "~/NWQ-Sim/data/device/";
     inline std::string DEVICE_CONFIG_FILE = "dummy_ibmq12";
 
@@ -136,10 +138,24 @@ namespace NWQSim::Config
         }
     }
 
+    /**
+     * @brief Read json file that stores backend noise properties from input path. Output from the function in the python script device_config.py
+     *        See an example usage in backedn_noise_validation.cpp
+     *
+     * @param path the absolute path path where json file locates. e.g., "./Data/"
+     */
+    inline void readDeviceConfig(const std::string& path) {
+        std::ifstream f(path);
+        if (f.fail())
+            throw std::logic_error("Device config file not found at " + path);
+        backend_config = nlohmann::json::parse(f);
+        DEVICE_READ = true;
+    }
+
     inline void Load(const std::string &filename = "../default_config.json")
     {
         LoadConfigFromFile(filename, true);
-        if (ENABLE_NOISE)
+        if (ENABLE_NOISE && !DEVICE_READ)
             readConfigFile();
     }
     inline std::string qindex(IdxType q) {
@@ -174,7 +190,7 @@ namespace NWQSim::Config
     {
         LoadConfigFromFile(filename, false);
 
-        if (ENABLE_NOISE)
+        if (ENABLE_NOISE && !DEVICE_READ)
             readConfigFile();
     }
 

@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
   // Note: path relative to presumed build directory
   std::string hamiltonian_path = "../vqe/example_hamiltonians/BeH2_6_2.4_xacc.hamil"; //  Effective Hamiltonian file path
   std::vector<std::vector<Pauli> > op = {{Pauli("IIIIIIIIIIII")}};
-  std::shared_ptr<Hamiltonian> hamil = std::make_shared<Hamiltonian>(op, "../default_config.json", n_particles, true); // Build the Hamiltonian object (used for energy calculation)
+  std::shared_ptr<Hamiltonian> hamil = std::make_shared<Hamiltonian>(op, n_particles, true); // Build the Hamiltonian object (used for energy calculation)
   Transformer jw_transform = getJordanWignerTransform; // Choose a transformation function
 
   // Build the ansatz circuit using the Hamiltonian Molecular environment and JW mapping
@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
 
   // Start the VQE optimization   
   std::shared_ptr<NWQSim::VQE::DynamicAnsatz> dyn_ansatz = std::reinterpret_pointer_cast<NWQSim::VQE::DynamicAnsatz>(ansatz);
-    dyn_ansatz->make_op_pool(hamil->getTransformer());
+    dyn_ansatz->make_op_pool(hamil->getTransformer(), 0, 40);
 
     NWQSim::VQE::AdaptVQE adapt_instance(dyn_ansatz, state, hamil);
     adapt_instance.make_commutators();

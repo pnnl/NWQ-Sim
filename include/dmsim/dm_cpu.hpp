@@ -11,8 +11,7 @@
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
 
-#include "../private/gate_factory/dm_gates.hpp"
-
+#include <memory>
 #include <random>
 #include <cstring>
 #include <algorithm>
@@ -25,7 +24,7 @@ namespace NWQSim
     {
 
     public:
-        DM_CPU(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits, config)
+        DM_CPU(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits, SimType::DM, config)
         {
             // Initialize CPU side
             n_qubits = _n_qubits;
@@ -188,6 +187,68 @@ namespace NWQSim
                 printf("\n");
             }
         }
+        
+        virtual ValType *get_real() const override {return dm_real;};
+        virtual ValType *get_imag() const override {return dm_imag;};
+
+        virtual ValType fidelity(std::shared_ptr<QuantumState> other) override {
+            ValType result_real = 0;
+            ValType result_imag = 0;
+            const IdxType block_size = 32;
+            IdxType vector_dim = 1 << n_qubits;
+            double* sv_real = other->get_real();
+            double* sv_imag = other->get_imag();
+            // IdxType i = 0;
+            // IdxType outer_limit = (vector_dim / block_size) * block_size;
+            // if (block_size > vector_dim)
+            //     goto EPILOGUE;
+            // for (i = 0; i < outer_limit; i+=block_size) {
+            //     // $\bra{\psi}$: vector in dual space
+            //     double* block_ket_real = sv_real + i;
+            //     double* block_ket_imag = sv_imag + i;
+
+            // #pragma unroll
+            // for (IdxType k = i; k < i + block_size; k++) {
+            //     ValType a = block_ket_real[k];
+            //     ValType b = block_ket_imag[k];
+            //     // individual block
+            //     for (IdxType j = 0; j < outer_limit; j += block_size) {
+            //         // $\ket{\psi}$: vector in primal space
+            //         double* block_bra_real = sv_real + j;
+            //         double* block_bra_imag = sv_imag + j;
+            //         // $\rho$: density matrix
+            //         double* block_dm_real = dm_real + i * vector_dim + j;
+            //         double* block_dm_imag = dm_imag + i * vector_dim + j;
+            //             #pragma unroll
+            //             for (IdxType r = j; r < j + block_size; r++) {
+            //                 printf("%d %d\n", k, r);
+            //                 ValType c = block_dm_real[k * vector_dim + r];
+            //                 ValType d = block_dm_imag[k * vector_dim + r];
+            //                 ValType g = block_bra_real[r];
+            //                 ValType f = -block_bra_imag[r];
+            //                 result_real += a * c * g - a * d * f - b * c * f - b * d * g;
+            //                 result_imag += a * c * f + a * d * g + b * c * g - b * d * f;
+            //             }
+            //         }
+            //     }
+            // }
+
+            // EPILOGUE:
+            for (IdxType ind = 0; ind < vector_dim; ind++) {
+                ValType a = sv_real[ind];
+                ValType b = -sv_imag[ind];
+                for (IdxType j = 0; j < vector_dim; j ++) {
+                    ValType c = dm_real[ind * vector_dim + j];
+                    ValType d = dm_imag[ind * vector_dim + j];
+                    ValType g = sv_real[j];
+                    ValType f = sv_imag[j];
+                    result_real += a * c * g - a * d * f - b * c * f - b * d * g;
+                    result_imag += a * c * f + a * d * g + b * c * g - b * d * f;
+                }
+            }
+            assert(abs(result_imag) <= 1e-10);
+            return result_real;
+        };
     protected:
         // n_qubits is the number of qubits
         IdxType n_qubits;

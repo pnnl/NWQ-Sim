@@ -194,6 +194,8 @@ This guide provides detailed instructions on how to execute the compiled program
 
 - `-a`: Runs all testing benchmarks. 
 
+- `device`: Sets the path to a device configuration JSON file for density matrix simulation. Note that this overwrites the file specified in `default_config.json`.
+
 - `-backend list`: Lists all the available backends. The list of available backends are:
   - CPU
   - OpenMP
@@ -210,18 +212,29 @@ This guide provides detailed instructions on how to execute the compiled program
 - `-basis`: Activates the program to run benchmark circuits using only basis gates.
 
 - `-sim <method>`: Sets the simulation method. There are two available options:
-  - `sv`: Stochastic Vector simulation.
-  - `dm`: Density Matrix simulation. Please note, when running with `dm`, the given circuit can only contain IBM basis gates and 2-qubit gates that are included in the device configuration file specified in the default_configuration.json file.
+  - `sv`: Statevector simulation.
+  - `dm`: Density Matrix simulation. Please note, when running with `dm`, the given circuit can only contain IBM basis gates and 2-qubit gates that are included in the device configuration file specified in the default_config.json file.
+
+- `-fidelity`: Calculates the fidelity resulting from quantum noise channels. NOTES: 
+  - This will run **both** the Statevector and Density Matrix simulators, so the given circuit can only contain IBM basis gates and 2-qubit gates that are included in the device configuration file specified in the default_config.json file or passed with `-device`. 
+  - Make sure that default_config.json has `enable_noise: true`, otherwise the fidelity will always be 1 (useful for debugging)
+  - If running with `-backend NVGPU_MPI`, the Statevector simulator will only run on the root node, while the Density Matrix simulator will run on all nodes.
 
 **Example Usage:** To run the qasm frontend from the `build` directory with a specific backend, a total number of shots, and a simulation method, use the following command: 
 
-```
+```bash
 ./qasm/nwq_qasm -backend <name> -shots <value> -sim <method> -q <path/to/qasm>
 ```
 
 Replace `<name>`, `<value>`, `<method>`, and `<path/to/qasm>` with your desired backend name, number of shots, and simulation method respectively.
 
 Please ensure that you replace `/qasm/nwq_qasm` with the actual name of your compiled executable file if not using the qasm frontend.
+
+To compute the fidelity, add the `-fidelity` flag (with an optional device JSON path):
+
+```bash
+./qasm/nwq_qasm -backend <name> -shots <value> -sim <method> -q <path/to/qasm> -fidelity -device <path/to/device_json>
+```
 
 ### Running on Frontier HPC
 

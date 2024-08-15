@@ -7,7 +7,6 @@
 #include "circuit/measurement.hpp"
 #include "gradient/sa_gradient.hpp"
 #include "observable/hamiltonian.hpp"
-#include "circuit_pass/fusion.hpp"
 #include "nlopt.hpp"
 #include <memory>
 #include <cmath>
@@ -43,21 +42,19 @@ namespace NWQSim
                                       optimizer_algorithm(_optimizer_algorithm),
                                       optimizer_settings(opt_settings)
                                       {
-          
+          process_rank = 0;
         }
         ~VQEState(){
-        for (auto i: obsvec) {
-            delete i;
-        }
       }
         void initialize() {
           const std::vector<std::vector<PauliOperator> >& pauli_operators = hamil->getPauliOperators(); 
+          // std::vector<std::vector<PauliOperator> > pauli_operators = {{PauliOperator("IIIIIIII")}};
           IdxType index = 0;    
           measurement.reset(new Ansatz(ansatz->num_qubits()));
           obsvec.clear();
           zmasks.clear();
           coeffs.clear();
-          obsvec.resize(pauli_operators.size());
+          allocate_observables(pauli_operators.size());
           zmasks.resize(pauli_operators.size());
           coeffs.resize(pauli_operators.size());
           std::vector<IdxType> mapping (ansatz->num_qubits());
@@ -73,21 +70,20 @@ namespace NWQSim
             measurement->compose(circ2, mapping);
             index++;
           }
-                                          
+                            
           // Check if the chosen algorithm requires derivatives
-          compute_gradient = std::string(nlopt::algorithm_name(optimizer_algorithm)).find("no-derivative") == std::string::npos;
-          
-          
+          compute_gradient = std::string(nlopt::algorithm_name(optimizer_algorithm)).find("no-derivative") == std::string::npos;\          
         };
       virtual void fill_obslist(IdxType index) {};
       // function for the NLOpt plugin
-      double cost_function(const std::vector<double> x, std::vector<double>& gradient) {
+      double cost_function(const std::vector<double>& x, std::vector<double>& gradient) {
         if (iteration > 0){
           Config::PRINT_SIM_TRACE = false;
         }
         if (compute_gradient) {
           gradient.resize(x.size());
-          g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, x, gradient, 1e-4);
+          g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, x, gradient, 1e-4, 1);
+          std::cout << gradient[0] << " " << gradient[1] << std::endl;
         }
         if (iteration > 0){
           Config::PRINT_SIM_TRACE = false;
@@ -116,7 +112,6 @@ namespace NWQSim
         ValType ene_prev = MAXFLOAT;
         ValType ene_curr = energy(params);
         initial_ene = ene_curr;
-        // gradient
         // get the single-direction starting vector
         g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, params, gradient, delta, n_grad_est);
         iteration = 0;
@@ -191,7 +186,10 @@ namespace NWQSim
       virtual void allocate_observables(ObservableList*& observables, IdxType size) {
         observables = new ObservableList[size];
       };
-      virtual void delete_observables(ObservableList* observables) {
+      virtual void allocate_observables(IdxType size) {
+        obsvec.resize(size);
+      };
+      virtual void delete_observables(ObservableList* observables, IdxType size) {
         delete[] observables;
       };
       virtual ValType energy(const std::vector<double>& x) {
@@ -201,6 +199,7 @@ namespace NWQSim
         ValType expectation = hamil->getEnv().constant + expectation_value;
         return expectation;
       }
+      IdxType get_process_rank() const { return process_rank; }
       
       std::shared_ptr<Hamiltonian> get_hamiltonian() const { return hamil; }
       IdxType get_iteration() const {return iteration;};
@@ -209,6 +208,7 @@ namespace NWQSim
         std::shared_ptr<Ansatz> measurement;
         std::shared_ptr<Hamiltonian> hamil;
         SPSA g_est;
+        IdxType process_rank;
         bool compute_gradient;
         Callback callback;
         OptimizerSettings optimizer_settings;

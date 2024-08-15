@@ -166,9 +166,9 @@ namespace NWQSim {
           return zmask;
         }
         // Dump the Pauli operator to string
-        std::string pauliToString() const {
+        std::string pauliToString(bool print_coeff = true) const {
           std::stringstream ss;
-          if (coeff != 1.0) {
+          if (coeff != 1.0 || !print_coeff) {
             ss << "(" << coeff.real() << " ";
             if (coeff.imag() >= 0) {
               ss << "+ " << coeff.imag() << "i)";
@@ -244,11 +244,12 @@ namespace NWQSim {
                       Commute relation) const {
           switch(relation) {
             case Commute::QWC:
-            return QWC(other);
+              return QWC(other);
             case Commute::GC:
-            return GC(other);
+              return GC(other);
+            default:
+              return false;
           }
-
         }
         std::complex<ValType> getCoeff() const {return coeff;}
         void setCoeff (std::complex<ValType> new_coeff) {coeff = new_coeff;}
@@ -262,7 +263,6 @@ namespace NWQSim {
           ValType expect = 0.0;
           IdxType shots = 0;
           for (auto& i: counts) {
-            IdxType observation = i.first;
             IdxType count = i.second;
             ValType sign;
             bool par = parity(i.first, sign);

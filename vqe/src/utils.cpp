@@ -1,11 +1,15 @@
 #include "observable/pauli_operator.hpp"
 #include "observable/fermionic_operator.hpp"
+#include "transform/transform.hpp"
 #include "utils.hpp"
+#include <algorithm>
+#include <random>
 #include <string>
 #include <iostream>
 #include <sstream>
 #include <queue>
 #include <fstream>
+#include <vector>
 
 namespace NWQSim{
 namespace VQE {
@@ -145,56 +149,74 @@ std::vector<IdxType> sorted_nodes;
         sorted_nodes = not_added;
     }
 }
-void generate_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
+
+/**
+ * @brief  Generate a set of single/double Fermionic excitations
+ * @note   Same set of operators evolved in a UCCSD Ansatz
+ * @param  fermion_operators: Output vector to store Fermionic operator products
+ * @param  env: Struct containing molecular information
+ * @retval None
+ */
+void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
                                     const MolecularEnvironment& env) {
   // Single excitation
-      for (IdxType p = 0; p < env.n_occ; p++) {
-        FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
-        FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
-        for (IdxType q = 0; q < env.n_virt; q++) {
-          FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
-          FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
-          fermion_operators.push_back({{occupied_annihilation_up, virtual_creation_up}, {occupied_annihilation_down, virtual_creation_down}});
-        }
+  for (IdxType p = 0; p < env.n_occ; p++) {
+    FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
+    FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
+    for (IdxType q = 0; q < env.n_virt; q++) {
+      FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
+      FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
+      // By spin symmetry, both single excitations should have the same parameter value
+      fermion_operators.push_back({{occupied_annihilation_up, virtual_creation_up}, {occupied_annihilation_down, virtual_creation_down}});
     }
-      // Double excitation
-    for (IdxType i = 0; i < env.n_occ; i++) {
-      FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
-      FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
-      for (IdxType j = i+1; j < env.n_occ; j++) {
-        FermionOperator occ_down_2 (j, Occupied, Down, Annihilation, env.xacc_scheme);
-        FermionOperator occ_up_2 (j, Occupied, Up, Annihilation, env.xacc_scheme);
-        for (IdxType r = 0; r < env.n_virt; r++) {
-        FermionOperator virt_down_1 (r, Virtual, Down, Creation, env.xacc_scheme);
-        FermionOperator virt_up_1 (r, Virtual, Up, Creation, env.xacc_scheme);
-          for (IdxType s = r+1; s < env.n_virt; s++) {
-            FermionOperator virt_down_2 (s, Virtual, Down, Creation, env.xacc_scheme);
-            FermionOperator virt_up_2 (s, Virtual, Up, Creation, env.xacc_scheme);
-            IdxType alpha_term = fermion_operators.size();
-            fermion_operators.push_back({{
-                  occ_down_1,
-                  occ_down_2,
-                  virt_down_2,
-                  virt_down_1},
-                  {occ_up_1,
-                   occ_up_2,
-                   virt_up_2,
-                   virt_up_1},
-                   {
-                  occ_up_1,
-                  occ_down_2,
-                  virt_down_2,
+  }
+  // Symmetric double excitations
+  for (IdxType i = 0; i < env.n_occ; i++) {
+    // Occupied orbital 1
+    FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
+    FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
+    for (IdxType j = i+1; j < env.n_occ; j++) {
+      // Occupied orbital 2
+      FermionOperator occ_down_2 (j, Occupied, Down, Annihilation, env.xacc_scheme);
+      FermionOperator occ_up_2 (j, Occupied, Up, Annihilation, env.xacc_scheme);
+      for (IdxType r = 0; r < env.n_virt; r++) {
+      // Virtual orbital 1
+      FermionOperator virt_down_1 (r, Virtual, Down, Creation, env.xacc_scheme);
+      FermionOperator virt_up_1 (r, Virtual, Up, Creation, env.xacc_scheme);
+        for (IdxType s = r+1; s < env.n_virt; s++) {
+          // Virtual orbital 2
+          FermionOperator virt_down_2 (s, Virtual, Down, Creation, env.xacc_scheme);
+          FermionOperator virt_up_2 (s, Virtual, Up, Creation, env.xacc_scheme);
+          IdxType alpha_term = fermion_operators.size();
+          // By Fermion spin symmetries, we have:
+          //     a_{i,\alpha}^\dagger a_{j,\alpha}^\dagger a_{r,\alpha} a_{s,\alpha} =
+          //     a_{i,\beta}^\dagger a_{j,\beta}^\dagger a_{r,\beta} a_{s,\beta} =
+          //     a_{i,\alpha}^\dagger a_{j,\beta}^\dagger a_{r,\beta} a_{s,\alpha} - a_{i,\alpha}^\dagger a_{j,\beta}^\dagger a_{r,\alpha} a_{s,\beta}
+          fermion_operators.push_back({{
+                occ_down_1, // alpha double
+                occ_down_2,
+                virt_down_2,
+                virt_down_1},
+                {occ_up_1, // beta double
+                  occ_up_2,
+                  virt_up_2,
                   virt_up_1},
                   {
-                  occ_down_1 * -1.0,
-                  occ_up_2,
-                  virt_down_2,
-                  virt_up_1}
-                  });
+                occ_up_1, // mixed state 1
+                occ_down_2,
+                virt_down_2,
+                virt_up_1},
+                {
+                occ_down_1 * -1.0, // mixed state 2
+                occ_up_2,
+                virt_down_2,
+                virt_up_1}
+                });
           }
         }
       }
     }
+    // Mixed Double Excitations
     for (IdxType i = 0; i < env.n_occ; i++) {
       FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
       FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
@@ -209,7 +231,9 @@ void generate_excitations(std::vector<std::vector<std::vector<FermionOperator> >
           FermionOperator virt_up_2 (s, Virtual, Up, Creation, env.xacc_scheme);
             
             IdxType term = fermion_operators.size();
+            // To avoid double counting
             if (i != j && r != s) {
+              // Spin reversal symmetry
               fermion_operators.push_back({
                     {occ_up_1,
                     occ_down_2,
@@ -233,6 +257,104 @@ void generate_excitations(std::vector<std::vector<std::vector<FermionOperator> >
       }
     }
 };
+
+/**
+ * @brief  Generate Pauli Operator Pool
+ * @note   Same operators as UCCSD, just with single Pauli Strings. TODO: Remove redundant Paulis
+ * @param  pauli_operators: Output vector of observables
+ * @param  env: Molecular environment structure
+ * @retval None
+ */
+void generate_pauli_excitations(std::vector<std::vector<PauliOperator> >& pauli_operators,
+                                    const MolecularEnvironment& env,
+                                    IdxType subsample,
+                                    IdxType seed) {
+  IdxType n_singles = env.n_occ * env.n_virt;
+  IdxType n_doubles = env.n_occ * (env.n_occ) * env.n_virt * (env.n_virt) +\
+              choose2(env.n_occ) * choose2(env.n_virt) * 2; 
+  std::vector<std::vector<std::vector<FermionOperator> > > fermion_operators;
+  fermion_operators.reserve(n_singles);
+  generate_fermionic_excitations(fermion_operators, env);
+
+  std::vector<PauliOperator> temporary_storage;
+  if (subsample > 0) {
+    temporary_storage.reserve(4 * n_singles + 16 * n_doubles);
+  } else {
+    pauli_operators.reserve(4 * n_singles + 16 * n_doubles);
+  }
+    
+  IdxType index = 0;
+  // NOTE: Not the most efficient way of doing this, kind of a workaround due to the data structures used elsewhere
+  for (size_t i = 0; i < fermion_operators.size(); i++) {
+  // Perform the JordanWigner mapping for each Fermionic operator product
+    std::vector<std::vector<PauliOperator> > mapper_temp;
+    getJordanWignerTransform(env, fermion_operators[i], mapper_temp, true);
+    // Iterate ove the JW mapped Paulis and slap them on the operator pool
+    for (auto pauli_list: mapper_temp) {
+      for (auto pauli: pauli_list) {
+        // If we're not subsampling or if this is a selected index
+        if (subsample < 0) {
+          pauli_operators.push_back({pauli});\
+        } else {
+          temporary_storage.push_back(pauli);
+        }
+        index++; // keep count of indices
+      }
+    }
+  }
+  std::vector<IdxType> selection;
+  // If we're subsampling, generate the list of operator indices to choose a priori
+  if (subsample > 0) {
+    std::vector<IdxType> indices(temporary_storage.size());
+    std::iota(indices.begin(), indices.end(), 0);
+    std::mt19937_64 random_engine (seed);
+    std::shuffle(indices.begin(), indices.end(), random_engine);
+    // take the first N indices, where N is either the number of samples or the number of operators (whichever is smaller)
+    selection = std::vector<IdxType>(
+      indices.begin(),
+      indices.begin() + std::min(subsample, (IdxType)indices.size()));
+    pauli_operators.reserve(selection.size());
+    for (IdxType i : selection) {
+      pauli_operators.push_back({temporary_storage[i]});
+    }
+  }
+  std::vector<IdxType>::iterator iter = selection.begin();
+
+  
+};
+
+ /**
+  * @brief  Construct the minimal operator pool using the strategy desc. in Appdx. C of Tang et al. 2021
+  * @note   
+  * @param  _pauli_operators: Output vector of Pauli operators (each element is a singleton)
+  * @param  _env: Molecular environment
+  * @retval None
+  */
+  void generate_minimal_pauli_excitations(std::vector<std::vector<PauliOperator > >& _pauli_operators,
+                                  const MolecularEnvironment& _env) {
+    IdxType n_qubits = _env.n_spatial * 2;
+    _pauli_operators.reserve(2 * n_qubits - 2);
+    for (size_t i = 0; i < n_qubits - 1; i++) {
+      // First construct the operator of the form II...Z_{i+1}Y_i...III
+      IdxType xmask_1 = 1 << i;
+      IdxType zmask_1 = (1 << i) + (1 << (i + 1));
+      PauliOperator pauli_1(xmask_1, zmask_1, n_qubits);
+      _pauli_operators.push_back({pauli_1});
+      // Now construct the operator of the form II...Y_{i+1}...III
+      IdxType xmask_2 = (1 << (i + 1));
+      IdxType zmask_2 = (1 << (i + 1));
+      PauliOperator pauli_2(xmask_2, zmask_2, n_qubits);
+      _pauli_operators.push_back({pauli_2});
+    }
+  };
+ /**
+  * @brief  Make a common measurement operator for a QWC group
+  * @note   `pauli_list` must consist of QWC operators
+  * @param  pauli_list: list of PauliOperators
+  * @param  zmasks: output for the observable zmasks to measure each PauliOperator after diagonalization
+  * @param  coeffs: coefficients for each Pauli operator (sign corrected) following diagonalization
+  * @retval PauliOperator
+  */
   PauliOperator make_common_op(const std::vector<PauliOperator>& pauli_list, 
                                std::vector<IdxType>& zmasks,
                                std::vector<ValType>& coeffs) {

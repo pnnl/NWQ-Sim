@@ -5,6 +5,7 @@
 #include <iomanip>
 
 /********** UPDATE THE INCLUDE PATH FOR LOCAL HEADER FILE HERE ************/
+#include "private/config.hpp"
 #include "src/qasm_parser.hpp"
 #include "src/parser_util.hpp"
 /**************************************************************************/
@@ -24,10 +25,11 @@ int main(int argc, char **argv)
     IdxType total_shots = 1024;
     bool run_with_basis = false;
     bool print_metrics = false;
-    std::string config = "./default_config.json";
+    std::string config = "../default_config.json";
     std::string initfile = "";
     std::string dumpfile = "";
     std::string layoutfile = "";
+    bool report_fidelity = false;
     std::string backend = "CPU";
     std::string simulation_method = "sv";
 
@@ -51,6 +53,8 @@ int main(int argc, char **argv)
                   << "Runs the testing benchmarks for the specific index provided." << std::endl;
         std::cout << std::setw(20) << "-a"
                   << "Runs all testing benchmarks." << std::endl;
+        std::cout << std::setw(20) << "-device"
+                  << "Path to device model JSON." << std::endl;
         std::cout << std::setw(20) << "-backend_list"
                   << "Lists all the available backends." << std::endl;
         std::cout << std::setw(20) << "-metrics"
@@ -75,6 +79,8 @@ int main(int argc, char **argv)
         std::cout << std::setw(20) << "-layout-string"
                   << "String denoting qubit layout. Format maps logical qubits (lq, 0...n_qubits) to physical qubits."
                   << " Format is lq0=pq0;lq1=pq1..." << std::endl;
+        std::cout << std::setw(20) << "-fidelity"
+                  << "Run both DM-Sim and SV-Sim and report the state fidelity." << std::endl;
     }
     if (cmdOptionExists(argv, argv + argc, "-shots"))
     {
@@ -96,6 +102,11 @@ int main(int argc, char **argv)
     if (cmdOptionExists(argv, argv + argc, "-backend"))
     {
         backend = std::string(getCmdOption(argv, argv + argc, "-backend"));
+    }
+    if (cmdOptionExists(argv, argv + argc, "-device"))
+    {
+        std::string device = std::string(getCmdOption(argv, argv + argc, "-device"));
+        Config::readDeviceConfig(device);
     }
     if (cmdOptionExists(argv, argv + argc, "-sim"))
     {
@@ -123,6 +134,10 @@ int main(int argc, char **argv)
         std::string layoutstring = std::string(getCmdOption(argv, argv + argc, "-layout-string"));
         Config::readLayoutString(layoutstring);
     }
+    if (cmdOptionExists(argv, argv + argc, "-fidelity"))
+    {
+        report_fidelity = true;
+    }
 // If MPI or NVSHMEM backend, initialize MPI
 #ifdef MPI_ENABLED
     if (backend == "MPI" || backend == "NVGPU_MPI")
@@ -135,133 +150,315 @@ int main(int argc, char **argv)
         const char *filename = getCmdOption(argv, argv + argc, "-q");
         qasm_parser parser;
         parser.load_qasm_file(filename);
+        
+        if (!report_fidelity) {
+            // Create the backend
+            std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, config, parser.num_qubits(), simulation_method);
+            if (!state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            state->print_config(simulation_method);
+            map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
 
-        // Create the backend
-        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, config, parser.num_qubits(), simulation_method);
-        if (!state)
-        {
-            std::cerr << "Failed to create backend\n";
-            return 1;
+            // std::vector<size_t> in_bits;
+
+            // for (int i = 0; i < parser.num_qubits(); ++i)
+            // {
+            //     in_bits.push_back(i);
+            // }
+
+            // ValType exp_val_z = state->get_exp_z(in_bits);
+            // ValType exp_val_z_all = state->get_exp_z();
+            // for (size_t i = 0; i < parser.num_qubits(); ++i)
+            // {
+            //     in_bits[i] = i;
+            // }
+            if (dumpfile != "") {
+                state->dump_res_state(dumpfile);
+            }
+            if (state->i_proc == 0)
+            {
+                print_counts(counts, total_shots);
+                // fflush(stdout);
+                // printf("exp-val-z: %f\n", exp_val_z);
+                // printf("exp-val-z all: %f\n", exp_val_z_all);
+            }
+            delete counts;
+           
+        } else {
+            
+            BackendManager::safe_print("Starting Statevector Simulation...");
+            std::string sv_backend = (backend == "NVGPU_MPI" ? "NVGPU" : backend);
+            std::shared_ptr<NWQSim::QuantumState> sv_state = BackendManager::create_state(sv_backend, config, parser.num_qubits(), "sv");
+            std::shared_ptr<NWQSim::QuantumState> dm_state = BackendManager::create_state(backend, config, parser.num_qubits(), "dm");
+            if (!sv_state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            if (dm_state->i_proc == 0)
+            {
+                sv_state->print_config(simulation_method);
+                map<string, IdxType> *counts_sv = parser.execute(sv_state, initfile, total_shots, print_metrics);
+                print_counts(counts_sv, total_shots);
+                delete counts_sv;
+            }
+
+            BackendManager::safe_print("Starting Density Matrix Simulation...");
+            if (!dm_state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            dm_state->print_config(simulation_method);
+            map<string, IdxType> *counts_dm = parser.execute(dm_state, initfile, total_shots, print_metrics);
+            if (dm_state->i_proc == 0)
+            {
+                print_counts(counts_dm, total_shots);
+            }
+
+            // if (dumpfile != "") {
+            //     dm_state->dump_res_state(dumpfile);
+            // }
+            ValType fidelity = dm_state->fidelity(sv_state);
+            BackendManager::safe_print("State Fidelity: %e\n", fidelity);
+            delete counts_dm;
         }
-        state->print_config(simulation_method);
-        map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
-
-        // std::vector<size_t> in_bits;
-
-        // for (int i = 0; i < parser.num_qubits(); ++i)
-        // {
-        //     in_bits.push_back(i);
-        // }
-
-        // ValType exp_val_z = state->get_exp_z(in_bits);
-        // ValType exp_val_z_all = state->get_exp_z();
-        // for (size_t i = 0; i < parser.num_qubits(); ++i)
-        // {
-        //     in_bits[i] = i;
-        // }
-        if (dumpfile != "") {
-            state->dump_res_state(dumpfile);
-        }
-        if (state->i_proc == 0)
-        {
-            print_counts(counts, total_shots);
-            // fflush(stdout);
-            // printf("exp-val-z: %f\n", exp_val_z);
-            // printf("exp-val-z all: %f\n", exp_val_z_all);
-        }
-        delete counts;
+        
     }
     if (cmdOptionExists(argv, argv + argc, "-qs"))
     {
         const char *qasmString = getCmdOption(argv, argv + argc, "-qs");
         qasm_parser parser;
         parser.load_qasm_string(std::string(qasmString)+";\n");
-        // Create the backend
-        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, config, parser.num_qubits(), simulation_method);
-        if (!state)
-        {
-            std::cerr << "Failed to create backend\n";
-            return 1;
+        if (!report_fidelity) {
+            // Create the backend
+            std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, config, parser.num_qubits(), simulation_method);
+            if (!state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            state->print_config(simulation_method);
+            map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
+            if (state->i_proc == 0)
+            {
+                print_counts(counts, total_shots);
+            }
+            if (dumpfile != "") {
+                state->dump_res_state(dumpfile);
+            }
+            delete counts;
+        } else {
+            BackendManager::safe_print("Starting Statevector Simulation...");
+            std::string sv_backend = (backend == "NVGPU_MPI" ? "NVGPU" : backend);
+            std::shared_ptr<NWQSim::QuantumState> sv_state = BackendManager::create_state(sv_backend, config, parser.num_qubits(), "sv");
+            if (!sv_state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            if (sv_state->i_proc == 0)
+            {
+                sv_state->print_config(simulation_method);
+                map<string, IdxType> *counts_sv = parser.execute(sv_state, initfile, total_shots, print_metrics);
+                print_counts(counts_sv, total_shots);
+                delete counts_sv;
+            }
+
+            BackendManager::safe_print("Starting Density Matrix Simulation...");
+            std::shared_ptr<NWQSim::QuantumState> dm_state = BackendManager::create_state(backend, config, parser.num_qubits(), "dm");
+            if (!dm_state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            dm_state->print_config(simulation_method);
+            map<string, IdxType> *counts_dm = parser.execute(dm_state, initfile, total_shots, print_metrics);
+            if (dm_state->i_proc == 0)
+            {
+                print_counts(counts_dm, total_shots);
+            }
+            ValType fidelity = dm_state->fidelity(sv_state);
+            BackendManager::safe_print("State Fidelity: %e\n", fidelity);
+            delete counts_dm;
         }
-        state->print_config(simulation_method);
-        map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
-        if (state->i_proc == 0)
-        {
-            print_counts(counts, total_shots);
-        }
-        delete counts;
+        
     }
     if (cmdOptionExists(argv, argv + argc, "-j"))
     {
         const char *qobjFile = getCmdOption(argv, argv + argc, "-j");
         qasm_parser parser;
         parser.load_qobj_file(qobjFile);
-        // Create the backend
-        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, config, parser.num_qubits(), simulation_method);
-        if (!state)
-        {
-            std::cerr << "Failed to create backend\n";
-            return 1;
-        }
-        
-        state->print_config(simulation_method);
-        map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
+        if (!report_fidelity) {
+            // Create the backend
+            std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, config, parser.num_qubits(), simulation_method);
+            if (!state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            state->print_config(simulation_method);
+            map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
+            if (state->i_proc == 0)
+            {
+                json result_count_json;
+                for (const auto& r : (*counts))
+                {
+                    result_count_json[(r.first)] = r.second;
+                }
+                cout << "nwq_sim_counts=" << result_count_json.dump() << endl;
 
-        json result_count_json;
-        for (const auto& r : (*counts))
-        {
-            result_count_json[(r.first)] = r.second;
-        }
-        cout << "nwq_sim_counts=" << result_count_json.dump() << endl;
+                cout << "----------" << endl;
+                state->print_res_state();
+                cout << "----------" << endl;
+            }
+            if (dumpfile != "") {
+                state->dump_res_state(dumpfile);
+            }
+            delete counts;
+            
+        } else {
+            BackendManager::safe_print("Starting Statevector Simulation...");
+            std::string sv_backend = (backend == "NVGPU_MPI" ? "NVGPU" : backend);
+            std::shared_ptr<NWQSim::QuantumState> sv_state = BackendManager::create_state(sv_backend, config, parser.num_qubits(), "sv");
+            if (!sv_state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            if (sv_state->i_proc == 0)
+            {
+                sv_state->print_config(simulation_method);
+                map<string, IdxType> *counts_sv = parser.execute(sv_state,  initfile,total_shots, print_metrics);
+                json result_count_json;
+                for (const auto& r : (*counts_sv))
+                {
+                    result_count_json[(r.first)] = r.second;
+                }
+                cout << "sv_nwq_sim_counts=" << result_count_json.dump() << endl;
 
-        cout << "----------" << endl;
-        state->print_res_state();
-        cout << "----------" << endl;
-        if (dumpfile != "") {
-            state->dump_res_state(dumpfile);
-        }
+                cout << "----------" << endl;
+                sv_state->print_res_state();
+                cout << "----------" << endl;
+                delete counts_sv;
+            }
 
-        //if (state->i_proc == 0)
-        //{
-        //print_counts(counts, total_shots);
-        //}
-        delete counts;
+            BackendManager::safe_print("Starting Density Matrix Simulation...");
+            std::shared_ptr<NWQSim::QuantumState> dm_state = BackendManager::create_state(backend, config, parser.num_qubits(), "dm");
+            if (!dm_state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            dm_state->print_config(simulation_method);
+            map<string, IdxType> *counts_dm = parser.execute(dm_state, initfile, total_shots, print_metrics);
+            if (dm_state->i_proc == 0)
+            {
+                json result_count_json;
+                for (const auto& r : (*counts_dm))
+                {
+                    result_count_json[(r.first)] = r.second;
+                }
+                cout << "dm_nwq_sim_counts=" << result_count_json.dump() << endl;
+
+                cout << "----------" << endl;
+                dm_state->print_res_state();
+                cout << "----------" << endl;
+            }
+            ValType fidelity = dm_state->fidelity(sv_state);
+            BackendManager::safe_print("State Fidelity: %e\n", fidelity);
+            delete counts_dm;
+        }
     }
     if (cmdOptionExists(argv, argv + argc, "-js"))
     {
         const char *qobjString = getCmdOption(argv, argv + argc, "-js");
         qasm_parser parser;
         parser.load_qobj_string(std::string(qobjString));
-        // Create the backend
-        std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, config, parser.num_qubits(), simulation_method);
-        if (!state)
-        {
-            std::cerr << "Failed to create backend\n";
-            return 1;
-        }
-        
-        state->print_config(simulation_method);
-        map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
+        if (!report_fidelity) {
+            // Create the backend
+            std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, config, parser.num_qubits(), simulation_method);
+            if (!state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            state->print_config(simulation_method);
+            map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
+            if (state->i_proc == 0)
+            {
+                json result_count_json;
+                for (const auto& r : (*counts))
+                {
+                    result_count_json[(r.first)] = r.second;
+                }
+                cout << "nwq_sim_counts=" << result_count_json.dump() << endl;
 
-        json result_count_json;
-        for (const auto& r : (*counts))
-        {
-            result_count_json[(r.first)] = r.second;
-        }
-        cout << "nwq_sim_counts=" << result_count_json.dump() << endl;
+                cout << "----------" << endl;
+                state->print_res_state();
+                cout << "----------" << endl;
+            }
+            if (dumpfile != "") {
+                state->dump_res_state(dumpfile);
+            }
+            delete counts;
+            
+        } else {
+            BackendManager::safe_print("Starting Statevector Simulation...");
+            std::string sv_backend = (backend == "NVGPU_MPI" ? "NVGPU" : backend);
+            std::shared_ptr<NWQSim::QuantumState> sv_state = BackendManager::create_state(sv_backend, config, parser.num_qubits(), "sv");
+            if (!sv_state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            
+            if (sv_state->i_proc == 0)
+            {
+                sv_state->print_config(simulation_method);
+                map<string, IdxType> *counts_sv = parser.execute(sv_state, initfile, total_shots, print_metrics);
+                json result_count_json;
+                for (const auto& r : (*counts_sv))
+                {
+                    result_count_json[(r.first)] = r.second;
+                }
+                cout << "sv_nwq_sim_counts=" << result_count_json.dump() << endl;
 
-        cout << "----------" << endl;
-        state->print_res_state();
-        cout << "----------" << endl;
-        if (dumpfile != "") {
-            state->dump_res_state(dumpfile);
-        }
+                cout << "----------" << endl;
+                sv_state->print_res_state();
+                cout << "----------" << endl;
+                delete counts_sv;
+            }
 
-        //if (state->i_proc == 0)
-        //{
-        //print_counts(counts, total_shots);
-        //}
-        delete counts;
+            BackendManager::safe_print("Starting Density Matrix Simulation...");
+            std::shared_ptr<NWQSim::QuantumState> dm_state = BackendManager::create_state(backend, config, parser.num_qubits(), "dm");
+            if (!dm_state)
+            {
+                std::cerr << "Failed to create backend\n";
+                return 1;
+            }
+            dm_state->print_config(simulation_method);
+            map<string, IdxType> *counts_dm = parser.execute(dm_state, initfile, total_shots, print_metrics);
+            if (dm_state->i_proc == 0)
+            {
+                json result_count_json;
+                for (const auto& r : (*counts_dm))
+                {
+                    result_count_json[(r.first)] = r.second;
+                }
+                cout << "dm_nwq_sim_counts=" << result_count_json.dump() << endl;
+
+                cout << "----------" << endl;
+                dm_state->print_res_state();
+                cout << "----------" << endl;
+            }
+            ValType fidelity = dm_state->fidelity(sv_state);
+            BackendManager::safe_print("State Fidelity: %e\n", fidelity);
+            delete counts_dm;
+        }
     }
 
     if (cmdOptionExists(argv, argv + argc, "-t"))

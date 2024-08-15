@@ -28,8 +28,9 @@ namespace NWQSim {
         gradient_measurement = std::make_shared<Ansatz>(_ans->num_qubits());
       }
       ~AdaptVQE() {
+        size_t index = 0;
         for (auto i: gradient_observables)
-          state->delete_observables(i);
+          state->delete_observables(i, observable_sizes[index++]);
       }
       void commutator(std::vector<PauliOperator>& oplist1, 
                       std::vector<PauliOperator>& oplist2, 
@@ -58,14 +59,15 @@ namespace NWQSim {
         const auto& pauli_strings = hamil->getPauliOperators();
 
         const auto& pauli_op_pool = ansatz->get_pauli_op_pool();
-
-        commutator_coeffs.resize(pauli_op_pool.size());
+        IdxType poolsize = pauli_op_pool.size();
+        commutator_coeffs.resize(poolsize);
         // gradient_observables.reserve(pauli_op_pool.size());
-        commutator_zmasks.resize(pauli_op_pool.size());
-        gradient_magnitudes.resize(pauli_op_pool.size());
-        gradient_observables.resize(pauli_op_pool.size());
-        observable_sizes.resize(pauli_op_pool.size());
-        for (size_t i = 0; i < pauli_op_pool.size(); i++) {
+        commutator_zmasks.resize(poolsize);
+        gradient_magnitudes.resize(poolsize);
+        gradient_observables.resize(poolsize);
+        observable_sizes.resize(poolsize);
+        size_t num_pauli_terms_total = 0;
+        for (size_t i = 0; i <poolsize; i++) {
           std::unordered_map<PauliOperator,  std::complex<double>, PauliHash> pmap;
           std::vector<PauliOperator> oplist = pauli_op_pool[i];
           for (auto hamil_oplist: pauli_strings) {
@@ -80,6 +82,7 @@ namespace NWQSim {
               comm_ops.push_back(op);
             }
           }
+          num_pauli_terms_total += comm_ops.size();
           // Create commuting groups using the (nonoverlapping) Sorted Insertion heuristic (see Crawford et. al 2021)
           std::list<std::vector<IdxType>> cliques;
           sorted_insertion(comm_ops, cliques, false);
@@ -95,33 +98,31 @@ namespace NWQSim {
             std::vector<IdxType>& clique = *cliqueiter;
             std::vector<PauliOperator> commuting_group (clique.size());
             std::transform(clique.begin(), clique.end(),
-              commuting_group.begin(), [&] (IdxType ind) {return comm_ops[ind];});
-            // NOTE: IN PROCESS OF API UPDATE!!!! PPOD!!!!!
- 
+              commuting_group.begin(), [&] (IdxType ind) {return comm_ops[ind];}); 
             PauliOperator common = make_common_op(commuting_group, 
                                                   commutator_zmasks[i][j], 
                                                   commutator_coeffs[i][j]);
             
-            Measurement circ1 (common, false);
-            gradient_measurement->compose(circ1, qubit_mapping);            
-            state->set_exp_gate(gradient_measurement, &gradient_observables[i][j], commutator_zmasks[i][j], commutator_coeffs[i][j]);
-            Measurement circ2 (common, true);
-            gradient_measurement->compose(circ2, qubit_mapping);      
+            Measurement circ1 (common, false); // QWC measurement circuit $U_M$
+            gradient_measurement->compose(circ1, qubit_mapping);         // add to gradient measurement
+            // add a gate to compute the expectation values   
+            state->set_exp_gate(gradient_measurement, gradient_observables[i] + j, commutator_zmasks[i][j], commutator_coeffs[i][j]);
+            Measurement circ2 (common, true); // inverse of the measurement circuit $U_M^\dagger$
+            gradient_measurement->compose(circ2, qubit_mapping);  // add the inverse
             cliqueiter++;  
           }
           // commutators[i] = std::make_shared<Hamiltonian>(hamil->getEnv(), comm_ops_grouped);
         }
+        if (state->get_process_rank() == 0)
+          std::cout << "Generated " << pauli_op_pool.size() << " commutators with " << num_pauli_terms_total << " (possibly degenerate) Individual Pauli Strings" << std::endl;
       }
-      void optimize(std::vector<double>& parameters, ValType& ene, IdxType maxiter, ValType reltol = 1e-5, ValType reltol_fval = 1e-7) {
+      void optimize(std::vector<double>& parameters, ValType& ene, IdxType maxiter, ValType abstol = 1e-5, ValType fvaltol = 1e-7) {
         ene = hamil->getEnv().constant;
         state->initialize();
         ValType constant = ene;
         IdxType iter = 0;
         ValType prev_ene = 1 + ene;
         const auto& pauli_op_pool = ansatz->get_pauli_op_pool();
-        maxiter = 50;
-        std::uniform_real_distribution<ValType> dist(0, 2 * PI);
-        std::mt19937_64 rng (2423);
         while(iter < maxiter) {
           prev_ene = ene;
           IdxType max_ind = 0; 
@@ -130,27 +131,26 @@ namespace NWQSim {
           state->call_simulator(gradient_measurement);
           std::fill(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0);
           state->get_exp_values(gradient_observables, observable_sizes, gradient_magnitudes);
-          double grad_norm = std::accumulate(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0.0, [] (ValType a, ValType b) {
+          double grad_norm = std::sqrt(std::accumulate(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0.0, [] (ValType a, ValType b) {
             return a + b * b;
-          });
+          }));
+          if (grad_norm < abstol) {
+            break;
+          }
           max_ind = std::max_element(gradient_magnitudes.begin(),
                                      gradient_magnitudes.end(),
                                      [] (ValType a, ValType b) {return abs(a) < abs(b);}) - gradient_magnitudes.begin();
-          for (auto i: gradient_magnitudes) {
-            std::cout << i << " ";
-          }
-          std::cout << std::endl;
-          // std::cout << gradient_magnitudes << std::endl;
-          if (std::sqrt(grad_norm) < reltol) {
-            break;
-          }
+
           ValType paramval = 0.0;//dist(rng);
           ansatz->add_operator(max_ind, paramval);
           // state->swap_hamil(hamil);
           parameters.push_back(paramval);
           state->optimize(parameters, ene);
-          ValType denom = abs(prev_ene) > 0 ? prev_ene : 1.0;
-          if (abs((ene - prev_ene) / denom) < reltol_fval) {
+          if (state->get_process_rank() == 0) {
+            std::cout << "ADAPT Iteration " << iter << ", Fval = " << ene << std::endl;
+            std::cout << "\tSelected Operator: " << ansatz->get_operator_string(max_ind) << ", Current gradient norm = " << grad_norm << std::endl;
+          }
+          if (abs((ene - prev_ene)) < fvaltol) {
             break;
           }
           iter++;
