@@ -70,8 +70,8 @@ namespace NWQSim {
                   occ_up_2,
                   virt_down_2,
                   virt_up_1});
-            symmetries[alpha_term] = {{mixed_term1, 1.0}, {mixed_term2, -1.0}};
-            symmetries[beta_term] = {{mixed_term1, 1.0}, {mixed_term2, -1.0}};
+            symmetries[alpha_term] = {{mixed_term1, 1.0}, {mixed_term2, 1.0}};
+            symmetries[beta_term] = {{mixed_term1, 1.0}, {mixed_term2, 1.0}};
             symmetries[mixed_term1] = {{mixed_term1, 1.0}};
             symmetries[mixed_term2] = {{mixed_term2, 1.0}};
 
