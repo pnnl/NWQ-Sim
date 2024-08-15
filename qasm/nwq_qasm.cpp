@@ -32,6 +32,7 @@ int main(int argc, char **argv)
     bool report_fidelity = false;
     std::string backend = "CPU";
     std::string simulation_method = "sv";
+    std::string init_format = "";
 
     if (cmdOptionExists(argv, argv + argc, "-h") || argc == 1)
     {
@@ -72,6 +73,8 @@ int main(int argc, char **argv)
         std::cout << std::setw(20) << "-initial"
                   << "Initial statevector/density matrix to enable simulation reuse/checkpointing. Must match qubit dimension of input circuit." 
                   << "Expected format is binary sv/dm_real.concat(sv/dm_imag)" << std::endl;
+        std::cout << std::setw(20) << "-initial-format"
+                  << "Expected format for intial file (Either \"sv\" or \"dm\"). Default is the same as -sim" << std::endl;
         std::cout << std::setw(20) << "-dump"
                   << "Path to dump binary statevector/density matrix result. (default: \"\", no output dump). Can be reused as a later -initial file" << std::endl;
         std::cout << std::setw(20) << "-layout"
@@ -116,6 +119,10 @@ int main(int argc, char **argv)
     {
         initfile = std::string(getCmdOption(argv, argv + argc, "-initial"));
     }
+    if (cmdOptionExists(argv, argv + argc, "-initial-format"))
+    {
+        init_format = std::string(getCmdOption(argv, argv + argc, "-initial-format"));
+    }
     if (cmdOptionExists(argv, argv + argc, "-dump"))
     {
         dumpfile = std::string(getCmdOption(argv, argv + argc, "-dump"));
@@ -137,6 +144,9 @@ int main(int argc, char **argv)
     if (cmdOptionExists(argv, argv + argc, "-fidelity"))
     {
         report_fidelity = true;
+    }
+    if (init_format == "") {
+        init_format = simulation_method;
     }
 // If MPI or NVSHMEM backend, initialize MPI
 #ifdef MPI_ENABLED

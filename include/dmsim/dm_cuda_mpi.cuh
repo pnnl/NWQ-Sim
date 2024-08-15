@@ -149,7 +149,7 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-        virtual void set_initial (std::string fpath) override {
+        virtual void set_initial (std::string fpath, std::string format) override {
             std::ifstream instream;
             instream.open(fpath, std::ios::in|std::ios::binary);
             if (instream.is_open()) {
@@ -1828,7 +1828,6 @@ namespace NWQSim
             }                               
         }
     };
-    
     __global__ 
     void fidelity_kernel_local(DM_CUDA_MPI* dm_gpu,
                                ValType* sv_real, 

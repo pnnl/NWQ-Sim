@@ -86,14 +86,34 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-        virtual void set_initial (std::string fpath) override {
+        virtual void set_initial (std::string fpath, std::string format) override {
             std::ifstream instream;
             instream.open(fpath, std::ios::in|std::ios::binary);
-            if (instream.is_open()) {
-                instream.read((char*)dm_real, dm_size);
-                instream.read((char*)dm_imag, dm_size);
+            if (format == "dm") {
+                if (instream.is_open()) {
+                    instream.read((char*)dm_real, dm_size);
+                    instream.read((char*)dm_imag, dm_size);
+                    instream.close();
+                }
+            } else {
+                // input is a statevector, take the outer product
+                IdxType sv_size = 1 << n_qubits;
+                ValType* imag_buffer = new ValType[sv_size];
+                instream.read((char*)m_real, sv_size);
+                instream.read((char*)imag_buffer, sv_size);
                 instream.close();
+                for (IdxType ind = 0; ind < sv_size; ind++) {
+                ValType a = m_real[ind];
+                ValType b = -imag_buffer[ind];
+                for (IdxType j = 0; j < sv_size; j ++) {
+                    ValType c = m_real[j];
+                    ValType d = imag_buffer[j];
+                    dm_real[ind * sv_size + j] = a * c + d * b;
+                    dm_imag[ind * sv_size + j] = d * a - c * b;
+                }
             }
+            }
+
         }
         virtual void dump_res_state(std::string outpath) override {
             std::ofstream outstream;

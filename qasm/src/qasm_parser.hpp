@@ -620,7 +620,7 @@ void qasm_parser::classify_measurements()
             final_measurements = false;
 }
 
-map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::string initpath, IdxType repetition, bool print_metrics)
+map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::string initpath, std::string initformat, IdxType repetition, bool print_metrics)
 {
     IdxType *results;
     if (contains_if)
@@ -628,13 +628,13 @@ map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::
         results = new IdxType[repetition];
         for (IdxType i = 0; i < repetition; i++)
         {
-            IdxType *sub_result = sub_execute(state, initpath, 1, print_metrics);
+            IdxType *sub_result = sub_execute(state, initpath, init_format, 1, print_metrics);
             results[i] = sub_result[0];
         }
     }
     else
     {
-        results = sub_execute(state, initpath, repetition, print_metrics);
+        results = sub_execute(state, initpath, init_format, repetition, print_metrics);
     }
     map<IdxType, IdxType> result_dict;
     for (IdxType i = 0; i < repetition; i++)
@@ -650,10 +650,10 @@ map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::
         return convert_dictionary(result_dict, list_cregs);
 }
 
-IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string initpath, IdxType repetition, bool print_metrics)
+IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string initpath, std::string init_format, IdxType repetition, bool print_metrics)
 {
     if (initpath != "") {
-        state->set_initial(initpath);
+        state->set_initial(initpath, init_format);
     } else {
         state->reset_state();
     }

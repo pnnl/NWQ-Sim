@@ -42,7 +42,7 @@ namespace NWQSim
         virtual IdxType *get_results() = 0;
         virtual IdxType measure(IdxType qubit) = 0;
         virtual IdxType *measure_all(IdxType repetition) = 0;
-        virtual void set_initial(std::string fpath) = 0;
+        virtual void set_initial(std::string fpath, std::string format) = 0;
         virtual ValType *get_real() const = 0;
         virtual ValType *get_imag() const = 0;
 

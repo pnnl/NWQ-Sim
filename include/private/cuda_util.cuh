@@ -1,4 +1,5 @@
 #pragma once
+#include "nwq_util.hpp"
 #include <stdio.h>
 #include <sys/time.h>
 #include <assert.h>
@@ -148,6 +149,14 @@ uint64_t swapBits_cu (uint64_t n, uint64_t p1, uint64_t p2) {
     two sets are swapped */
     uint64_t result = n ^ x;
     return result;
+}
+
+/********************************
+ * Generic Kernel Routines
+ ********************************/
+__global__
+void outerProduct(double* matrix, double* v1, double* v2, size_t size_1, size_t size_2) {
+    
 }
 
 /***********************************************
