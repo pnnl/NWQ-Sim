@@ -2,6 +2,7 @@
 #define __FERMI_OP__
 #include <vector>
 #include <complex>
+#include "environment.hpp"
 #include "utils.hpp"
 namespace NWQSim {
   /* Basic data type for indices */
@@ -61,8 +62,21 @@ namespace NWQSim {
         // Flattened indexing scheme
         return getQubitIndex(orbital_index, spin, orb_type, n_occ, n_virt, xacc_scheme);
       }
+      IdxType getOrbitalIndex(const MolecularEnvironment& env) const {
+        size_t _index = orbital_index;
+        if (orb_type == OrbitalType::Virtual) {
+          _index += env.n_occ;
+        }
+        return _index;
+
+      }
+      FermionOperator spinReversed() const {
+        Spin other = spin == Spin::Up ? Spin::Down : Spin::Up;
+        return FermionOperator(orbital_index, orb_type, other, type, xacc_scheme, coeff);
+      }
       std::complex<ValType> getCoeff() const { return coeff; }
       FermionOpType getType() const { return type; }
+      Spin getSpin() const { return spin; }
       std::string toString (IdxType n_occ, IdxType n_virt) const {
         std::stringstream ss;
         ss  << qubitIndex(n_occ, n_virt) << ((type==Creation) ? "^": "");

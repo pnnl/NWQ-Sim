@@ -326,15 +326,36 @@ namespace NWQSim {
             }
             std::string opstring = "";
             bool first = true;
+            bool is_distinct = true;
+            bool is_mixed = true;
+            std::vector<IdxType> indices_seen(env.n_spatial, 0);
             for (auto& op: oplist) {
               if (!first) {
                 opstring = " " + opstring;
               } else {
                 first = false;
+                is_mixed = op.getSpin() != oplist[1].getSpin();
               }
+              if (indices_seen[op.getOrbitalIndex(env)]) {
+                is_distinct = false;
+              }
+              indices_seen[op.getOrbitalIndex(env)] += 1;
               opstring = op.toString(env.n_occ, env.n_virt) + opstring;
             }
             result.push_back(std::make_pair(opstring, param));
+            if (is_distinct && oplist.size() == 4 && is_mixed) {
+              first = true;
+              opstring = "";
+              for (auto& op: oplist) {
+                if (!first) {
+                  opstring = " " + opstring;
+                } else {
+                  first = false;
+                }
+                opstring = op.spinReversed().toString(env.n_occ, env.n_virt) + opstring;
+              }
+              result.push_back(std::make_pair(opstring, param));
+            }
           }
           return result;
         };
