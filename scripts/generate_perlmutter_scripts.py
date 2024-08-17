@@ -37,21 +37,21 @@ ADAPT-VQE OPTIONS
 
 
 
-hamilpath = "/global/homes/m/mxburns/benchmarks/DUCC-Hamiltonians/H2O"
-orbitals = "DUCC3"
-name = 'h2o_ducc_adapt_fermionic_ducc3'
+hamilpath = "/global/homes/m/mxburns/benchmarks/DUCC-Hamiltonians/C2H4"
+orbitals = "Bare"
+name = 'c2h4_ducc_bare'
 args = {
     'optimizer': 'LN_COBYLA',
-    'maxeval': 1000,
-    'abstol': 5e-3,
+    'maxeval': 20000,
+    'abstol': 1e-6,
     'backend': 'NVGPU',
     'xacc': '',
-    'adapt': '',
+    # 'adapt': '',
     # 'qubit': '',
     # 'adapt-pool': 25,
-    'adapt-gradtol': 1e-6,
-    'adapt-fvaltol': 1e-10,
-    'adapt-maxeval': 1000
+    # 'adapt-gradtol': 1e-6,
+    # 'adapt-fvaltol': 1e-10,
+    # 'adapt-maxeval': 1000
 }
 def filterfunc(val):
     try:
