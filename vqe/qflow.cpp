@@ -22,6 +22,8 @@ int show_help() {
   std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA" << std::endl;
   std::cout << "--config              Path to config file for NLOpt optimizer parameters" << std::endl;
   std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
+  std::cout << "--lbound              Optimizer lower bound. Defaults to -2" << std::endl;
+  std::cout << "--ubound              Optimizer upper bound. Defaults to 2" << std::endl;
   std::cout << "--abstol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--maxeval             Maximum number of function evaluations for optimizer. Defaults to 200" << std::endl;
   std::cout << "--maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)" << std::endl;
@@ -62,6 +64,8 @@ int parse_args(int argc, char** argv,
   use_xacc = false;
   local = false;
   verbose = false;
+  settings.lbound = -2;
+  settings.ubound = 2;
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
     if (argname == "-h" || argname == "--help") {
@@ -111,6 +115,12 @@ int parse_args(int argc, char** argv,
     } else 
     if (argname == "--abstol") {
       settings.abs_tol = std::atof(argv[++i]);
+    } else 
+    if (argname == "--ubound") {
+      settings.ubound = std::atof(argv[++i]);
+    } else 
+    if (argname == "--lbound") {
+      settings.lbound = std::atof(argv[++i]);
     } else 
     if (argname == "--maxeval") {
       settings.max_evals = std::atoll(argv[++i]);

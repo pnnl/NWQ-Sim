@@ -41,37 +41,37 @@ namespace NWQSim {
         FermionOperator occ_down_2 (j, Occupied, Down, Annihilation, env.xacc_scheme);
         FermionOperator occ_up_2 (j, Occupied, Up, Annihilation, env.xacc_scheme);
         for (IdxType r = 0; r < env.n_virt; r++) {
-        FermionOperator virt_down_1 (r, Virtual, Down, Creation, env.xacc_scheme);
-        FermionOperator virt_up_1 (r, Virtual, Up, Creation, env.xacc_scheme);
+        FermionOperator virt_down_3 (r, Virtual, Down, Creation, env.xacc_scheme);
+        FermionOperator virt_up_3 (r, Virtual, Up, Creation, env.xacc_scheme);
           for (IdxType s = r+1; s < env.n_virt; s++) {
-            FermionOperator virt_down_2 (s, Virtual, Down, Creation, env.xacc_scheme);
-            FermionOperator virt_up_2 (s, Virtual, Up, Creation, env.xacc_scheme);
+            FermionOperator virt_down_4 (s, Virtual, Down, Creation, env.xacc_scheme);
+            FermionOperator virt_up_4 (s, Virtual, Up, Creation, env.xacc_scheme);
             IdxType alpha_term = fermion_operators.size();
             fermion_operators.push_back({
                   occ_down_1,
                   occ_down_2,
-                  virt_down_2,
-                  virt_down_1});
+                  virt_down_3,
+                  virt_down_4});
             IdxType beta_term = fermion_operators.size();
             fermion_operators.push_back({
                   occ_up_1, 
                   occ_up_2,
-                  virt_up_2,
-                  virt_up_1});
+                  virt_up_3,
+                  virt_up_4});
             IdxType mixed_term1 = fermion_operators.size();
             fermion_operators.push_back({
                   occ_up_1,
                   occ_down_2,
-                  virt_down_2,
-                  virt_up_1});
+                  virt_down_3,
+                  virt_up_4});
             IdxType mixed_term2 = fermion_operators.size();
             fermion_operators.push_back({
                   occ_down_1,
                   occ_up_2,
-                  virt_down_2,
-                  virt_up_1});
-            symmetries[alpha_term] = {{mixed_term1, 1.0}, {mixed_term2, -1.0}};
-            symmetries[beta_term] = {{mixed_term1, 1.0}, {mixed_term2, -1.0}};
+                  virt_down_3,
+                  virt_up_4});
+            symmetries[alpha_term] = {{mixed_term1, 1.0}, {mixed_term2, 1.0}};
+            symmetries[beta_term] = {{mixed_term1, 1.0}, {mixed_term2, 1.0}};
             symmetries[mixed_term1] = {{mixed_term1, 1.0}};
             symmetries[mixed_term2] = {{mixed_term2, 1.0}};
 
@@ -84,35 +84,61 @@ namespace NWQSim {
     for (IdxType i = 0; i < env.n_occ; i++) {
       FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
       FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
-      for (IdxType j = 0; j < i + 1; j++) {
-        FermionOperator occ_down_2 (j, Occupied, Down, Annihilation, env.xacc_scheme);
-        FermionOperator occ_up_2 (j, Occupied, Up, Annihilation, env.xacc_scheme);
-        for (IdxType r = 0; r < env.n_virt; r++) {
-        FermionOperator virt_down_1 (r, Virtual, Down, Creation, env.xacc_scheme);
-        FermionOperator virt_up_1 (r, Virtual, Up, Creation, env.xacc_scheme);
+        for (IdxType r = 1; r < env.n_virt; r++) {
+        FermionOperator virt_down_2 (r, Virtual, Down, Creation, env.xacc_scheme);
+        FermionOperator virt_up_2 (r, Virtual, Up, Creation, env.xacc_scheme);
+          for (IdxType s = 0; s < r; s++) {
+          FermionOperator virt_down_3 (s, Virtual, Down, Creation, env.xacc_scheme);
+          FermionOperator virt_up_3 (s, Virtual, Up, Creation, env.xacc_scheme);
+            IdxType term = fermion_operators.size();
+            fermion_operators.push_back({
+                  occ_up_1,
+                  occ_down_1,
+                  virt_down_2,
+                  virt_up_3});
+            fermion_ops_to_params[term] = unique_params++;
+            symmetries[term] = {{term, 1.0}};
+            term++;
+            fermion_operators.push_back({
+                  occ_up_1,
+                  occ_down_1,
+                  virt_down_3,
+                  virt_up_2});
+          fermion_ops_to_params[term] = unique_params++;
+          symmetries[term] = {{term, 1.0}};
+        }
+      }
+    }
+
+    for (IdxType i = 0; i < env.n_virt; i++) {
+      FermionOperator virt_down_3 (i, Virtual, Down, Creation, env.xacc_scheme);
+      FermionOperator virt_up_3 (i, Virtual, Up, Creation, env.xacc_scheme);
+        for (IdxType r = 0; r < env.n_occ; r++) {
+      FermionOperator occ_down_1 (r, Occupied, Down, Annihilation, env.xacc_scheme);
+      FermionOperator occ_up_1 (r, Occupied, Up, Annihilation, env.xacc_scheme);
           for (IdxType s = 0; s < r + 1; s++) {
-          FermionOperator virt_down_2 (s, Virtual, Down, Creation, env.xacc_scheme);
-          FermionOperator virt_up_2 (s, Virtual, Up, Creation, env.xacc_scheme);
+          FermionOperator occ_down_2 (s, Occupied, Down, Annihilation, env.xacc_scheme);
+          FermionOperator occ_up_2 (s, Occupied, Up, Annihilation, env.xacc_scheme);
             
             IdxType term = fermion_operators.size();
             fermion_operators.push_back({
                   occ_up_1,
                   occ_down_2,
-                  virt_down_2,
-                  virt_up_1});
-          fermion_ops_to_params[term] = unique_params++;
-          symmetries[term] = {{term, 1.0}};
-          if (i != j || r != s) {
-            symmetries.at(fermion_operators.size()) = {{fermion_operators.size(), 1.0}};
-            fermion_ops_to_params.at(fermion_operators.size()) = unique_params++;
-            fermion_operators.push_back({
-                  occ_down_1,
-                  occ_up_2,
-                  virt_up_2,
-                  virt_down_1});
-          }
-            
-          }
+                  virt_down_3,
+                  virt_up_3});
+            fermion_ops_to_params[term] = unique_params++;
+            symmetries[term] = {{term, 1.0}};
+
+            if (r > s) {
+              term++;
+              fermion_operators.push_back({
+                    occ_up_2,
+                    occ_down_1,
+                    virt_down_3,
+                    virt_up_3});
+              fermion_ops_to_params[term] = unique_params++;
+              symmetries[term] = {{term, 1.0}};
+            }
         }
       }
     }

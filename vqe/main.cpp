@@ -17,6 +17,8 @@ int show_help() {
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
   std::cout << "--config              Path to config file for NLOpt optimizer parameters" << std::endl;
   std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA" << std::endl;
+  std::cout << "--lbound              Lower bound for classical optimizer. Defaults to -PI" << std::endl;
+  std::cout << "--ubound              Upper bound for classical optimizer. Defaults to PI" << std::endl;
   std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--abstol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--maxeval             Maximum number of function evaluations for optimizer. Defaults to 200" << std::endl;
@@ -79,6 +81,12 @@ int parse_args(int argc, char** argv,
     } else 
     if (argname == "--abstol") {
       settings.abs_tol = std::atof(argv[++i]);
+    }  else 
+    if (argname == "--ubound") {
+      settings.ubound = std::atof(argv[++i]);
+    }  else 
+    if (argname == "--lbound") {
+      settings.lbound = std::atof(argv[++i]);
     } else 
     if (argname == "--maxeval") {
       settings.max_evals = std::atoll(argv[++i]);
@@ -133,7 +141,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      std::vector<double>& params,
                      double& fval) {
   std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, callback_function, seed, settings);  
-  std::uniform_real_distribution<double> initdist(0, 2 * PI);
+  std::uniform_real_distribution<double> initdist(settings.lbound, settings.ubound);
   std::mt19937_64 random_engine (seed);
   params.resize(ansatz->numParams());
   std::fill(params.begin(), params.end(), 0);
