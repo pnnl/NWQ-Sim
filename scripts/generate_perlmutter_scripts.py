@@ -37,16 +37,18 @@ ADAPT-VQE OPTIONS
 
 
 
-name = 'h6_ducc_adapt_qubit_25'
+hamilpath = "/global/homes/m/mxburns/benchmarks/DUCC-Hamiltonians/H2O"
+orbitals = "DUCC3"
+name = 'h2o_ducc_adapt_fermionic_ducc3'
 args = {
     'optimizer': 'LN_COBYLA',
-    'maxeval': 10000,
-    'abstol': 1e-6,
+    'maxeval': 1000,
+    'abstol': 5e-3,
     'backend': 'NVGPU',
     'xacc': '',
     'adapt': '',
-    'qubit': '',
-    'adapt-pool': 25,
+    # 'qubit': '',
+    # 'adapt-pool': 25,
     'adapt-gradtol': 1e-6,
     'adapt-fvaltol': 1e-10,
     'adapt-maxeval': 1000
@@ -56,7 +58,7 @@ def filterfunc(val):
         n_orbs = int(re.findall(r'(\d+)-Orbitals', val)[0])
     except IndexError:
         return False
-    return n_orbs <= 14
+    return n_orbs <= 11
 
 
 
@@ -92,8 +94,6 @@ cpus = 1
 gpus = 1
 time = "12:00:00"
 nodes = 1
-hamilpath = "/global/homes/m/mxburns/benchmarks/DUCC-Hamiltonians/H6"
-orbitals = "DUCC3"
 
 
 def find_directories(base_path, subfolder):

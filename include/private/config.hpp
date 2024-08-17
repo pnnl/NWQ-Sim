@@ -148,6 +148,11 @@ namespace NWQSim::Config
 
     inline void Load(const std::string &filename = "../default_config.json")
     {
+        
+        LoadConfigFromFile(filename, true);
+        if (ENABLE_NOISE && !DEVICE_READ) {
+            readConfigFile();
+        }
         if (layout.empty()) {
             IdxType n_qubits;
             backend_config["num_qubits"].get_to(n_qubits);
@@ -155,9 +160,7 @@ namespace NWQSim::Config
                 layout[std::to_string(n)] = (int)n;
             }
         }
-        LoadConfigFromFile(filename, true);
-        if (ENABLE_NOISE && !DEVICE_READ)
-            readConfigFile();
+        
     }
     inline std::string qindex(IdxType q) {
         return std::to_string(static_cast<IdxType>(

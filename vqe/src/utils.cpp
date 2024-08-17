@@ -160,102 +160,104 @@ std::vector<IdxType> sorted_nodes;
 void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
                                     const MolecularEnvironment& env) {
   // Single excitation
-  for (IdxType p = 0; p < env.n_occ; p++) {
-    FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
-    FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
-    for (IdxType q = 0; q < env.n_virt; q++) {
-      FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
-      FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
-      // By spin symmetry, both single excitations should have the same parameter value
-      fermion_operators.push_back({{occupied_annihilation_up, virtual_creation_up}, {occupied_annihilation_down, virtual_creation_down}});
-    }
-  }
-  // Symmetric double excitations
-  for (IdxType i = 0; i < env.n_occ; i++) {
-    // Occupied orbital 1
-    FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
-    FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
-    for (IdxType j = i+1; j < env.n_occ; j++) {
-      // Occupied orbital 2
-      FermionOperator occ_down_2 (j, Occupied, Down, Annihilation, env.xacc_scheme);
-      FermionOperator occ_up_2 (j, Occupied, Up, Annihilation, env.xacc_scheme);
-      for (IdxType r = 0; r < env.n_virt; r++) {
-      // Virtual orbital 1
-      FermionOperator virt_down_1 (r, Virtual, Down, Creation, env.xacc_scheme);
-      FermionOperator virt_up_1 (r, Virtual, Up, Creation, env.xacc_scheme);
-        for (IdxType s = r+1; s < env.n_virt; s++) {
-          // Virtual orbital 2
-          FermionOperator virt_down_2 (s, Virtual, Down, Creation, env.xacc_scheme);
-          FermionOperator virt_up_2 (s, Virtual, Up, Creation, env.xacc_scheme);
-          IdxType alpha_term = fermion_operators.size();
-          // By Fermion spin symmetries, we have:
-          //     a_{i,\alpha}^\dagger a_{j,\alpha}^\dagger a_{r,\alpha} a_{s,\alpha} =
-          //     a_{i,\beta}^\dagger a_{j,\beta}^\dagger a_{r,\beta} a_{s,\beta} =
-          //     a_{i,\alpha}^\dagger a_{j,\beta}^\dagger a_{r,\beta} a_{s,\alpha} - a_{i,\alpha}^\dagger a_{j,\beta}^\dagger a_{r,\alpha} a_{s,\beta}
-          fermion_operators.push_back({{
-                occ_down_1, // alpha double
-                occ_down_2,
-                virt_down_2,
-                virt_down_1},
-                {occ_up_1, // beta double
-                  occ_up_2,
-                  virt_up_2,
-                  virt_up_1},
-                  {
-                occ_up_1, // mixed state 1
-                occ_down_2,
-                virt_down_2,
-                virt_up_1},
-                {
-                occ_down_1 * -1.0, // mixed state 2
-                occ_up_2,
-                virt_down_2,
-                virt_up_1}
-                });
-          }
+      for (IdxType p = 0; p < env.n_occ; p++) {
+        FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
+        FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
+        for (IdxType q = 0; q < env.n_virt; q++) {
+          FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
+          FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
+          fermion_operators.push_back({{occupied_annihilation_up, virtual_creation_up},
+                                       {occupied_annihilation_down, virtual_creation_down}});
         }
       }
-    }
-    // Mixed Double Excitations
+      // Double excitation
     for (IdxType i = 0; i < env.n_occ; i++) {
       FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
       FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
-      for (IdxType j = 0; j < i + 1; j++) {
+      for (IdxType j = i+1; j < env.n_occ; j++) {
         FermionOperator occ_down_2 (j, Occupied, Down, Annihilation, env.xacc_scheme);
         FermionOperator occ_up_2 (j, Occupied, Up, Annihilation, env.xacc_scheme);
         for (IdxType r = 0; r < env.n_virt; r++) {
-        FermionOperator virt_down_1 (r, Virtual, Down, Creation, env.xacc_scheme);
-        FermionOperator virt_up_1 (r, Virtual, Up, Creation, env.xacc_scheme);
-          for (IdxType s = 0; s < r + 1; s++) {
-          FermionOperator virt_down_2 (s, Virtual, Down, Creation, env.xacc_scheme);
-          FermionOperator virt_up_2 (s, Virtual, Up, Creation, env.xacc_scheme);
-            
-            IdxType term = fermion_operators.size();
-            // To avoid double counting
-            if (i != j && r != s) {
-              // Spin reversal symmetry
-              fermion_operators.push_back({
-                    {occ_up_1,
-                    occ_down_2,
-                    virt_down_2,
-                    virt_up_1},
-                    {occ_down_1,
-                    occ_up_2,
-                    virt_up_2,
-                    virt_down_1}});
-            } else {
-              fermion_operators.push_back({
-                    {occ_down_1,
-                    occ_up_2,
-                    virt_up_2,
-                    virt_down_1}});
-
-            }
+        FermionOperator virt_down_3 (r, Virtual, Down, Creation, env.xacc_scheme);
+        FermionOperator virt_up_3 (r, Virtual, Up, Creation, env.xacc_scheme);
+          for (IdxType s = r+1; s < env.n_virt; s++) {
+            FermionOperator virt_down_4 (s, Virtual, Down, Creation, env.xacc_scheme);
+            FermionOperator virt_up_4 (s, Virtual, Up, Creation, env.xacc_scheme);
+            IdxType alpha_term = fermion_operators.size();
+            fermion_operators.push_back(
+               {{occ_down_1,
+                occ_down_2,
+                virt_down_3,
+                virt_down_4},
+               {occ_up_1, 
+                occ_up_2,
+                virt_up_3,
+                virt_up_4},
+                {occ_up_1,
+                 occ_down_2, 
+                 virt_down_3,
+                 virt_up_4},
+                {occ_down_1,
+                 occ_up_2,
+                 virt_down_3,
+                 virt_up_4}}
+                );
           }
-            
         }
       }
     }
+    for (IdxType i = 0; i < env.n_occ; i++) {
+      FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
+      FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
+        for (IdxType r = 1; r < env.n_virt; r++) {
+        FermionOperator virt_down_2 (r, Virtual, Down, Creation, env.xacc_scheme);
+        FermionOperator virt_up_2 (r, Virtual, Up, Creation, env.xacc_scheme);
+          for (IdxType s = 0; s < r; s++) {
+          FermionOperator virt_down_3 (s, Virtual, Down, Creation, env.xacc_scheme);
+          FermionOperator virt_up_3 (s, Virtual, Up, Creation, env.xacc_scheme);
+            IdxType term = fermion_operators.size();
+            fermion_operators.push_back(
+                 {{occ_up_1,
+                  occ_down_1,
+                  virt_down_2,
+                  virt_up_3},
+                  {occ_up_1,
+                  occ_down_1,
+                  virt_down_3,
+                  virt_up_2}});
+        }
+      }
+    }
+
+    for (IdxType i = 0; i < env.n_virt; i++) {
+      FermionOperator virt_down_3 (i, Virtual, Down, Creation, env.xacc_scheme);
+      FermionOperator virt_up_3 (i, Virtual, Up, Creation, env.xacc_scheme);
+        for (IdxType r = 0; r < env.n_occ; r++) {
+      FermionOperator occ_down_1 (r, Occupied, Down, Annihilation, env.xacc_scheme);
+      FermionOperator occ_up_1 (r, Occupied, Up, Annihilation, env.xacc_scheme);
+          for (IdxType s = 0; s < r + 1; s++) {
+          FermionOperator occ_down_2 (s, Occupied, Down, Annihilation, env.xacc_scheme);
+          FermionOperator occ_up_2 (s, Occupied, Up, Annihilation, env.xacc_scheme);
+            if (r > s) {
+              fermion_operators.push_back({
+                    {occ_up_1,
+                    occ_down_2,
+                    virt_down_3,
+                    virt_up_3},
+                    {occ_up_2,
+                    occ_down_1,
+                    virt_down_3,
+                    virt_up_3}});
+            } else {
+              fermion_operators.push_back({
+                    {occ_up_1,
+                    occ_down_2,
+                    virt_down_3,
+                    virt_up_3}});
+            }
+        }
+        }
+      }
 };
 
 /**
