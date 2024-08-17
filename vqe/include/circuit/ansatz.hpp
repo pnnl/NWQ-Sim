@@ -276,8 +276,10 @@ namespace NWQSim {
                                   qubit_transform(_qubit_transform),
                                   Ansatz(2 * _env.n_spatial) {
           n_singles = 2 * env.n_occ * env.n_virt;
-          n_doubles = env.n_occ * (env.n_occ) * env.n_virt * (env.n_virt) +\
-              choose2(env.n_occ) * choose2(env.n_virt) * 2; 
+          IdxType c2virtual = choose2(env.n_virt);
+          IdxType c2occupied = choose2(env.n_occ);
+          n_doubles = 2 * (env.n_occ) * c2virtual + 2 * (env.n_virt) * c2occupied + env.n_occ * env.n_virt +\
+              c2occupied * c2virtual * 4;
           fermion_operators.reserve(n_singles + n_doubles);
           symmetries = std::vector<std::vector<std::pair<IdxType, ValType> > >((n_singles + n_doubles));
           fermion_ops_to_params.resize(n_doubles + n_singles);
@@ -316,15 +318,36 @@ namespace NWQSim {
             }
             std::string opstring = "";
             bool first = true;
+            bool is_distinct = true;
+            bool is_mixed = true;
+            std::vector<IdxType> indices_seen(env.n_spatial, 0);
             for (auto& op: oplist) {
               if (!first) {
                 opstring = " " + opstring;
               } else {
                 first = false;
+                is_mixed = op.getSpin() != oplist[1].getSpin();
               }
+              if (indices_seen[op.getOrbitalIndex(env)]) {
+                is_distinct = false;
+              }
+              indices_seen[op.getOrbitalIndex(env)] += 1;
               opstring = op.toString(env.n_occ, env.n_virt) + opstring;
             }
             result.push_back(std::make_pair(opstring, param));
+            if (is_distinct && oplist.size() == 4 && is_mixed) {
+              first = true;
+              opstring = "";
+              for (auto& op: oplist) {
+                if (!first) {
+                  opstring = " " + opstring;
+                } else {
+                  first = false;
+                }
+                opstring = op.spinReversed().toString(env.n_occ, env.n_virt) + opstring;
+              }
+              result.push_back(std::make_pair(opstring, param));
+            }
           }
           return result;
         };
