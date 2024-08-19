@@ -1,5 +1,6 @@
 #ifndef VQE_UTILS
 #define VQE_UTILS
+#include "nwq_util.hpp"
 #include <iostream>
 #include <vector>
 #include <unordered_map>
@@ -42,9 +43,9 @@ template <typename T>
 inline
 T choose2(T n) {
     if (n >= 2) {
-        return factorial(n) / (factorial(n-2) * 2);
+        return n * (n-1) / 2;
     }
-    return 1;
+    return 0;
 }
 // Status enum for MPI processes
 enum STATUS {
@@ -96,13 +97,17 @@ namespace NWQSim{
     ValType stop_val; //
     IdxType max_evals; // Max number of function evaluations
     ValType max_time; // Optimizer timeout (seconds)
+    ValType lbound; // Lower bound
+    ValType ubound; // Upper bound
     std::unordered_map<std::string, ValType> parameter_map; // map for setting optimizer-specific parameters
     // Defaults (disables all of the settings, except for the max_eval ceiling)
     OptimizerSettings(): rel_tol(-1), 
                          abs_tol(-1),
                          stop_val(-MAXFLOAT),
                          max_evals(50),
-                         max_time(-1) {}
+                         max_time(-1),
+                         lbound(-PI),
+                         ubound(PI) {}
   };
 
   inline

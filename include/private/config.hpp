@@ -129,7 +129,13 @@ namespace NWQSim::Config
         if (f.fail())
             throw std::logic_error("Device config file not found at " + path);
         backend_config = nlohmann::json::parse(f);
-        
+        if (layout.empty()) {
+            IdxType n_qubits;
+            backend_config["num_qubits"].get_to(n_qubits);
+            for (IdxType n = 0; n < n_qubits; n++) {
+                layout[std::to_string(n)] = (int)n;
+            }
+        }
     }
 
     /**
@@ -148,16 +154,13 @@ namespace NWQSim::Config
 
     inline void Load(const std::string &filename = "../default_config.json")
     {
-        if (layout.empty()) {
-            IdxType n_qubits;
-            backend_config["num_qubits"].get_to(n_qubits);
-            for (IdxType n = 0; n < n_qubits; n++) {
-                layout[std::to_string(n)] = (int)n;
-            }
-        }
+        
         LoadConfigFromFile(filename, true);
-        if (ENABLE_NOISE && !DEVICE_READ)
+        if (ENABLE_NOISE && !DEVICE_READ) {
             readConfigFile();
+        }
+        
+        
     }
     inline std::string qindex(IdxType q) {
         return std::to_string(static_cast<IdxType>(

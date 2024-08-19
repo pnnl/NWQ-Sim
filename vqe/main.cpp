@@ -43,6 +43,8 @@ int show_help() {
   std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
   std::cout << "--opt-config          Path to config file for NLOpt optimizer parameters" << std::endl;
   std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA" << std::endl;
+  std::cout << "--lbound              Lower bound for classical optimizer. Defaults to -PI" << std::endl;
+  std::cout << "--ubound              Upper bound for classical optimizer. Defaults to PI" << std::endl;
   std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--abstol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--maxeval             Maximum number of function evaluations for optimizer. Defaults to 200" << std::endl;
@@ -112,6 +114,12 @@ int parse_args(int argc, char** argv,
     } else 
     if (argname == "--abstol") {
       settings.abs_tol = std::atof(argv[++i]);
+    }  else 
+    if (argname == "--ubound") {
+      settings.ubound = std::atof(argv[++i]);
+    }  else 
+    if (argname == "--lbound") {
+      settings.lbound = std::atof(argv[++i]);
     } else 
     if (argname == "--adapt-fvaltol") {
       params.adapt_fvaltol = std::atof(argv[++i]);
