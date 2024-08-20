@@ -657,7 +657,7 @@ IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string in
     } else {
         state->reset_state();
     }
-
+    
     std::shared_ptr<NWQSim::Circuit> circuit = std::make_shared<Circuit>(num_qubits());
     for (auto gate : *list_gates)
     {

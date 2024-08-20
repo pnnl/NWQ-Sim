@@ -149,20 +149,7 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-        virtual void set_initial (std::string fpath, std::string format) override {
-            std::ifstream instream;
-            instream.open(fpath, std::ios::in|std::ios::binary);
-            if (instream.is_open()) {
-                instream.seekg(dm_size_per_gpu * i_proc);
-                instream.read((char*)dm_real_cpu, dm_size_per_gpu * sizeof(ValType));
-                instream.read((char*)dm_imag_cpu, dm_size_per_gpu * sizeof(ValType));
-                cudaSafeCall(cudaMemcpy(dm_real, dm_real_cpu,
-                                        dm_size_per_gpu, cudaMemcpyHostToDevice));
-                cudaSafeCall(cudaMemcpy(dm_imag, dm_imag_cpu,
-                                        dm_size_per_gpu, cudaMemcpyHostToDevice));
-                instream.close();
-            }
-        }
+
         virtual void dump_res_state(std::string outpath) override {
             std::ofstream outstream;
             outstream.open(outpath, std::ios::out|std::ios::binary);
@@ -1514,7 +1501,8 @@ namespace NWQSim
             }
         }
 #endif
-        ///*
+        
+
         __device__ __inline__ void M_GATE(ValType *gm_real, ValType *gm_imag,
                                           const IdxType qubit, const IdxType cur_index)
         {
@@ -1827,8 +1815,7 @@ namespace NWQSim
                  *result = m_real[tid];
             }                               
         }
-    };
-    virtual void set_initial (std::string fpath, std::string format) override {
+        virtual void set_initial (std::string fpath, std::string format) override {
             std::ifstream instream;
             instream.open(fpath, std::ios::in|std::ios::binary);
             if (instream.is_open()) {
@@ -1849,6 +1836,7 @@ namespace NWQSim
                     IdxType offset = sv_size_per_gpu * i_proc;
 
                     IdxType n_blocks = IdxType(ceil((double)dm_size / THREADS_CTA_CUDA)); 
+                    std::cout << n_blocks << std::endl;
                     outerProduct<<<THREADS_CTA_CUDA, n_blocks>>>(dm_real, dm_imag, sv_real + offset, sv_imag + offset, sv_real, sv_imag, sv_size_per_gpu, sv_size);
                     cudaSafeCall(cudaMemcpy(dm_real_cpu, dm_real,
                                             dm_size_per_gpu, cudaMemcpyDeviceToHost));
@@ -1858,6 +1846,8 @@ namespace NWQSim
                 }
             }
         }
+    };
+    
 
     __global__ 
     void fidelity_kernel_local(DM_CUDA_MPI* dm_gpu,
