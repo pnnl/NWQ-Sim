@@ -25,17 +25,29 @@ namespace NWQSim {
         std::vector<ObservableList*> gradient_observables; // Vector of structure pointers for measurement circuit
         std::vector<IdxType> observable_sizes; // Stores the number of commuting cliques for each commutator  
     public:
+
+      //Ctor
       AdaptVQE(std::shared_ptr<DynamicAnsatz> _ans, std::shared_ptr<VQEState> backend, std::shared_ptr<Hamiltonian> _hamil): 
             ansatz(_ans), 
             state(backend), 
             hamil(_hamil) {
         gradient_measurement = std::make_shared<Ansatz>(_ans->num_qubits());
       }
+      //Dtor
       ~AdaptVQE() {
         size_t index = 0;
         for (auto i: gradient_observables)
           state->delete_observables(i, observable_sizes[index++]);
       }
+
+     /**
+      * @brief  Calculate the commutator of two sums over Pauli strings
+      * @note   Uses a std::unordered_map to keep track of coefficients to avoid duplicate/zero terms. Computes [oplist1, oplist2]
+      * @param  oplist1: Sum over Pauli terms, first operator in commutator
+      * @param  oplist2: Sum over Pauli terms, second operator in commutator
+      * @param  summation: std::unordered_map to track coefficient sums
+      * @retval None
+      */
       void commutator(std::vector<PauliOperator>& oplist1, 
                       std::vector<PauliOperator>& oplist2, 
                       PauliMap& summation) {
@@ -43,7 +55,8 @@ namespace NWQSim {
               for (auto p2: oplist2) {
                 auto p12 = (p1 * p2);
                 auto p21 = (p2 * p1);
-                p21 *= -1.0 * imag;
+                // multiply by an imaginary factor 
+                p21 *= -1.0 * imag; // 
                 p12 *= imag;
                 if (summation.find(p12) == summation.end()) {
                   summation[p12] = p12.getCoeff();
