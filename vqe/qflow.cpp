@@ -188,12 +188,12 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      double delta,
                      double eta) {
   double fval;
-  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, config, ansatz, hamil, algo, callback_function, seed, settings); 
   NWQSim::VQE::Callback callback = verbose ? carriage_return_callback_function: silent_callback_function;
   if (!verbose) {
     NWQSim::Config::PRINT_SIM_TRACE = false;
   }  
-  std::uniform_real_distribution<double> initdist(0, 2 * PI);
+  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, config, ansatz, hamil, algo, callback, seed, settings); 
+  std::uniform_real_distribution<double> initdist(-2, 2);
   std::mt19937_64 random_engine (seed);
   params.resize(ansatz->numParams());
   std::fill(params.begin(), params.end(), 0);
@@ -256,6 +256,7 @@ int main(int argc, char** argv) {
     NWQSim::VQE::getJordanWignerTransform,
     1
   );
+  ansatz->buildAnsatz();
   std::vector<double> params;
   manager.safe_print("Beginning VQE loop...\n");
   optimize_ansatz(manager, backend, config, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta);
