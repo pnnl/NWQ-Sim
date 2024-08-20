@@ -154,8 +154,8 @@ namespace NWQSim
             instream.open(fpath, std::ios::in|std::ios::binary);
             if (instream.is_open()) {
                 instream.seekg(dm_size_per_gpu * i_proc);
-                instream.read((char*)dm_real_cpu, dm_size_per_gpu);
-                instream.read((char*)dm_imag_cpu, dm_size_per_gpu);
+                instream.read((char*)dm_real_cpu, dm_size_per_gpu * sizeof(ValType));
+                instream.read((char*)dm_imag_cpu, dm_size_per_gpu * sizeof(ValType));
                 cudaSafeCall(cudaMemcpy(dm_real, dm_real_cpu,
                                         dm_size_per_gpu, cudaMemcpyHostToDevice));
                 cudaSafeCall(cudaMemcpy(dm_imag, dm_imag_cpu,
@@ -1828,6 +1828,37 @@ namespace NWQSim
             }                               
         }
     };
+    virtual void set_initial (std::string fpath, std::string format) override {
+            std::ifstream instream;
+            instream.open(fpath, std::ios::in|std::ios::binary);
+            if (instream.is_open()) {
+                if (format == "dm") {
+                    instream.read((char*)dm_real_cpu, dm_size * sizeof(ValType));
+                    instream.read((char*)dm_imag_cpu, dm_size * sizeof(ValType));
+                    cudaSafeCall(cudaMemcpy(dm_real, dm_real_cpu,
+                                            dm_size, cudaMemcpyHostToDevice));
+                    cudaSafeCall(cudaMemcpy(dm_imag, dm_imag_cpu,
+                                            dm_size, cudaMemcpyHostToDevice));
+                    instream.close();
+                } else {
+                    IdxType sv_size = 1 << n_qubits;
+                    IdxType sv_size_per_gpu = sv_size / n_gpus;
+                    ValType *sv_real, *sv_imag;
+                    SAFE_ALOC_GPU(sv_real, sv_size);
+                    SAFE_ALOC_GPU(sv_imag, sv_size);
+                    IdxType offset = sv_size_per_gpu * i_proc;
+
+                    IdxType n_blocks = IdxType(ceil((double)dm_size / THREADS_CTA_CUDA)); 
+                    outerProduct<<<THREADS_CTA_CUDA, n_blocks>>>(dm_real, dm_imag, sv_real + offset, sv_imag + offset, sv_real, sv_imag, sv_size_per_gpu, sv_size);
+                    cudaSafeCall(cudaMemcpy(dm_real_cpu, dm_real,
+                                            dm_size_per_gpu, cudaMemcpyDeviceToHost));
+                    cudaSafeCall(cudaMemcpy(dm_imag_cpu, dm_imag,
+                                            dm_size_per_gpu, cudaMemcpyDeviceToHost));
+                    
+                }
+            }
+        }
+
     __global__ 
     void fidelity_kernel_local(DM_CUDA_MPI* dm_gpu,
                                ValType* sv_real, 

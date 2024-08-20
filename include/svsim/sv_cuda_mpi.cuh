@@ -144,13 +144,16 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-virtual void set_initial (std::string fpath) override {
+        virtual void set_initial (std::string fpath, std::string format) override {
             std::ifstream instream;
+            if (format != "sv") {
+                throw std::runtime_error("SV-Sim only supports statevector input states\n");
+            }
             instream.open(fpath, std::ios::in|std::ios::binary);
             if (instream.is_open()) {
                 instream.seekg(sv_size_per_gpu * i_proc);
-                instream.read((char*)sv_real_cpu, sv_size_per_gpu);
-                instream.read((char*)sv_imag_cpu, sv_size_per_gpu);
+                instream.read((char*)sv_real_cpu, sv_size_per_gpu * sizeof(ValType));
+                instream.read((char*)sv_imag_cpu, sv_size_per_gpu * sizeof(ValType));
                 cudaSafeCall(cudaMemcpy(sv_real, sv_real_cpu,
                                         sv_size_per_gpu, cudaMemcpyHostToDevice));
                 cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu,

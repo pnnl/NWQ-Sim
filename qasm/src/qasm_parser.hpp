@@ -65,7 +65,7 @@ private:
     void classify_measurements();
 
     void execute_gate(shared_ptr<QuantumState> state, std::shared_ptr<NWQSim::Circuit> circuit, qasm_gate gate);
-    IdxType *sub_execute(shared_ptr<QuantumState> state, std::string initpath, IdxType repetition, bool print_metrics);
+    IdxType *sub_execute(shared_ptr<QuantumState> state, std::string init_path, std::string init_format, IdxType repetition, bool print_metrics);
 
     void dump_defined_gates();
     void dump_cur_inst();
@@ -79,7 +79,7 @@ public:
     void load_qobj_string(const std::string qobj_string);
 
     IdxType num_qubits();
-    map<string, IdxType> *execute(shared_ptr<QuantumState> state, std::string initpath, IdxType repetition, bool print_metrics = false);
+    map<string, IdxType> *execute(shared_ptr<QuantumState> state, std::string initpath, std::string init_format, IdxType repetition, bool print_metrics = false);
     ~qasm_parser();
 };
 
@@ -620,7 +620,7 @@ void qasm_parser::classify_measurements()
             final_measurements = false;
 }
 
-map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::string initpath, std::string initformat, IdxType repetition, bool print_metrics)
+map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::string initpath, std::string init_format, IdxType repetition, bool print_metrics)
 {
     IdxType *results;
     if (contains_if)
@@ -650,10 +650,10 @@ map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::
         return convert_dictionary(result_dict, list_cregs);
 }
 
-IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string initpath, std::string init_format, IdxType repetition, bool print_metrics)
+IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string init_path, std::string init_format, IdxType repetition, bool print_metrics)
 {
-    if (initpath != "") {
-        state->set_initial(initpath, init_format);
+    if (init_path != "") {
+        state->set_initial(init_path, init_format);
     } else {
         state->reset_state();
     }

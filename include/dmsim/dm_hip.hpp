@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <random>
 #include <complex.h>
+#include <stdexcept>
 #include <vector>
 #include <algorithm>
 #include <string>
@@ -123,13 +124,16 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-<<<<<<< HEAD
-        virtual void set_initial (std::string fpath) override {
+        virtual void set_initial (std::string fpath, std::string format) override {
             std::ifstream instream;
             instream.open(fpath, std::ios::in|std::ios::binary);
+            // TODO: Implement HIP outer product
+            if (format != "dm") {
+                throw std::runtime_error("HIP SV outer product not yet implemented\n");
+            }
             if (instream.is_open()) {
-                instream.read((char*)dm_real_cpu, dm_size);
-                instream.read((char*)dm_imag_cpu, dm_size);
+                instream.read((char*)dm_real_cpu, dm_size * sizeof(ValType));
+                instream.read((char*)dm_imag_cpu, dm_size * sizeof(ValType));
                 hipSafeCall(hipMemcpy(dm_real, dm_real_cpu,
                                         dm_size, hipMemcpyHostToDevice));
                 hipSafeCall(hipMemcpy(dm_imag, dm_imag_cpu,
@@ -150,10 +154,8 @@ namespace NWQSim
                 outstream.close();
             }
         };
-=======
         virtual ValType *get_real() const override {return dm_real;};
         virtual ValType *get_imag() const override {return dm_imag;};
->>>>>>> main
 
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {

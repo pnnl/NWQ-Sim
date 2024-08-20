@@ -126,17 +126,31 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-        virtual void set_initial (std::string fpath) override {
+        virtual void set_initial (std::string fpath, std::string format) override {
             std::ifstream instream;
             instream.open(fpath, std::ios::in|std::ios::binary);
             if (instream.is_open()) {
-                instream.read((char*)dm_real_cpu, dm_size);
-                instream.read((char*)dm_imag_cpu, dm_size);
-                cudaSafeCall(cudaMemcpy(dm_real, dm_real_cpu,
-                                        dm_size, cudaMemcpyHostToDevice));
-                cudaSafeCall(cudaMemcpy(dm_imag, dm_imag_cpu,
-                                        dm_size, cudaMemcpyHostToDevice));
-                instream.close();
+                if (format == "dm") {
+                    instream.read((char*)dm_real_cpu, dm_size * sizeof(ValType));
+                    instream.read((char*)dm_imag_cpu, dm_size * sizeof(ValType));
+                    cudaSafeCall(cudaMemcpy(dm_real, dm_real_cpu,
+                                            dm_size, cudaMemcpyHostToDevice));
+                    cudaSafeCall(cudaMemcpy(dm_imag, dm_imag_cpu,
+                                            dm_size, cudaMemcpyHostToDevice));
+                    instream.close();
+                } else {
+                    IdxType sv_size = 1 << n_qubits;
+                    ValType *sv_real, *sv_imag;
+                    SAFE_ALOC_GPU(sv_real, sv_size);
+                    SAFE_ALOC_GPU(sv_imag, sv_size);
+                    IdxType n_blocks = IdxType(ceil((double)dm_size / THREADS_CTA_CUDA)); 
+                    outerProduct<<<THREADS_CTA_CUDA, n_blocks>>>(dm_real, dm_imag, sv_real, sv_imag, sv_real, sv_imag, sv_size, sv_size);
+                    cudaSafeCall(cudaMemcpy(dm_real_cpu, dm_real,
+                                            dm_size, cudaMemcpyDeviceToHost));
+                    cudaSafeCall(cudaMemcpy(dm_imag_cpu, dm_imag,
+                                            dm_size, cudaMemcpyDeviceToHost));
+                    
+                }
             }
         }
         virtual void dump_res_state(std::string outpath) override {

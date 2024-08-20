@@ -26,7 +26,7 @@ int main(int argc, char **argv)
     bool run_with_basis = false;
     bool print_metrics = false;
     std::string config = "../default_config.json";
-    std::string initfile = "";
+    std::string init_file = "";
     std::string dumpfile = "";
     std::string layoutfile = "";
     bool report_fidelity = false;
@@ -117,7 +117,7 @@ int main(int argc, char **argv)
     }
     if (cmdOptionExists(argv, argv + argc, "-initial"))
     {
-        initfile = std::string(getCmdOption(argv, argv + argc, "-initial"));
+        init_file = std::string(getCmdOption(argv, argv + argc, "-initial"));
     }
     if (cmdOptionExists(argv, argv + argc, "-initial-format"))
     {
@@ -170,7 +170,7 @@ int main(int argc, char **argv)
                 return 1;
             }
             state->print_config(simulation_method);
-            map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
+            map<string, IdxType> *counts = parser.execute(state, init_file, init_format, total_shots, print_metrics);
 
             // std::vector<size_t> in_bits;
 
@@ -211,7 +211,7 @@ int main(int argc, char **argv)
             if (dm_state->i_proc == 0)
             {
                 sv_state->print_config(simulation_method);
-                map<string, IdxType> *counts_sv = parser.execute(sv_state, "", total_shots, print_metrics);
+                map<string, IdxType> *counts_sv = parser.execute(sv_state, init_file, init_format, total_shots, print_metrics);
                 print_counts(counts_sv, total_shots);
                 delete counts_sv;
             }
@@ -223,7 +223,7 @@ int main(int argc, char **argv)
                 return 1;
             }
             dm_state->print_config(simulation_method);
-            map<string, IdxType> *counts_dm = parser.execute(dm_state, "", total_shots, print_metrics);
+            map<string, IdxType> *counts_dm = parser.execute(dm_state, init_file, init_format, total_shots, print_metrics);
             if (dm_state->i_proc == 0)
             {
                 print_counts(counts_dm, total_shots);
@@ -252,7 +252,7 @@ int main(int argc, char **argv)
                 return 1;
             }
             state->print_config(simulation_method);
-            map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
+            map<string, IdxType> *counts = parser.execute(state, init_file, init_format, total_shots, print_metrics);
             if (state->i_proc == 0)
             {
                 print_counts(counts, total_shots);
@@ -273,7 +273,7 @@ int main(int argc, char **argv)
             if (sv_state->i_proc == 0)
             {
                 sv_state->print_config(simulation_method);
-                map<string, IdxType> *counts_sv = parser.execute(sv_state, "", total_shots, print_metrics);
+                map<string, IdxType> *counts_sv = parser.execute(sv_state, init_file, init_format, total_shots, print_metrics);
                 print_counts(counts_sv, total_shots);
                 delete counts_sv;
             }
@@ -286,7 +286,7 @@ int main(int argc, char **argv)
                 return 1;
             }
             dm_state->print_config(simulation_method);
-            map<string, IdxType> *counts_dm = parser.execute(dm_state, "", total_shots, print_metrics);
+            map<string, IdxType> *counts_dm = parser.execute(dm_state, init_file, init_format, total_shots, print_metrics);
             if (dm_state->i_proc == 0)
             {
                 print_counts(counts_dm, total_shots);
@@ -311,7 +311,7 @@ int main(int argc, char **argv)
                 return 1;
             }
             state->print_config(simulation_method);
-            map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
+            map<string, IdxType> *counts = parser.execute(state, init_file, init_format, total_shots, print_metrics);
             if (state->i_proc == 0)
             {
                 json result_count_json;
@@ -342,7 +342,7 @@ int main(int argc, char **argv)
             if (sv_state->i_proc == 0)
             {
                 sv_state->print_config(simulation_method);
-                map<string, IdxType> *counts_sv = parser.execute(sv_state,  "",total_shots, print_metrics);
+                map<string, IdxType> *counts_sv = parser.execute(sv_state,  init_file, init_format, total_shots, print_metrics);
                 json result_count_json;
                 for (const auto& r : (*counts_sv))
                 {
@@ -364,7 +364,7 @@ int main(int argc, char **argv)
                 return 1;
             }
             dm_state->print_config(simulation_method);
-            map<string, IdxType> *counts_dm = parser.execute(dm_state, "", total_shots, print_metrics);
+            map<string, IdxType> *counts_dm = parser.execute(dm_state, init_file, init_format, total_shots, print_metrics);
             if (dm_state->i_proc == 0)
             {
                 json result_count_json;
@@ -397,7 +397,7 @@ int main(int argc, char **argv)
                 return 1;
             }
             state->print_config(simulation_method);
-            map<string, IdxType> *counts = parser.execute(state, initfile, total_shots, print_metrics);
+            map<string, IdxType> *counts = parser.execute(state, init_file, init_format, total_shots, print_metrics);
             if (state->i_proc == 0)
             {
                 json result_count_json;
@@ -429,7 +429,7 @@ int main(int argc, char **argv)
             if (sv_state->i_proc == 0)
             {
                 sv_state->print_config(simulation_method);
-                map<string, IdxType> *counts_sv = parser.execute(sv_state, "", total_shots, print_metrics);
+                map<string, IdxType> *counts_sv = parser.execute(sv_state, init_file, init_format, total_shots, print_metrics);
                 json result_count_json;
                 for (const auto& r : (*counts_sv))
                 {
@@ -451,7 +451,7 @@ int main(int argc, char **argv)
                 return 1;
             }
             dm_state->print_config(simulation_method);
-            map<string, IdxType> *counts_dm = parser.execute(dm_state, "", total_shots, print_metrics);
+            map<string, IdxType> *counts_dm = parser.execute(dm_state, init_file, init_format, total_shots, print_metrics);
             if (dm_state->i_proc == 0)
             {
                 json result_count_json;
@@ -534,7 +534,7 @@ ValType run_brnchmark(std::string backend, const std::string& config, IdxType in
         return 1;
     }
     state->print_config(simulation_method);
-    map<string, IdxType> *svsim_counts = parser.execute(state, "", total_shots);
+    map<string, IdxType> *svsim_counts = parser.execute(state, "", "", total_shots);
     map<string, ValType> ref_probs;
     map<string, ValType> svsim_probs;
     string line;

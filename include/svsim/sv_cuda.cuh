@@ -117,8 +117,11 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-        virtual void set_initial (std::string fpath) override {
+        virtual void set_initial (std::string fpath, std::string format) override {
             std::ifstream instream;
+            if (format != "sv") {
+                throw std::runtime_error("SV-Sim only supports statevector input states\n");
+            }
             instream.open(fpath, std::ios::in|std::ios::binary);
             if (instream.is_open()) {
                 instream.read((char*)sv_real_cpu, sizeof(ValType) * dim);
