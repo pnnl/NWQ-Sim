@@ -28,17 +28,12 @@ std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
   out << "]";
   return out;
 }
-// Templated print function for std::vector
+// Templated print function for std::pair
 template <typename T, typename S>
 std::ostream& operator<<(std::ostream& out, const std::pair<T, S>& target) {
   std::cout << "(" << target.first << ", " << target.second << ")" << std::endl;
   return out;
 }
-template <typename T>
-inline
-T factorial(T n) {
-    return (n == 1 || n == 0) ? 1 : factorial(n - 1) * n;
- }
 template <typename T>
 inline
 T choose2(T n) {
@@ -70,19 +65,6 @@ std::stringstream& operator<<(std::stringstream& out, const std::vector<T>& targ
 
 namespace NWQSim{
   namespace VQE{
-    // template <typename T>
-// std::ostream& operator<<(std::ostream& out, const std::vector<T>& target) {
-//   out << "[";
-//   size_t len = target.size();
-//   if (len > 0) {
-//       for (size_t i = 0; i < len - 1; i++) {
-//           out << target[i] << ", ";
-//       }
-//       out << target[len-1];
-//   }
-//   out << "]";
-//   return out;
-// }
   using IdxType = long long;
   using ValType = double;
   enum class Commute {
@@ -90,8 +72,12 @@ namespace NWQSim{
     QWC, // qubit-wise commutativity
     TRC  // topology-restricted commutativity
   };
+
+
   struct OptimizerSettings {
-    // Structure to pass settings to the optimizer
+   /**
+    * @brief  Data structure for NLOpt optimizer settings
+    */
     ValType rel_tol; // relative tolerance cutoff
     ValType abs_tol; // absolute tolerance cutoff
     ValType stop_val; //
@@ -110,6 +96,17 @@ namespace NWQSim{
                          ubound(PI) {}
   };
 
+
+ /**
+  * @brief  Get the qubit index of a spin orbital
+  * @note   
+  * @param  orbital_index: The numerical index of an orbital (starting from 0) within either occupied or virtual
+  * @param  spin: Spin type (Spin::Up or Spin::Down)
+  * @param  orb_type: Orbital type (virtual or occupied)
+  * @param  n_occ: Number of occupied orbitals in system
+  * @param  n_virt: Number of virtual orbitals in system
+  * @param  xacc_scheme: Flag for XACC ordering (true) or canonical (false)
+  */
   inline
   IdxType getQubitIndex(IdxType orbital_index, IdxType spin, IdxType orb_type, IdxType n_occ, IdxType n_virt, bool xacc_scheme) {
     // Flattened indexing scheme
@@ -128,6 +125,12 @@ namespace NWQSim{
     return index;
   }
 
+/**
+ * @brief  Count the ones in a long long bitmask
+ * @note   Used for Pauli parity operations
+ * @param  val: Bitmask to count
+ * @retval 
+ */
 inline
 IdxType count_ones(IdxType val) {
   IdxType count = 0;
@@ -138,6 +141,18 @@ IdxType count_ones(IdxType val) {
   }
   return count;
 }
+ /**
+  * @brief  Extract orbital information from a qubit index
+  * @note   Inverse of `getQubitIndex`
+  * @param  qubit_idx: Qubit index (input)
+  * @param  orbital_index: Numerical index of orbital (output)
+  * @param  spin: Spin type (Spin::Up or Spin::Down) (output)
+  * @param  orb_type: Type of orbital (Occupied or Virtual) (output)
+  * @param  n_occ: # Occupied orbitals
+  * @param  n_virt: # Virtual orbitals
+  * @param  xacc_scheme: Flag on whether to use XACC ordering (true) or canonical ordering (false)
+  * @retval None
+  */
   inline
   void getFermiInfoFromQubit(IdxType qubit_idx, IdxType& orbital_index, IdxType& spin, IdxType& orb_type, IdxType n_occ, IdxType n_virt, bool xacc_scheme) {
     // Flattened indexing scheme (reversed). Extracts orbital/operator/spin properties from the qubit index
@@ -161,14 +176,16 @@ IdxType count_ones(IdxType val) {
       orb_type = orbital_index >= n_occ;
       orbital_index -= orb_type * n_occ;
     }
-    
-    // Below is the reverse indexing for comparison with Qiskit
-    // std::cout << qubit_idx << " " << orbital_index << " " << spin << " " << orb_type << " " << n_occ << " " << n_virt << std::endl;
   }
+
+  // Forward declaration for PauliOperator class
   class PauliOperator;
+
+  // Make a common operator for a QWC class
   PauliOperator make_common_op(const std::vector<PauliOperator>& pauli_list, 
                                std::vector<IdxType>& zmasks,
                                std::vector<ValType>& coeffs);
+  // Heuristic to partition operators into QWC-compatible cliques
   void sorted_insertion(const std::vector<PauliOperator>& paulilist, std::list<std::vector<IdxType> >& cliques, bool overlap);
   // Convert an integer to an  `n_qubits`-digit binary string
   std::string to_binary_string(IdxType val, IdxType n_qubits);

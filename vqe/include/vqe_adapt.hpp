@@ -8,18 +8,22 @@
 #include <cstddef>
 namespace NWQSim {
   namespace VQE {
+    const std::complex<ValType> imag = {0, 1.0}; // constant `i` value
+    /**
+    * @brief  Implementation of ADAPT-VQE optimizer
+    * @note   Uses commutator-based gradient calculation with either Fermionic or Pauli operator pools
+    */
     class AdaptVQE {
       protected:
-        std::shared_ptr<DynamicAnsatz> ansatz;
-        std::shared_ptr<VQEState> state;
-        std::vector<ValType> gradient_magnitudes;
-        std::shared_ptr<Hamiltonian> hamil;
-        std::shared_ptr<Ansatz> gradient_measurement;
-        const std::complex<ValType> imag = {0, 1.0};
-        std::vector<std::vector<std::vector<double> > > commutator_coeffs;
-        std::vector<std::vector<std::vector<IdxType> > > commutator_zmasks;
-        std::vector<ObservableList*> gradient_observables;
-        std::vector<IdxType> observable_sizes;
+        std::shared_ptr<DynamicAnsatz> ansatz; // Iterative Ansatz being constructed
+        std::shared_ptr<VQEState> state; // VQE state for energy calculation and ansatz optimization
+        std::vector<ValType> gradient_magnitudes; // vector of gradient magnitudes
+        std::shared_ptr<Hamiltonian> hamil; // Hamiltonian observable
+        std::shared_ptr<Ansatz> gradient_measurement; // Measurement circuit for gradient estimation
+        std::vector<std::vector<std::vector<double> > > commutator_coeffs; // Coefficients for commutator operators
+        std::vector<std::vector<std::vector<IdxType> > > commutator_zmasks; // Zmasks for commutator operators
+        std::vector<ObservableList*> gradient_observables; // Vector of structure pointers for measurement circuit
+        std::vector<IdxType> observable_sizes; // Stores the number of commuting cliques for each commutator  
     public:
       AdaptVQE(std::shared_ptr<DynamicAnsatz> _ans, std::shared_ptr<VQEState> backend, std::shared_ptr<Hamiltonian> _hamil): 
             ansatz(_ans), 
