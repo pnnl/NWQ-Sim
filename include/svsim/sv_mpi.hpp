@@ -1091,17 +1091,26 @@ namespace NWQSim
             results[0] = (rand <= prob_of_one ? 1 : 0);
             BARR_MPI;
         }
+        // Compute the expectation value for a single operator in the diagonal basis
         double EXPECT_C0_GATE(IdxType zmask) {
             const IdxType per_pe_work = ((dim) >> (cpu_scale));
             ValType exp_val = 0;
+            // iterate over locally stored values
             for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
             {
+                // compute the probability amplitude
                 ValType val = LOCAL_G(sv_real, i) * LOCAL_G(sv_real, i) + LOCAL_G(sv_imag, i) * LOCAL_G(sv_imag, i);
                 exp_val += hasEvenParity(i & zmask, n_qubits) ? val : -val;
             }
             return exp_val;
             
         }
+        /**
+         * @brief Compute operator expectation values
+         * @note `o` points to the zmasks and coefficients for a QWC group, assumes the measurement unitary has already been applied.
+         *       The partial sums are reduced using an MPI
+         * @param o: Pointer to a container with pointers to an array of qubit masks and coefficients, also stores the accumulated sum
+         */
         void EXPECT_GATE(ObservableList* o)  {
             ValType expect = 0;
             for (size_t i = 0; i < o->numterms; i++) {

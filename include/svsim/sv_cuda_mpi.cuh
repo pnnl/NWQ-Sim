@@ -144,6 +144,12 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
+        /** 
+         * @brief Read an initial quantum state (TODO: Check for state purity/validity)
+         * @note 
+         * @param fpath: Path to the input binary file
+         * @param format: Format of the input (either "sv" or "dm")
+         */
         virtual void set_initial (std::string fpath, std::string format) override {
             std::ifstream instream;
             if (format != "sv") {
@@ -160,12 +166,20 @@ namespace NWQSim
                                         sv_size_per_gpu, cudaMemcpyHostToDevice));
                 instream.close();
             }
+            std::cout << i_proc << std::endl;
         }
+
+
+        /** 
+         * @brief Dump the current quantum state to a binary output file
+         * @note 
+         * @param outpath: Output path
+         */
         virtual void dump_res_state(std::string outpath) override {
             std::ofstream outstream;
             outstream.open(outpath, std::ios::out|std::ios::binary);
             IdxType ticket = 1;
-            // synchronize the file writes with a basic point-point ticket lock
+            // synchronize the file writes with a basic point<->point ticket lock (hooray for 404)
             if (i_proc != 0) {
                 MPI_Recv(&ticket, 1, MPI_INT64_T, i_proc - 1, i_proc, comm_global, MPI_STATUS_IGNORE);
             }
@@ -824,6 +838,7 @@ namespace NWQSim
         __device__ inline 
         void EXPECT_C2_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1, const IdxType mask)
         {
+            // Functions very similarly to the two-qubit gate. Computes diagonalization and expectation value in-place for a weight-2 Pauli operator 
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType per_pe_work = ((dim) >> (gpu_scale + 2));
@@ -888,6 +903,7 @@ namespace NWQSim
         __device__ inline
         void EXPECT_C2V1_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1, IdxType mask)
         {
+            // Functions very similarly to the two-qubit gate with remote optimization.
             assert(qubit0 != qubit1); // Non-cloning
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -982,6 +998,8 @@ namespace NWQSim
                 
             }
         }
+
+    // Compute the expectation value for a weight-four Pauli string 
     __device__ inline 
     void EXPECT_C4_GATE(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask) {
             grid_group grid = this_grid();
@@ -1053,6 +1071,7 @@ namespace NWQSim
             }
         }
 
+        // Compute the expectation value of a weight-four Pauli operator (this time with communication optimizations, one qubit is remote)
         __device__
         void EXPECT_C4V1_GATE(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask) {
             grid_group grid = this_grid();
@@ -1216,48 +1235,54 @@ namespace NWQSim
             }
         }
 
+        // Compute the expectation value of a diagonal-basis Pauli operator. No communication needed, just need the local sum
         __device__ inline void EXPECT_C0_GATE(IdxType mask, ValType coeff) {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             double exp_val = 0.0;
             const IdxType per_pe_work = m_gpu;
+            // loop over local quantum state
             for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work; i += blockDim.x * gridDim.x)
             {
+                // compute the probability amplitude
                 double val = LOCAL_G_CUDA_MPI(sv_real, i) * LOCAL_G_CUDA_MPI(sv_real, i) + LOCAL_G_CUDA_MPI(sv_imag, i) * LOCAL_G_CUDA_MPI(sv_imag, i);
+                // add/subtract depending on the Pauli parity relative to the state index
                 exp_val += hasEvenParity_cu(i & mask, n_qubits) ? val : -val;
             }
             if (tid < per_pe_work) {
+                // store accumulated result in m_real
                 m_real[tid] += coeff * exp_val;
             }
         }
 
+        // Perform a parallel reduction over the locally cached expectation sums
         __device__ inline
         void EXPECT_REDUCE(ValType* output) {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
-            // Parallel reduction
+            // ensure the reduction dimension is a power of 2
             IdxType gridlog2 = 63 - __clzll(blockDim.x * gridDim.x);
             if (blockDim.x * gridDim.x & ((1 << gridlog2) - 1)) {
                 gridlog2 += 1;
             }
             IdxType reduce_limit = 1 << gridlog2;
+            // If there are more threads than local entries, then reduce over the thread count. Otherwise reduce over the local dimension
             reduce_limit = min(reduce_limit, dim >> gpu_scale);
+            // Parallel reduction
             for (IdxType k = (reduce_limit >> 1); k > 0; k >>= 1)
             {
                 if (tid < k && tid + k < blockDim.x * gridDim.x) {
                     m_real[tid] += m_real[tid + k];
-                    LOCAL_P_CUDA_MPI(m_imag, tid + k, 1);
-                    
-                    LOCAL_P_CUDA_MPI(m_imag, tid, 1);
                 }
                 grid.sync();
             }
             grid.sync();
             if (tid == 0) {
+                // write the output to the assigned pointer
                 *output = m_real[0];
             }
         }
-
+            // Compute the expectation value for a QWC group
 __device__ __inline__ void EXPECT_GATE(ObservableList* o)  {
             grid_group grid = this_grid();
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;

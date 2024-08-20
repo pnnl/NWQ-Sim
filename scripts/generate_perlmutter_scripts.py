@@ -37,21 +37,21 @@ ADAPT-VQE OPTIONS
 
 
 
-hamilpath = "/global/homes/m/mxburns/benchmarks/DUCC-Hamiltonians/C2H4"
-orbitals = "Bare"
-name = 'c2h4_ducc_bare'
+hamilpath = ["/global/homes/m/mxburns/benchmarks/DUCC-Hamiltonians/H6"]
+orbitals = ["Bare", 'DUCC3']
+name = 'adapt_vqe_h6_bare_comp'
 args = {
     'optimizer': 'LN_COBYLA',
-    'maxeval': 20000,
-    'abstol': 1e-6,
+    'maxeval': 500,
+    'abstol': 1e-3,
     'backend': 'NVGPU',
     'xacc': '',
-    # 'adapt': '',
+    'adapt': '',
     # 'qubit': '',
     # 'adapt-pool': 25,
-    # 'adapt-gradtol': 1e-6,
-    # 'adapt-fvaltol': 1e-10,
-    # 'adapt-maxeval': 1000
+    'adapt-gradtol': 1e-6,
+    'adapt-fvaltol': 1e-10,
+    'adapt-maxeval': 1000
 }
 def filterfunc(val):
     try:
@@ -105,7 +105,7 @@ def find_directories(base_path, subfolder):
 
 
 problems = {
-    'hamiltonian': list(filter(filterfunc, glob.glob(f'{hamilpath}/**/{orbitals}/**/*-xacc', recursive=True))),
+    'hamiltonian': sum([list(filter(filterfunc, glob.glob(f'{h}/**/{o}/**/*-xacc', recursive=True))) for h, o in product(hamilpath, orbitals)], []),
 }
 problems['nparticles'] = [int(re.findall(r'(\d+)-electrons', i)[0]) for i in problems['hamiltonian']]
 

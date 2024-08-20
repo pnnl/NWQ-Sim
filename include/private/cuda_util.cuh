@@ -162,7 +162,7 @@ void outerProduct(double* matrix_real, double* matrix_imag, double* v1_real, dou
     if (tid < size_1 * size_2) {
         size_t idx1 = tid / size_2;
         size_t idx2 = tid % size_2;
-        double real_coeff = v1_real[idx1] * v2_real[idx2] - v1_imag[idx1] * v2_imag[idx2];
+        double real_coeff = v1_real[idx1] * v2_real[idx2] + v1_imag[idx1] * v2_imag[idx2];
         double imag_coeff = v1_imag[idx1] * v2_real[idx2] - v1_real[idx1] * v2_imag[idx2];
         matrix_real[tid] = real_coeff;
         matrix_real[tid] = imag_coeff;
