@@ -674,12 +674,7 @@ IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, IdxType repeti
     if (!circuit->is_empty())
     {
         circuit->MA(repetition);
-        if (print_metrics)
-        {
-            circuit->print_metrics();
-            circuit->clear(); //This clears circuit since for print metrics, we do not need to actually run the circuit
-            circuit->MA(repetition);
-        }
+        if (print_metrics) circuit->print_metrics();
         state->sim(circuit);
     }
     return state->get_results();
