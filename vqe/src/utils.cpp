@@ -4,12 +4,15 @@
 #include "utils.hpp"
 #include <algorithm>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <iostream>
 #include <sstream>
 #include <queue>
 #include <fstream>
+#include <unordered_map>
 #include <vector>
+#include <regex>
 
 namespace NWQSim{
 namespace VQE {
@@ -20,7 +23,7 @@ namespace VQE {
   std::string to_binary_string(NWQSim::IdxType val, NWQSim::IdxType n_qubits) {
     std::stringstream ss;
     for (IdxType i = n_qubits-1; i >= 0; i--) {
-      ss << ((val & (1 << i)) ? "1" : "0");
+      ss << ((val & (1ll << i)) ? "1" : "0");
     }
 
     return ss.str();
@@ -155,10 +158,12 @@ std::vector<IdxType> sorted_nodes;
  * @param  product: Vector of individual annihilation or creation operators
  * @retval 
  */
-std::string to_fermionic_string(const std::vector<FermionOperator>& product){
+std::string to_fermionic_string(const std::vector<FermionOperator>& product, const MolecularEnvironment& env){
     std::string opstring = "";
     bool first = true;
-    for (auto& op: oplist) {
+    IdxType prodterms = product.size();
+    IdxType index = 0;
+    for (auto& op: product) {
       if (!first) {
         opstring = " " + opstring;
       } 
@@ -166,6 +171,60 @@ std::string to_fermionic_string(const std::vector<FermionOperator>& product){
       opstring = op.toString(env.n_occ, env.n_virt) + opstring;
     }
     return opstring;
+};
+
+
+const std::regex pattern("^\\s*(\\d+)\\s+(\\d+)\\s+(?:(\\d+)\\s+(\\d+)){0,1}\\s+([\\d\\.\\+e-]+)");
+/**
+ * @brief Read in a set of amplitudes
+ * @note   
+ * @param  product: Vector of individual annihilation or creation operators
+ * @retval
+ * */ 
+void read_amplitudes(std::string fpath, std::vector<ValType>& params, const std::unordered_map<std::string, IdxType>& idx_map){
+    std::ifstream infile;
+    infile.open(fpath);
+    if (!infile.is_open()) {
+      std::cout << "Could not open amplitude file " << fpath << std::endl;
+    }
+    std::vector<bool> read_in(params.size(), 0);
+    std::string line;
+    std::smatch match;
+    for (auto pair : idx_map) {
+      std::cout << pair.first << " " << pair.second << std::endl;
+    }
+    getchar();
+    while(std::getline(infile, line)) {
+
+        if (line.length() == 0) {
+          continue;
+        }
+        if (std::regex_search(line, match, pattern)) {
+          ValType amplitude = std::stod(match.str(5));
+          std::string key;
+          // if single excitation
+          
+          if (match.str(3) == "") {
+            key = match.str(1) + "^ " + match.str(2);
+          } else {
+            key = match.str(1) + "^ " + match.str(2) + "^ " + match.str(3) + " " + match.str(4);
+          }
+          if (idx_map.find(key) == idx_map.end()) {
+            continue;
+          }
+          std::cout << key << std::endl;
+          params.at(idx_map.at(key)) = amplitude;
+          read_in.at(idx_map.at(key)) = 1;
+        }
+    }
+    IdxType index = 0;
+    for (auto i: read_in) {
+      if (!i) {
+        // throw std::runtime_error("Parameter " + std::to_string(index) + " not provided\n");
+        params.at(index) = 0;
+      }
+      index++;
+    }
 };
 /**
  * @brief  Generate a set of single/double Fermionic excitations

@@ -587,7 +587,7 @@ namespace NWQSim
                     MPI_Recv(sv_imag_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     
                     IdxType index = (i_proc >> (q - (lg2_m_cpu) + 1)) << (q - (lg2_m_cpu));
-                    index |= i_proc & ((1 << (q - (lg2_m_cpu))) - 1);
+                    index |= i_proc & (((IdxType)1 << (q - (lg2_m_cpu))) - 1);
                     for (IdxType i = (index)*per_pe_work; i < (index + 1) * per_pe_work; i++)
                     {
                         ValType el_real[4];
@@ -758,7 +758,7 @@ namespace NWQSim
                 {
 
                     IdxType index = (i_proc >> (s - (lg2_m_cpu) + 1)) << (s - (lg2_m_cpu));
-                    index |= i_proc & ((1 << (s - (lg2_m_cpu))) - 1);
+                    index |= i_proc & (((IdxType)1 << (s - (lg2_m_cpu))) - 1);
                     // printf("%d %d %d %d\n", i_proc, (index)*per_pe_work, (index + 1) * per_pe_work, dim);
                     ValType *sv_real_remote = m_real;
                     ValType *sv_imag_remote = m_imag;
@@ -983,7 +983,7 @@ namespace NWQSim
                 else
                 {
                     IdxType index = (i_proc >> (q - (lg2_m_cpu) + 1)) << (q - (lg2_m_cpu));
-                    index |= i_proc & ((1 << (q - (lg2_m_cpu))) - 1);
+                    index |= i_proc & (((IdxType)1 << (q - (lg2_m_cpu))) - 1);
                     // printf("%d %d %d %d\n", i_proc, (index)*per_pe_work, (index + 1) * per_pe_work, dim);
                     ValType *sv_real_remote = m_real;
                     ValType *sv_imag_remote = m_imag;
@@ -1321,7 +1321,7 @@ namespace NWQSim
                 MPI_Recv(sv_imag_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
                 IdxType index = (i_proc >> (q - (lg2_m_cpu) + 1)) << (q - (lg2_m_cpu));
-                index |= i_proc & ((1 << (q - (lg2_m_cpu))) - 1);
+                index |= i_proc & (((IdxType)1 << (q - (lg2_m_cpu))) - 1);
                 for (IdxType i = (index)*per_pe_work; i < (index + 1) * per_pe_work; i++)
                 {
                     ValType el_real[4];

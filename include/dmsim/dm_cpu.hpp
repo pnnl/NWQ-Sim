@@ -215,7 +215,7 @@ namespace NWQSim
             ValType result_real = 0;
             ValType result_imag = 0;
             const IdxType block_size = 32;
-            IdxType vector_dim = 1 << n_qubits;
+            IdxType vector_dim = (IdxType)1 << n_qubits;
             double* sv_real = other->get_real();
             double* sv_imag = other->get_imag();
             for (IdxType ind = 0; ind < vector_dim; ind++) {

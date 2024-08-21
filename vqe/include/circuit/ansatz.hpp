@@ -41,6 +41,7 @@ namespace NWQSim {
           */ 
           // 
         }
+        const std::unordered_map<std::string, IdxType>& get_excitation_map() const {return excitation_index_map;}
         virtual 
         void setParams(const std::vector<ValType>& params) {
           assert (params.size() == theta->size());
