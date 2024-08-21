@@ -15,6 +15,11 @@
 namespace NWQSim
 {
   namespace VQE {
+    /**
+     * @brief  MPI-Specific backend for VQE routine
+     * @note   
+     * @retval None
+     */
     class SV_MPI_VQE: public VQEState, public SV_MPI {
       public:
         SV_MPI_VQE(std::shared_ptr<Ansatz> a, 
@@ -33,6 +38,12 @@ namespace NWQSim
         process_rank = rank;
       };
 
+      /**
+       * @brief  Allocate an ObservableList object for a commuting group
+       * @note   Need to free objects before termination, see destructor
+       * @param  index: Index of the QWC group
+       * @retval None
+       */
       virtual void fill_obslist(IdxType index) override {
         ObservableList*& obs = obsvec[index];
         obs = new ObservableList;
@@ -41,6 +52,12 @@ namespace NWQSim
         obs->numterms = zmasks[index].size();
         measurement->EXPECT(obs); 
       };
+      /**
+       * @brief  Call to NWQ-Sim
+       * @note   
+       * @param  _measurement: 
+       * @retval None
+       */
       virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) override { 
         Config::PRINT_SIM_TRACE = false; 
         if (iteration > 0){

@@ -798,10 +798,6 @@ namespace NWQSim
             BARR_CUDA;
 
         }
-        #define QI(o, i)  (o->x_indices[i])
-        #define QbI(o, i, ind)  ((o->zmasks[ind] & (1 << QI(o, i))) >> (1 << QI(o, i))) << i
-        #define QV2(o, ind) (QbI(o, 0, ind) + QbI(o, 1, ind))
-        #define QV4(o, ind) (QbI(o, 0, ind) + QbI(o, 1, ind) + QbI(o, 2, ind) + QbI(o, 3, ind))
         __device__ __inline__ void Expect_GATE(ObservableList* o)  {
             grid_group grid = this_grid();
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;

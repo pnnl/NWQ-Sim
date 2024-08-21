@@ -1,10 +1,7 @@
 #include "vqeBackendManager.hpp"
 #include "utils.hpp"
 #include <cmath>
-#include <memory>
 #include <string>
-#include <unordered_map>
-#include <sstream>
 #include "circuit/dynamic_ansatz.hpp"
 #include "vqe_adapt.hpp"
 #include <chrono>
@@ -16,14 +13,23 @@ using IdxType = NWQSim::IdxType;
 using ValType = NWQSim::ValType;
 
 struct VQEParams {
+  /**
+   * @brief  Structure to hold command line arguments for NWQ-VQE
+   */
+  // Problem Info
   std::string hamiltonian_path = "";
   IdxType nparticles = -1;
+  bool xacc = true;
+
+  // Simulator options
   std::string backend = "CPU";
-  uint32_t seed;
   std::string config = "../default_config.json";
+  uint32_t seed;
+  // Optimizer settings
   NWQSim::VQE::OptimizerSettings optimizer_settings;
   nlopt::algorithm algo;
-  bool xacc = true;
+
+  // ADAPT-VQE options
   bool adapt = false;
   bool qubit = false;
   IdxType adapt_maxeval = 100;
@@ -63,6 +69,16 @@ int show_help() {
 }
 
 using json = nlohmann::json;
+
+/**
+ * @brief  Parse command line arguments
+ * @note   
+ * @param  argc: Number of command line arguments passed
+ * @param  argv: Pointer to command line arg C strings
+ * @param  manager: Backend manager object
+ * @param  params: Data structure to store command line arguments
+ * @retval 
+ */
 int parse_args(int argc, char** argv,
                VQEBackendManager& manager,
                VQEParams& params) {
@@ -186,12 +202,25 @@ void silent_callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::Val
   
 }
 
+
+/**
+ * @brief  Optimized the UCCSD (or ADAPT-VQE) Ansatz and Report the Fermionic Excitations
+ * @note   
+ * @param  manager: API to handle calls to different backends
+ * @param  params: Data structure with runtime-configurable options
+ * @param  ansatz: Shared pointer to a parameterized quantum circuit
+ * @param  hamil: Share pointer to a Hamiltonian observable
+ * @param  x: Parameter vector (reference, output)
+ * @param  fval: Energy value (reference, output)
+ * @retval None
+ */
 void optimize_ansatz(const VQEBackendManager& manager,
                      VQEParams params,
                      std::shared_ptr<NWQSim::VQE::Ansatz> ansatz,
                      std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil,
                      std::vector<double>& x,
                      double& fval) {
+  // Set the callback function (silent is default)
   NWQSim::VQE::Callback callback = (params.adapt ? silent_callback_function : callback_function);
   std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(params.backend,
                                                                            params.config,
@@ -201,30 +230,31 @@ void optimize_ansatz(const VQEBackendManager& manager,
                                                                            callback, 
                                                                            params.seed, 
                                                                            params.optimizer_settings);  
-  std::uniform_real_distribution<double> initdist(0, 2 * PI);
-  std::mt19937_64 random_engine (params.seed);
   x.resize(ansatz->numParams());
   std::fill(x.begin(), x.end(), 0);
 
+  
   if (params.adapt) {
-
-    // state->initialize();
+    /***** ADAPT-VQE ******/
+    // recast the ansatz pointer
     std::shared_ptr<NWQSim::VQE::DynamicAnsatz> dyn_ansatz = std::reinterpret_pointer_cast<NWQSim::VQE::DynamicAnsatz>(ansatz);
-    std::cout << "Pool Size " << params.adapt_pool_size << std::endl;
-    dyn_ansatz->make_op_pool(hamil->getTransformer(),params.seed, params.adapt_pool_size);
+    // make the operator pool (either Fermionic or ADAPT)
+    dyn_ansatz->make_op_pool(hamil->getTransformer(), params.seed, params.adapt_pool_size);
+    // construct the AdaptVQE controller
     NWQSim::VQE::AdaptVQE adapt_instance(dyn_ansatz, state, hamil);
+    // timing utilities
     auto start_time = std::chrono::high_resolution_clock::now();
-    adapt_instance.make_commutators();
+    adapt_instance.make_commutators(); // Start making the commutators
     auto end_commutators = std::chrono::high_resolution_clock::now();
     double commutator_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_commutators - start_time).count() / 1e9;
-    manager.safe_print("Constructed ADAPT-VQE Commutators in %.2e seconds\n", commutator_time);
-    adapt_instance.optimize(x, fval, params.adapt_maxeval, params.adapt_gradtol, params.adapt_fvaltol);
+    manager.safe_print("Constructed ADAPT-VQE Commutators in %.2e seconds\n", commutator_time); // Report the commutator overhead
+    adapt_instance.optimize(x, fval, params.adapt_maxeval, params.adapt_gradtol, params.adapt_fvaltol); // MAIN OPTIMIZATION LOOP
     auto end_optimization = std::chrono::high_resolution_clock::now();
     double optimization_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_optimization - end_commutators ).count() / 1e9;
-    manager.safe_print("Completed ADAPT-VQE Optimization in %.2e seconds\n", optimization_time);
+    manager.safe_print("Completed ADAPT-VQE Optimization in %.2e seconds\n", optimization_time); // Report the total time
   } else {
-    state->initialize();
-    state->optimize(x, fval);
+    state->initialize(); // Initialize the state (AKA allocating measurement data structures and building the measurement circuit)
+    state->optimize(x, fval); // MAIN OPTIMIZATION LOOP
 
   }
   
@@ -246,19 +276,24 @@ int main(int argc, char** argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &i_proc);
 }
 #endif
+
+  // Get the Hamiltonian from the external file
   manager.safe_print("Reading Hamiltonian...\n");
   std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(params.hamiltonian_path, 
                                                                                                params.nparticles,
                                                                                                params.xacc);
   manager.safe_print("Constructed %lld Pauli Observables\n", hamil->num_ops());
   manager.safe_print("Constructing UCCSD Ansatz...\n");
-
+  
+  // Build the parameterized ansatz
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
   if (params.adapt)
   {
+    // Iteratively build an ADAPT-VQE ansatz (starts from HF state)
     NWQSim::VQE::PoolType pool = params.qubit ? NWQSim::VQE::PoolType::Pauli : NWQSim::VQE::PoolType::Fermionic;
     ansatz = std::make_shared<NWQSim::VQE::DynamicAnsatz>(hamil->getEnv(), pool);
   } else {
+    // Static UCCSD ansatz
     ansatz  = std::make_shared<NWQSim::VQE::UCCSD>(
       hamil->getEnv(),
       NWQSim::VQE::getJordanWignerTransform,
@@ -273,11 +308,7 @@ int main(int argc, char** argv) {
   manager.safe_print("Beginning VQE loop...\n");
   optimize_ansatz(manager, params, ansatz,  hamil, x, fval);
   
-  // std::string qasm_string = ansatz->toQASM3();
-  // std::ofstream outstream;
-  // outstream.open("../uccsd.qasm", std::fstream::out);
-  // outstream << qasm_string;
-  // outstream.close();
+  // Print out the Fermionic operators with their excitations
   std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters();
   manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters:\n", fval);
   for (auto& pair: param_map) {

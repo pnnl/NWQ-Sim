@@ -51,45 +51,54 @@ namespace NWQSim {
       void commutator(std::vector<PauliOperator>& oplist1, 
                       std::vector<PauliOperator>& oplist2, 
                       PauliMap& summation) {
-        for (auto p1: oplist1) {
-              for (auto p2: oplist2) {
-                auto p12 = (p1 * p2);
-                auto p21 = (p2 * p1);
-                // multiply by an imaginary factor 
-                p21 *= -1.0 * imag; // 
-                p12 *= imag;
-                if (summation.find(p12) == summation.end()) {
-                  summation[p12] = p12.getCoeff();
-                } else {
-                  summation[p12] += p12.getCoeff();
-                }
-                if (summation.find(p21) == summation.end()) {
-                  summation[p21] = p21.getCoeff();
-                } else {
-                  summation[p21] += p21.getCoeff();
-                }
+          for (auto p1: oplist1) {
+            for (auto p2: oplist2) {
+              auto p12 = (p1 * p2);
+              auto p21 = (p2 * p1);
+              // multiply by -i to account for phase from Hermitian UCCSD flag in JW constructor
+              p21 *= -1.0 * imag;
+              p12 *= imag;
+              // Track coefficients for each Pauli term
+              if (summation.find(p12) == summation.end()) {
+                summation[p12] = p12.getCoeff();
+              } else {
+                summation[p12] += p12.getCoeff();
+              }
+              if (summation.find(p21) == summation.end()) {
+                summation[p21] = p21.getCoeff();
+              } else {
+                summation[p21] += p21.getCoeff();
               }
             }
+          }
       }
+      /**
+       * @brief  Construct commutator for each operator in ansatz pool
+       * @note   This is the *big* slow (yes that grammar was intentional), O(N^8) scaling 
+       * * TODO: Get O(N^6) scaling with reduced density matrix approach
+       * @retval None
+       */
       void make_commutators() {
         std::shared_ptr<Hamiltonian> hamil = state->get_hamiltonian();
         const auto& pauli_strings = hamil->getPauliOperators();
-
         const auto& pauli_op_pool = ansatz->get_pauli_op_pool();
         IdxType poolsize = pauli_op_pool.size();
+        
+        // allocate memory for commutator structures
         commutator_coeffs.resize(poolsize);
-        // gradient_observables.reserve(pauli_op_pool.size());
         commutator_zmasks.resize(poolsize);
         gradient_magnitudes.resize(poolsize);
         gradient_observables.resize(poolsize);
         observable_sizes.resize(poolsize);
         size_t num_pauli_terms_total = 0;
-        for (size_t i = 0; i <poolsize; i++) {
+        for (size_t i = 0; i < poolsize; i++) {
+          // Get all of the ungrouped Pauli strings for this commutator 
           std::unordered_map<PauliOperator,  std::complex<double>, PauliHash> pmap;
           std::vector<PauliOperator> oplist = pauli_op_pool[i];
           for (auto hamil_oplist: pauli_strings) {
             commutator(hamil_oplist, oplist, pmap);
           }
+          // Filter out the Paulis with zero coeffients
           std::vector<PauliOperator> comm_ops;
           comm_ops.reserve(pmap.size());
           for (auto pair: pmap) {
@@ -99,13 +108,16 @@ namespace NWQSim {
               comm_ops.push_back(op);
             }
           }
+
           num_pauli_terms_total += comm_ops.size();
           // Create commuting groups using the (nonoverlapping) Sorted Insertion heuristic (see Crawford et. al 2021)
           std::list<std::vector<IdxType>> cliques;
           sorted_insertion(comm_ops, cliques, false);
+
+          // For each clique, we want to make an ObservableList object to compute expectation values after diagonalization
           auto cliqueiter = cliques.begin();
-          commutator_coeffs[i].resize(cliques.size());
-          commutator_zmasks[i].resize(cliques.size());
+          commutator_coeffs[i].resize(cliques.size()); // Pauli coefficient storage
+          commutator_zmasks[i].resize(cliques.size()); // ZMask storage (in diagonal QWC basis this is pauli.xmask | pauli.zmask)
           state->allocate_observables(gradient_observables[i], cliques.size());
           std::vector<IdxType> qubit_mapping (ansatz->num_qubits());
           std::iota(qubit_mapping.begin(), qubit_mapping.end(), 0);
@@ -116,6 +128,7 @@ namespace NWQSim {
             std::vector<PauliOperator> commuting_group (clique.size());
             std::transform(clique.begin(), clique.end(),
               commuting_group.begin(), [&] (IdxType ind) {return comm_ops[ind];}); 
+            // Get a Pauli string that's the logical `or` over each stabilizer state, append to zmasks and coeff data structures within loop  
             PauliOperator common = make_common_op(commuting_group, 
                                                   commutator_zmasks[i][j], 
                                                   commutator_coeffs[i][j]);
@@ -128,11 +141,23 @@ namespace NWQSim {
             gradient_measurement->compose(circ2, qubit_mapping);  // add the inverse
             cliqueiter++;  
           }
-          // commutators[i] = std::make_shared<Hamiltonian>(hamil->getEnv(), comm_ops_grouped);
         }
+        // Report commutator stats
         if (state->get_process_rank() == 0)
           std::cout << "Generated " << pauli_op_pool.size() << " commutators with " << num_pauli_terms_total << " (possibly degenerate) Individual Pauli Strings" << std::endl;
       }
+
+
+      /**
+       * @brief  Main ADAPT_VQE optimization loop
+       * @note   Can terminate either due to gradient convergence, maxeval limit, or due to function value convergence
+       * @param  parameters: Reference to ansatz parameter vector (output)
+       * @param  ene: Reference to estimated energy (output)
+       * @param  maxiter: Max iteration limit
+       * @param  abstol: Tolerance for gradient norm
+       * @param  fvaltol: Tolerance for function value convergence
+       * @retval None
+       */
       void optimize(std::vector<double>& parameters, ValType& ene, IdxType maxiter, ValType abstol = 1e-5, ValType fvaltol = 1e-7) {
         ene = hamil->getEnv().constant;
         state->initialize();
@@ -144,29 +169,35 @@ namespace NWQSim {
           prev_ene = ene;
           IdxType max_ind = 0; 
           double max_ene = -MAXFLOAT;
-          // std::fill(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0);
-          state->call_simulator(gradient_measurement);
+          // Gradient estimation
+          state->call_simulator(gradient_measurement); // compute the commutator expvals
           std::fill(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0);
-          state->get_exp_values(gradient_observables, observable_sizes, gradient_magnitudes);
+          state->get_exp_values(gradient_observables, observable_sizes, gradient_magnitudes); // Get the commutator expvals from ObservableList structures (possibly in device memory)
+          // compute the norm
           double grad_norm = std::sqrt(std::accumulate(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0.0, [] (ValType a, ValType b) {
             return a + b * b;
           }));
+          // if the gradient converged, break
           if (grad_norm < abstol) {
             break;
           }
+          // else find the index of the gradient element with the largest magnitude
           max_ind = std::max_element(gradient_magnitudes.begin(),
                                      gradient_magnitudes.end(),
                                      [] (ValType a, ValType b) {return abs(a) < abs(b);}) - gradient_magnitudes.begin();
-
-          ValType paramval = 0.0;//dist(rng);
-          ansatz->add_operator(max_ind, paramval);
-          // state->swap_hamil(hamil);
+          // Add a new parameter for the new operator
+          ValType paramval = 0.0;
+          // Slap the operator on the back of the ansatz
+          ansatz->add_operator(max_ind, paramval); 
           parameters.push_back(paramval);
+          // VQE Optimzation step
           state->optimize(parameters, ene);
+          // Print update
           if (state->get_process_rank() == 0) {
             std::cout << "ADAPT Iteration " << iter << ", Fval = " << ene << std::endl;
             std::cout << "\tSelected Operator: " << ansatz->get_operator_string(max_ind) << ", Current gradient norm = " << grad_norm << std::endl;
           }
+          // If the function value converged, then break
           if (abs((ene - prev_ene)) < fvaltol) {
             break;
           }
