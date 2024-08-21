@@ -1555,7 +1555,6 @@ namespace NWQSim
             if (tid == 0)
                 results_gpu[cur_index] = (rand <= prob_of_one ? 1 : 0);
         }
-        //*/
 
         __device__ __inline__ void Normalization(ValType *dm_real, ValType *dm_imag)
         {

@@ -143,8 +143,19 @@ namespace NWQSim
                     ValType *sv_real, *sv_imag;
                     SAFE_ALOC_GPU(sv_real, sv_size);
                     SAFE_ALOC_GPU(sv_imag, sv_size);
-                    IdxType n_blocks = IdxType(ceil((double)dm_size / THREADS_CTA_CUDA)); 
-                    outerProduct<<<THREADS_CTA_CUDA, n_blocks>>>(dm_real, dm_imag, sv_real, sv_imag, sv_real, sv_imag, sv_size, sv_size);
+                    int numBlocksPerSm;
+                    int smem_size = 0;
+                    cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
+                                                                            fidelity_kernel, THREADS_CTA_CUDA, smem_size));
+                    
+                    dim3 gridDim(1, 1, 1);
+
+                    cudaDeviceProp deviceProp;
+                    cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
+                    gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
+                    void* args[] = {&dm_real, &dm_imag, &sv_real, &sv_imag, &sv_real, &sv_imag, &sv_size, &sv_size};
+                    cudaLaunchCooperativeKernel((void *)outerProduct, gridDim,
+                                                THREADS_CTA_CUDA, args, smem_size);
                     cudaSafeCall(cudaMemcpy(dm_real_cpu, dm_real,
                                             dm_size, cudaMemcpyDeviceToHost));
                     cudaSafeCall(cudaMemcpy(dm_imag_cpu, dm_imag,

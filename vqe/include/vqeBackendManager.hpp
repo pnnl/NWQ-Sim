@@ -17,7 +17,11 @@
 #include "svsim_vqe/sv_cuda_mpi_vqe.cuh"
 #endif
 
-
+/**
+ * @brief  VQE-specific BackendManager instance
+ * @note   constructs appropriate VQE state based on desired backend
+ * @retval None
+ */
 class VQEBackendManager: public BackendManager
 {
 public:

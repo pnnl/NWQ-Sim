@@ -1,7 +1,5 @@
 #ifndef MOLECULE
 #define MOLECULE
-#include <vector>
-#include <string>
 #include "utils.hpp"
 
 

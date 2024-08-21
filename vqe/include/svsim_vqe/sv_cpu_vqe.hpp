@@ -38,9 +38,11 @@ namespace NWQSim
         }
       };
 
-      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) override {    
-        reset_state();
-        sim(ansatz);
+      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement, bool reset) override {    
+        if (reset) {
+          reset_state();
+          sim(ansatz);
+        }
         sim(_measurement);
       };
       virtual void fill_obslist(IdxType index) override {

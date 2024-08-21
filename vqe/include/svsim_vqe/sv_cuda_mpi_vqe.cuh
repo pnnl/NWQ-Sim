@@ -125,25 +125,27 @@ virtual void fill_obslist(IdxType index) override {
         MPI_Barrier(MPI_COMM_WORLD);     
         
       };
-      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) override {  
+      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement, bool reset) override {  
         std::vector<ValType> xparams;   
         if (iteration > 0){
           Config::PRINT_SIM_TRACE = false;
         }
-        if (i_proc == 0) {
-          std::vector<double>* ansatz_params = ansatz->getParams();
-          stat = CALL_SIMULATOR;
-          for(IdxType i = 1; i < n_gpus; i++) {
-            MPI_Send(ansatz_params->data(), ansatz->numParams(), MPI_DOUBLE, i, 1, MPI_COMM_WORLD);
+        if (reset) {
+          if (i_proc == 0) {
+            std::vector<double>* ansatz_params = ansatz->getParams();
+            stat = CALL_SIMULATOR;
+            for(IdxType i = 1; i < n_gpus; i++) {
+              MPI_Send(ansatz_params->data(), ansatz->numParams(), MPI_DOUBLE, i, 1, MPI_COMM_WORLD);
+            }
+          } else {
+            xparams.resize(ansatz->numParams());
+            MPI_Recv(xparams.data(), ansatz->numParams(), MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            ansatz->setParams(xparams);
           }
-        } else {
-          xparams.resize(ansatz->numParams());
-          MPI_Recv(xparams.data(), ansatz->numParams(), MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-          ansatz->setParams(xparams);
+          MPI_Barrier(MPI_COMM_WORLD);
+          reset_state();
+          sim(ansatz);
         }
-        MPI_Barrier(MPI_COMM_WORLD);
-        reset_state();
-        sim(ansatz);
         sim(_measurement);
         cudaDeviceSynchronize();
         
