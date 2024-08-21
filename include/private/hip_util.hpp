@@ -17,33 +17,59 @@
         roc_shmem_ctx_wg_barrier_all(*p_ctx);               \
     grid.sync();
 
-#define LOCAL_G_HIP_MPI(arr, i) arr[(i) & (m_gpu - 1)]
-#define LOCAL_P_HIP_MPI(arr, i, val) arr[(i) & (m_gpu - 1)] = val;
-
+// #define LOCAL_G_HIP_MPI(arr, i) arr[(i) & (m_gpu - 1)]
+// #define LOCAL_P_HIP_MPI(arr, i, val) arr[(i) & (m_gpu - 1)] = val;
+#define LOCAL_G_HIP_MPI(arr, i) roc_shmem_ctx_double_g(*p_ctx, &(arr)[(i) & (m_gpu - 1)], i_proc)
+#define LOCAL_P_HIP_MPI(arr, i, val) roc_shmem_ctx_double_p(*p_ctx, &(arr)[(i) & (m_gpu - 1)], val, i_proc);
 
 #define PGAS_OG(arr, i) roc_shmem_ctx_double_g(*p_ctx, &(arr)[(i) & ((m_gpu) - 1)], ((i) >> (lg2_m_gpu)))
-#define PGAS_OP(arr, i, val) roc_shmem_ctx_double_p(*p_ctx, &(arr)[(i) & ((m_gpu) - 1)], (val), ((i) >> (lg2_m_gpu)))
+#define PGAS_OP(arr, i, val) \
+    roc_shmem_ctx_double_p(*p_ctx, &(arr)[(i) & ((m_gpu) - 1)], (val), ((i) >> (lg2_m_gpu))); \
+    roc_shmem_ctx_quiet(*p_ctx);
 
-#define PGAS_G(arr, i)  ((((i)>>(lg2_m_gpu))==i_proc) ? (LOCAL_G_HIP_MPI(arr, i)) : (PGAS_OG(arr, i)));
+// #define PGAS_G(arr, i)  ((((i)>>(lg2_m_gpu))==i_proc) ? (LOCAL_G_HIP_MPI(arr, i)) : (PGAS_OG(arr, i)));
+// #define PGAS_P(arr, i, val) if (((i)>>(lg2_m_gpu))==i_proc) { \
+//     LOCAL_P_HIP_MPI(arr, i, val);} else { PGAS_OP(arr, i, val); roc_shmem_ctx_quiet(*p_ctx);}
+#define PGAS_G(arr, i)  ((((i)>>(lg2_m_gpu))==i_proc) ? (LOCAL_G_HIP_MPI(arr, i)) : (PGAS_OG(arr, i)))
 #define PGAS_P(arr, i, val) if (((i)>>(lg2_m_gpu))==i_proc) { \
-    LOCAL_P_HIP_MPI(arr, i, val);} else { PGAS_OP(arr, i, val); roc_shmem_ctx_quiet(*p_ctx);}
+    LOCAL_P_HIP_MPI(arr, i, val)} else { PGAS_OP(arr, i, val)}
 
+// #define PGAS_GG(dst,src,i) if (((i)>>(lg2_m_gpu))==i_proc) { \
+//     *(dst) = src[(i)&(m_gpu-1)];\
+// } else { \
+//     IdxType i_gpu = ((i)>>lg2_m_gpu); \
+//     IdxType i_idx = ((i)&(m_gpu-1)); \
+//     roc_shmem_ctx_getmem(*p_ctx, &m_imag[i_idx], &src[i_idx], sizeof(ValType), i_gpu);\
+//     *(dst) = m_imag[i_idx]; } 
+    
 
+// #define PGAS_PP(dst,i,val) if (((i)>>(lg2_m_gpu))==i_proc) { \
+//     dst[(i)&(m_gpu-1)]=val;\
+// } else { \
+//     IdxType i_gpu = ((i)>>lg2_m_gpu); \
+//     IdxType i_idx = ((i)&(m_gpu-1)); \
+//     m_imag[i_idx] = val; \
+//     roc_shmem_ctx_putmem(*p_ctx, &dst[i_idx], &m_imag[i_idx], sizeof(ValType), i_gpu);\
+//     roc_shmem_ctx_quiet(*p_ctx);}
 #define PGAS_GG(dst,src,i) if (((i)>>(lg2_m_gpu))==i_proc) { \
-    *(dst) = src[(i)&(m_gpu-1)];\
+    roc_shmem_ctx_double_p(*p_ctx, dst, src[(i)&(m_gpu-1)], i_proc); \
+    roc_shmem_ctx_quiet(*p_ctx);
 } else { \
     IdxType i_gpu = ((i)>>lg2_m_gpu); \
     IdxType i_idx = ((i)&(m_gpu-1)); \
     roc_shmem_ctx_getmem(*p_ctx, &m_imag[i_idx], &src[i_idx], sizeof(ValType), i_gpu);\
-    *(dst) = m_imag[i_idx]; } 
+    roc_shmem_ctx_double_p(*p_ctx, dst, m_imag[i_idx], i_proc); \
+    roc_shmem_ctx_quiet(*p_ctx); } 
     
 
 #define PGAS_PP(dst,i,val) if (((i)>>(lg2_m_gpu))==i_proc) { \
-    dst[(i)&(m_gpu-1)]=val;\
+    roc_shmem_ctx_double_p(*p_ctx, &(dst)[(i)&(m_gpu-1)], val, i_proc); \
+    roc_shmem_ctx_quiet(*p_ctx);
 } else { \
     IdxType i_gpu = ((i)>>lg2_m_gpu); \
     IdxType i_idx = ((i)&(m_gpu-1)); \
-    m_imag[i_idx] = val; \
+    roc_shmem_ctx_double_p(*p_ctx, &(m_imag)[i_idx], val, i_proc); \
+    roc_shmem_ctx_quiet(*p_ctx);
     roc_shmem_ctx_putmem(*p_ctx, &dst[i_idx], &m_imag[i_idx], sizeof(ValType), i_gpu);\
     roc_shmem_ctx_quiet(*p_ctx);}
 
