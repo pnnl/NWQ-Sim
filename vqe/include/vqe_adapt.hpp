@@ -19,7 +19,7 @@ namespace NWQSim {
         std::shared_ptr<VQEState> state; // VQE state for energy calculation and ansatz optimization
         std::vector<ValType> gradient_magnitudes; // vector of gradient magnitudes
         std::shared_ptr<Hamiltonian> hamil; // Hamiltonian observable
-        std::shared_ptr<Ansatz> gradient_measurement; // Measurement circuit for gradient estimation
+        std::vector<std::shared_ptr<Ansatz> > gradient_measurement; // Measurement circuit for gradient estimation
         std::vector<std::vector<std::vector<double> > > commutator_coeffs; // Coefficients for commutator operators
         std::vector<std::vector<std::vector<IdxType> > > commutator_zmasks; // Zmasks for commutator operators
         std::vector<ObservableList*> gradient_observables; // Vector of structure pointers for measurement circuit
@@ -31,7 +31,6 @@ namespace NWQSim {
             ansatz(_ans), 
             state(backend), 
             hamil(_hamil) {
-        gradient_measurement = std::make_shared<Ansatz>(_ans->num_qubits());
       }
       //Dtor
       ~AdaptVQE() {
@@ -86,6 +85,7 @@ namespace NWQSim {
         
         // allocate memory for commutator structures
         commutator_coeffs.resize(poolsize);
+        gradient_measurement.resize(poolsize);
         commutator_zmasks.resize(poolsize);
         gradient_magnitudes.resize(poolsize);
         gradient_observables.resize(poolsize);
@@ -122,6 +122,7 @@ namespace NWQSim {
           std::vector<IdxType> qubit_mapping (ansatz->num_qubits());
           std::iota(qubit_mapping.begin(), qubit_mapping.end(), 0);
           observable_sizes[i] = cliques.size();
+          gradient_measurement[i] = std::make_shared<Ansatz>(ansatz->num_qubits());
           // For each clique, construct a measurement circuit and append
           for (size_t j = 0; j < cliques.size(); j++) {
             std::vector<IdxType>& clique = *cliqueiter;
@@ -134,11 +135,11 @@ namespace NWQSim {
                                                   commutator_coeffs[i][j]);
             
             Measurement circ1 (common, false); // QWC measurement circuit $U_M$
-            gradient_measurement->compose(circ1, qubit_mapping);         // add to gradient measurement
+            gradient_measurement[i]->compose(circ1, qubit_mapping);         // add to gradient measurement
             // add a gate to compute the expectation values   
-            state->set_exp_gate(gradient_measurement, gradient_observables[i] + j, commutator_zmasks[i][j], commutator_coeffs[i][j]);
+            state->set_exp_gate(gradient_measurement[i], gradient_observables[i] + j, commutator_zmasks[i][j], commutator_coeffs[i][j]);
             Measurement circ2 (common, true); // inverse of the measurement circuit $U_M^\dagger$
-            gradient_measurement->compose(circ2, qubit_mapping);  // add the inverse
+            gradient_measurement[i]->compose(circ2, qubit_mapping);  // add the inverse
             cliqueiter++;  
           }
         }
@@ -170,7 +171,11 @@ namespace NWQSim {
           IdxType max_ind = 0; 
           double max_ene = -MAXFLOAT;
           // Gradient estimation
-          state->call_simulator(gradient_measurement); // compute the commutator expvals
+          bool first = true;
+          for (auto grad_circuit: gradient_measurement) {
+            state->call_simulator(grad_circuit, first); // compute the commutator expvals
+            first = false;
+          }
           std::fill(gradient_magnitudes.begin(), gradient_magnitudes.end(), 0);
           state->get_exp_values(gradient_observables, observable_sizes, gradient_magnitudes); // Get the commutator expvals from ObservableList structures (possibly in device memory)
           // compute the norm

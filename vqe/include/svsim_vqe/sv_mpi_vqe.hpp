@@ -58,30 +58,33 @@ namespace NWQSim
        * @param  _measurement: 
        * @retval None
        */
-      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) override { 
+      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement, bool reset) override { 
         Config::PRINT_SIM_TRACE = false; 
         if (iteration > 0){
           Config::PRINT_SIM_TRACE = false;
         }
-        MPI_Barrier(comm_global);
-        std::vector<ValType> xparams;
-        if (i_proc == 0) {
-          std::vector<double>* ansatz_params = ansatz->getParams();
-          stat = CALL_SIMULATOR;
-          for(IdxType i = 1; i < n_cpus; i++) {
-            MPI_Send(ansatz_params->data(), ansatz->numParams(), MPI_DOUBLE, i, 1, MPI_COMM_WORLD);
+        if (reset) {
+          MPI_Barrier(comm_global);
+          std::vector<ValType> xparams;
+          if (i_proc == 0) {
+            std::vector<double>* ansatz_params = ansatz->getParams();
+            stat = CALL_SIMULATOR;
+            for(IdxType i = 1; i < n_cpus; i++) {
+              MPI_Send(ansatz_params->data(), ansatz->numParams(), MPI_DOUBLE, i, 1, MPI_COMM_WORLD);
+            }
+          } else {
+            xparams.resize(ansatz->numParams());
+            MPI_Recv(xparams.data(),
+                    ansatz->numParams(), 
+                          MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            ansatz->setParams(xparams);
           }
-        } else {
-          xparams.resize(ansatz->numParams());
-          MPI_Recv(xparams.data(),
-                   ansatz->numParams(), 
-                        MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-          ansatz->setParams(xparams);
+          BARR_MPI;
+          reset_state();
+          BARR_MPI;
+          sim(ansatz);
         }
-        BARR_MPI;
-        reset_state();
-        BARR_MPI;
-        sim(ansatz);
+
         BARR_MPI;
         sim(_measurement);
         BARR_MPI;

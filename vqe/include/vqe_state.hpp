@@ -203,7 +203,7 @@ namespace NWQSim
 
       // Function declarations (overloaded by backends) 
       virtual void call_simulator() {};
-      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement) {};
+      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement, bool reset) {};
       virtual void set_exp_gate(std::shared_ptr<Ansatz> circuit, ObservableList* o, std::vector<IdxType>& zmasks, std::vector<ValType>& coeffs) {
         o->zmasks = zmasks.data();
         o->coeffs = coeffs.data();
