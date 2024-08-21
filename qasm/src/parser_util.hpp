@@ -216,7 +216,7 @@ vector<T> slices(vector<T> const &v, int m, int n)
 
 IdxType modifyBit(IdxType n, IdxType p, IdxType b)
 {
-    IdxType mask = 1 << p;
+    IdxType mask = 1ll << p;
     return ((n & ~mask) | (b << p));
 }
 

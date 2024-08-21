@@ -11,9 +11,9 @@ namespace NWQSim {
     FermionOperator ferm_op,
     std::vector<PauliOperator>& output) {
   size_t qubit_index = ferm_op.qubitIndex(n_occ, n_virt);
-  IdxType xmask = (1 << qubit_index);
-  IdxType zmask1 = (1 << qubit_index) - 1;
-  IdxType zmask2 = (1 << (qubit_index + 1)) - 1;
+  IdxType xmask = (1ll << qubit_index);
+  IdxType zmask1 = (1ll << qubit_index) - 1;
+  IdxType zmask2 = (1ll << (qubit_index + 1)) - 1;
   // we also want to subtract a, adagger
   output.push_back(PauliOperator(xmask, zmask1, n_qubits, 0.5));
   int sign = (ferm_op.getType() == Annihilation) - (ferm_op.getType() == Creation);

@@ -131,18 +131,29 @@ namespace NWQSim
             instream.open(fpath, std::ios::in|std::ios::binary);
             if (instream.is_open()) {
                 if (format == "dm") {
-                    instream.read((char*)dm_real_cpu, dm_size * sizeof(ValType));
-                    instream.read((char*)dm_imag_cpu, dm_size * sizeof(ValType));
+                    instream.read((char*)dm_real_cpu, dm_size);
+                    instream.read((char*)dm_imag_cpu, dm_size);
                     cudaSafeCall(cudaMemcpy(dm_real, dm_real_cpu,
                                             dm_size, cudaMemcpyHostToDevice));
                     cudaSafeCall(cudaMemcpy(dm_imag, dm_imag_cpu,
                                             dm_size, cudaMemcpyHostToDevice));
                     instream.close();
                 } else {
-                    IdxType sv_size = 1 << n_qubits;
-                    ValType *sv_real, *sv_imag;
-                    SAFE_ALOC_GPU(sv_real, sv_size);
-                    SAFE_ALOC_GPU(sv_imag, sv_size);
+                    IdxType sv_dim = 1 << n_qubits;
+                    IdxType sv_mem = sv_dim * sizeof(ValType);
+                    ValType *sv_real, *sv_imag, *sv_real_cpu, *sv_imag_cpu;
+                    SAFE_ALOC_GPU(sv_real, sv_mem);
+                    SAFE_ALOC_GPU(sv_imag, sv_mem);
+                    sv_real_cpu = new ValType[sv_dim];
+                    sv_imag_cpu = new ValType[sv_dim];
+                    instream.read((char*)sv_real_cpu, sv_mem);
+                    instream.read((char*)sv_imag_cpu, sv_mem);
+                    cudaSafeCall(cudaMemcpy(sv_real, sv_real_cpu,
+                                            sv_mem, cudaMemcpyHostToDevice));
+                    cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu,
+                                            sv_mem, cudaMemcpyHostToDevice));
+                    delete [] sv_real_cpu;
+                    delete [] sv_imag_cpu;
                     int numBlocksPerSm;
                     int smem_size = 0;
                     cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
@@ -153,14 +164,16 @@ namespace NWQSim
                     cudaDeviceProp deviceProp;
                     cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
                     gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
-                    void* args[] = {&dm_real, &dm_imag, &sv_real, &sv_imag, &sv_real, &sv_imag, &sv_size, &sv_size};
+                    void* args[] = {&dm_real, &dm_imag, &sv_real, &sv_imag, &sv_real, &sv_imag, &sv_dim, &sv_dim};
                     cudaLaunchCooperativeKernel((void *)outerProduct, gridDim,
                                                 THREADS_CTA_CUDA, args, smem_size);
+                    cudaDeviceSynchronize();
                     cudaSafeCall(cudaMemcpy(dm_real_cpu, dm_real,
                                             dm_size, cudaMemcpyDeviceToHost));
                     cudaSafeCall(cudaMemcpy(dm_imag_cpu, dm_imag,
                                             dm_size, cudaMemcpyDeviceToHost));
-                    
+                    SAFE_FREE_GPU(sv_real);
+                    SAFE_FREE_GPU(sv_imag);
                 }
             }
         }
@@ -848,7 +861,7 @@ namespace NWQSim
             {
                 IdxType step = (IdxType)1 << (d + 1);
                 for (IdxType k = tid * step; k < n_size; k += step * blockDim.x * gridDim.x)
-                    m_real[k + (1 << (d + 1)) - 1] = m_real[k + (1 << d) - 1] + m_real[k + (1 << (d + 1)) - 1];
+                    m_real[k + ((IdxType)1 << (d + 1)) - 1] = m_real[k + ((IdxType)1 << d) - 1] + m_real[k + ((IdxType)1 << (d + 1)) - 1];
                 grid.sync();
             }
 
@@ -949,7 +962,7 @@ namespace NWQSim
                                         ValType* result) {
             const IdxType tid = threadIdx.x + blockIdx.x * blockDim.x; 
             grid_group grid = this_grid();
-            IdxType vector_dim = 1 << n_qubits;
+            IdxType vector_dim = (IdxType)1 << n_qubits;
             ValType local_real = 0;
             if (tid < dim) {
                 m_real[tid] = 0;
@@ -972,7 +985,7 @@ namespace NWQSim
 
             grid.sync();
             IdxType gridlog2 = 63 - __clz(blockDim.x * gridDim.x);
-            if (blockDim.x * gridDim.x > (1 << gridlog2)) {
+            if (blockDim.x * gridDim.x > ((IdxType)1 << gridlog2)) {
                 gridlog2 += 1;
             }
 

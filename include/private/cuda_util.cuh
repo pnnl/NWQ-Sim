@@ -1,5 +1,6 @@
 #pragma once
 #include "nwq_util.hpp"
+#include <cooperative_groups.h>
 #include <stdio.h>
 #include <sys/time.h>
 #include <assert.h>
@@ -159,13 +160,14 @@ __global__
 void outerProduct(double* matrix_real, double* matrix_imag, double* v1_real, double* v1_imag, double* v2_real, double* v2_imag, size_t size_1, size_t size_2) {
     // Is this fast? no. Could it be more optimized? yes. Does it get the job done for now? probably.
     size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (tid < size_1 * size_2) {
-        size_t idx1 = tid / size_2;
-        size_t idx2 = tid % size_2;
+    size_t n_threads = blockDim.x * gridDim.x;
+    for (size_t i = tid; i < size_1 * size_2; i += n_threads) {
+        size_t idx1 = i / size_2;
+        size_t idx2 = i % size_2;
         double real_coeff = v1_real[idx1] * v2_real[idx2] + v1_imag[idx1] * v2_imag[idx2];
         double imag_coeff = v1_imag[idx1] * v2_real[idx2] - v1_real[idx1] * v2_imag[idx2];
-        matrix_real[tid] = real_coeff;
-        matrix_real[tid] = imag_coeff;
+        matrix_real[i] = real_coeff;
+        matrix_imag[i] = imag_coeff;
     }
 }
 

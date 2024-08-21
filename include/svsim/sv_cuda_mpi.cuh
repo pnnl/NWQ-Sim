@@ -158,8 +158,9 @@ namespace NWQSim
             instream.open(fpath, std::ios::in|std::ios::binary);
             if (instream.is_open()) {
                 instream.seekg(sv_size_per_gpu * i_proc);
-                instream.read((char*)sv_real_cpu, sv_size_per_gpu * sizeof(ValType));
-                instream.read((char*)sv_imag_cpu, sv_size_per_gpu * sizeof(ValType));
+                instream.read((char*)sv_real_cpu, sv_size_per_gpu);
+                instream.seekg(dim * sizeof(ValType) + sv_size_per_gpu * i_proc);
+                instream.read((char*)sv_imag_cpu, sv_size_per_gpu);
                 cudaSafeCall(cudaMemcpy(sv_real, sv_real_cpu,
                                         sv_size_per_gpu, cudaMemcpyHostToDevice));
                 cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu,
@@ -176,21 +177,46 @@ namespace NWQSim
          * @param outpath: Output path
          */
         virtual void dump_res_state(std::string outpath) override {
-            std::ofstream outstream;
-            outstream.open(outpath, std::ios::out|std::ios::binary);
+                        std::ofstream outstream;
+            
             IdxType ticket = 1;
-            // synchronize the file writes with a basic point<->point ticket lock (hooray for 404)
+            // synchronize the file writes with a basic point-point ticket lock
+            if (i_proc != 0) {
+                MPI_Recv(&ticket, 1, MPI_INT64_T, i_proc - 1, i_proc, comm_global, MPI_STATUS_IGNORE);
+                outstream.open(outpath, std::ios::app|std::ios::binary);
+            } else {
+                outstream.open(outpath, std::ios::trunc|std::ios::binary); // remove existing file
+            }
+            if (!outstream.is_open()) {
+
+                MPI_Send(&ticket, 1, MPI_INT64_T, i_proc + 1, i_proc + 1, comm_global);
+                if (i_proc == 0)
+                    std::cout << "Could not open file " << outpath << std::endl; 
+                return;
+            }
+            cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, sv_size_per_gpu, cudaMemcpyDeviceToHost));
+            // append to the end of the file
+            outstream.write((char*)sv_real_cpu, sv_size_per_gpu);
+            // outstream.write((char*)dm_imag_cpu, sizeof(ValType) * dm_size_per_gpu);
+            // now write the imaginary part
+            outstream.flush();
+            outstream.close(); // close to flush the stream
+            if (i_proc != n_gpus - 1) {
+                MPI_Send(&ticket, 1, MPI_INT64_T, i_proc + 1, i_proc + 1, comm_global);
+            } 
+            // synchronize the file writes with a basic point-point ticket lock
             if (i_proc != 0) {
                 MPI_Recv(&ticket, 1, MPI_INT64_T, i_proc - 1, i_proc, comm_global, MPI_STATUS_IGNORE);
             }
-            if (outstream.is_open()) {
-                save_state();
-                // append to the end of the file
-                outstream.seekp(0, std::ios::end);
-                outstream.write((char*)sv_real_cpu, sizeof(ValType) * sv_size_per_gpu);
-                outstream.write((char*)sv_imag_cpu, sizeof(ValType) * sv_size_per_gpu);
-                outstream.close();
-            }
+
+            // reopen the file with the changes from the other threads
+            outstream.open(outpath, std::ios::app|std::ios::binary);
+            cudaSafeCall(cudaMemcpy(sv_imag_cpu, sv_imag, sv_size_per_gpu, cudaMemcpyDeviceToHost));
+            // outstream.write((char*)dm_real_cpu, sizeof(ValType) * dm_size_per_gpu);
+            outstream.write((char*)sv_imag_cpu, sv_size_per_gpu);
+            
+            outstream.flush();
+            outstream.close();
             if (i_proc != n_gpus - 1) {
                 MPI_Send(&ticket, 1, MPI_INT64_T, i_proc + 1, i_proc + 1, comm_global);
             } 
@@ -765,7 +791,7 @@ namespace NWQSim
                 grid.sync();
 
                 IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << q - (lg2_m_gpu);
-                index |= i_proc & ((1 << (q - (lg2_m_gpu))) - 1);
+                index |= i_proc & (((IdxType)1 << (q - (lg2_m_gpu))) - 1);
                 for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                      i += blockDim.x * gridDim.x)
                 {
@@ -940,7 +966,7 @@ namespace NWQSim
                 grid.sync();
                 
                 IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << q - (lg2_m_gpu);
-                index |= i_proc & ((1 << (q - (lg2_m_gpu))) - 1);
+                index |= i_proc & (((IdxType)1 << (q - (lg2_m_gpu))) - 1);
 
                 for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work; i += blockDim.x * gridDim.x)
                 {
@@ -1113,7 +1139,7 @@ namespace NWQSim
                 // make the indices continguous (e.g. map from i_proc = 0, 2, 4, 6 - > 0, 1, 2, 3)
                 // Basically, we're just ``deleting'' bit s - (lg2_m_gpu). If s - (lg2_m_gpu) is 1 and i_proc = 5 = 0b101, then we get 0b011 (3)
                 IdxType index = (i_proc >> (s - (lg2_m_gpu) + 1)) << (s - (lg2_m_gpu));
-                index |= i_proc & ((1 << (s - (lg2_m_gpu))) - 1);
+                index |= i_proc & (((IdxType)1 << (s - (lg2_m_gpu))) - 1);
                 ValType *sv_real_remote = m_real;
                 ValType *sv_imag_remote = m_imag;
                 if (tid == 0)
@@ -1262,11 +1288,10 @@ namespace NWQSim
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             // ensure the reduction dimension is a power of 2
             IdxType gridlog2 = 63 - __clzll(blockDim.x * gridDim.x);
-            if (blockDim.x * gridDim.x & ((1 << gridlog2) - 1)) {
+            if (blockDim.x * gridDim.x & (((IdxType)1 << gridlog2) - 1)) {
                 gridlog2 += 1;
             }
-            IdxType reduce_limit = 1 << gridlog2;
-            // If there are more threads than local entries, then reduce over the thread count. Otherwise reduce over the local dimension
+            IdxType reduce_limit =(IdxType)1 << gridlog2;
             reduce_limit = min(reduce_limit, dim >> gpu_scale);
             // Parallel reduction
             for (IdxType k = (reduce_limit >> 1); k > 0; k >>= 1)
@@ -1679,7 +1704,7 @@ __device__ __inline__ void EXPECT_GATE(ObservableList* o)  {
                 nvshmem_double_get(sv_imag_remote, sv_imag, per_pe_num, pair_gpu);
             grid.sync();
             IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << (q - (lg2_m_gpu));
-            index |= i_proc & ((1 << (q - (lg2_m_gpu))) - 1);
+            index |= i_proc & (((IdxType)1 << (q - (lg2_m_gpu))) - 1);
             for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                  i += blockDim.x * gridDim.x)
             {

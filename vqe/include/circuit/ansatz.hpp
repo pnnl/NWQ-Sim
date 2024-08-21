@@ -24,7 +24,7 @@ namespace NWQSim {
         std::shared_ptr<std::vector<IdxType> > parameterized_gates; // Indices of parameterized gates
         std::shared_ptr<std::vector<std::vector<std::pair<IdxType, ValType> > > > gate_parameter_pointers; // Gate parameter indices
         std::shared_ptr<std::vector<ValType> > gate_coefficients; // Gate coefficients
-
+        std::unordered_map<std::string, IdxType> excitation_index_map;
       public:
         Ansatz(IdxType n_qubits): Circuit(n_qubits) {
           theta = std::make_shared<std::vector<ValType> >();
@@ -41,6 +41,7 @@ namespace NWQSim {
           */ 
           // 
         }
+        const std::unordered_map<std::string, IdxType>& get_excitation_map() const {return excitation_index_map;}
         virtual 
         void setParams(const std::vector<ValType>& params) {
           assert (params.size() == theta->size());

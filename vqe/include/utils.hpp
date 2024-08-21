@@ -65,6 +65,11 @@ std::stringstream& operator<<(std::stringstream& out, const std::vector<T>& targ
 
 namespace NWQSim{
   namespace VQE{
+
+  class FermionOperator;
+
+  class PauliOperator;
+  struct MolecularEnvironment;
   using IdxType = long long;
   using ValType = double;
   enum class Commute {
@@ -189,6 +194,8 @@ IdxType count_ones(IdxType val) {
   void sorted_insertion(const std::vector<PauliOperator>& paulilist, std::list<std::vector<IdxType> >& cliques, bool overlap);
   // Convert an integer to an  `n_qubits`-digit binary string
   std::string to_binary_string(IdxType val, IdxType n_qubits);
+  std::string to_fermionic_string(const std::vector<FermionOperator>& product, const MolecularEnvironment& env);
+  void read_amplitudes(std::string fpath, std::vector<ValType>& params, const std::unordered_map<std::string, IdxType>& idx_map);
 
 };};
 
