@@ -29,7 +29,7 @@ NWQ-Sim uses CMake for building, which automatically detects the execution envir
 
 1. Clone the NWQ-Sim repository:
 ```bash
-git clone https://github.com/pnnl/NWQ-Sim.git
+git clone --recursive https://github.com/pnnl/NWQ-Sim.git
 cd NWQ-Sim
 ```
 2. Create a build directory and navigate into it:
