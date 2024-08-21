@@ -149,7 +149,24 @@ std::vector<IdxType> sorted_nodes;
         sorted_nodes = not_added;
     }
 }
-
+/**
+ * @brief Make an XACC-formatted excitation string for a product of fermionic operators 
+ * @note   
+ * @param  product: Vector of individual annihilation or creation operators
+ * @retval 
+ */
+std::string to_fermionic_string(const std::vector<FermionOperator>& product){
+    std::string opstring = "";
+    bool first = true;
+    for (auto& op: oplist) {
+      if (!first) {
+        opstring = " " + opstring;
+      } 
+      first = false;
+      opstring = op.toString(env.n_occ, env.n_virt) + opstring;
+    }
+    return opstring;
+};
 /**
  * @brief  Generate a set of single/double Fermionic excitations
  * @note   Same set of operators evolved in a UCCSD Ansatz

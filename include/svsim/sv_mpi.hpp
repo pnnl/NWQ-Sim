@@ -112,8 +112,8 @@ namespace NWQSim
             instream.open(fpath, std::ios::in|std::ios::binary);
             if (instream.is_open()) {
                 instream.seekg(sv_size_per_cpu * i_proc);
-                instream.read((char*)sv_real, sv_size_per_cpu * sizeof(ValType));
-                instream.read((char*)sv_imag, sv_size_per_cpu * sizeof(ValType));
+                instream.read((char*)sv_real, sv_size_per_cpu);
+                instream.read((char*)sv_imag, sv_size_per_cpu);
                 instream.close();
             }
         }
@@ -130,12 +130,28 @@ namespace NWQSim
                 // append to the end of the file
                 outstream.seekp(0, std::ios::end);
                 outstream.write((char*)sv_real, sizeof(ValType) * sv_size_per_cpu);
-                outstream.write((char*)sv_imag, sizeof(ValType) * sv_size_per_cpu);
                 outstream.close();
             }
             if (i_proc != n_cpus - 1) {
                 MPI_Send(&ticket, 1, MPI_INT64_T, i_proc + 1, i_proc + 1, comm_global);
             } 
+            // now for the imaginary part
+            ticket = 1;
+            // synchronize the file writes with a basic point-point ticket lock
+            if (i_proc != 0) {
+                MPI_Recv(&ticket, 1, MPI_INT64_T, i_proc - 1, i_proc, comm_global, MPI_STATUS_IGNORE);
+            }
+            outstream.open(outpath, std::ios::out|std::ios::binary);
+            if (outstream.is_open()) {
+                // append to the end of the file
+                outstream.seekp(0, std::ios::end);
+                outstream.write((char*)sv_imag, sv_size_per_cpu);
+                outstream.close();
+            }
+            if (i_proc != n_cpus - 1) {
+                MPI_Send(&ticket, 1, MPI_INT64_T, i_proc + 1, i_proc + 1, comm_global);
+            } 
+
         };
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {

@@ -1,6 +1,7 @@
 #ifndef VQE_UTILS
 #define VQE_UTILS
 #include "nwq_util.hpp"
+#include "observable/fermionic_operator.hpp"
 #include <iostream>
 #include <vector>
 #include <unordered_map>
@@ -189,7 +190,7 @@ IdxType count_ones(IdxType val) {
   void sorted_insertion(const std::vector<PauliOperator>& paulilist, std::list<std::vector<IdxType> >& cliques, bool overlap);
   // Convert an integer to an  `n_qubits`-digit binary string
   std::string to_binary_string(IdxType val, IdxType n_qubits);
-
+  std::string to_fermionic_string(const std::vector<FermionOperator>& product);
 };};
 
 #endif

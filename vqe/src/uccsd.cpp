@@ -15,8 +15,10 @@ namespace NWQSim {
         for (IdxType q = 0; q < env.n_virt; q++) {
           FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
           symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
+          excitation_index_map[to_fermionic_string(ops)] = unique_params;
+          std::vector<FermionOperator> ops = {occupied_annihilation_up, virtual_creation_up};
+          fermion_operators.push_back(ops);
           fermion_ops_to_params[fermion_operators.size()] = unique_params++;
-          fermion_operators.push_back({occupied_annihilation_up, virtual_creation_up});
         }
       }
       // Beta Single Excitations
@@ -26,7 +28,9 @@ namespace NWQSim {
           FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
           // Add a pointer to the corresponding Alpha term to share parameters
           symmetries[fermion_operators.size()] = {{fermion_operators.size() - env.n_occ * env.n_virt, 1.0}};
-          fermion_operators.push_back({occupied_annihilation_down, virtual_creation_down});
+          std::vector<FermionOperator> ops = {occupied_annihilation_down, virtual_creation_down};
+          fermion_operators.push_back(ops);
+          excitation_index_map[to_fermionic_string(ops)] = fermion_operators.size() - env.n_occ * env.n_virt;
         }
       }
       /*===========Double Excitations===========*/
@@ -52,6 +56,7 @@ namespace NWQSim {
                     occ_down_2,
                     virt_down_3,
                     virt_down_4});
+              excitation_index_map[to_fermionic_string(fermion_operators.back())] = fermion_operators.size() - env.n_occ * env.n_virt;
               IdxType beta_term = fermion_operators.size();
               // All beta excitation: beta_4*beta_3*beta_2*beta_1
               fermion_operators.push_back({
