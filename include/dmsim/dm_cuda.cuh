@@ -899,7 +899,7 @@ namespace NWQSim
                                         ValType* result) {
             const IdxType tid = threadIdx.x + blockIdx.x * blockDim.x; 
             grid_group grid = this_grid();
-            IdxType vector_dim =(IdxType)1 << n_qubits;
+            IdxType vector_dim = (IdxType)1 << n_qubits;
             ValType local_real = 0;
             if (tid < dim) {
                 m_real[tid] = 0;

@@ -1754,7 +1754,7 @@ namespace NWQSim
                                         ValType* result) {
             const IdxType tid = threadIdx.x + blockIdx.x * blockDim.x; 
             grid_group grid = this_grid();
-            IdxType vector_dim =(IdxType)1 << n_qubits;
+            IdxType vector_dim = (IdxType)1 << n_qubits;
             ValType local_real = 0;
             const IdxType per_pe_work = ((dim) >> (gpu_scale));
             IdxType gridlog2 = 63 - __clz(blockDim.x * gridDim.x);
