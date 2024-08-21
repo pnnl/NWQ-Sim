@@ -798,7 +798,7 @@ namespace NWQSim
             {
                 IdxType step = (IdxType)1 << (d + 1);
                 for (IdxType k = tid * step; k < n_size; k += step * blockDim.x * gridDim.x)
-                    m_real[k + (1 << (d + 1)) - 1] = m_real[k + (1 << d) - 1] + m_real[k + (1 << (d + 1)) - 1];
+                    m_real[k + ((IdxType)1 << (d + 1)) - 1] = m_real[k + ((IdxType)1 << d) - 1] + m_real[k + ((IdxType)1 << (d + 1)) - 1];
                 grid.sync();
             }
 
@@ -899,7 +899,7 @@ namespace NWQSim
                                         ValType* result) {
             const IdxType tid = threadIdx.x + blockIdx.x * blockDim.x; 
             grid_group grid = this_grid();
-            IdxType vector_dim = 1 << n_qubits;
+            IdxType vector_dim = (IdxType)1 << n_qubits;
             ValType local_real = 0;
             if (tid < dim) {
                 m_real[tid] = 0;
