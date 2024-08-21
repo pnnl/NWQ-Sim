@@ -15,7 +15,7 @@ namespace VQE {
   std::string to_binary_string(NWQSim::IdxType val, NWQSim::IdxType n_qubits) {
     std::stringstream ss;
     for (IdxType i = n_qubits-1; i >= 0; i--) {
-      ss << ((val & (1 << i)) ? "1" : "0");
+      ss << ((val & (1ll << i)) ? "1" : "0");
     }
 
     return ss.str();

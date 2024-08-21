@@ -637,7 +637,7 @@ namespace NWQSim
             {
                 IdxType step = (IdxType)1 << (d + 1);
                 for (IdxType k = tid * step; k < n_size; k += step * blockDim.x * gridDim.x)
-                    m_real[k + (1 << (d + 1)) - 1] = m_real[k + (1 << d) - 1] + m_real[k + (1 << (d + 1)) - 1];
+                    m_real[k + ((IdxType)1 << (d + 1)) - 1] = m_real[k + ((IdxType)1 << d) - 1] + m_real[k + ((IdxType)1 << (d + 1)) - 1];
                 grid.sync();
             }
 

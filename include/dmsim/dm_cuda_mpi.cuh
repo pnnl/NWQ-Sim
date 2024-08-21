@@ -510,7 +510,7 @@ namespace NWQSim
 
 
                 IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << q - (lg2_m_gpu);
-                index |= i_proc & ((1 << q - (lg2_m_gpu)) - 1);
+                index |= i_proc & (((IdxType)1 << q - (lg2_m_gpu)) - 1);
                 for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                      i += blockDim.x * gridDim.x)
                 {
@@ -615,7 +615,7 @@ namespace NWQSim
             grid.sync();
 
             IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << q - (lg2_m_gpu);
-            index |= i_proc & ((1 << q - (lg2_m_gpu)) - 1);
+            index |= i_proc & (((IdxType)1 << q - (lg2_m_gpu)) - 1);
             for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                  i += blockDim.x * gridDim.x)
             {
@@ -772,7 +772,7 @@ namespace NWQSim
                 grid.sync();
                 
                 IdxType index = (i_proc >> (s - (lg2_m_gpu) + 1)) << s - (lg2_m_gpu);
-                index |= i_proc & ((1 << s - (lg2_m_gpu)) - 1);
+                index |= i_proc & (((IdxType)1 << s - (lg2_m_gpu)) - 1);
                 for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                      i += blockDim.x * gridDim.x)
                 {
@@ -1587,7 +1587,7 @@ namespace NWQSim
                 {
                     IdxType step = (IdxType)1 << (d + 1);
                     for (IdxType k = tid * step; k < n_size; k += step * blockDim.x * gridDim.x)
-                        m_real[k + (1 << (d + 1)) - 1] = m_real[k + (1 << d) - 1] + m_real[k + (1 << (d + 1)) - 1];
+                        m_real[k + ((IdxType)1 << (d + 1)) - 1] = m_real[k + ((IdxType)1 << d) - 1] + m_real[k + ((IdxType)1 << (d + 1)) - 1];
                     grid.sync();
                 }
                 if (tid == 0)
@@ -1720,20 +1720,20 @@ namespace NWQSim
             cudaSafeCall(cudaMemcpy(dm_gpu, this,
                                     sizeof(DM_CUDA_MPI), cudaMemcpyHostToDevice));
             // Copy the ideal statevector from host to device
-            ValType* sv_real_cpu = new ValType[1 << n_qubits];
-            ValType* sv_imag_cpu = new ValType[1 << n_qubits];
+            ValType* sv_real_cpu = new ValType[(IdxType)1 << n_qubits];
+            ValType* sv_imag_cpu = new ValType[(IdxType)1 << n_qubits];
             ValType* sv_real, *sv_imag;
-            SAFE_ALOC_GPU(sv_real, (1 << n_qubits) * sizeof(ValType));
-            SAFE_ALOC_GPU(sv_imag, (1 << n_qubits) * sizeof(ValType));
+            SAFE_ALOC_GPU(sv_real, ((IdxType)1 << n_qubits) * sizeof(ValType));
+            SAFE_ALOC_GPU(sv_imag, ((IdxType)1 << n_qubits) * sizeof(ValType));
             if (i_proc == 0) {
-                cudaSafeCall(cudaMemcpy(sv_real_cpu, other->get_real(), (1 << n_qubits) * sizeof(ValType), cudaMemcpyDeviceToHost));
-                cudaSafeCall(cudaMemcpy(sv_imag_cpu, other->get_imag(), (1 << n_qubits) * sizeof(ValType), cudaMemcpyDeviceToHost));
+                cudaSafeCall(cudaMemcpy(sv_real_cpu, other->get_real(), ((IdxType)1 << n_qubits) * sizeof(ValType), cudaMemcpyDeviceToHost));
+                cudaSafeCall(cudaMemcpy(sv_imag_cpu, other->get_imag(), ((IdxType)1 << n_qubits) * sizeof(ValType), cudaMemcpyDeviceToHost));
             }
-            MPI_Bcast(sv_real_cpu, (1 << n_qubits), MPI_DOUBLE, 0, comm_global);
-            MPI_Bcast(sv_imag_cpu, (1 << n_qubits), MPI_DOUBLE, 0, comm_global);
+            MPI_Bcast(sv_real_cpu, ((IdxType)1 << n_qubits), MPI_DOUBLE, 0, comm_global);
+            MPI_Bcast(sv_imag_cpu, ((IdxType)1 << n_qubits), MPI_DOUBLE, 0, comm_global);
             
-            cudaSafeCall(cudaMemcpy(sv_real, sv_real_cpu, (1 << n_qubits) * sizeof(ValType), cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu, (1 << n_qubits) * sizeof(ValType), cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(sv_real, sv_real_cpu, ((IdxType)1 << n_qubits) * sizeof(ValType), cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu, ((IdxType)1 << n_qubits) * sizeof(ValType), cudaMemcpyHostToDevice));
             void* args[] = {&dm_gpu, &sv_real, &sv_imag, &result_cu};
             cudaLaunchCooperativeKernel((void *)fidelity_kernel_local, gridDim,
                                         THREADS_CTA_CUDA, args, smem_size);
@@ -1754,11 +1754,11 @@ namespace NWQSim
                                         ValType* result) {
             const IdxType tid = threadIdx.x + blockIdx.x * blockDim.x; 
             grid_group grid = this_grid();
-            IdxType vector_dim = 1 << n_qubits;
+            IdxType vector_dim =(IdxType)1 << n_qubits;
             ValType local_real = 0;
             const IdxType per_pe_work = ((dim) >> (gpu_scale));
             IdxType gridlog2 = 63 - __clz(blockDim.x * gridDim.x);
-            if (blockDim.x * gridDim.x > (1 << gridlog2)) {
+            if (blockDim.x * gridDim.x > ((IdxType)1 << gridlog2)) {
                 gridlog2 += 1;
             }
             if (tid < per_pe_work) {

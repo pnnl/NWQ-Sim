@@ -351,7 +351,7 @@ namespace NWQSim
             {
 #pragma omp for schedule(auto)
                 for (IdxType k = 0; k < n_size; k += ((IdxType)1 << (d + 1)))
-                    m_real[k + (1 << (d + 1)) - 1] = m_real[k + (1 << d) - 1] + m_real[k + (1 << (d + 1)) - 1];
+                    m_real[k + ((IdxType)1 << (d + 1)) - 1] = m_real[k + ((IdxType)1 << d) - 1] + m_real[k + ((IdxType)1 << (d + 1)) - 1];
                 BARR;
             }
             if (omp_get_thread_num() == 0)

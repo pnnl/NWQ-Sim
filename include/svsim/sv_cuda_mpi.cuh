@@ -715,7 +715,7 @@ namespace NWQSim
                 grid.sync();
 
                 IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << q - (lg2_m_gpu);
-                index |= i_proc & ((1 << (q - (lg2_m_gpu))) - 1);
+                index |= i_proc & (((IdxType)1 << (q - (lg2_m_gpu))) - 1);
                 for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                      i += blockDim.x * gridDim.x)
                 {
@@ -888,7 +888,7 @@ namespace NWQSim
                 grid.sync();
                 
                 IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << q - (lg2_m_gpu);
-                index |= i_proc & ((1 << (q - (lg2_m_gpu))) - 1);
+                index |= i_proc & (((IdxType)1 << (q - (lg2_m_gpu))) - 1);
 
                 for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work; i += blockDim.x * gridDim.x)
                 {
@@ -1058,7 +1058,7 @@ namespace NWQSim
                 // make the indices continguous (e.g. map from i_proc = 0, 2, 4, 6 - > 0, 1, 2, 3)
                 // Basically, we're just ``deleting'' bit s - (lg2_m_gpu). If s - (lg2_m_gpu) is 1 and i_proc = 5 = 0b101, then we get 0b011 (3)
                 IdxType index = (i_proc >> (s - (lg2_m_gpu) + 1)) << (s - (lg2_m_gpu));
-                index |= i_proc & ((1 << (s - (lg2_m_gpu))) - 1);
+                index |= i_proc & (((IdxType)1 << (s - (lg2_m_gpu))) - 1);
                 ValType *sv_real_remote = m_real;
                 ValType *sv_imag_remote = m_imag;
                 if (tid == 0)
@@ -1201,10 +1201,10 @@ namespace NWQSim
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             // Parallel reduction
             IdxType gridlog2 = 63 - __clzll(blockDim.x * gridDim.x);
-            if (blockDim.x * gridDim.x & ((1 << gridlog2) - 1)) {
+            if (blockDim.x * gridDim.x & (((IdxType)1 << gridlog2) - 1)) {
                 gridlog2 += 1;
             }
-            IdxType reduce_limit = 1 << gridlog2;
+            IdxType reduce_limit =(IdxType)1 << gridlog2;
             reduce_limit = min(reduce_limit, dim >> gpu_scale);
             for (IdxType k = (reduce_limit >> 1); k > 0; k >>= 1)
             {
@@ -1613,7 +1613,7 @@ __device__ __inline__ void EXPECT_GATE(ObservableList o)  {
                 nvshmem_double_get(sv_imag_remote, sv_imag, per_pe_num, pair_gpu);
             grid.sync();
             IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << (q - (lg2_m_gpu));
-            index |= i_proc & ((1 << (q - (lg2_m_gpu))) - 1);
+            index |= i_proc & (((IdxType)1 << (q - (lg2_m_gpu))) - 1);
             for (IdxType i = (index)*per_pe_work + tid; i < (index + 1) * per_pe_work;
                  i += blockDim.x * gridDim.x)
             {

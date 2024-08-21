@@ -610,8 +610,8 @@ namespace NWQSim
             if (num_x_indices == 2) {
                 IdxType q0 = x_indices[0];
                 IdxType q1 = x_indices[1];
-                IdxType zind0 = ((zmask & (1 << q0)) >> q0);
-                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 1;
+                IdxType zind0 = ((zmask & ((IdxType)1 << q0)) >> q0);
+                IdxType zind1 = ((zmask & ((IdxType)1 << q1)) >> q1) << 1;
                 const ValType* gm_real = exp_gate_perms_2q[zind0 + zind1];
                 const ValType* gm_imag = exp_gate_perms_2q[zind0 + zind1] + 16;
                 *output += coeff * EXPECT_C2_GATE(gm_real, gm_imag, q0, q1, xmask | zmask);
@@ -620,10 +620,10 @@ namespace NWQSim
                 IdxType q1 = x_indices[1];
                 IdxType q2 = x_indices[2];
                 IdxType q3 = x_indices[3];
-                IdxType zind0 = ((zmask & (1 << q0)) >> q0) << 3;
-                IdxType zind1 = ((zmask & (1 << q1)) >> q1) << 2;
-                IdxType zind2 = ((zmask & (1 << q2)) >> q2) << 1;
-                IdxType zind3 = ((zmask & (1 << q3)) >> q3) << 0;
+                IdxType zind0 = ((zmask & ((IdxType)1 << q0)) >> q0) << 3;
+                IdxType zind1 = ((zmask & ((IdxType)1 << q1)) >> q1) << 2;
+                IdxType zind2 = ((zmask & ((IdxType)1 << q2)) >> q2) << 1;
+                IdxType zind3 = ((zmask & ((IdxType)1 << q3)) >> q3) << 0;
                 const ValType* gm_real = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3];
                 const ValType* gm_imag = exp_gate_perms_4q[zind0 + zind1 + zind2 + zind3] + 256;
                 *output += coeff * EXPECT_C4_GATE(gm_real, gm_imag, q0, q1, q2, q3, xmask | zmask);
