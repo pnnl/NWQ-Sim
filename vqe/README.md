@@ -28,37 +28,70 @@ After installing NLOpt, build NWQ-Sim as normal (see the [User Manual](doc/user_
 
 Running `make` from the `build` directory will compile the binary `build/vqe/nwq_vqe`, a shared library `build/vqe/libvqe.dylib`, and the example binaries under `/build/vqe/examples`. 
 
-## Running the Command Line Solver
-To test NWQ-VQE from the command line, run the `build/vqe/nwq_vqe` executable. This program takes program parameters and file paths as command line arguments and configures the solver accordingly. The command line options are:
+
+## Command Line Usage
+NWQ-VQE can be used from the command line via the `nwq_vqe` executable. The executable supports a number of arguments to configure runtime parameters.
+
+Only two arguments are required, the path to the XACC-formatted Hamiltonian (see [example_hamiltonians](example_hamiltonians) for examples) and the number of electrons:
 ```shell
-Usage: NWQ-VQE [--help] [--version] [--hamiltonian VAR] [--nparticles VAR] [--config VAR] [--maxeval VAR] [--seed VAR] [--reltol VAR] [--abstol VAR] [--maxtime VAR] [--stopval VAR] [--optimizer VAR]
-
-Optional arguments:
-  -h, --help         shows help message and exits 
-  -v, --version      prints version information and exits 
-  -f, --hamiltonian  Path to Fermionic Hamiltonian file 
-  -n, --nparticles   Number of particles to model 
-  -c, --config       Optimizer configuration file [nargs=0..1] [default: ""]
-  --maxeval          Maximum number of function evaluations [nargs=0..1] [default: 200]
-  --seed             Random seed [nargs=0..1] [default: 1717713962]
-  --reltol           Relative function value tolerance cutoff [nargs=0..1] [default: -1]
-  --abstol           Absolute function value tolerance cutoff [nargs=0..1] [default: -1]
-  --maxtime          Optimizer timeout (seconds) [nargs=0..1] [default: -1]
-  --stopval          Optimizer value cutoff [nargs=0..1] [default: -3.40282e+38]
-  --optimizer        Optimization algorithm name (NLOpt key, see [NLOpt Algorithms](https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/)) [nargs=0..1] [default: "LN_COBYLA"]
+NWQ-VQE Options
+REQUIRED
+--hamiltonian, -f     Path to the input Hamiltonian file (formatted as a sum of Fermionic operators, see examples)
+--nparticles, -n      Number of electrons in molecule
 ```
-`--hamiltonian` and `--nparticles` are the only required arguments.
 
-To specify algorithm-specific settings from the command line (as shown in [examples/config_example.cpp](examples/config_example.cpp)), pass as JSON file with a parameter: value dictionary. For example, passing the following via the `--config` argument with `--optimizer=LD_MMA`:
-```json
-{
-    "inner_maxeval": 6,
-    "verbosity": 2,
-    "dual_ftol_rel": 1e-12
-}
+The first class of optional arguments are used for configuring the simulator: selecting the backend, setting random seeds, and passing NWQ-Sim configuration JSON files
+```shell
+OPTIONAL
+--backend, -b         Simulation backend. Defaults to CPU
+--list-backends, -l   List available backends and exit.
+--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)
+--config              Path to NWQ-Sim config file. Defaults to "../default_config.json"
 ```
-specifies a maximum of 6 function evaluations per inner loop iteration, a verbosity level of 2, and a relative tolerance for the dual optimization step of $10^{-12}$.
- 
+
+NWQ-VQE uses the [NLOpt](https://nlopt.readthedocs.io/en/latest/) library for optimization algorithm implementations. To configure the NLOpt object, we support setting termination criteria, upper/lower bounds, and optimizer algorithms via command line. Algorithm-specific options can be set via a JSON file, see [mma_config.json](mma_config.json) for an example. The `--xacc` and `--ducc` flags set the orbital indexing scheme to either XACC or canonical orderings respectively. XACC is the default, and the flag is included for compatibility. To get a full list of valid NLOpt optimizer strings, refer to the [NLOpt documentation](https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/). An example of a correctly formatted string is `--optimizer LN_COBYLA`.
+```shell
+--opt-config          Path to config file for NLOpt optimizer parameters
+--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA
+--lbound              Lower bound for classical optimizer. Defaults to -PI
+--ubound              Upper bound for classical optimizer. Defaults to PI
+--reltol              Relative tolerance termination criterion. Defaults to -1 (off)
+--abstol              Relative tolerance termination criterion. Defaults to -1 (off)
+--maxeval             Maximum number of function evaluations for optimizer. Defaults to 200
+--maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)
+--stopval             Cutoff function value for optimizer. Defaults to -MAXFLOAT (off)
+--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme. (Deprecated, true by default)
+--ducc                Use DUCC indexing scheme, otherwise uses XACC scheme. (Defaults to true)
+```
+
+NWQ-Sim also supports ADAPT-VQE simulations, using both Fermionic operators ([Ref](https://www.nature.com/articles/s41467-019-10988-2)) and single Pauli strings ([Ref](https://journals.aps.org/prxquantum/abstract/10.1103/PRXQuantum.2.020310)). The executable supports the following ADAPT-specific options. `--adapt-maxeval`, `--adapt-gradtol`, and `--adapt-fvaltol` set termination criteria for the ADAPT loop, while the `--adapt` and `--qubit` flags enable ADAPT and Qubit-ADAPT respectively. To enable Qubit-ADAPT, you must pass both the `--adapt` and `--qubit` flags. Qubit-ADAPT also supports randomized operator pool subsampling, with the size set by the `--adapt-pool` flag (-1 indicates the full pool). 
+```shell
+ADAPT-VQE OPTIONS
+--adapt               Use ADAPT-VQE for dynamic ansatz construction. Defaults to false
+--adapt-maxeval       Set a maximum iteration count for ADAPT-VQE. Defaults to 100
+--adapt-gradtol       Cutoff absolute tolerance for operator gradient norm. Defaults to 1e-3
+--adapt-fvaltol       Cutoff absolute tolerance for function value. Defaults to 1e-6
+--qubit               Uses Qubit instead of Fermionic operators for ADAPT-VQE. Defaults to false
+--adapt-pool          Sets the pool size for Qubit operators. Defaults to -1
+```
+
+To run the $\mathrm{H_4}$ example using command line, run:
+```shell
+./vqe/nwq_vqe -f ../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -n 4 --maxeval 1000
+```
+where we have now increased the evaluation limit to 1000.
+
+To run the same problem with ADAPT-VQE and Qubit-ADAPT, run:
+```shell
+./vqe/nwq_vqe -f ../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -n 4 --maxeval 200 --adapt --adapt-maxeval 400
+```
+and
+```shell
+./vqe/nwq_vqe -f ../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -n 4 --maxeval 200 --adapt --qubit --adapt-maxeval 400
+```
+respectively. Note that we have increased the ADAPT iteration limit while decreasing the per-VQE step limit. 
+
+
 
 ## Running the Example(s) and General Workflow
 To add NWQ-VQE functionality:
@@ -78,28 +111,31 @@ The file [examples/basic_example.cpp](src/example.cpp) contains basic example co
 The NWQ-VQE API can be broken into 3 main steps: problem definition, ansatz construction, and solver configuration.
 1. **Problem Definition**: We start by specifying the target Hamiltonian. The program expects a sum of Fermionic operators with complex coefficients. [example_hamiltonians/h2O.hamil](examples/h2O.hamil) provides an example generated by `xacc` for Quantum Chemistry ([source](https://github.com/npbauman/DUCC-Hamiltonians/blob/main/H2O/cc-pv5z/single/6/out-xacc)). 
 ```c++
-  NWQSim::IdxType n_particles = 10; // Set the number of particles
+NWQSim::IdxType n_particles = 4; // Set the number of particles
   // Note: path relative to presumed build directory
-  std::string hamiltonian_path = "../vqe/example_hamiltonians/h2O.hamil"; //  Effective Hamiltonian file path
+  std::string hamiltonian_path = "../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil"; //  Effective Hamiltonian file path
 
-  Hamiltonian hamil(hamiltonian_path, n_particles); // Build the Hamiltonian object (used for energy calculation)
+  std::shared_ptr<Hamiltonian> hamil = std::make_shared<Hamiltonian>(hamiltonian_path, n_particles, true); // Build the Hamiltonian object (used for energy calculation)
 ```
-2. **Ansatz Construction**: For VQE we need a parameterized wavefunction in the form of a quantum ansatz. The NWQ-VQE package supports the UCCSD ansatz with a Jordan-Wigner (JW) Fermion-Qubit mapping. We specify first specify the JW tranformation function, then call the UCCSD ansatz constructor (subclassed from the NWQ-Sim circuit class). Note that NWQ-Sim backends expect circuits to be wrapped by a `std::shared_ptr`. The `Ansatz` class contains the general functionality needed for optimization, while `UCCSD` provides the specific circuit constructor.
+2. **Ansatz Construction**: For VQE we need a parameterized wavefunction in the form of a quantum ansatz. The NWQ-VQE package supports the UCCSD ansatz with a Jordan-Wigner (JW) Fermion-Qubit mapping. We specify first specify the JW tranformation function, then call the UCCSD ansatz constructor (subclassed from the NWQ-Sim circuit class). Note that NWQ-Sim backends expect circuits to be wrapped by a `std::shared_ptr`. The `Ansatz` class contains the general functionality needed for optimization, while `UCCSD` provides the specific circuit constructor. After declaring the circuit object, invoke the `buildAnsatz` function to initialize the circuit
 ```c++
   Transformer jw_transform = getJordanWignerTransform; // Choose a transformation function
 
   // Build the ansatz circuit using the Hamiltonian Molecular environment and JW mapping
   //      (shared_ptr used to match baseline NWQ-Sim functionality)
-  std::shared_ptr<Ansatz> ansatz = std::make_shared<UCCSD>(hamil.getEnv(), jw_transform, 1);
+  std::shared_ptr<Ansatz> ansatz = std::make_shared<UCCSD>(hamil->getEnv(), jw_transform, 1);
+  ansatz->buildAnsatz();
 ```
 
 3. **Solver Configuration**: To solve the problem, we pass the ansatz pointer and the Hamiltonian object to a `SV_CPU_VQE` object to run the main optimization loop. Here we use the COBYLA algorithm implemented by NLOpt, see (NLOpt Algorithms)[https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/] for a full list of algorithms. If the algorithm requires a gradient, the SPSA scheme is used to compute the emprical gradient.
 ```c++
+  std::string config_path = "../default_config.json";
   // Build the Quantum State object
   NWQSim::VQE::SV_CPU_VQE state(ansatz, // reference to ansatz
                                 hamil,  // reference to Hamiltonian
                                 nlopt::algorithm::LN_COBYLA, // NLOpt algorithm for optimization
                                 callback_function, // Callback function for each energy evaluation
+                                config_path, // path to config file
                                 0 // Random seed (passed to the SPSA gradient estimator for random perturbations)
                                 );
 ```
@@ -114,13 +150,10 @@ void callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fv
 }
 ```
 
-With those 3 steps done, all we need to do is specify a starting point (randomized here)
+With those 3 steps done, all we need to do is specify a starting point (all zero here)
 ```c++
-  // Random initial parameters (sets to all 0 by default if not provided). Note that the function modifies `parameters` inplace
-  std::vector<double> parameters(ansatz->numParams(), 1.0);
-  std::uniform_real_distribution<double> dist(0.0, 2 * PI);
-  std::mt19937_64 rand_device(342);
-  std::generate(parameters.begin(), parameters.end(), [&] () {return dist(rand_device);});
+  // Set initial parameters to 0
+  std::vector<double> parameters(ansatz->numParams(), 0.0);
 
   // Return destination for the function value
   double fval;
@@ -132,19 +165,15 @@ With those 3 steps done, all we need to do is specify a starting point (randomiz
 ```
 With the given parameters, the example output is:
 ```shell
-Final Parameters: [3.38321, 3.12406, 0.604382, 6.23878, 3.13498, 1.6731, 5.19951, 1.00041, 3.85333, 4.45068, 5.18236, 1.87307, 6.08033, 3.72354, 6.11622, 5.92692, 6.27671, 3.12758, 0.143945, 0.531499, 2.67651, 4.47741, 6.26275, 5.59402, 6.08819, 4.87106, 3.67601, 2.49373, 4.21423, 0.376157, 2.17098, 1.46454, 0.0594701, 0.914741, 6.1902]
-Final Energy: -75.7452
+Final Parameters: [-0.017729, 0.00190356, -0.00687456, -0.00595677, -0.0362287, 0.0676943, 0.00566315, -0.00576158, -0.00107353, 0.00854818, 0.0418309, -0.00767838, 0.0104276, 0.168057, 0.0427336, 0.00160509, -0.00336476, 0.0288875]
+Final Energy: -2.16938
 ```
-The final energy (-75.7452) is about about 0.6 Hartree away from the true ground state (-76.387). 
+The final energy (-2.16938) is about about 0.11 mHartree away from the true ground state (-2.18031661). 
 
 The example file [examples/config_example.cpp](examples/config_example.cpp) is similar, but demonstrates how to specify `NLOpt` algorithm parameters and cutoff criteria within NWQ-VQE.
 
-## Testing
-The same example can be run with the command line-configurable `nwq_vqe` executable by running:
-```shell
-./vqe/nwq_vqe -f ../vqe/example_hamiltonians/h2O.hamil -n 10
-```
 
+### Backends
 Note that [examples/basic_example_cuda_mpi.cu](examples/basic_example_cuda_mpi.cu) separates the `SV_CUDA_MPI_VQE` constructor call and the call to `MPI_Finalize()` into two different functions. This is necessary to ensure that the `SV_CUDA_MPI` destructor (which invokes `nvshmem_finalize()`) is called before `MPI_Finalize()`.
 
 To locally run the example CUDA, MPI,and examples respectively, run (from `NWQ-Sim/build`):
@@ -178,6 +207,14 @@ bsub -W 60 -nnodes 4 -P CHP125 -Is /bin/bash
 source ../environment/setup_summit.sh
 jsrun -n 64 -a1 -g0 -c1 -r16 ./vqe/examples/basic_example_mpi
 ```
+To run the command-line solver with the aforementioned backends, replace the `./vqe/examples/...` executable with the command line tool and add the appropriate `--backend` flag. For example, to run multi-GPU on Perlmutter:
+```shell
+salloc --nodes 4 --qos interactive -t 60 --constraint gpu --account=m4243
+source ../environment/setup_perlmutter.sh
+srun -C gpu -N 4 -n 4 -c 1 --gpus-per-task=1 --gpu-bind=single:1 ./vqe/nwq_vqe -f ../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -n 4 --maxeval 1000 --backend NVGPU_MPI
+```
+where we have added the `NVGPU_MPI` backend option to utilize NVSHMEM-linked NVIDIA GPU accelerators.
+
 
 # QFlow
 In the QFlow algorithm, we repeatedly perform single-direction gradient descent over downfolded Hamiltonians. 
@@ -202,6 +239,11 @@ OPTIONAL
 
 `--delta` and `--eta` are QFlow-specific parameters which control the gradient descent procedure (TODO: implement adaptive stepsize line search). `--delta` is used to perturb parameter vectors to compute the empirical gradient using SPSA, whereas `--eta` controls the descent stepsize. The algorithm descends the gradient from the (random) initial point until it finds a minimum, then returns.
 
+
+
+
+
+<!-- 
 ## Python
 A pybind11-enabled API allows for a direct Python interface. Two functions are provided: `optimize_effective_hamiltonian` and `get_param_count`. The latter returns the number of unique parameters, accounting for symmetry reparameterizations.
 
@@ -279,4 +321,4 @@ Documentation for `optimize_effective_hamiltonian` is shown below:
                     num_trotter (int): Number of Trotter steps (linearly increases number of parameters). Defaults to 1
                     num_samples (int): Number of gradient samples for SPSA average. Defaults to 1
 
-```
+``` -->
