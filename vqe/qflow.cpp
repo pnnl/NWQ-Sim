@@ -195,16 +195,15 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      double delta,
                      double eta) {
   double fval;
-  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, config, ansatz, hamil, algo, callback_function, seed, settings); 
   NWQSim::VQE::Callback callback = verbose ? carriage_return_callback_function: silent_callback_function;
   if (!verbose) {
     NWQSim::Config::PRINT_SIM_TRACE = false;
-  }  
+  }
+  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, config, ansatz, hamil, algo, callback, seed, settings); 
   params.resize(ansatz->numParams());
   std::cout << ansatz->numParams() << std::endl;
-  if (amplitudes == "") {
     std::fill(params.begin(), params.end(), 0);
-  } else {
+  if (amplitudes != "") {
     NWQSim::VQE::read_amplitudes(amplitudes, params, ansatz->get_excitation_map());
   }
   double initial_ene, final_ene;
