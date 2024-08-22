@@ -26,7 +26,8 @@ namespace NWQSim
                    IdxType seed = 0,
                    OptimizerSettings opt_settings = OptimizerSettings()): 
                                       SV_CPU(a->num_qubits(), configpath),
-                                      VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {                                 
+                                      VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
+        initialize();
       };
       virtual void call_simulator() override {      
         reset_state();

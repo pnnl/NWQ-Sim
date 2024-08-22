@@ -190,10 +190,6 @@ void read_amplitudes(std::string fpath, std::vector<ValType>& params, const std:
     std::vector<bool> read_in(params.size(), 0);
     std::string line;
     std::smatch match;
-    for (auto pair : idx_map) {
-      std::cout << pair.first << " " << pair.second << std::endl;
-    }
-    getchar();
     while(std::getline(infile, line)) {
 
         if (line.length() == 0) {
@@ -212,7 +208,6 @@ void read_amplitudes(std::string fpath, std::vector<ValType>& params, const std:
           if (idx_map.find(key) == idx_map.end()) {
             continue;
           }
-          std::cout << key << std::endl;
           params.at(idx_map.at(key)) = amplitude;
           read_in.at(idx_map.at(key)) = 1;
         }
@@ -269,6 +264,17 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
                 occ_up_2,
                 virt_up_3,
                 virt_up_4},
+                {occ_up_1,
+                 occ_down_2, 
+                 virt_down_3,
+                 virt_up_4},
+                {occ_down_1,
+                 occ_up_2,
+                 virt_down_3,
+                 virt_up_4}}
+                );
+            fermion_operators.push_back(
+               {
                 {occ_up_1,
                  occ_down_2, 
                  virt_down_3,

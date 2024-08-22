@@ -4,6 +4,7 @@
 #include "circuit/ansatz.hpp"
 #include "circuit/measurement.hpp"
 #include <fstream>
+#include <string>
 #include "utils.hpp"
 #include "state.hpp"
 #include "svsim_vqe/sv_cpu_vqe.hpp"
@@ -26,7 +27,7 @@ void callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fv
 int main(int argc, char** argv) {
   NWQSim::IdxType n_particles = 4; // Set the number of particles
   // Note: path relative to presumed build directory
-  std::string hamiltonian_path = "../vqe/example_hamiltonians/LiH_3_xacc.hamil"; //  Effective Hamiltonian file path
+  std::string hamiltonian_path = "../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil"; //  Effective Hamiltonian file path
 
   std::shared_ptr<Hamiltonian> hamil = std::make_shared<Hamiltonian>(hamiltonian_path, n_particles, false); // Build the Hamiltonian object (used for energy calculation) using the DUCC mapping
   Transformer jw_transform = getJordanWignerTransform; // Choose a transformation function
@@ -35,12 +36,11 @@ int main(int argc, char** argv) {
   //      (shared_ptr used to match baseline NWQ-Sim functionality)
   std::shared_ptr<Ansatz> ansatz = std::make_shared<UCCSD>(hamil->getEnv(), jw_transform, 1);
   ansatz->buildAnsatz();
-  
   // Now we get a bit fancier. We can pass an `OptimizerSettings` object to specify termination criteria and optimizer parameters
   OptimizerSettings settings;
   settings.abs_tol = 1e-5;  // absolution function value tolerance cutoff
   settings.rel_tol = 1e-3;  // relative function value tolerance cutoff
-  settings.max_evals = 100; // max number of function calls (circuit simulations)
+  settings.max_evals = 1000; // max number of function calls (circuit simulations)
   settings.max_time = 1000; // timeout (in seconds)
   settings.stop_val = -76.387; // ground state for our problem
   // algorithm-specific parameters, see NLOpt docs for specifics. `inner_maxeval` specifies the maximum number
@@ -50,19 +50,19 @@ int main(int argc, char** argv) {
     {"inner_maxeval", 20}
   }; 
   
-  
+  std::string config_path = "../default_config.json";
   // Build the Quantum State object
   NWQSim::VQE::SV_CPU_VQE state(ansatz, // reference to ansatz
                                 hamil,  // reference to Hamiltonian
                                 nlopt::algorithm::LD_MMA, // NLOpt algorithm for optimization
                                 callback_function, // Callback function for each energy evaluation
-                                "../default_config.json",
+                                config_path,
                                 0, // Random seed (passed to the SPSA gradient estimator for random perturbations)
                                 settings
                                 );
   // Random initial parameters (sets to all 0 by default if not provided). Note that the function modifies `parameters` inplace
   std::vector<double> parameters(ansatz->numParams(), 1.0);
-  std::uniform_real_distribution<double> dist(0.0, 2 * PI);
+  std::uniform_real_distribution<double> dist(-PI, PI);
   std::mt19937_64 rand_device(342);
   std::generate(parameters.begin(), parameters.end(), [&] () {return dist(rand_device);});
 

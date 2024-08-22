@@ -42,9 +42,9 @@ int show_help() {
   std::cout << UNDERLINE << "REQUIRED" << CLOSEUNDERLINE << std::endl;
   std::cout << "--hamiltonian, -f     Path to the input Hamiltonian file (formatted as a sum of Fermionic operators, see examples)" << std::endl;
   std::cout << "--nparticles, -n      Number of electrons in molecule" << std::endl;
+  std::cout << UNDERLINE << "OPTIONAL" << CLOSEUNDERLINE << std::endl;
   std::cout << "--backend, -b         Simulation backend. Defaults to CPU" << std::endl;
   std::cout << "--list-backends, -l   List available backends and exit." << std::endl;
-  std::cout << UNDERLINE << "OPTIONAL" << CLOSEUNDERLINE << std::endl;
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
   std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
   std::cout << "--opt-config          Path to config file for NLOpt optimizer parameters" << std::endl;
@@ -253,7 +253,6 @@ void optimize_ansatz(const VQEBackendManager& manager,
     double optimization_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_optimization - end_commutators ).count() / 1e9;
     manager.safe_print("Completed ADAPT-VQE Optimization in %.2e seconds\n", optimization_time); // Report the total time
   } else {
-    state->initialize(); // Initialize the state (AKA allocating measurement data structures and building the measurement circuit)
     state->optimize(x, fval); // MAIN OPTIMIZATION LOOP
 
   }

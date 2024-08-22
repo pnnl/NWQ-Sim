@@ -36,6 +36,7 @@ namespace NWQSim
         int rank = 0;
         MPI_Comm_rank(comm_global, &rank);
         process_rank = rank;
+        initialize();
       };
 
       /**

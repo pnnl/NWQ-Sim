@@ -27,6 +27,7 @@ namespace NWQSim
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
         // resize the expectation value data structure (to-do, just make a double)
         // allocate space for host, device memory for observable lists
+        initialize();
       };
 
       virtual void allocate_observables(IdxType size) override {

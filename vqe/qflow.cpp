@@ -210,7 +210,6 @@ void optimize_ansatz(const VQEBackendManager& manager,
   double initial_ene, final_ene;
   long long num_iterations = 0;
   std::vector<std::pair<std::string, double> > param_tuple;
-  state->initialize();
   if (local) {
   param_tuple = state->follow_fixed_gradient(params, 
                                               initial_ene, 

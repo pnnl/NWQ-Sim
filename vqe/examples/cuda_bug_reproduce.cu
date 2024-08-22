@@ -66,7 +66,7 @@ void example () {
   // Random initial parameters (sets to all 0 by default if not provided). Note that the function modifies `parameters` inplace
   std::vector<double> parameters(ansatz->numParams(), 1.0);
   if (i_proc == 0) {
-    std::uniform_real_distribution<double> dist(0.0, 2 * PI);
+    std::uniform_real_distribution<double> dist(-PI, PI);
     std::mt19937_64 rand_device(342);
     std::generate(parameters.begin(), parameters.end(), [&] () {return dist(rand_device);});
   }

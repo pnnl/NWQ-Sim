@@ -34,6 +34,7 @@ namespace NWQSim
         int rank = 0;
         MPI_Comm_rank(comm_global, &rank);
         process_rank = rank;
+        initialize();
       };
       virtual void allocate_observables(IdxType size) override {
         SAFE_ALOC_GPU(obsvals_dev, size * sizeof(ObservableList));

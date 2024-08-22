@@ -161,7 +161,6 @@ namespace NWQSim {
        */
       void optimize(std::vector<double>& parameters, ValType& ene, IdxType maxiter, ValType abstol = 1e-5, ValType fvaltol = 1e-7) {
         ene = hamil->getEnv().constant;
-        state->initialize();
         ValType constant = ene;
         IdxType iter = 0;
         ValType prev_ene = 1 + ene;
@@ -184,6 +183,7 @@ namespace NWQSim {
           }));
           // if the gradient converged, break
           if (grad_norm < abstol) {
+            std::cout << "Gradient norm " << grad_norm << " below tolerance, terminating" << std::endl;
             break;
           }
           // else find the index of the gradient element with the largest magnitude
@@ -204,6 +204,7 @@ namespace NWQSim {
           }
           // If the function value converged, then break
           if (abs((ene - prev_ene)) < fvaltol) {
+            std::cout << "Function value difference " << abs((ene - prev_ene)) << " below tolerance, terminating" << std::endl;
             break;
           }
           iter++;
