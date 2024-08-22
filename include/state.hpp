@@ -14,11 +14,8 @@
 namespace NWQSim
 {
     struct ObservableList {
-        IdxType* x_indices;
-        IdxType* x_index_sizes;
-        IdxType* xmasks;
         IdxType* zmasks;
-        ValType* exp_output;
+        ValType exp_output;
         ValType* coeffs;
         IdxType numterms;
     };
@@ -26,9 +23,9 @@ namespace NWQSim
     class QuantumState
     {
     public:
-        QuantumState(IdxType _n_qubits, SimType _sim_type): sim_type(_sim_type)
+        QuantumState(IdxType _n_qubits, SimType _sim_type, const std::string& configpath = "../default_config.json"): sim_type(_sim_type)
         {
-            Config::Load();
+            Config::Load(configpath);
             registerGates();
         }                          // constructor
         virtual ~QuantumState() {} // virtual destructor
@@ -45,6 +42,7 @@ namespace NWQSim
         virtual IdxType *get_results() = 0;
         virtual IdxType measure(IdxType qubit) = 0;
         virtual IdxType *measure_all(IdxType repetition) = 0;
+        virtual void set_initial(std::string fpath, std::string format) = 0;
         virtual ValType *get_real() const = 0;
         virtual ValType *get_imag() const = 0;
 
@@ -54,6 +52,7 @@ namespace NWQSim
             throw std::runtime_error("Fidelity computation not implemented");
         };
         virtual void print_res_state() = 0;
+        virtual void dump_res_state(std::string outfile) = 0;
 
         virtual void save_state()
         {

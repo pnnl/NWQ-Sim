@@ -65,7 +65,7 @@ private:
     void classify_measurements();
 
     void execute_gate(shared_ptr<QuantumState> state, std::shared_ptr<NWQSim::Circuit> circuit, qasm_gate gate);
-    IdxType *sub_execute(shared_ptr<QuantumState> state, IdxType repetition, bool print_metrics);
+    IdxType *sub_execute(shared_ptr<QuantumState> state, std::string init_path, std::string init_format, IdxType repetition, bool print_metrics);
 
     void dump_defined_gates();
     void dump_cur_inst();
@@ -79,7 +79,7 @@ public:
     void load_qobj_string(const std::string qobj_string);
 
     IdxType num_qubits();
-    map<string, IdxType> *execute(shared_ptr<QuantumState> state, IdxType repetition, bool print_metrics = false);
+    map<string, IdxType> *execute(shared_ptr<QuantumState> state, std::string initpath, std::string init_format, IdxType repetition, bool print_metrics = false);
     ~qasm_parser();
 };
 
@@ -620,7 +620,7 @@ void qasm_parser::classify_measurements()
             final_measurements = false;
 }
 
-map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, IdxType repetition, bool print_metrics)
+map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::string initpath, std::string init_format, IdxType repetition, bool print_metrics)
 {
     IdxType *results;
     if (contains_if)
@@ -628,13 +628,13 @@ map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, IdxTy
         results = new IdxType[repetition];
         for (IdxType i = 0; i < repetition; i++)
         {
-            IdxType *sub_result = sub_execute(state, 1, print_metrics);
+            IdxType *sub_result = sub_execute(state, initpath, init_format, 1, print_metrics);
             results[i] = sub_result[0];
         }
     }
     else
     {
-        results = sub_execute(state, repetition, print_metrics);
+        results = sub_execute(state, initpath, init_format, repetition, print_metrics);
     }
     map<IdxType, IdxType> result_dict;
     for (IdxType i = 0; i < repetition; i++)
@@ -650,9 +650,14 @@ map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, IdxTy
         return convert_dictionary(result_dict, list_cregs);
 }
 
-IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, IdxType repetition, bool print_metrics)
+IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string init_path, std::string init_format, IdxType repetition, bool print_metrics)
 {
-    state->reset_state();
+    if (init_path != "") {
+        state->set_initial(init_path, init_format);
+    } else {
+        state->reset_state();
+    }
+    
     std::shared_ptr<NWQSim::Circuit> circuit = std::make_shared<Circuit>(num_qubits());
     for (auto gate : *list_gates)
     {
@@ -778,6 +783,8 @@ void qasm_parser::execute_gate(shared_ptr<QuantumState> state, std::shared_ptr<N
         circuit->CSDG(qubits[0], qubits[1]);
     else if (gate_name == "CT")
         circuit->CT(qubits[0], qubits[1]);
+    else if (gate_name == "ECR")
+        circuit->ECR(qubits[0], qubits[1]);
     else if (gate_name == "CTDG")
         circuit->CTDG(qubits[0], qubits[1]);
     else if (gate_name == "CSX")

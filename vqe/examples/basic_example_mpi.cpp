@@ -37,6 +37,7 @@ int main(int argc, char** argv) {
   // Build the ansatz circuit using the Hamiltonian Molecular environment and JW mapping
   //      (shared_ptr used to match baseline NWQ-Sim functionality)
   std::shared_ptr<Ansatz> ansatz = std::make_shared<UCCSD>(hamil->getEnv(), jw_transform, 1);
+  ansatz->buildAnsatz();
   // Build the Quantum State object
   NWQSim::VQE::SV_MPI_VQE state(ansatz, // reference to ansatz
                                 hamil,  // reference to Hamiltonian

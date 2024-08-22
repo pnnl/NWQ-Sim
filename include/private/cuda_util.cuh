@@ -1,4 +1,6 @@
 #pragma once
+#include "nwq_util.hpp"
+#include <cooperative_groups.h>
 #include <stdio.h>
 #include <sys/time.h>
 #include <assert.h>
@@ -148,6 +150,25 @@ uint64_t swapBits_cu (uint64_t n, uint64_t p1, uint64_t p2) {
     two sets are swapped */
     uint64_t result = n ^ x;
     return result;
+}
+
+/********************************
+ * Generic Kernel Routines
+ ********************************/
+// implement |v1><v2|, so v2 is in the dual space and is therefore conjugated
+__global__
+void outerProduct(double* matrix_real, double* matrix_imag, double* v1_real, double* v1_imag, double* v2_real, double* v2_imag, size_t size_1, size_t size_2) {
+    // Is this fast? no. Could it be more optimized? yes. Does it get the job done for now? probably.
+    size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t n_threads = blockDim.x * gridDim.x;
+    for (size_t i = tid; i < size_1 * size_2; i += n_threads) {
+        size_t idx1 = i / size_2;
+        size_t idx2 = i % size_2;
+        double real_coeff = v1_real[idx1] * v2_real[idx2] + v1_imag[idx1] * v2_imag[idx2];
+        double imag_coeff = v1_imag[idx1] * v2_real[idx2] - v1_real[idx1] * v2_imag[idx2];
+        matrix_real[i] = real_coeff;
+        matrix_imag[i] = imag_coeff;
+    }
 }
 
 /***********************************************

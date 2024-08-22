@@ -19,6 +19,7 @@ namespace NWQSim{
       if (!input_file.is_open()) {
         throw std::runtime_error("Could not open file");
       }
+      qubit_transform = transform;
       std::string line;
       std::istringstream linestream;
 
@@ -134,6 +135,7 @@ namespace NWQSim{
       std::istringstream linestream;
       IdxType term_counter = 0;
       ValType energy_constant = 0;
+      qubit_transform = transform;
       for (auto& pair: input_ops) {
         
 
@@ -180,7 +182,6 @@ namespace NWQSim{
                                  n_particles,
                                  xacc_scheme,
                                  energy_constant);
-      IdxType coeff_index = 0;
       IdxType otypeval, spinval, orbital_index;
       Spin spin;
       OrbitalType orbitaltype;

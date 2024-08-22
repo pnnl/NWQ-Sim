@@ -46,7 +46,7 @@ namespace NWQSim
     class DM_CUDA : public QuantumState
     {
     public:
-        DM_CUDA(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::DM)
+        DM_CUDA(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits,SimType::DM, config)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -126,7 +126,70 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
+        virtual void set_initial (std::string fpath, std::string format) override {
+            std::ifstream instream;
+            instream.open(fpath, std::ios::in|std::ios::binary);
+            if (instream.is_open()) {
+                if (format == "dm") {
+                    instream.read((char*)dm_real_cpu, dm_size);
+                    instream.read((char*)dm_imag_cpu, dm_size);
+                    cudaSafeCall(cudaMemcpy(dm_real, dm_real_cpu,
+                                            dm_size, cudaMemcpyHostToDevice));
+                    cudaSafeCall(cudaMemcpy(dm_imag, dm_imag_cpu,
+                                            dm_size, cudaMemcpyHostToDevice));
+                    instream.close();
+                } else {
+                    IdxType sv_dim = 1 << n_qubits;
+                    IdxType sv_mem = sv_dim * sizeof(ValType);
+                    ValType *sv_real, *sv_imag, *sv_real_cpu, *sv_imag_cpu;
+                    SAFE_ALOC_GPU(sv_real, sv_mem);
+                    SAFE_ALOC_GPU(sv_imag, sv_mem);
+                    sv_real_cpu = new ValType[sv_dim];
+                    sv_imag_cpu = new ValType[sv_dim];
+                    instream.read((char*)sv_real_cpu, sv_mem);
+                    instream.read((char*)sv_imag_cpu, sv_mem);
+                    cudaSafeCall(cudaMemcpy(sv_real, sv_real_cpu,
+                                            sv_mem, cudaMemcpyHostToDevice));
+                    cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu,
+                                            sv_mem, cudaMemcpyHostToDevice));
+                    delete [] sv_real_cpu;
+                    delete [] sv_imag_cpu;
+                    int numBlocksPerSm;
+                    int smem_size = 0;
+                    cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
+                                                                            fidelity_kernel, THREADS_CTA_CUDA, smem_size));
+                    
+                    dim3 gridDim(1, 1, 1);
 
+                    cudaDeviceProp deviceProp;
+                    cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
+                    gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
+                    void* args[] = {&dm_real, &dm_imag, &sv_real, &sv_imag, &sv_real, &sv_imag, &sv_dim, &sv_dim};
+                    cudaLaunchCooperativeKernel((void *)outerProduct, gridDim,
+                                                THREADS_CTA_CUDA, args, smem_size);
+                    cudaDeviceSynchronize();
+                    cudaSafeCall(cudaMemcpy(dm_real_cpu, dm_real,
+                                            dm_size, cudaMemcpyDeviceToHost));
+                    cudaSafeCall(cudaMemcpy(dm_imag_cpu, dm_imag,
+                                            dm_size, cudaMemcpyDeviceToHost));
+                    SAFE_FREE_GPU(sv_real);
+                    SAFE_FREE_GPU(sv_imag);
+                }
+            }
+        }
+        virtual void dump_res_state(std::string outpath) override {
+            std::ofstream outstream;
+            outstream.open(outpath, std::ios::out|std::ios::binary);
+            if (outstream.is_open()) {
+                cudaSafeCall(cudaMemcpy(dm_real_cpu, dm_real, 
+                                        dm_size, cudaMemcpyDeviceToHost));
+                cudaSafeCall(cudaMemcpy(dm_imag_cpu, dm_imag, 
+                                        dm_size, cudaMemcpyDeviceToHost));
+                outstream.write((char*)dm_real_cpu, sizeof(ValType) * dim);
+                outstream.write((char*)dm_imag_cpu, sizeof(ValType) * dim);
+                outstream.close();
+            }
+        };
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
             IdxType origional_gates = circuit->num_gates();

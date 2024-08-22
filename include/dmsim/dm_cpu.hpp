@@ -24,7 +24,7 @@ namespace NWQSim
     {
 
     public:
-        DM_CPU(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::DM)
+        DM_CPU(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits, SimType::DM, config)
         {
             // Initialize CPU side
             n_qubits = _n_qubits;
@@ -86,6 +86,44 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
+        virtual void set_initial (std::string fpath, std::string format) override {
+            std::ifstream instream;
+            instream.open(fpath, std::ios::in|std::ios::binary);
+            if (format == "dm") {
+                if (instream.is_open()) {
+                    instream.read((char*)dm_real, dm_size * sizeof(ValType));
+                    instream.read((char*)dm_imag, dm_size * sizeof(ValType));
+                    instream.close();
+                }
+            } else {
+                // input is a statevector, take the outer product
+                IdxType sv_size = 1 << n_qubits;
+                ValType* imag_buffer = new ValType[sv_size];
+                instream.read((char*)m_real, sv_size * sizeof(ValType));
+                instream.read((char*)imag_buffer, sv_size * sizeof(ValType));
+                instream.close();
+                for (IdxType ind = 0; ind < sv_size; ind++) {
+                    ValType a = m_real[ind];
+                    ValType b = imag_buffer[ind];
+                    for (IdxType j = 0; j < sv_size; j ++) {
+                        ValType c = m_real[j];
+                        ValType d = -imag_buffer[j];
+                        dm_real[ind * sv_size + j] = a * c - d * b;
+                        dm_imag[ind * sv_size + j] = d * a + c * b;
+                    }
+                }
+                std::memset(m_real, 0, sv_size);
+            }
+        }
+        virtual void dump_res_state(std::string outpath) override {
+            std::ofstream outstream;
+            outstream.open(outpath, std::ios::out|std::ios::binary);
+            if (outstream.is_open()) {
+                outstream.write((char*)dm_real, sizeof(ValType) * dim);
+                outstream.write((char*)dm_imag, sizeof(ValType) * dim);
+                outstream.close();
+            }
+        };
 
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
@@ -180,42 +218,6 @@ namespace NWQSim
             IdxType vector_dim = (IdxType)1 << n_qubits;
             double* sv_real = other->get_real();
             double* sv_imag = other->get_imag();
-            // IdxType i = 0;
-            // IdxType outer_limit = (vector_dim / block_size) * block_size;
-            // if (block_size > vector_dim)
-            //     goto EPILOGUE;
-            // for (i = 0; i < outer_limit; i+=block_size) {
-            //     // $\bra{\psi}$: vector in dual space
-            //     double* block_ket_real = sv_real + i;
-            //     double* block_ket_imag = sv_imag + i;
-
-            // #pragma unroll
-            // for (IdxType k = i; k < i + block_size; k++) {
-            //     ValType a = block_ket_real[k];
-            //     ValType b = block_ket_imag[k];
-            //     // individual block
-            //     for (IdxType j = 0; j < outer_limit; j += block_size) {
-            //         // $\ket{\psi}$: vector in primal space
-            //         double* block_bra_real = sv_real + j;
-            //         double* block_bra_imag = sv_imag + j;
-            //         // $\rho$: density matrix
-            //         double* block_dm_real = dm_real + i * vector_dim + j;
-            //         double* block_dm_imag = dm_imag + i * vector_dim + j;
-            //             #pragma unroll
-            //             for (IdxType r = j; r < j + block_size; r++) {
-            //                 printf("%d %d\n", k, r);
-            //                 ValType c = block_dm_real[k * vector_dim + r];
-            //                 ValType d = block_dm_imag[k * vector_dim + r];
-            //                 ValType g = block_bra_real[r];
-            //                 ValType f = -block_bra_imag[r];
-            //                 result_real += a * c * g - a * d * f - b * c * f - b * d * g;
-            //                 result_imag += a * c * f + a * d * g + b * c * g - b * d * f;
-            //             }
-            //         }
-            //     }
-            // }
-
-            // EPILOGUE:
             for (IdxType ind = 0; ind < vector_dim; ind++) {
                 ValType a = sv_real[ind];
                 ValType b = -sv_imag[ind];
