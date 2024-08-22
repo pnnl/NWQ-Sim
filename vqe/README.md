@@ -64,16 +64,6 @@ NWQ-VQE uses the [NLOpt](https://nlopt.readthedocs.io/en/latest/) library for op
 --ducc                Use DUCC indexing scheme, otherwise uses XACC scheme. (Defaults to true)
 ```
 
-NWQ-Sim also supports ADAPT-VQE simulations, using both Fermionic operators ([Ref](https://www.nature.com/articles/s41467-019-10988-2)) and single Pauli strings ([Ref](https://journals.aps.org/prxquantum/abstract/10.1103/PRXQuantum.2.020310)). The executable supports the following ADAPT-specific options. `--adapt-maxeval`, `--adapt-gradtol`, and `--adapt-fvaltol` set termination criteria for the ADAPT loop, while the `--adapt` and `--qubit` flags enable ADAPT and Qubit-ADAPT respectively. To enable Qubit-ADAPT, you must pass both the `--adapt` and `--qubit` flags. Qubit-ADAPT also supports randomized operator pool subsampling, with the size set by the `--adapt-pool` flag (-1 indicates the full pool). 
-```shell
-ADAPT-VQE OPTIONS
---adapt               Use ADAPT-VQE for dynamic ansatz construction. Defaults to false
---adapt-maxeval       Set a maximum iteration count for ADAPT-VQE. Defaults to 100
---adapt-gradtol       Cutoff absolute tolerance for operator gradient norm. Defaults to 1e-3
---adapt-fvaltol       Cutoff absolute tolerance for function value. Defaults to 1e-6
---qubit               Uses Qubit instead of Fermionic operators for ADAPT-VQE. Defaults to false
---adapt-pool          Sets the pool size for Qubit operators. Defaults to -1
-```
 
 To run the $\mathrm{H_4}$ example using command line, run:
 ```shell
@@ -81,15 +71,58 @@ To run the $\mathrm{H_4}$ example using command line, run:
 ```
 where we have now increased the evaluation limit to 1000.
 
-To run the same problem with ADAPT-VQE and Qubit-ADAPT, run:
-```shell
-./vqe/nwq_vqe -f ../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -n 4 --maxeval 200 --adapt --adapt-maxeval 400
+
+### ADAPT-VQE Usage
+NWQ-Sim also supports ADAPT-VQE simulations, using both Fermionic operators ([Ref](https://www.nature.com/articles/s41467-019-10988-2)) and single Pauli strings ([Ref](https://journals.aps.org/prxquantum/abstract/10.1103/PRXQuantum.2.020310)). The executable supports the following ADAPT-specific options. `--adapt-maxeval`, `--adapt-gradtol`, and `--adapt-fvaltol` set termination criteria for the ADAPT loop, while the `--adapt` and `--qubit` flags enable ADAPT and Qubit-ADAPT respectively. To enable Qubit-ADAPT, you must pass both the `--adapt` and `--qubit` flags. Qubit-ADAPT also supports randomized operator pool subsampling, with the size set by the `--adapt-pool` flag (-1 indicates the full pool). 
 ```
-and
-```shell
-./vqe/nwq_vqe -f ../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -n 4 --maxeval 200 --adapt --qubit --adapt-maxeval 400
+ADAPT-VQE OPTIONS
+--adapt               Use ADAPT-VQE for dynamic ansatz construction. Defaults to false
+--adapt-maxeval       Set a maximum iteration count for ADAPT-VQE. Defaults to 100
+--adapt-gradtol       Cutoff absolute tolerance for operator gradient norm. Defaults to 1e-3
+--adapt-fvaltol       Cutoff absolute tolerance for function value. Defaults to 1e-6
 ```
-respectively. Note that we have increased the ADAPT iteration limit while decreasing the per-VQE step limit. 
+
+
+To run the $\mathrm{H_4}$ problem using Fermionic ADAPT, we add the ``--adapt'' flag:
+```shell
+./vqe/nwq_vqe -f ../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -n 4 --maxeval 200 --adapt
+```
+where `--maxeval` now indicates the number of iterations for the VQE subsolver, not the number of ADAPT iterations (Default 100).
+
+To increase the number of ADAPT iterations, we can add the flag `--adapt-maxeval` flag:
+```shell
+./vqe/nwq_vqe -f ../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -n 4 --maxeval 200 --adapt --adapt-maxeval 500
+```
+to increase the iteration limit to 500.
+
+ADAPT-VQE also supports termination criteria based on gradient norm and function value convergence. The gradient norm is $\sqrt{\sum_{i=1}\langle \psi|[H,O_i]|\psi\rangle^2}$ for each $O_i$ in the operator pool.
+
+To set a gradient norm tolerance cutoff of $0.001$, we can add the `--adapt-gradtol` flag:
+```shell
+./vqe/nwq_vqe -f ../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -n 4 --maxeval 200 --adapt --qubit --adapt-maxeval 400 --adapt-gradtol 1e-3
+```
+Conversely, we can add a tolerance cutoff for the function value difference between iterations with the `--adapt-fvaltol` flag:
+```shell
+./vqe/nwq_vqe -f ../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -n 4 --maxeval 200 --adapt --qubit --adapt-maxeval 400 --adapt-fvaltol 1e-3
+```
+
+#### Qubit-ADAPT VQE
+Qubit-ADAPT also supports custom configuration options:
+```
+--qubit               Uses Qubit instead of Fermionic operators for ADAPT-VQE. Defaults to false
+--adapt-pool          Sets the pool size for Qubit operators. Defaults to -1
+``` 
+
+The `--qubit` flag enables a Pauli string operator pool rather than using Fermionic operators e.g.:
+```shell
+./vqe/nwq_vqe -f ../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -n 4 --maxeval 200 --adapt --qubit --adapt-maxeval 400 --adapt-fvaltol 1e-3 --qubit
+```
+However, this constructs an operator pool with all Pauli strings from the JW-mapped Fermionic pool, which may be excessive. To randomly subsample from the operator pool, use the `--adapt-pool` to set the pool size:
+```shell
+./vqe/nwq_vqe -f ../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -n 4 --maxeval 200 --adapt --qubit --adapt-maxeval 400 --adapt-fvaltol 1e-3 --qubit --adapt-pool 50
+```
+Note that `--adapt-pool` has no effect on the Fermionic ADAPT solver.
+
 
 
 
