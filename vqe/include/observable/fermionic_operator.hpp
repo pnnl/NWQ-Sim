@@ -4,6 +4,7 @@
 #include <complex>
 #include "environment.hpp"
 #include "utils.hpp"
+#include "environment.hpp"
 namespace NWQSim {
   /* Basic data type for indices */
   using IdxType = long long int;
@@ -82,7 +83,21 @@ namespace NWQSim {
         ss  << qubitIndex(n_occ, n_virt) << ((type==Creation) ? "^": "");
         return ss.str();
       };
+      FermionOperator operator*(std::complex<ValType> scalar) {
+        FermionOperator result(*this);
+        result.coeff *= scalar;
+        return result;
+      }
     };
+    void generate_fermionic_excitations(std::vector<std::vector< std::vector<FermionOperator> > >& _fermion_operators,
+                                    const MolecularEnvironment& _env);
+    void generate_pauli_excitations(std::vector<std::vector<PauliOperator > >& _pauli_operators,
+                                    const MolecularEnvironment& _env,
+                                    IdxType subsample = -1,
+                                    IdxType seed = 0);
+    // Construct the minimal operator pool G from Tang et al. 2021 ("Qubit-ADAPT VQE")
+    void generate_minimal_pauli_excitations(std::vector<std::vector<PauliOperator > >& _pauli_operators,
+                                    const MolecularEnvironment& _env);
   };// namespace vqe
 };// namespace nwqsim
 

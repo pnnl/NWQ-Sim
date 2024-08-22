@@ -1,10 +1,18 @@
 #include "observable/pauli_operator.hpp"
+#include "observable/fermionic_operator.hpp"
+#include "transform/transform.hpp"
 #include "utils.hpp"
+#include <algorithm>
+#include <random>
+#include <stdexcept>
 #include <string>
 #include <iostream>
 #include <sstream>
 #include <queue>
 #include <fstream>
+#include <unordered_map>
+#include <vector>
+#include <regex>
 
 namespace NWQSim{
 namespace VQE {
@@ -144,6 +152,306 @@ std::vector<IdxType> sorted_nodes;
         sorted_nodes = not_added;
     }
 }
+/**
+ * @brief Make an XACC-formatted excitation string for a product of fermionic operators 
+ * @note   
+ * @param  product: Vector of individual annihilation or creation operators
+ * @retval 
+ */
+std::string to_fermionic_string(const std::vector<FermionOperator>& product, const MolecularEnvironment& env){
+    std::string opstring = "";
+    bool first = true;
+    IdxType prodterms = product.size();
+    IdxType index = 0;
+    for (auto& op: product) {
+      if (!first) {
+        opstring = " " + opstring;
+      } 
+      first = false;
+      opstring = op.toString(env.n_occ, env.n_virt) + opstring;
+    }
+    return opstring;
+};
+
+
+const std::regex pattern("^\\s*(\\d+)\\s+(\\d+)\\s+(?:(\\d+)\\s+(\\d+)){0,1}\\s+([\\d\\.\\+e-]+)");
+/**
+ * @brief Read in a set of amplitudes
+ * @note   
+ * @param  product: Vector of individual annihilation or creation operators
+ * @retval
+ * */ 
+void read_amplitudes(std::string fpath, std::vector<ValType>& params, const std::unordered_map<std::string, IdxType>& idx_map){
+    std::ifstream infile;
+    infile.open(fpath);
+    if (!infile.is_open()) {
+      std::cout << "Could not open amplitude file " << fpath << std::endl;
+    }
+    std::vector<bool> read_in(params.size(), 0);
+    std::string line;
+    std::smatch match;
+    for (auto pair : idx_map) {
+      std::cout << pair.first << " " << pair.second << std::endl;
+    }
+    getchar();
+    while(std::getline(infile, line)) {
+
+        if (line.length() == 0) {
+          continue;
+        }
+        if (std::regex_search(line, match, pattern)) {
+          ValType amplitude = std::stod(match.str(5));
+          std::string key;
+          // if single excitation
+          
+          if (match.str(3) == "") {
+            key = match.str(1) + "^ " + match.str(2);
+          } else {
+            key = match.str(1) + "^ " + match.str(2) + "^ " + match.str(3) + " " + match.str(4);
+          }
+          if (idx_map.find(key) == idx_map.end()) {
+            continue;
+          }
+          std::cout << key << std::endl;
+          params.at(idx_map.at(key)) = amplitude;
+          read_in.at(idx_map.at(key)) = 1;
+        }
+    }
+    IdxType index = 0;
+    for (auto i: read_in) {
+      if (!i) {
+        // throw std::runtime_error("Parameter " + std::to_string(index) + " not provided\n");
+        params.at(index) = 0;
+      }
+      index++;
+    }
+};
+/**
+ * @brief  Generate a set of single/double Fermionic excitations
+ * @note   Same set of operators evolved in a UCCSD Ansatz
+ * @param  fermion_operators: Output vector to store Fermionic operator products
+ * @param  env: Struct containing molecular information
+ * @retval None
+ */
+void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
+                                    const MolecularEnvironment& env) {
+  // Single excitation
+      for (IdxType p = 0; p < env.n_occ; p++) {
+        FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
+        FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
+        for (IdxType q = 0; q < env.n_virt; q++) {
+          FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
+          FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
+          fermion_operators.push_back({{occupied_annihilation_up, virtual_creation_up},
+                                       {occupied_annihilation_down, virtual_creation_down}});
+        }
+      }
+      // Double excitation
+    for (IdxType i = 0; i < env.n_occ; i++) {
+      FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
+      FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
+      for (IdxType j = i+1; j < env.n_occ; j++) {
+        FermionOperator occ_down_2 (j, Occupied, Down, Annihilation, env.xacc_scheme);
+        FermionOperator occ_up_2 (j, Occupied, Up, Annihilation, env.xacc_scheme);
+        for (IdxType r = 0; r < env.n_virt; r++) {
+        FermionOperator virt_down_3 (r, Virtual, Down, Creation, env.xacc_scheme);
+        FermionOperator virt_up_3 (r, Virtual, Up, Creation, env.xacc_scheme);
+          for (IdxType s = r+1; s < env.n_virt; s++) {
+            FermionOperator virt_down_4 (s, Virtual, Down, Creation, env.xacc_scheme);
+            FermionOperator virt_up_4 (s, Virtual, Up, Creation, env.xacc_scheme);
+            IdxType alpha_term = fermion_operators.size();
+            fermion_operators.push_back(
+               {{occ_down_1,
+                occ_down_2,
+                virt_down_3,
+                virt_down_4},
+               {occ_up_1, 
+                occ_up_2,
+                virt_up_3,
+                virt_up_4},
+                {occ_up_1,
+                 occ_down_2, 
+                 virt_down_3,
+                 virt_up_4},
+                {occ_down_1,
+                 occ_up_2,
+                 virt_down_3,
+                 virt_up_4}}
+                );
+          }
+        }
+      }
+    }
+    for (IdxType i = 0; i < env.n_occ; i++) {
+      FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
+      FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
+        for (IdxType r = 1; r < env.n_virt; r++) {
+        FermionOperator virt_down_2 (r, Virtual, Down, Creation, env.xacc_scheme);
+        FermionOperator virt_up_2 (r, Virtual, Up, Creation, env.xacc_scheme);
+          for (IdxType s = 0; s < r; s++) {
+          FermionOperator virt_down_3 (s, Virtual, Down, Creation, env.xacc_scheme);
+          FermionOperator virt_up_3 (s, Virtual, Up, Creation, env.xacc_scheme);
+            IdxType term = fermion_operators.size();
+            fermion_operators.push_back(
+                 {{occ_up_1,
+                  occ_down_1,
+                  virt_down_2,
+                  virt_up_3},
+                  {occ_up_1,
+                  occ_down_1,
+                  virt_down_3,
+                  virt_up_2}});
+        }
+      }
+    }
+
+    for (IdxType i = 0; i < env.n_virt; i++) {
+      FermionOperator virt_down_3 (i, Virtual, Down, Creation, env.xacc_scheme);
+      FermionOperator virt_up_3 (i, Virtual, Up, Creation, env.xacc_scheme);
+        for (IdxType r = 0; r < env.n_occ; r++) {
+      FermionOperator occ_down_1 (r, Occupied, Down, Annihilation, env.xacc_scheme);
+      FermionOperator occ_up_1 (r, Occupied, Up, Annihilation, env.xacc_scheme);
+          for (IdxType s = 0; s < r + 1; s++) {
+          FermionOperator occ_down_2 (s, Occupied, Down, Annihilation, env.xacc_scheme);
+          FermionOperator occ_up_2 (s, Occupied, Up, Annihilation, env.xacc_scheme);
+            if (r > s) {
+              fermion_operators.push_back({
+                    {occ_up_1,
+                    occ_down_2,
+                    virt_down_3,
+                    virt_up_3},
+                    {occ_up_2,
+                    occ_down_1,
+                    virt_down_3,
+                    virt_up_3}});
+            } else {
+              fermion_operators.push_back({
+                    {occ_up_1,
+                    occ_down_2,
+                    virt_down_3,
+                    virt_up_3}});
+            }
+        }
+        }
+      }
+};
+
+/**
+ * @brief  Generate Pauli Operator Pool
+ * @note   Same operators as UCCSD, just with single Pauli Strings. TODO: Remove redundant Paulis
+ * @param  pauli_operators: Output vector of observables
+ * @param  env: Molecular environment structure
+ * @retval None
+ */
+void generate_pauli_excitations(std::vector<std::vector<PauliOperator> >& pauli_operators,
+                                    const MolecularEnvironment& env,
+                                    IdxType subsample,
+                                    IdxType seed) {
+  IdxType n_singles = env.n_occ * env.n_virt;
+  IdxType n_doubles = env.n_occ * (env.n_occ) * env.n_virt * (env.n_virt) +\
+              choose2(env.n_occ) * choose2(env.n_virt) * 2; 
+  std::vector<std::vector<std::vector<FermionOperator> > > fermion_operators;
+  fermion_operators.reserve(n_singles);
+  generate_fermionic_excitations(fermion_operators, env);
+
+  std::vector<PauliOperator> temporary_storage;
+  if (subsample > 0) {
+    temporary_storage.reserve(4 * n_singles + 16 * n_doubles);
+  } else {
+    pauli_operators.reserve(4 * n_singles + 16 * n_doubles);
+  }
+    
+  IdxType index = 0;
+  // NOTE: Not the most efficient way of doing this, kind of a workaround due to the data structures used elsewhere
+  for (size_t i = 0; i < fermion_operators.size(); i++) {
+  // Perform the JordanWigner mapping for each Fermionic operator product
+    std::vector<std::vector<PauliOperator> > mapper_temp;
+    getJordanWignerTransform(env, fermion_operators[i], mapper_temp, true);
+    // Iterate ove the JW mapped Paulis and slap them on the operator pool
+    for (auto pauli_list: mapper_temp) {
+      for (auto pauli: pauli_list) {
+        // If we're not subsampling or if this is a selected index
+        if (subsample < 0) {
+          pauli_operators.push_back({pauli});\
+        } else {
+          temporary_storage.push_back(pauli);
+        }
+        index++; // keep count of indices
+      }
+    }
+  }
+  std::vector<IdxType> selection;
+  // If we're subsampling, generate the list of operator indices to choose a priori
+  if (subsample > 0) {
+    std::vector<IdxType> indices(temporary_storage.size());
+    std::iota(indices.begin(), indices.end(), 0);
+    std::mt19937_64 random_engine (seed);
+    std::shuffle(indices.begin(), indices.end(), random_engine);
+    // take the first N indices, where N is either the number of samples or the number of operators (whichever is smaller)
+    selection = std::vector<IdxType>(
+      indices.begin(),
+      indices.begin() + std::min(subsample, (IdxType)indices.size()));
+    pauli_operators.reserve(selection.size());
+    for (IdxType i : selection) {
+      pauli_operators.push_back({temporary_storage[i]});
+    }
+  }
+  std::vector<IdxType>::iterator iter = selection.begin();
+
+  
+};
+
+ /**
+  * @brief  Construct the minimal operator pool using the strategy desc. in Appdx. C of Tang et al. 2021
+  * @note   
+  * @param  _pauli_operators: Output vector of Pauli operators (each element is a singleton)
+  * @param  _env: Molecular environment
+  * @retval None
+  */
+  void generate_minimal_pauli_excitations(std::vector<std::vector<PauliOperator > >& _pauli_operators,
+                                  const MolecularEnvironment& _env) {
+    IdxType n_qubits = _env.n_spatial * 2;
+    _pauli_operators.reserve(2 * n_qubits - 2);
+    for (size_t i = 0; i < n_qubits - 1; i++) {
+      // First construct the operator of the form II...Z_{i+1}Y_i...III
+      IdxType xmask_1 = 1 << i;
+      IdxType zmask_1 = (1 << i) + (1 << (i + 1));
+      PauliOperator pauli_1(xmask_1, zmask_1, n_qubits);
+      _pauli_operators.push_back({pauli_1});
+      // Now construct the operator of the form II...Y_{i+1}...III
+      IdxType xmask_2 = (1 << (i + 1));
+      IdxType zmask_2 = (1 << (i + 1));
+      PauliOperator pauli_2(xmask_2, zmask_2, n_qubits);
+      _pauli_operators.push_back({pauli_2});
+    }
+  };
+ /**
+  * @brief  Make a common measurement operator for a QWC group
+  * @note   `pauli_list` must consist of QWC operators
+  * @param  pauli_list: list of PauliOperators
+  * @param  zmasks: output for the observable zmasks to measure each PauliOperator after diagonalization
+  * @param  coeffs: coefficients for each Pauli operator (sign corrected) following diagonalization
+  * @retval PauliOperator
+  */
+  PauliOperator make_common_op(const std::vector<PauliOperator>& pauli_list, 
+                               std::vector<IdxType>& zmasks,
+                               std::vector<ValType>& coeffs) {
+    zmasks.reserve(pauli_list.size());
+    coeffs.reserve(pauli_list.size());
+    IdxType composite_xmask = 0;
+    IdxType composite_zmask = 0;
+    IdxType dim = -1;
+    for (const PauliOperator& pauli: pauli_list) {
+      dim = std::max(dim, pauli.get_dim());
+      composite_xmask |= pauli.get_xmask();
+      coeffs.push_back(pauli.getCoeff().real());
+      coeffs.back() *= (pauli.count_y() % 2) ? -1.0 : 1.0;
+      zmasks.push_back(pauli.get_zmask() | pauli.get_xmask());
+      composite_zmask |= pauli.get_zmask();
+    }
+    return PauliOperator(composite_xmask, composite_zmask, dim);
+    
+  }
 };// namespace VQE
 };// namespace NWQSim
 

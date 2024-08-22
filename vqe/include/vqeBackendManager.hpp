@@ -17,12 +17,17 @@
 #include "svsim_vqe/sv_cuda_mpi_vqe.cuh"
 #endif
 
-
+/**
+ * @brief  VQE-specific BackendManager instance
+ * @note   constructs appropriate VQE state based on desired backend
+ * @retval None
+ */
 class VQEBackendManager: public BackendManager
 {
 public:
     
     static std::shared_ptr<NWQSim::VQE::VQEState> create_vqe_solver(std::string backend, 
+                                                                    const std::string& config,
                                                                     std::shared_ptr<NWQSim::VQE::Ansatz> a, 
                                                                     std::shared_ptr<NWQSim::VQE::Hamiltonian> h, 
                                                                     nlopt::algorithm optimizer_algorithm,
@@ -35,27 +40,27 @@ public:
                        { return std::toupper(c); });
         if (backend == "CPU")
         {
-            return std::make_shared<NWQSim::VQE::SV_CPU_VQE>(a, h, optimizer_algorithm, _callback, seed, opt_settings);
+            return std::make_shared<NWQSim::VQE::SV_CPU_VQE>(a, h, optimizer_algorithm, _callback, config, seed, opt_settings);
         }
 
 #ifdef MPI_ENABLED
         else if (backend == "MPI")
         {
-            return std::make_shared<NWQSim::VQE::SV_MPI_VQE>(a, h, optimizer_algorithm, _callback, seed, opt_settings);
+            return std::make_shared<NWQSim::VQE::SV_MPI_VQE>(a, h, optimizer_algorithm, _callback, config, seed, opt_settings);
         }
 #endif
 
 #ifdef CUDA_ENABLED
         else if (backend == "NVGPU")
         {
-            return std::make_shared<NWQSim::VQE::SV_CUDA_VQE>(a, h, optimizer_algorithm, _callback, seed, opt_settings);
+            return std::make_shared<NWQSim::VQE::SV_CUDA_VQE>(a, h, optimizer_algorithm, _callback, config, seed, opt_settings);
         }
 #endif
 
 #ifdef CUDA_MPI_ENABLED
         else if (backend == "NVGPU_MPI")
         {
-            return std::make_shared<NWQSim::VQE::SV_CUDA_MPI_VQE>(a, h, optimizer_algorithm, _callback, seed, opt_settings);
+            return std::make_shared<NWQSim::VQE::SV_CUDA_MPI_VQE>(a, h, optimizer_algorithm, _callback, config, seed, opt_settings);
         }
 #endif
         else if (backend == "LIST")

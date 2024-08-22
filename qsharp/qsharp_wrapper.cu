@@ -145,7 +145,7 @@ public:
             std::string backend="CPU";
             std::string sim_method="dm";
             circuit->set_num_qubits(used_qubits);
-            state = BackendManager::create_state(backend, used_qubits, sim_method);
+            state = BackendManager::create_state(backend, "../default_config.json", used_qubits, sim_method);
         }
         IdxType target = to_qubit(Qtarget);
         circuit->M(target);

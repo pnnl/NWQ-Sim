@@ -21,6 +21,7 @@ namespace NWQSim {
         std::vector<std::vector<FermionOperator> > fermi_operators;
         std::vector<std::vector<PauliOperator> > pauli_operators;
         IdxType n_ops;
+        Transformer qubit_transform;
       
       public:
         Hamiltonian(std::string input_path, IdxType n_particles, bool xacc_scheme,
@@ -40,6 +41,25 @@ namespace NWQSim {
         Hamiltonian(MolecularEnvironment _env,
                     const std::vector<std::vector<PauliOperator> > _pauli_operators, 
                     Transformer transform = getJordanWignerTransform): env(_env), pauli_operators(_pauli_operators) {
+          n_ops = 0;
+          for (auto& i : pauli_operators) {
+            n_ops += i.size();
+          }
+        }
+        Hamiltonian(const std::vector<std::vector<PauliOperator> > _pauli_operators, 
+                    IdxType n_particles,
+                    bool use_xacc,
+                    Transformer transform = getJordanWignerTransform):  pauli_operators(_pauli_operators) {
+          IdxType num_qubits = pauli_operators.front().front().get_dim();
+          IdxType n_spatial = num_qubits / 2;
+          env = MolecularEnvironment(n_spatial, n_particles, use_xacc);
+          n_ops = 0;
+          for (auto& i : pauli_operators) {
+            n_ops += i.size();
+          }
+        }
+        Hamiltonian(MolecularEnvironment _env,
+                    const std::vector<std::vector<PauliOperator> > _pauli_operators): env(_env), pauli_operators(_pauli_operators) {
           n_ops = 0;
           for (auto& i : pauli_operators) {
             n_ops += i.size();
@@ -75,6 +95,7 @@ namespace NWQSim {
           return result;
         }
         const MolecularEnvironment& getEnv () const {return env;}
+        Transformer getTransformer () const {return qubit_transform;}
         const std::vector<std::vector<PauliOperator> >& getPauliOperators() const {return pauli_operators;};
         const std::vector<std::vector<FermionOperator> >& getFermionicOperators() const {return fermi_operators;};
     };

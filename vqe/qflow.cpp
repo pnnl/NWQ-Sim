@@ -1,3 +1,4 @@
+#include "include/utils.hpp"
 #include "vqeBackendManager.hpp"
 #include "utils.hpp"
 #include "vqe_state.hpp"
@@ -15,12 +16,13 @@ int show_help() {
   std::cout << UNDERLINE << "OPTIONAL" << CLOSEUNDERLINE << std::endl;
   std::cout << "--backend, -b         Simulation backend. Defaults to CPU" << std::endl;
   std::cout << "--list-backends, -l   List available backends and exit." << std::endl;
-  std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl;
+  std::cout << "--amplitudes          List of initial amplitudes." << std::endl;
+  std::cout << "--ducc                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl;
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
   std::cout << "--verbose             Print optimizer information on each iteration. Defaults to false" << std::endl;
   std::cout << UNDERLINE << "OPTIONAL (Global Minimizer)" << CLOSEUNDERLINE << std::endl;
   std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA" << std::endl;
-  std::cout << "--config              Path to config file for NLOpt optimizer parameters" << std::endl;
+  std::cout << "--optimizer-config    Path to config file for NLOpt optimizer parameters" << std::endl;
   std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--lbound              Optimizer lower bound. Defaults to -2" << std::endl;
   std::cout << "--ubound              Optimizer upper bound. Defaults to 2" << std::endl;
@@ -41,6 +43,8 @@ int parse_args(int argc, char** argv,
                VQEBackendManager& manager,
                 std::string& hamilfile,
                 std::string& backend,
+                std::string& config_path,
+                std::string& amplitudes,
                 NWQSim::IdxType& n_particles,
                 nlopt::algorithm& algo,
                 NWQSim::VQE::OptimizerSettings& settings,
@@ -81,7 +85,11 @@ int parse_args(int argc, char** argv,
     if (argname == "-f" || argname == "--hamiltonian") {
       hamilfile = argv[++i];
       continue;
-    } else 
+    } else
+    if (argname == "--config") {
+      config_file = argv[++i];
+      continue;
+    }  else 
     if (argname == "-n" || argname == "--nparticles") {
       n_particles = std::atoll(argv[++i]);
     } else 
@@ -97,6 +105,9 @@ int parse_args(int argc, char** argv,
     if (argname == "--xacc") {
       use_xacc = true;
     } else
+    if (argname == "--amplitudes") {
+      amplitudes = argv[++i];
+    } else
     if (argname == "--verbose") {
       verbose = true;
     } else if (argname == "--delta") {
@@ -104,7 +115,7 @@ int parse_args(int argc, char** argv,
     } else if (argname == "--eta") {
       eta = std::atof(argv[++i]);
     } else 
-    if (argname == "--config") {
+    if (argname == "--optimizer-config") {
       config_file = argv[++i];
     } else 
     if (argname == "--optimizer") {
@@ -170,6 +181,8 @@ void silent_callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::Val
 
 void optimize_ansatz(const VQEBackendManager& manager,
                      const std::string& backend,
+                     const std::string& config,
+                     const std::string& amplitudes,
                      std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil,
                      std::shared_ptr<NWQSim::VQE::Ansatz> ansatz,
                      NWQSim::VQE::OptimizerSettings& settings,
@@ -181,18 +194,22 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      bool verbose,
                      double delta,
                      double eta) {
+  double fval;
   NWQSim::VQE::Callback callback = verbose ? carriage_return_callback_function: silent_callback_function;
-  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, callback, seed, settings);
   if (!verbose) {
     NWQSim::Config::PRINT_SIM_TRACE = false;
-  }  
-  std::uniform_real_distribution<double> initdist(0, 2 * PI);
-  std::mt19937_64 random_engine (seed);
+  }
+  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, config, ansatz, hamil, algo, callback, seed, settings); 
   params.resize(ansatz->numParams());
-  std::fill(params.begin(), params.end(), 0);
+  std::cout << ansatz->numParams() << std::endl;
+    std::fill(params.begin(), params.end(), 0);
+  if (amplitudes != "") {
+    NWQSim::VQE::read_amplitudes(amplitudes, params, ansatz->get_excitation_map());
+  }
   double initial_ene, final_ene;
   long long num_iterations = 0;
   std::vector<std::pair<std::string, double> > param_tuple;
+  state->initialize();
   if (local) {
   param_tuple = state->follow_fixed_gradient(params, 
                                               initial_ene, 
@@ -219,7 +236,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
 
 int main(int argc, char** argv) {
   VQEBackendManager manager;
-  std::string hamil_path, backend;
+  std::string hamil_path, backend, config, amplitudes;
   NWQSim::IdxType n_part;
   NWQSim::VQE::OptimizerSettings settings;
   nlopt::algorithm algo;
@@ -228,7 +245,7 @@ int main(int argc, char** argv) {
   unsigned seed;
   bool use_xacc, local, verbose;
   int n_trials;
-  if (parse_args(argc, argv, manager, hamil_path, backend, n_part, algo, settings, n_trials, use_xacc, local, verbose, seed, delta, eta)) {
+  if (parse_args(argc, argv, manager, hamil_path, backend, config, amplitudes,  n_part, algo, settings, n_trials, use_xacc, local, verbose, seed, delta, eta)) {
     return 1;
   }
 #ifdef MPI_ENABLED
@@ -248,9 +265,10 @@ int main(int argc, char** argv) {
     NWQSim::VQE::getJordanWignerTransform,
     1
   );
+  ansatz->buildAnsatz();
   std::vector<double> params;
   manager.safe_print("Beginning VQE loop...\n");
-  optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta);
+  optimize_ansatz(manager, backend, config, amplitudes, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta);
 #ifdef MPI_ENABLED
   if (backend == "MPI" || backend == "NVGPU_MPI")
   {

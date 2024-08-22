@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <random>
 #include <complex.h>
+#include <stdexcept>
 #include <vector>
 #include <algorithm>
 #include <string>
@@ -43,7 +44,7 @@ namespace NWQSim
     class DM_HIP : public QuantumState
     {
     public:
-        DM_HIP(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::DM)
+        DM_HIP(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits,SimType::DM, config)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -123,6 +124,36 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
+        virtual void set_initial (std::string fpath, std::string format) override {
+            std::ifstream instream;
+            instream.open(fpath, std::ios::in|std::ios::binary);
+            // TODO: Implement HIP outer product
+            if (format != "dm") {
+                throw std::runtime_error("HIP SV outer product not yet implemented\n");
+            }
+            if (instream.is_open()) {
+                instream.read((char*)dm_real_cpu, dm_size * sizeof(ValType));
+                instream.read((char*)dm_imag_cpu, dm_size * sizeof(ValType));
+                hipSafeCall(hipMemcpy(dm_real, dm_real_cpu,
+                                        dm_size, hipMemcpyHostToDevice));
+                hipSafeCall(hipMemcpy(dm_imag, dm_imag_cpu,
+                                        dm_size, hipMemcpyHostToDevice));
+                instream.close();
+            }
+        }
+        virtual void dump_res_state(std::string outpath) override {
+            std::ofstream outstream;
+            outstream.open(outpath, std::ios::out|std::ios::binary);
+            if (outstream.is_open()) {
+                hipSafeCall(hipMemcpy(dm_real_cpu, dm_real,
+                                    dm_size, hipMemcpyDeviceToHost));
+                hipSafeCall(hipMemcpy(dm_imag_cpu, dm_imag,
+                                    dm_size, hipMemcpyDeviceToHost));
+                outstream.write((char*)dm_real_cpu, dm_size);
+                outstream.write((char*)dm_imag_cpu, dm_size);
+                outstream.close();
+            }
+        };
         virtual ValType *get_real() const override {return dm_real;};
         virtual ValType *get_imag() const override {return dm_imag;};
 

@@ -33,7 +33,7 @@ std::vector<std::pair<std::string, double> > optimize_ansatz(const VQEBackendMan
                      std::vector<double>& params,
                      double& fval) {
   // py::print("Started function");
-  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, null_callback_function, seed, settings);  
+  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, "../default_config.json",  ansatz, hamil, algo, null_callback_function, seed, settings);  
   std::uniform_real_distribution<double> initdist(0, 2 * PI);
   // py::print("Calling optimization routine");
 

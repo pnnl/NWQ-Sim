@@ -24,7 +24,7 @@ namespace NWQSim {
         std::shared_ptr<std::vector<IdxType> > parameterized_gates; // Indices of parameterized gates
         std::shared_ptr<std::vector<std::vector<std::pair<IdxType, ValType> > > > gate_parameter_pointers; // Gate parameter indices
         std::shared_ptr<std::vector<ValType> > gate_coefficients; // Gate coefficients
-
+        std::unordered_map<std::string, IdxType> excitation_index_map;
       public:
         Ansatz(IdxType n_qubits): Circuit(n_qubits) {
           theta = std::make_shared<std::vector<ValType> >();
@@ -41,8 +41,9 @@ namespace NWQSim {
           */ 
           // 
         }
+        const std::unordered_map<std::string, IdxType>& get_excitation_map() const {return excitation_index_map;}
         virtual 
-        void setParams(const std::vector<ValType> params) {
+        void setParams(const std::vector<ValType>& params) {
           assert (params.size() == theta->size());
           std::copy(params.begin(), params.end(), theta->begin());
           IdxType index = 0;
@@ -74,7 +75,7 @@ namespace NWQSim {
               [](unsigned char c){ return std::tolower(c); });
 
             outstream << lower_name;
-            if (param_ix < parameterized_gates->size() and gate_ix == parameterized_gates->at(param_ix)) {
+            if (false && param_ix < parameterized_gates->size() && gate_ix == parameterized_gates->at(param_ix)) {
               outstream << "(" << gate_coefficients->at(param_ix) << "*(";
               std::vector<std::pair<IdxType, ValType> > expr_vec = gate_parameter_pointers->at(param_ix);
               for (IdxType i = 0; i < expr_vec.size(); i++) {
@@ -95,11 +96,10 @@ namespace NWQSim {
                 case OP::P:
                   outstream << "(" << g.theta << ")";
                   break;
-                case OP::CX: {
-                  outstream << " q[" << g.ctrl << "],";
-                  break;
-                }
                 default:
+                if (g.n_qubits == 2) {
+                  outstream << " q[" << g.ctrl << "],";
+                }
                 break;
               }
             }
@@ -112,13 +112,10 @@ namespace NWQSim {
         virtual std::vector<std::string> getFermionicOperatorStrings() const {
           std::vector<std::string> result;
           throw std::runtime_error("Fermionic operators not specified for this ansatz\n");
-          return result;
         };
         virtual std::vector<std::pair<std::string, ValType> > getFermionicOperatorParameters() const {
           std::vector<std::pair<std::string, ValType> > result;
           throw std::runtime_error("Fermionic operators not specified for this ansatz\n");
-          return result;
-
         }
         void compose(const Circuit& other, std::vector<IdxType>& qubit_mapping) {
           // Ansatz composition = Ansatz(*this);
@@ -150,6 +147,7 @@ namespace NWQSim {
         // const/Non-const access
         const std::shared_ptr<std::vector<ValType> > getParams() const {return theta;}
         std::vector<ValType>* getParams() {return theta.get();}
+        std::vector<ValType>& getParamRef() {return *theta.get();}
 
         void OneParamGate(enum OP _op_name,
               IdxType _qubit,
@@ -253,6 +251,7 @@ namespace NWQSim {
             }
           }
         }
+        virtual void buildAnsatz() {};
     };
     class UCCSD: public Ansatz {
       protected:
@@ -261,6 +260,7 @@ namespace NWQSim {
         IdxType n_doubles;
         IdxType trotter_n;
         IdxType unique_params;
+        Transformer qubit_transform;
         // bool enforce_symmetries;
         /** 
          * Enforce symmetries for each term. Each fermionic term will have one symmetry entry. If no symmetries are enforced, 
@@ -269,12 +269,12 @@ namespace NWQSim {
         std::vector<std::vector<std::pair<IdxType, ValType> > > symmetries;
         std::vector<IdxType> fermion_ops_to_params; // map from fermion operators to parameters (used in update)
         std::vector<std::vector<FermionOperator> > fermion_operators;
-        void getFermionOps();
-        void buildAnsatz(std::vector<std::vector<PauliOperator> > pauli_oplist);
+        virtual void getFermionOps();
       public:
-        UCCSD(const MolecularEnvironment& _env, Transformer transform, IdxType _trotter_n = 1): 
+        UCCSD(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1): 
                                   env(_env),
                                   trotter_n(_trotter_n),
+                                  qubit_transform(_qubit_transform),
                                   Ansatz(2 * _env.n_spatial) {
           n_singles = 2 * env.n_occ * env.n_virt;
           IdxType c2virtual = choose2(env.n_virt);
@@ -286,16 +286,9 @@ namespace NWQSim {
           fermion_ops_to_params.resize(n_doubles + n_singles);
           std::fill(fermion_ops_to_params.begin(), fermion_ops_to_params.end(), -1);
           unique_params = 0;
-          getFermionOps();
-          assert((n_doubles + n_singles) == fermion_operators.size());
-          std::cout << "Generated " << n_doubles + n_singles << " operators." << std::endl;
-          theta->resize(unique_params * trotter_n);
-          // exit(0);
-          std::vector<std::vector<PauliOperator> > pauli_ops;
-          pauli_ops.reserve(4 * n_singles + 16 * n_doubles);
-          transform(env, fermion_operators, pauli_ops, true);  
-          buildAnsatz(pauli_ops);
+          
         };
+        virtual void buildAnsatz() override;
         virtual std::vector<std::string> getFermionicOperatorStrings() const override {
           std::vector<std::string> result;
           result.reserve(fermion_operators.size());
@@ -363,6 +356,7 @@ namespace NWQSim {
         const MolecularEnvironment& getEnv() const {return env;};
         virtual IdxType numParams() const override { return unique_params; };
     };
+    
   };// namespace vqe
 };// namespace nwqsim
 #endif

@@ -23,7 +23,7 @@ namespace NWQSim
     {
 
     public:
-        SV_MPI(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::SV)
+        SV_MPI(IdxType _n_qubits, const std::string& config_path) : QuantumState(_n_qubits, SimType::SV, config_path)
         {
             // SV initialization
             n_qubits = _n_qubits;
@@ -104,6 +104,55 @@ namespace NWQSim
             rng.seed(seed);
         }
 
+        virtual void set_initial (std::string fpath, std::string format) override {
+            std::ifstream instream;
+            if (format != "sv") {
+                throw std::runtime_error("SV-Sim only supports statevector input states\n");
+            }
+            instream.open(fpath, std::ios::in|std::ios::binary);
+            if (instream.is_open()) {
+                instream.seekg(sv_size_per_cpu * i_proc);
+                instream.read((char*)sv_real, sv_size_per_cpu);
+                instream.read((char*)sv_imag, sv_size_per_cpu);
+                instream.close();
+            }
+        }
+
+        virtual void dump_res_state(std::string outpath) override {
+            std::ofstream outstream;
+            outstream.open(outpath, std::ios::out|std::ios::binary);
+            IdxType ticket = 1;
+            // synchronize the file writes with a basic point-point ticket lock
+            if (i_proc != 0) {
+                MPI_Recv(&ticket, 1, MPI_INT64_T, i_proc - 1, i_proc, comm_global, MPI_STATUS_IGNORE);
+            }
+            if (outstream.is_open()) {
+                // append to the end of the file
+                outstream.seekp(0, std::ios::end);
+                outstream.write((char*)sv_real, sizeof(ValType) * sv_size_per_cpu);
+                outstream.close();
+            }
+            if (i_proc != n_cpus - 1) {
+                MPI_Send(&ticket, 1, MPI_INT64_T, i_proc + 1, i_proc + 1, comm_global);
+            } 
+            // now for the imaginary part
+            ticket = 1;
+            // synchronize the file writes with a basic point-point ticket lock
+            if (i_proc != 0) {
+                MPI_Recv(&ticket, 1, MPI_INT64_T, i_proc - 1, i_proc, comm_global, MPI_STATUS_IGNORE);
+            }
+            outstream.open(outpath, std::ios::out|std::ios::binary);
+            if (outstream.is_open()) {
+                // append to the end of the file
+                outstream.seekp(0, std::ios::end);
+                outstream.write((char*)sv_imag, sv_size_per_cpu);
+                outstream.close();
+            }
+            if (i_proc != n_cpus - 1) {
+                MPI_Send(&ticket, 1, MPI_INT64_T, i_proc + 1, i_proc + 1, comm_global);
+            } 
+
+        };
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
             IdxType origional_gates = circuit->num_gates();
@@ -342,7 +391,7 @@ namespace NWQSim
                 else if (g.op_name == OP::EXPECT)
                 {
                     BARR_MPI;
-                    ObservableList o = *(ObservableList*)(g.data);
+                    ObservableList* o = (ObservableList*)(g.data);
                     EXPECT_GATE(o);
                     BARR_MPI;
                 }
@@ -1058,25 +1107,33 @@ namespace NWQSim
             results[0] = (rand <= prob_of_one ? 1 : 0);
             BARR_MPI;
         }
+        // Compute the expectation value for a single operator in the diagonal basis
         double EXPECT_C0_GATE(IdxType zmask) {
             const IdxType per_pe_work = ((dim) >> (cpu_scale));
             ValType exp_val = 0;
+            // iterate over locally stored values
             for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
             {
+                // compute the probability amplitude
                 ValType val = LOCAL_G(sv_real, i) * LOCAL_G(sv_real, i) + LOCAL_G(sv_imag, i) * LOCAL_G(sv_imag, i);
                 exp_val += hasEvenParity(i & zmask, n_qubits) ? val : -val;
             }
             return exp_val;
             
         }
-        void EXPECT_GATE(ObservableList o)  {
+        /**
+         * @brief Compute operator expectation values
+         * @note `o` points to the zmasks and coefficients for a QWC group, assumes the measurement unitary has already been applied.
+         *       The partial sums are reduced using an MPI
+         * @param o: Pointer to a container with pointers to an array of qubit masks and coefficients, also stores the accumulated sum
+         */
+        void EXPECT_GATE(ObservableList* o)  {
             ValType expect = 0;
-            for (size_t i = 0; i < o.numterms; i++) {
-                expect += o.coeffs[i] * EXPECT_C0_GATE(o.zmasks[i]);
+            for (size_t i = 0; i < o->numterms; i++) {
+                expect += o->coeffs[i] * EXPECT_C0_GATE(o->zmasks[i]);
             }
             // printf("%lld %f\n", i_proc, result);
-            *o.exp_output += expect;
-           
+            o->exp_output = expect;
         }
         // We first do a local reduction, then we do a MPI scan, then update local vector
         void MA_GATE(const IdxType repetition)

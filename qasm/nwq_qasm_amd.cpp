@@ -74,7 +74,7 @@ int main(int argc, char **argv)
         }
 
 
-        map<string, IdxType> *counts = parser.execute(state, total_shots, print_metrics);
+        map<string, IdxType> *counts = parser.execute(state, "", total_shots, print_metrics);
 
         print_counts(counts, total_shots);
       
@@ -143,7 +143,7 @@ ValType run_brnchmark(IdxType index, IdxType total_shots, bool is_basis)
         return 1;
     }
     
-    map<string, IdxType> *svsim_counts = parser.execute(state, total_shots);
+    map<string, IdxType> *svsim_counts = parser.execute(state, "", total_shots);
 
     map<string, ValType> ref_probs;
     map<string, ValType> svsim_probs;

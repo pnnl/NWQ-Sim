@@ -1,7 +1,5 @@
 #ifndef MOLECULE
 #define MOLECULE
-#include <vector>
-#include <string>
 #include "utils.hpp"
 
 
@@ -14,12 +12,12 @@ namespace NWQSim {
       /**
        * Data structure to store environment information (orbital/particle config, energy offsets)
       */
-      IdxType n_spatial;
-      IdxType n_part; 
-      IdxType n_occ;
-      IdxType n_virt;
-      bool xacc_scheme;
-      ValType constant;
+      IdxType n_spatial; // # spatial orbitals
+      IdxType n_part;    // # electrons
+      IdxType n_occ;     // # occupied orbitals
+      IdxType n_virt;    // # virtual orbitals
+      bool xacc_scheme;  // Whether to use XACC (true) or canonical (false) qubit indexing
+      ValType constant;  // constant offset
       
       // Ctors
       MolecularEnvironment() {};
@@ -39,6 +37,7 @@ namespace NWQSim {
         return getQubitIndex(orbital, spin_down, is_virtual, n_occ, n_virt, xacc_scheme);
       }
     };
+
   };// namespace vqe
 };// namespace nwqsim
 #endif
