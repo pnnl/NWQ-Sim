@@ -228,6 +228,9 @@ int main(int argc, char **argv)
             {
                 print_counts(counts_dm, total_shots);
             }
+            if (dumpfile != "") {
+                dm_state->dump_res_state(dumpfile);
+            }
 
             // if (dumpfile != "") {
             //     dm_state->dump_res_state(dumpfile);
@@ -290,6 +293,9 @@ int main(int argc, char **argv)
             if (dm_state->i_proc == 0)
             {
                 print_counts(counts_dm, total_shots);
+            }
+            if (dumpfile != "") {
+                dm_state->dump_res_state(dumpfile);
             }
             ValType fidelity = dm_state->fidelity(sv_state);
             BackendManager::safe_print("State Fidelity: %e\n", fidelity);

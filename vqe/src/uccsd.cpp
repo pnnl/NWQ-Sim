@@ -13,9 +13,12 @@ namespace NWQSim {
       for (IdxType p = 0; p < env.n_occ; p++) {
         FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
         for (IdxType q = 0; q < env.n_virt; q++) {
+          // creation operator
           FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
+          // use this index as the unique parameter to create the symmetry
           symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
           fermion_operators.push_back({occupied_annihilation_up, virtual_creation_up});
+          // record the string::parameter mapping
           excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params;
           fermion_ops_to_params[fermion_operators.size()] = unique_params++;
         }
@@ -25,7 +28,7 @@ namespace NWQSim {
         FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
         for (IdxType q = 0; q < env.n_virt; q++) {
           FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
-          // Add a pointer to the corresponding Alpha term to share parameters
+          // Add a pointer to the corresponding Up spin term to share parameters
           symmetries[fermion_operators.size()] = {{fermion_operators.size() - env.n_occ * env.n_virt, 1.0}};
           fermion_operators.push_back({occupied_annihilation_down, virtual_creation_down});
           excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = fermion_operators.size() - env.n_occ * env.n_virt - 1;
@@ -183,8 +186,6 @@ namespace NWQSim {
       theta->resize(unique_params * trotter_n);
       // exit(0);
       std::vector<std::vector<PauliOperator> > pauli_oplist;
-      pauli_oplist.reserve(4 * n_singles + 16 * n_doubles);
-      qubit_transform(env, fermion_operators, pauli_oplist, true);  
       if (env.xacc_scheme) {
         for (IdxType i = 0; i < env.n_occ; i++) {
           X(i);
@@ -195,6 +196,8 @@ namespace NWQSim {
           X(i);
         }
       }
+      pauli_oplist.reserve(4 * n_singles + 16 * n_doubles);
+      qubit_transform(env, fermion_operators, pauli_oplist, true);  
       IdxType index = 0; // parameter index, shares parameters for Pauli evolution gates corresponding to the same Fermionic operator within the same Trotter step
       for (auto& fermionic_group: pauli_oplist) {
         bool wasused = 0;
@@ -219,7 +222,6 @@ namespace NWQSim {
         }
         index++;
       }
-      IdxType params_per_rep = unique_params / trotter_n;
       for (IdxType i = 0; i < trotter_n - 1; i++) {
         for (auto& fermionic_group: pauli_oplist) {
           for (auto& pauli: fermionic_group) {
@@ -227,8 +229,8 @@ namespace NWQSim {
             if (pauli.isNonTrivial() && abs(coeff) > 1e-10)  {  
             std::vector<std::pair<IdxType, ValType> > idxvals = symmetries[index];
             std::transform(symmetries[index].begin(), symmetries[index].end(),idxvals.begin(), 
-            [params_per_rep, i] (std::pair<IdxType, ValType> val) {
-              return std::make_pair(val.first + (i + 1) * params_per_rep, val.second);
+            [&, i] (std::pair<IdxType, ValType> val) {
+              return std::make_pair(fermion_ops_to_params[val.first] + (i + 1) * unique_params, val.second);
             } );
             ExponentialGate(pauli, OP::RZ, idxvals, 2 * coeff);
             }

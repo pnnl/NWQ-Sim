@@ -15,6 +15,7 @@
 #include <random>
 #include <cstring>
 #include <algorithm>
+#include <stdexcept>
 #include <vector>
 #include <string>
 
@@ -119,9 +120,13 @@ namespace NWQSim
             std::ofstream outstream;
             outstream.open(outpath, std::ios::out|std::ios::binary);
             if (outstream.is_open()) {
+                std::cout << "Writing density matrix to " << outpath << std::endl;
                 outstream.write((char*)dm_real, sizeof(ValType) * dim);
                 outstream.write((char*)dm_imag, sizeof(ValType) * dim);
                 outstream.close();
+            } else {
+                std::cout << "Could not open " + outpath << std::endl;
+                throw std::runtime_error("Could not open " + outpath + "\n");
             }
         };
 

@@ -75,13 +75,15 @@ namespace NWQSim {
               [](unsigned char c){ return std::tolower(c); });
 
             outstream << lower_name;
-            if (false && param_ix < parameterized_gates->size() && gate_ix == parameterized_gates->at(param_ix)) {
+            bool print_close = false;
+            if (param_ix < parameterized_gates->size() && gate_ix == parameterized_gates->at(param_ix)) {
               outstream << "(" << gate_coefficients->at(param_ix) << "*(";
               std::vector<std::pair<IdxType, ValType> > expr_vec = gate_parameter_pointers->at(param_ix);
               for (IdxType i = 0; i < expr_vec.size(); i++) {
                 outstream << expr_vec.at(i).second << "*theta_" << expr_vec.at(i).first;
                 if (i < expr_vec.size() - 1) {
-                  outstream << " * ";
+                  outstream << " + ";
+                  print_close = true;
                 } else {
                   outstream << ")";
                 }
@@ -145,9 +147,9 @@ namespace NWQSim {
           } );
           return result;}
         // const/Non-const access
-        const std::shared_ptr<std::vector<ValType> > getParams() const {return theta;}
+        std::shared_ptr<std::vector<ValType> > getParams() const {return theta;}
         std::vector<ValType>* getParams() {return theta.get();}
-        std::vector<ValType>& getParamRef() {return *theta.get();}
+        const std::vector<ValType>& getParamRef() const {return *theta.get();}
 
         void OneParamGate(enum OP _op_name,
               IdxType _qubit,
@@ -261,7 +263,6 @@ namespace NWQSim {
         IdxType trotter_n;
         IdxType unique_params;
         Transformer qubit_transform;
-        // bool enforce_symmetries;
         /** 
          * Enforce symmetries for each term. Each fermionic term will have one symmetry entry. If no symmetries are enforced, 
          * symmetries[i] = {{i, 1.0}}; Otherwise, symmetries[i] = {{j, 1.0}, {k, -1.0}} denotes that theta_i must be equal to theta_j - theta_k

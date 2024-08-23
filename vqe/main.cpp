@@ -257,7 +257,6 @@ void optimize_ansatz(const VQEBackendManager& manager,
     state->optimize(x, fval); // MAIN OPTIMIZATION LOOP
 
   }
-  
 }
 
 

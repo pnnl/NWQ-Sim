@@ -26,12 +26,12 @@ namespace NWQSim {
     class FermionOperator {
       // Basic IR before transformation operations (JW, BK, etc.)
       protected:
-      IdxType orbital_index;
-      OrbitalType orb_type;
-      Spin spin;
-      FermionOpType type;
-      bool xacc_scheme;
-      std::complex<ValType> coeff;
+        IdxType orbital_index;
+        OrbitalType orb_type;
+        Spin spin;
+        FermionOpType type;
+        bool xacc_scheme;
+        std::complex<ValType> coeff;
       public:
       FermionOperator(IdxType _idx,
                       OrbitalType _orb_type,

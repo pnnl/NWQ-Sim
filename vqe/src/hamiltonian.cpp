@@ -113,14 +113,6 @@ namespace NWQSim{
       for (auto& i : pauli_operators) {
         n_ops += i.size();
       }
-// #ifndef NDEBUG
-//       std::cout << "Hamiltonian Pauli Strings:" << std::endl;
-//       for (auto& plist: pauli_operators) {
-//         for (auto& p: plist) {
-//           std::cout << p << "\n";
-//         }
-//       }
-// #endif
     };
     Hamiltonian::Hamiltonian(const std::vector<std::pair<std::string, std::complex<double>>>& input_ops, 
                              IdxType n_particles, 

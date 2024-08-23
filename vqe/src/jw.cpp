@@ -4,6 +4,16 @@
 
 namespace NWQSim {
   namespace VQE {
+    /**
+     * @brief  Perform a JW mapping for a single creation/annihilation operator
+     * @note   
+     * @param  n_occ: # of occupied orbitals
+     * @param  n_virt: # of virtual orbitals
+     * @param  n_qubits: # of qubits
+     * @param  ferm_op: Fermionic operator
+     * @param  output: Output vector of Pauli strings
+     * @retval None
+     */
     void jwFermionToPauliSingle (
     IdxType n_occ,
     IdxType n_virt,
@@ -11,6 +21,7 @@ namespace NWQSim {
     FermionOperator ferm_op,
     std::vector<PauliOperator>& output) {
   size_t qubit_index = ferm_op.qubitIndex(n_occ, n_virt);
+  // set the masks
   IdxType xmask = (1ll << qubit_index);
   IdxType zmask1 = (1ll << qubit_index) - 1;
   IdxType zmask2 = (1ll << (qubit_index + 1)) - 1;
@@ -19,7 +30,17 @@ namespace NWQSim {
   int sign = (ferm_op.getType() == Annihilation) - (ferm_op.getType() == Creation);
   output.push_back(PauliOperator(xmask, zmask2, n_qubits, std::complex(0.0, 0.5 * sign)));
 }
-
+  /**
+   * @brief  Perform a JW mapping for a single creation/annihilation operator
+   * @note   
+   * @param  n_occ: # of occupied orbitals
+   * @param  n_virt: # of virtual orbitals
+   * @param  n_qubits: # of qubits
+   * @param  ap_dagger: Fermionic operator 1 NOTE: This are mislabeled, but at this point I don't want to break anything. Will fix later
+   * * @param  aq: Fermionic operator 2
+   * @param  output: Output vector of Pauli strings
+   * @retval None
+   */
 void jwFermionToPauliSinglePair (
     size_t n_occ,
     size_t n_virt,
