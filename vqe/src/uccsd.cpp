@@ -17,10 +17,10 @@ namespace NWQSim {
           FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
           // use this index as the unique parameter to create the symmetry
           symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
+          fermion_ops_to_params[fermion_operators.size()] = unique_params++;
           fermion_operators.push_back({occupied_annihilation_up, virtual_creation_up});
           // record the string::parameter mapping
           excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params;
-          fermion_ops_to_params[fermion_operators.size()] = unique_params++;
         }
       }
       // Beta Single Excitations

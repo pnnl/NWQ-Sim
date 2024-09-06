@@ -198,6 +198,7 @@ namespace NWQSim
           }
           iteration = 0;
           // Call the optimizer
+          // final_ene = energy(parameters);
           nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
       }
 
