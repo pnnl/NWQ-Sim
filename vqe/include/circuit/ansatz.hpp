@@ -262,6 +262,7 @@ namespace NWQSim {
         IdxType n_doubles;
         IdxType trotter_n;
         IdxType unique_params;
+        bool symm_enforce;
         Transformer qubit_transform;
         /** 
          * Enforce symmetries for each term. Each fermionic term will have one symmetry entry. If no symmetries are enforced, 
@@ -272,9 +273,10 @@ namespace NWQSim {
         std::vector<std::vector<FermionOperator> > fermion_operators;
         virtual void getFermionOps();
       public:
-        UCCSD(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1): 
+        UCCSD(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1, bool _symm_enforce = true): 
                                   env(_env),
                                   trotter_n(_trotter_n),
+                                  symm_enforce(_symm_enforce),
                                   qubit_transform(_qubit_transform),
                                   Ansatz(2 * _env.n_spatial) {
           n_singles = 2 * env.n_occ * env.n_virt;

@@ -28,10 +28,18 @@ namespace NWQSim {
         FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
         for (IdxType q = 0; q < env.n_virt; q++) {
           FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
-          // Add a pointer to the corresponding Up spin term to share parameters
-          symmetries[fermion_operators.size()] = {{fermion_operators.size() - env.n_occ * env.n_virt, 1.0}};
-          fermion_operators.push_back({occupied_annihilation_down, virtual_creation_down});
-          excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = fermion_operators.size() - env.n_occ * env.n_virt - 1;
+          if (symm_enforce) {
+            // Add a pointer to the corresponding Up spin term to share parameters
+            symmetries[fermion_operators.size()] = {{fermion_operators.size() - env.n_occ * env.n_virt, 1.0}};
+            fermion_operators.push_back({occupied_annihilation_down, virtual_creation_down});
+            excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = fermion_operators.size() - env.n_occ * env.n_virt - 1;
+          } else {
+            symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
+            fermion_ops_to_params[fermion_operators.size()] = unique_params++;
+            fermion_operators.push_back({occupied_annihilation_down, virtual_creation_down});
+            // record the string::parameter mapping
+            excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params;
+          }
         }
       }
       /*===========Double Excitations===========*/
@@ -79,15 +87,32 @@ namespace NWQSim {
                     virt_down_3,
                     virt_up_4});
               // Add the parameter pointers, all 4 values determined by two parameters
-              symmetries[alpha_term] = {{mixed_term1, 1.0}, {mixed_term2, 1.0}};
-              symmetries[beta_term] = {{mixed_term1, 1.0}, {mixed_term2, 1.0}};
-              symmetries[mixed_term1] = {{mixed_term1, 1.0}};
-              symmetries[mixed_term2] = {{mixed_term2, 1.0}};
+              if (symm_enforce) {
+                symmetries[alpha_term] = {{mixed_term1, 1.0}, {mixed_term2, 1.0}};
+                symmetries[beta_term] = {{mixed_term1, 1.0}, {mixed_term2, 1.0}};
+                symmetries[mixed_term1] = {{mixed_term1, 1.0}};
+                symmetries[mixed_term2] = {{mixed_term2, 1.0}};
 
-              fermion_ops_to_params[mixed_term1] = unique_params++;
-              fermion_ops_to_params[mixed_term2] = unique_params++;
-              excitation_index_map[to_fermionic_string(fermion_operators[mixed_term1], env)] = unique_params - 2;
-              excitation_index_map[to_fermionic_string(fermion_operators[mixed_term2], env)] = unique_params - 1;
+                fermion_ops_to_params[mixed_term1] = unique_params++;
+                fermion_ops_to_params[mixed_term2] = unique_params++;
+                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term1], env)] = unique_params - 2;
+                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term2], env)] = unique_params - 1;
+              } else {
+
+                symmetries[alpha_term] = {{alpha_term, 1.0}};
+                symmetries[beta_term] = {{beta_term, 1.0}};
+                symmetries[mixed_term1] = {{mixed_term1, 1.0}};
+                symmetries[mixed_term2] = {{mixed_term2, 1.0}};
+
+                fermion_ops_to_params[alpha_term] = unique_params++;
+                fermion_ops_to_params[beta_term] = unique_params++;
+                fermion_ops_to_params[mixed_term1] = unique_params++;
+                fermion_ops_to_params[mixed_term2] = unique_params++;
+                excitation_index_map[to_fermionic_string(fermion_operators[alpha_term], env)] = unique_params - 4;
+                excitation_index_map[to_fermionic_string(fermion_operators[beta_term], env)] = unique_params - 3;
+                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term1], env)] = unique_params - 2;
+                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term2], env)] = unique_params - 1;
+              }
             }
           }
         }
