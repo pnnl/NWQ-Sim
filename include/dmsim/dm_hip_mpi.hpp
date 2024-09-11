@@ -7,7 +7,7 @@
 #include "../circuit.hpp"
 
 #include "../private/config.hpp"
-#include "../private/hip_util.cuh"
+#include "../private/hip_util.hpp"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
 
@@ -16,7 +16,6 @@
 #include <assert.h>
 #include <random>
 #include <complex.h>
-#include <cooperative_groups.h>
 #include <vector>
 #include <algorithm>
 #include <string>
@@ -115,8 +114,8 @@ namespace NWQSim
             roc_shmem_free(m_real);
             roc_shmem_free(m_imag);
 
-            SAFE_FREE_GPU(randoms_gpu);
-            SAFE_FREE_GPU(gates_gpu);
+            SAFE_FREE_GPU_HIP(randoms_gpu);
+            SAFE_FREE_GPU_HIP(gates_gpu);
 
             roc_shmem_free(results_gpu);
 
@@ -167,7 +166,7 @@ namespace NWQSim
             is_tc = Config::ENABLE_TENSOR_CORE;
 #endif
             DM_HIP_MPI *dm_gpu;
-            SAFE_ALOC_GPU(dm_gpu, sizeof(DM_HIP_MPI));
+            SAFE_ALOC_GPU_HIP(dm_gpu, sizeof(DM_HIP_MPI));
             // Copy the simulator instance to GPU
             hipSafeCall(hipMemcpy(dm_gpu, this,
                                     sizeof(DM_HIP_MPI), hipMemcpyHostToDevice));
@@ -245,7 +244,7 @@ namespace NWQSim
                 }
             }
 
-            SAFE_FREE_GPU(dm_gpu);
+            SAFE_FREE_GPU_HIP(dm_gpu);
         }
 
         IdxType *get_results() override
@@ -356,7 +355,7 @@ namespace NWQSim
 
         // GPU-side simulator instance
         DMGate *gates_gpu = NULL;
-        roc_shmem_ctx_t* p_ctx;
+  
 
         void copy_gates_to_gpu(std::vector<DMGate> &cpu_vec)
         {
@@ -406,7 +405,7 @@ namespace NWQSim
 
         //================================= Gate Definition ========================================
         //============== Unified 2-qubit Gate without comm optimization ================
-        __device__ __inline__ void C2_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1)
+        __device__ __inline__ void C2_GATE(roc_shmem_ctx_t* p_ctx, const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1)
         {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -469,13 +468,13 @@ namespace NWQSim
         // Perform communication optimization here
         // Since this is for single-qubit density matrix gate,
         // It is only possible qubit0 < qubit1 and qubit1 can be remote
-        __device__ __inline__ void C2V1_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1)
+        __device__ __inline__ void C2V1_GATE(roc_shmem_ctx_t* p_ctx, const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1)
         {
             assert(qubit0 != qubit1); // Non-cloning
 
             if (qubit1 < lg2_m_gpu)
             {
-                C2_GATE(gm_real, gm_imag, qubit0, qubit1);
+                C2_GATE(p_ctx, gm_real, gm_imag, qubit0, qubit1);
             }
             else
             {
@@ -535,10 +534,10 @@ namespace NWQSim
                         el_real[2] = LOCAL_G_HIP_MPI(dm_real, term + SV4IDX(2));
                         el_imag[2] = LOCAL_G_HIP_MPI(dm_imag, term + SV4IDX(2));
                     }
-#pragma unroll
+// #pragma unroll
                     for (unsigned j = 0; j < 4; j++)
                     {
-#pragma unroll
+// #pragma unroll
                         for (unsigned k = 0; k < 4; k++)
                         {
                             res_real[j] += (el_real[k] * gm_real[j * 4 + k]) - (el_imag[k] * gm_imag[j * 4 + k]);
@@ -580,7 +579,7 @@ namespace NWQSim
         // swap one of them to a local qubit without noise,
         // perform the C4 gate, and then swap back
         // It is assumed qubit0 is local, qubit1 is remote
-        __device__ __inline__ void SWAP_GATE(
+        __device__ __inline__ void SWAP_GATE(roc_shmem_ctx_t* p_ctx, 
             const IdxType qubit0, const IdxType qubit1)
         {
             grid_group grid = this_grid();
@@ -637,13 +636,13 @@ namespace NWQSim
             }
             grid.sync();
             if (tid == 0)
-                roc_shmem_ctx_double_put(*p_ctx, dm_real_remote, per_pe_num, pair_gpu);
+                roc_shmem_ctx_double_put(*p_ctx,dm_real, dm_real_remote, per_pe_num, pair_gpu);
             if (tid == 0)
                 roc_shmem_ctx_double_put(*p_ctx, dm_imag, dm_imag_remote, per_pe_num, pair_gpu);
         }
 
         //============== Unified 4-qubit Gate ================
-        __device__ __inline__ void C4_GATE(const ValType *gm_real, const ValType *gm_imag,
+        __device__ __inline__ void C4_GATE(roc_shmem_ctx_t* p_ctx, const ValType *gm_real, const ValType *gm_imag,
                                            const IdxType qubit0, const IdxType qubit1,
                                            const IdxType qubit2, const IdxType qubit3)
         {
@@ -695,12 +694,12 @@ namespace NWQSim
                     PGAS_G(dm_imag, term + SV16IDX(10)), PGAS_G(dm_imag, term + SV16IDX(11)),
                     PGAS_G(dm_imag, term + SV16IDX(12)), PGAS_G(dm_imag, term + SV16IDX(13)),
                     PGAS_G(dm_imag, term + SV16IDX(14)), PGAS_G(dm_imag, term + SV16IDX(15))};
-#pragma unroll
+// #pragma unroll
                 for (unsigned j = 0; j < 16; j++)
                 {
                     ValType res_real = 0;
                     ValType res_imag = 0;
-#pragma unroll
+// #pragma unroll
                     for (unsigned k = 0; k < 16; k++)
                     {
                         res_real += (el_real[k] * gm_real[j * 16 + k]) - (el_imag[k] * gm_imag[j * 16 + k]);
@@ -715,7 +714,7 @@ namespace NWQSim
 
         //============== Unified 4-qubit Gate with comm optimization ================
         // This is with roc_shmem merged communication optimization but without tensorcore
-        __device__ __inline__ void C4V1_GATE(const ValType *gm_real, const ValType *gm_imag,
+        __device__ __inline__ void C4V1_GATE(roc_shmem_ctx_t* p_ctx, const ValType *gm_real, const ValType *gm_imag,
                                              const IdxType qubit0, const IdxType qubit1,
                                              const IdxType qubit2, const IdxType qubit3)
         {
@@ -740,7 +739,7 @@ namespace NWQSim
 
             if (s < lg2_m_gpu) // all 4 qubits are local
             {
-                C4_GATE(gm_real, gm_imag, qubit0, qubit1, qubit2, qubit3);
+                C4_GATE(p_ctx, gm_real, gm_imag, qubit0, qubit1, qubit2, qubit3);
             }
             else // s qubit is non-local
             {
@@ -851,12 +850,12 @@ namespace NWQSim
                         el_imag[14] = LOCAL_G_HIP_MPI(dm_imag_remote, term + SV16IDX(14));
                         el_imag[15] = LOCAL_G_HIP_MPI(dm_imag_remote, term + SV16IDX(15));
                     }
-#pragma unroll
+// #pragma unroll
                     for (unsigned j = 0; j < 16; j++)
                     {
                         ValType res_real = 0;
                         ValType res_imag = 0;
-#pragma unroll
+// #pragma unroll
                         for (unsigned k = 0; k < 16; k++)
                         {
                             res_real += (el_real[k] * gm_real[j * 16 + k]) - (el_imag[k] * gm_imag[j * 16 + k]);
@@ -1468,7 +1467,7 @@ namespace NWQSim
 //         }
 // #endif
         ///*
-        __device__ __inline__ void M_GATE(ValType *gm_real, ValType *gm_imag,
+        __device__ __inline__ void M_GATE(roc_shmem_ctx_t* p_ctx, ValType *gm_real, ValType *gm_imag,
                                           const IdxType qubit, const IdxType cur_index)
         {
             grid_group grid = this_grid();
@@ -1482,10 +1481,12 @@ namespace NWQSim
                 for (IdxType i = tid; i < ((IdxType)1 << (n_qubits)); i += blockDim.x * gridDim.x)
                 {
                     const ValType val = PGAS_G(dm_real, (i << (n_qubits)) + i);
-                    if ((i & mask) == 0)
+                    if ((i & mask) == 0){
                        LOCAL_P_HIP_MPI(m_real, i, 0);
-                    else
+                    }
+                    else {
                        LOCAL_P_HIP_MPI(m_real, i, abs(val));
+                    }
                 }
                 grid.sync();
                 for (IdxType k = ((IdxType)1 << (n_qubits - 1)); k > 0; k >>= 1)
@@ -1519,7 +1520,7 @@ namespace NWQSim
                 }
             }
             BARR_ROC_SHMEM;
-            C2V1_GATE(gm_real, gm_imag, qubit, qubit + n_qubits);
+            C2V1_GATE(p_ctx, gm_real, gm_imag, qubit, qubit + n_qubits);
             BARR_ROC_SHMEM;
             if (tid == 0){
                 ValType res = (rand <= prob_of_one ? 1 : 0);
@@ -1528,7 +1529,7 @@ namespace NWQSim
         }
         //*/
 
-        __device__ __inline__ void Normalization(ValType *dm_real, ValType *dm_imag)
+        __device__ __inline__ void Normalization(roc_shmem_ctx_t* p_ctx, ValType *dm_real, ValType *dm_imag)
         {
             grid_group grid = this_grid();
             assert(n_qubits < lg2_m_gpu);
@@ -1568,7 +1569,7 @@ namespace NWQSim
             }
         }
 
-        __device__ __inline__ void MA_GATE(const IdxType repetition, const IdxType cur_index)
+        __device__ __inline__ void MA_GATE(roc_shmem_ctx_t* p_ctx, const IdxType repetition, const IdxType cur_index)
         {
             grid_group grid = this_grid();
             assert(n_qubits < lg2_m_gpu); // ensure the diagonal can be fit into GPU-0's part of m_real
@@ -1635,7 +1636,7 @@ namespace NWQSim
             BARR_ROC_SHMEM;
         }
 
-        __device__ __inline__ void RESET_GATE(const IdxType qubit)
+        __device__ __inline__ void RESET_GATE(roc_shmem_ctx_t* p_ctx, const IdxType qubit)
         {
             grid_group grid = this_grid();
             assert(n_qubits < lg2_m_gpu); // ensure the diagonal can be fit into GPU-0's part of m_real
@@ -1719,6 +1720,14 @@ namespace NWQSim
         IdxType cur_index = 0;
         IdxType lg2_m_gpu = dm_gpu->lg2_m_gpu;
         grid_group grid = this_grid();
+        const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
+
+        __shared__ roc_shmem_ctx_t ctx; 
+        roc_shmem_ctx_t* p_ctx = &ctx;
+
+        roc_shmem_wg_init(); 
+        roc_shmem_wg_ctx_create(8, p_ctx);
+        __syncthreads();
 
         for (IdxType t = 0; t < n_gates; t++)
         {
@@ -1742,38 +1751,38 @@ namespace NWQSim
 
             if (op_name == OP::RESET)
             {
-                dm_gpu->RESET_GATE(qubit);
+                dm_gpu->RESET_GATE(p_ctx, qubit);
             }
             else if (op_name == OP::M)
             {
-                dm_gpu->M_GATE(gm_real, gm_imag, qubit, cur_index);
+                dm_gpu->M_GATE(p_ctx, gm_real, gm_imag, qubit, cur_index);
                 cur_index++;
             }
             else if (op_name == OP::MA)
             {
-                dm_gpu->MA_GATE(repetition, cur_index);
+                dm_gpu->MA_GATE(p_ctx, repetition, cur_index);
                 cur_index += repetition;
             }
             else if (op_name == OP::C2)
             {
-                dm_gpu->C2V1_GATE(gm_real, gm_imag, qubit, qubit + (n_qubits));
+                dm_gpu->C2V1_GATE(p_ctx, gm_real, gm_imag, qubit, qubit + (n_qubits));
             }
             else if (op_name == OP::C4)
             {
 
                 if (((ctrl + n_qubits) >= lg2_m_gpu) && ((qubit + n_qubits) >= lg2_m_gpu))
                 {
-                    dm_gpu->SWAP_GATE(0, ctrl + (n_qubits));
+                    dm_gpu->SWAP_GATE(p_ctx, 0, ctrl + (n_qubits));
                     BARR_ROC_SHMEM;
 // #ifdef HIP_TC_AVAILABLE
 //                     if (enable_tc)
 //                         dm_gpu->C4TCV3_GATE(gm_real, gm_imag, ctrl, qubit, 0, qubit + (n_qubits));
 //                     else
 // #endif
-                        dm_gpu->C4V1_GATE(gm_real, gm_imag, ctrl, qubit, 0, qubit + (n_qubits));
+                        dm_gpu->C4V1_GATE(p_ctx, gm_real, gm_imag, ctrl, qubit, 0, qubit + (n_qubits));
 
                     BARR_ROC_SHMEM;
-                    dm_gpu->SWAP_GATE(0, ctrl + (n_qubits));
+                    dm_gpu->SWAP_GATE(p_ctx, 0, ctrl + (n_qubits));
                 }
                 else
                 {
@@ -1782,7 +1791,7 @@ namespace NWQSim
 //                         dm_gpu->C4TCV3_GATE(gm_real, gm_imag, ctrl, qubit, ctrl + (n_qubits), qubit + (n_qubits));
 //                     else
 // #endif
-                        dm_gpu->C4V1_GATE(gm_real, gm_imag, ctrl, qubit, ctrl + (n_qubits), qubit + (n_qubits));
+                        dm_gpu->C4V1_GATE(p_ctx, gm_real, gm_imag, ctrl, qubit, ctrl + (n_qubits), qubit + (n_qubits));
                 }
             }
             // only need sync when operating on remote qubits
@@ -1792,10 +1801,10 @@ namespace NWQSim
             grid.sync();
         }
         BARR_ROC_SHMEM;
-        if (tid == 0)
-        { 
+        // if (tid == 0)
+        // { 
             roc_shmem_wg_ctx_destroy(p_ctx); 
             roc_shmem_wg_finalize(); 
-        }
+        // }
     }
 }

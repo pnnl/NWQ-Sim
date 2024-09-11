@@ -79,6 +79,11 @@ namespace NWQSim
             sv_imag = (ValType *)roc_shmem_malloc(sv_size_per_gpu);
             m_real = (ValType *)roc_shmem_malloc(sv_size_per_gpu);
             m_imag = (ValType *)roc_shmem_malloc(sv_size_per_gpu);
+            /*This just a temp array to transfer the double data, will optimize it later. */
+            trans_double = (int *)roc_shmem_malloc(2*sizeof(int));
+            trans_double[0] = 0.0;
+            trans_double[1] = 0.0;
+            
             hipCheckError();
             gpu_mem += sv_size_per_gpu * 4;
 
@@ -176,6 +181,8 @@ namespace NWQSim
             gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
             void *args[] = {&sv_gpu, &n_gates};
             hipSafeCall(hipDeviceSynchronize());
+            // roc_shmem_barrier_all();
+
 
             if (Config::PRINT_SIM_TRACE)
                 MPI_Barrier(MPI_COMM_WORLD);
@@ -183,6 +190,8 @@ namespace NWQSim
 
             hipSafeCall(hipLaunchCooperativeKernel((const void *)simulation_kernel_hip_mpi, gridDim, THREADS_CTA_HIP, args, smem_size, 0));
             
+            // roc_shmem_barrier_all();
+
             hipSafeCall(hipDeviceSynchronize());
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
@@ -222,6 +231,9 @@ namespace NWQSim
                     SAFE_FREE_HOST_HIP(sim_times);
                 }
             }
+            // roc_shmem_barrier_all();
+
+            print_res_state();
 
             SAFE_FREE_GPU_HIP(sv_gpu);
         }
@@ -347,7 +359,7 @@ namespace NWQSim
                 printf("----- SVSim ------\n");
                 for (IdxType i = 0; i < num; i++)
                 {
-                    printf("(%.3lf,%.3lfj) ", sv_diag_real[i], sv_diag_imag[i]);
+                    printf("(%lf,%lfj) ", sv_diag_real[i], sv_diag_imag[i]);
                     if ((i + 1) % 8 == 0)
                         printf("\n");
                 }
@@ -388,6 +400,8 @@ namespace NWQSim
         // For measurement result
         IdxType *results = NULL;
         IdxType *results_gpu = NULL;
+
+        int *trans_double;
         // Random
         std::mt19937 rng;
         std::uniform_real_distribution<ValType> uni_dist;
@@ -448,7 +462,7 @@ namespace NWQSim
         }
 
         //============== Local Unified 1-qubit Gate ================
-        __device__ __inline__ void C1_GATE(roc_shmem_ctx_t* p_ctx, const ValType *gm_real, const ValType *gm_imag, const IdxType qubit)
+        __device__ __inline__ void C1_GATE(roc_shmem_ctx_t* p_ctx, const ValType *gm_real, const ValType *gm_imag, const IdxType qubit, IdxType t)
         {
             grid_group grid = this_grid();
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -473,7 +487,11 @@ namespace NWQSim
                 LOCAL_P_HIP_MPI(sv_imag, pos0, sv_imag_pos0);
                 LOCAL_P_HIP_MPI(sv_real, pos1, sv_real_pos1);
                 LOCAL_P_HIP_MPI(sv_imag, pos1, sv_imag_pos1);
+                // if(t==198){
+                //     printf("i = %lld, el0_real = %lf, el0_imag = %lf, el1_real = %lf, el1_imag = %lf, real_pos0 = %lf, imag_pos0 = %lf, real_pos1 = %lf, imag_pos1 = %lf, m_real[128]=%lf, m_imag[128] = %lf\n", t, el0_real, el0_imag, el1_real, el1_imag, sv_real_pos0, sv_imag_pos0, sv_real_pos1, sv_imag_pos1);
+                // }
             }
+            
             grid.sync();
         }
 
@@ -489,7 +507,7 @@ namespace NWQSim
 
             if (qubit < lg2_m_gpu)
             {
-                C1_GATE(p_ctx, gm_real, gm_imag, qubit);
+                C1_GATE(p_ctx, gm_real, gm_imag, qubit, 0);
             }
             else
             {
@@ -544,6 +562,7 @@ namespace NWQSim
                     {
                         roc_shmem_ctx_putmem(*p_ctx, sv_real, 
                                 sv_real_pos1, per_pe_bytes, pair_gpu); 
+                        roc_shmem_ctx_quiet(*p_ctx);
                         roc_shmem_ctx_putmem(*p_ctx, sv_imag, 
                                 sv_imag_pos1, per_pe_bytes, pair_gpu);
                         roc_shmem_ctx_quiet(*p_ctx);
@@ -555,6 +574,7 @@ namespace NWQSim
                     {
                         roc_shmem_ctx_putmem(*p_ctx, &sv_real[per_pe_work], 
                                 sv_real_pos0, per_pe_bytes, pair_gpu);
+                         roc_shmem_ctx_quiet(*p_ctx);
                         roc_shmem_ctx_putmem(*p_ctx, &sv_imag[per_pe_work], 
                                 sv_imag_pos0, per_pe_bytes, pair_gpu);
                         roc_shmem_ctx_quiet(*p_ctx);
@@ -576,23 +596,26 @@ namespace NWQSim
 
             if (qubit < lg2_m_gpu)
             {
-                C1_GATE(p_ctx,gm_real, gm_imag, qubit);
+                C1_GATE(p_ctx,gm_real, gm_imag, qubit, t);
             }
             else
             {
-                BARR_ROC_SHMEM;
+                // BARR_ROC_SHMEM;
                 IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (qubit - (lg2_m_gpu)));
-                if (i_proc < pair_gpu && tid == 0)
+                if (i_proc > pair_gpu)
+                    return;
+                if (tid == 0)
                 {
                     roc_shmem_ctx_getmem(*p_ctx, m_real, sv_real, per_pe_bytes, pair_gpu);
                     roc_shmem_ctx_quiet(*p_ctx);
                     roc_shmem_ctx_getmem(*p_ctx, m_imag, sv_imag, per_pe_bytes, pair_gpu);
                     roc_shmem_ctx_quiet(*p_ctx);
                 }
-                BARR_ROC_SHMEM;
+                // BARR_ROC_SHMEM;
+                grid.sync();
 
-                if (i_proc < pair_gpu)
-                {
+                // if (i_proc < pair_gpu)
+                // {
                     for (IdxType i = tid; i < per_pe_work; i += blockDim.x * gridDim.x)
                     {
                         const ValType el0_real = LOCAL_G_HIP_MPI(sv_real, i);
@@ -608,25 +631,30 @@ namespace NWQSim
                         LOCAL_P_HIP_MPI(sv_imag, i, imag_pos0);
                         LOCAL_P_HIP_MPI(m_real, i, real_pos1);
                         LOCAL_P_HIP_MPI(m_imag, i, imag_pos1);
-                        if(t==68 && i == 128){
-                            printf("t = %lld, el0_real = %lf, el0_imag = %lf, el1_real = %lf, el1_imag = %lf, real_pos1 = %lf, imag_pos1 = %lf, m_real[128]=%lf, m_imag[128] = %lf\n", t, el0_real, el0_imag, el1_real, el1_imag, real_pos1, imag_pos1, m_real[128], m_imag[128]);
+                        // if(t==198){
+                        //     printf("i = %lld, local, el0_real = %lf, el0_imag = %lf, el1_real = %lf, el1_imag = %lf, real_pos0 = %lf, imag_pos0 = %lf, real_pos1 = %lf, imag_pos1 = %lf, sv_real_remote[i]=%lf, sv_imag_remote[i] = %lf\n", i, el0_real, el0_imag, el1_real, el1_imag, real_pos0, imag_pos0, real_pos1, imag_pos1, m_real[i], m_imag[i]);
+                        // }
+                    //     if((t==70||t==69) && i == 128){
+                    //         printf("t = %lld, el0_real = %lf, el0_imag = %lf, el1_real = %lf, el1_imag = %lf, real_pos1 = %lf, imag_pos1 = %lf, m_real[128]=%lf, m_imag[128] = %lf\n", t, el0_real, el0_imag, el1_real, el1_imag, real_pos1, imag_pos1, m_real[128], m_imag[128]);
+                    // }
                     }
-                    }
-                }
-                __syncthreads();
+                // }
+                // __syncthreads();
                 grid.sync();
-                BARR_ROC_SHMEM;
+                // BARR_ROC_SHMEM;
 
-                if (i_proc < pair_gpu && tid == 0)
+                // if (i_proc < pair_gpu && tid == 0)
+                if(tid == 0)
                 {
-                    if (t==68)
+                    if (t==69 || t == 70)
                         printf(" sv_real_remote[128] = %lf, sv_imag_remote[128] = %lf\n", m_real[128], m_imag[128]);
                     roc_shmem_ctx_putmem(*p_ctx, sv_real, m_real, per_pe_bytes, pair_gpu);
                     roc_shmem_ctx_quiet(*p_ctx);
                     roc_shmem_ctx_putmem(*p_ctx, sv_imag, m_imag, per_pe_bytes, pair_gpu);
                     roc_shmem_ctx_quiet(*p_ctx);
                 }
-                BARR_ROC_SHMEM;
+                // BARR_ROC_SHMEM;
+                // grid.sync();
             }
         }
 
@@ -688,13 +716,15 @@ namespace NWQSim
                 LOCAL_P_HIP_MPI(sv_imag, pos2, sv_imag_pos2);
                 LOCAL_P_HIP_MPI(sv_imag, pos3, sv_imag_pos3);
             }
+            // roc_shmem_ctx_wg_barrier_all(*p_ctx);
+            // grid.sync();
             // BARR_ROC_SHMEM;
         }
 
         //============== Unified 2-qubit Gate ================
         // Perform communication optimization here
         __device__ __inline__ void C2V1_GATE(roc_shmem_ctx_t* p_ctx, const ValType *gm_real,
-                const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1)
+                const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1, IdxType t)
         {
             assert(qubit0 != qubit1); // Non-cloning
             grid_group grid = this_grid();
@@ -720,16 +750,22 @@ namespace NWQSim
 
                 // load data from pair GPU
                 IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (q - (lg2_m_gpu)));
+                if (i_proc > pair_gpu)
+                    return;
 
-                if (i_proc < pair_gpu && tid == 0)
+                // if (i_proc < pair_gpu && tid == 0)
+                if(tid == 0)
                 {
                     roc_shmem_ctx_getmem(*p_ctx, m_real, sv_real, per_pe_bytes, pair_gpu);
+                    roc_shmem_ctx_quiet(*p_ctx);
                     roc_shmem_ctx_getmem(*p_ctx, m_imag, sv_imag, per_pe_bytes, pair_gpu);
-                }
-                BARR_ROC_SHMEM;
+                    roc_shmem_ctx_quiet(*p_ctx);
 
-                if (i_proc < pair_gpu)
-                {
+                }
+                grid.sync();
+
+                // if (i_proc < pair_gpu)
+                // {
                     for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
                             i += blockDim.x * gridDim.x)
                     {
@@ -776,7 +812,11 @@ namespace NWQSim
                         LOCAL_P_HIP_MPI(sv_imag, term + SV4IDX(0), res_imag[0]);
                         LOCAL_P_HIP_MPI(m_real, term + SV4IDX(3), res_real[3]);
                         LOCAL_P_HIP_MPI(m_imag, term + SV4IDX(3), res_imag[3]);
+                        // if(t == 196)
+                        //     printf("i = %lld, el_real[0] = %lf, el_real[1] = %lf, el_real[2] = %lf, el_real[3] = %lf, el_imag[0] = %lf, el_imag[1] = %lf,el_imag[2] = %lf,el_imag[3] = %lf, sv_real_remote[i] = %lf, sv_imag_remote[i] = %lf\n", i, el_real[0], el_real[1], el_real[2], el_real[3], el_imag[0], el_imag[1], el_imag[2], el_imag[3], m_real[i],m_imag[i]);
 
+                        // if(i < 2048)
+                        //     printf("t = %lld, m_real[%lld] = %lf, m_imag[%lld] = %lf\n", t, i, m_real[i], i,m_imag[i]);
                         if (qubit0 == q) // qubit0 is the remote qubit
                         {
                             LOCAL_P_HIP_MPI(sv_real, term + SV4IDX(1), res_real[1]);
@@ -792,15 +832,22 @@ namespace NWQSim
                             LOCAL_P_HIP_MPI(sv_imag, term + SV4IDX(2), res_imag[2]);
                         }
                     }
-                }
-                BARR_ROC_SHMEM;
-                if (i_proc < pair_gpu && tid == 0)
+                    grid.sync();
+                // }
+                // BARR_ROC_SHMEM;
+                // if (i_proc < pair_gpu && tid == 0)
+                if (tid == 0)
                 {
+                    // for(int i =0; i<1024; i++){
+                    //     printf("In t0, t = %lld, sv_real_remote[%d] = %lf, sv_imag_remote[%d] = %lf\n", t, i, m_real[i],i, m_imag[i]);
+                    // }
                     roc_shmem_ctx_putmem(*p_ctx, sv_real, m_real, per_pe_bytes, pair_gpu);
+                     roc_shmem_ctx_quiet(*p_ctx);
                     roc_shmem_ctx_putmem(*p_ctx, sv_imag, m_imag, per_pe_bytes, pair_gpu);
                     roc_shmem_ctx_quiet(*p_ctx);
                 }
-                BARR_ROC_SHMEM;
+                
+         //       grid.sync();
             }
         }
 
@@ -1036,6 +1083,10 @@ namespace NWQSim
                 }
                 grid.sync();
             }
+            uint64_t doubleBits;
+            memcpy((void *) &doubleBits, (void *) &m_imag[0], sizeof(double));
+            trans_double[0] = static_cast<uint32_t>(doubleBits);
+            trans_double[1] = static_cast<int32_t>(doubleBits >> 32);
             BARR_ROC_SHMEM;
 
             if (i_proc == 0 && tid == 0) // first GPU
@@ -1044,7 +1095,13 @@ namespace NWQSim
                 for (IdxType g = 0; g < n_gpus; g++)
                 {
                     roc_shmem_ctx_double_p(*p_ctx, &m_imag[1], partial, g);
-                    ValType inc = roc_shmem_ctx_double_g(*p_ctx, &m_imag[0], g);
+                    
+                    // ValType inc = roc_shmem_ctx_double_g(*p_ctx, &m_imag[0], g);
+                     uint32_t low = roc_shmem_ctx_int_g(*p_ctx, &trans_double[0], g);
+                    uint32_t high = roc_shmem_ctx_int_g(*p_ctx, &trans_double[1], g);
+                    uint64_t remote_int = (uint64_t) high << 32 | low;
+                    ValType inc;
+                    memcpy((void *) &inc, (void *) &remote_int, sizeof(ValType));
                     partial += inc;
                 }
                 ValType purity = fabs(partial);
@@ -1218,14 +1275,20 @@ namespace NWQSim
             const IdxType q = max(qubit0, qubit1);
             // load data from pair GPU
             IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (q - (lg2_m_gpu)));
-            if (i_proc < pair_gpu && tid == 0)
+            if (i_proc > pair_gpu)
+                return;
+            // if (i_proc < pair_gpu && tid == 0)
+            if(tid == 0)
             {
                 roc_shmem_ctx_getmem(*p_ctx, m_real, sv_real, per_pe_bytes, pair_gpu);
+                roc_shmem_ctx_quiet(*p_ctx);
                 roc_shmem_ctx_getmem(*p_ctx, m_imag, sv_imag, per_pe_bytes, pair_gpu);
+                roc_shmem_ctx_quiet(*p_ctx);
             }
-            BARR_ROC_SHMEM;
+            // BARR_ROC_SHMEM;
+            grid.sync();
 
-            if (i_proc < pair_gpu)
+            // if (i_proc < pair_gpu)
             {
                 for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work;
                         i += blockDim.x * gridDim.x)
@@ -1256,9 +1319,11 @@ namespace NWQSim
                 }
             }
             grid.sync();
-            if (i_proc < pair_gpu && tid == 0)
+            // if (i_proc < pair_gpu && tid == 0)
+            if (tid == 0)
             {
                 roc_shmem_ctx_putmem(*p_ctx, sv_real, m_real, per_pe_bytes, pair_gpu);
+                 roc_shmem_ctx_quiet(*p_ctx);
                 roc_shmem_ctx_putmem(*p_ctx, sv_imag, m_imag, per_pe_bytes, pair_gpu);
                 roc_shmem_ctx_quiet(*p_ctx);
             }
@@ -1282,7 +1347,6 @@ namespace NWQSim
                 ValType tmp = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
                 LOCAL_P_HIP_MPI(m_real, i, tmp);
             }
-            grid.sync();
 
 
             //if (i_proc == 1 && tid == 0)
@@ -1325,16 +1389,20 @@ namespace NWQSim
                 }
                 grid.sync();
             }
+            uint64_t doubleBits;
+            memcpy((void *) &doubleBits, (void *) &m_real[0], sizeof(double));
+            trans_double[0] = static_cast<uint32_t>(doubleBits);
+            trans_double[1] = static_cast<int32_t>(doubleBits >> 32);
             BARR_ROC_SHMEM;
-            if (i_proc == 1 && tid == 0)
-            {
-                printf("\n === GPU-1: local is :%lf\n", m_real[0]);
+            // if (i_proc == 1 && tid == 0)
+            // {
+            //     printf("\n === GPU-1: local is :%lf\n", m_real[0]);
 
-                //if (abs(m_real[0] - 1.0) > ERROR_BAR) 
-                //{
-                //for (IdxType j=0; j<m_gpu; j++) printf("(%lf,%lf )",sv_real[j], m_real[j]);
-                //}
-            }
+            //     //if (abs(m_real[0] - 1.0) > ERROR_BAR) 
+            //     //{
+            //     //for (IdxType j=0; j<m_gpu; j++) printf("(%lf,%lf )",sv_real[j], m_real[j]);
+            //     //}
+            // }
             BARR_ROC_SHMEM;
 
             if (i_proc == 0 && tid == 0)
@@ -1342,7 +1410,12 @@ namespace NWQSim
                 ValType beff = m_real[0];
                 for (IdxType m = 1; m < n_gpus; m++)
                 {
-                    ValType remote = roc_shmem_ctx_double_g(*p_ctx, &m_real[0], m);
+                    // ValType remote = roc_shmem_ctx_double_g(*p_ctx, &m_real[0], m);
+                     uint32_t low = roc_shmem_ctx_int_g(*p_ctx, &trans_double[0], m);
+                    uint32_t high = roc_shmem_ctx_int_g(*p_ctx, &trans_double[1], m);
+                    uint64_t remote_int = (uint64_t) high << 32 | low;
+                    ValType remote;
+                    memcpy((void *) &remote, (void *) &remote_int, sizeof(ValType));
                     m_real [0] += remote; 
                     printf("\n remote:%lf\n", remote);
                 }
@@ -1373,13 +1446,24 @@ namespace NWQSim
         __shared__ roc_shmem_ctx_t ctx; 
         roc_shmem_ctx_t* p_ctx = &ctx;
         // p_ctx = &ctx;
-        if (tid == 0) 
-        { 
+        // if (tid == 0) 
+        // { 
+        // grid.sync();
             roc_shmem_wg_init(); 
             roc_shmem_wg_ctx_create(8, p_ctx);
-        } 
-        __syncthreads();
+        // } 
+    // int provided;
+    // roc_shmem_wg_init_thread(ROC_SHMEM_THREAD_MULTIPLE, &provided);
+    // assert(provided == ROC_SHMEM_THREAD_MULTIPLE);
+
+    //      roc_shmem_wg_ctx_create(8, p_ctx);
+        // __syncthreads();
+
         //Execute the circuit
+        // grid.sync();
+        // roc_shmem_ctx_wg_barrier_all(*p_ctx);
+        // grid.sync();
+
         for (IdxType t = 0; t < n_gates; t++)
         {
             OP op_name = (sv_gpu->gates_gpu)[t].op_name;
@@ -1391,13 +1475,23 @@ namespace NWQSim
             // only need sync when operating on remote qubits
             if ((ctrl >= lg2_m_gpu) || (qubit >= lg2_m_gpu))
             { 
-                if (!already_sync) BARR_ROC_SHMEM; // do not need repeated sync
+                // if (!already_sync) BARR_ROC_SHMEM; // do not need repeated sync
+                if (!already_sync) {
+                    grid.sync(); 
+                    roc_shmem_ctx_wg_barrier_all(*p_ctx);
+                    // grid.sync(); 
+                }  // do not need repeated sync
+
             }
             already_sync = false;
+            grid.sync();
             // only need sync when operating on remote qubits
             if (op_name == OP::C1)
             {
                 sv_gpu->C1V2_GATE(p_ctx, gm_real, gm_imag, qubit,t);
+                // if(tid == 0) {
+                //     printf("I'm at PE %d, I'm at the one qubit Gate %lld\n", roc_shmem_my_pe(), t);
+                // }
                 //if (tid == 0)
                 //{
                 //printf("\n GPU-%llu [", sv_gpu->i_proc);
@@ -1406,24 +1500,32 @@ namespace NWQSim
                 //}
 
                 //// sv_gpu->C1V1_GATE(gm_real, gm_imag, qubit);
-                // sv_gpu->Purity_Check(t);
+                // sv_gpu->Purity_Check(p_ctx, t);
             }
+            
+            // else if (op_name == OP::C2)
+            // {
+            //     if ((ctrl >= lg2_m_gpu) && (qubit >= lg2_m_gpu))
+            //     {
+            //         sv_gpu->SWAP_GATE(p_ctx, 0, ctrl);
+            //         // BARR_ROC_SHMEM;
+            //         grid.sync();
+            //         roc_shmem_ctx_wg_barrier_all(*p_ctx);
+            //         grid.sync();
+            //         sv_gpu->C2V1_GATE(p_ctx, gm_real, gm_imag, 0, qubit, t);
+            //         // BARR_ROC_SHMEM;
+            //         roc_shmem_ctx_wg_barrier_all(*p_ctx);
+            //         grid.sync();
+            //         sv_gpu->SWAP_GATE(p_ctx, 0, ctrl);
+            //     }
+            //     else
+            //     {
+            //         // if(tid == 0 && roc_shmem_my_pe() == 0) 
+            //         //     printf("I'm at the two qubit Gate %lld\n", t);
+            //         sv_gpu->C2V1_GATE(p_ctx, gm_real, gm_imag, ctrl, qubit,t);
+            //     }
+            // }
             /*
-            else if (op_name == OP::C2)
-            {
-                if ((ctrl >= lg2_m_gpu) && (qubit >= lg2_m_gpu))
-                {
-                    sv_gpu->SWAP_GATE(p_ctx, 0, ctrl);
-                    BARR_ROC_SHMEM;
-                    sv_gpu->C2V1_GATE(p_ctx, gm_real, gm_imag, 0, qubit);
-                    BARR_ROC_SHMEM;
-                    sv_gpu->SWAP_GATE(p_ctx, 0, ctrl);
-                }
-                else
-                {
-                    sv_gpu->C2V1_GATE(p_ctx, gm_real, gm_imag, ctrl, qubit);
-                }
-            }
             else if (op_name == OP::RESET)
             {
                 sv_gpu->RESET_GATE(p_ctx, qubit);
@@ -1443,19 +1545,25 @@ namespace NWQSim
             // only need sync when operating on remote qubits
             if ((ctrl >= lg2_m_gpu) || (qubit >= lg2_m_gpu))
             {
-                if (threadIdx.x == 0 && blockIdx.x == 0)
+                // if ( blockIdx.x == 0)
+                // grid.sync();
                     roc_shmem_ctx_wg_barrier_all(*p_ctx);
+                    // grid.sync(); 
                 already_sync = true;
             }
             grid.sync();
 
         }
         //Finalizae ROC_SHMEM
-        BARR_ROC_SHMEM;
-        if (tid == 0)
-        { 
+        // BARR_ROC_SHMEM;
+        // grid.sync();
+        roc_shmem_ctx_wg_barrier_all(*p_ctx); 
+        grid.sync(); 
+
+        // if (tid == 0)
+        // { 
             roc_shmem_wg_ctx_destroy(p_ctx); 
             roc_shmem_wg_finalize(); 
-        }
+        // }
     }
 }

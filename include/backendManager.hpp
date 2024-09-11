@@ -31,6 +31,7 @@
 
 #ifdef HIP_MPI_ENABLED
 #include "svsim/sv_hip_mpi.hpp"
+#include "dmsim/dm_hip_mpi.hpp"
 #endif
 
 #include <iostream>
@@ -153,7 +154,10 @@ public:
 #ifdef HIP_MPI_ENABLED
         else if (backend == "AMDGPU_MPI")
         {
-            return std::make_shared<NWQSim::SV_HIP_MPI>(numQubits);
+            if (simulator_method == "sv")
+                return std::make_shared<NWQSim::SV_HIP_MPI>(numQubits);
+            else
+                return std::make_shared<NWQSim::DM_HIP_MPI>(numQubits);
         }
 #endif
 
