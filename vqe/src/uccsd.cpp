@@ -20,7 +20,7 @@ namespace NWQSim {
           fermion_ops_to_params[fermion_operators.size()] = unique_params++;
           fermion_operators.push_back({occupied_annihilation_up, virtual_creation_up});
           // record the string::parameter mapping
-          excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params;
+          excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params-1;
         }
       }
       // Beta Single Excitations
@@ -37,8 +37,8 @@ namespace NWQSim {
             symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
             fermion_ops_to_params[fermion_operators.size()] = unique_params++;
             fermion_operators.push_back({occupied_annihilation_down, virtual_creation_down});
+            excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params-1;
             // record the string::parameter mapping
-            excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params;
           }
         }
       }

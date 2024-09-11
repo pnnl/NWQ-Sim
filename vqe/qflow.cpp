@@ -212,6 +212,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
   if (amplitudes != "") {
     NWQSim::VQE::read_amplitudes(amplitudes, params, ansatz->get_excitation_map());
   }
+  std::cout << params << std::endl;
   double initial_ene, final_ene;
   long long num_iterations = 0;
   std::vector<std::pair<std::string, double> > param_tuple;
@@ -226,7 +227,9 @@ void optimize_ansatz(const VQEBackendManager& manager,
                                               num_trials);
 
   } else {
-    state->optimize(params, final_ene);
+    ansatz->setParams(params);
+    if (settings.max_evals > 0) 
+      state->optimize(params, final_ene);
     param_tuple = ansatz->getFermionicOperatorParameters();
     num_iterations = state->get_iteration();
   }
