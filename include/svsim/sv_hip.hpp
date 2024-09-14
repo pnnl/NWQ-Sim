@@ -35,7 +35,7 @@ namespace NWQSim
     class SV_HIP : public QuantumState
     {
     public:
-        SV_HIP(IdxType _n_qubits) : QuantumState(_n_qubits, SimType::SV)
+        SV_HIP(IdxType _n_qubits, const std::string& config_path) : QuantumState(_n_qubits, SimType::SV, config_path)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -115,6 +115,33 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
+        virtual void set_initial (std::string fpath, std::string format) override {
+            std::ifstream instream;
+            if (format != "sv") {
+                throw std::runtime_error("SV-Sim only supports statevector input states\n");
+            }
+            instream.open(fpath, std::ios::in|std::ios::binary);
+            if (instream.is_open()) {
+                instream.read((char*)sv_real_cpu, sizeof(ValType) * dim);
+                instream.read((char*)sv_imag_cpu, sizeof(ValType) * dim);
+                load_state();
+                instream.close();
+            }
+        }
+
+        virtual void dump_res_state(std::string outpath) override {
+            std::ofstream outstream;
+            outstream.open(outpath, std::ios::out|std::ios::binary);
+            if (outstream.is_open()) {
+                save_state();
+                outstream.write((char*)sv_real_cpu, sizeof(ValType) * dim);
+                outstream.write((char*)sv_imag_cpu, sizeof(ValType) * dim);
+                outstream.close();
+            }
+        };
+ 
+
+
 
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
@@ -192,7 +219,6 @@ namespace NWQSim
             sim(circuit);
             return results[0];
         }
-
         IdxType *measure_all(IdxType repetition) override
         {
             std::shared_ptr<Circuit> circuit = std::make_shared<Circuit>(n_qubits);
@@ -672,6 +698,8 @@ namespace NWQSim
             }
             BARR_HIP;
         }
+        virtual ValType *get_real() const override {return sv_real;};
+        virtual ValType *get_imag() const override {return sv_imag;};
     };
 
     __global__ void simulation_kernel_hip(SV_HIP *sv_gpu, IdxType n_gates)
@@ -713,8 +741,6 @@ namespace NWQSim
             }
             grid.sync();
         }
-        virtual ValType *get_real() const override {return sv_real;};
-        virtual ValType *get_imag() const override {return sv_imag;};
     }
 
 } // namespace NWQSim
