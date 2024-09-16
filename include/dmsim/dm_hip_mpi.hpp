@@ -403,6 +403,23 @@ namespace NWQSim
             return n_measures;
         }
 
+        __inline__ __device__ ValType pgas_get_double(roc_shmem_ctx_t* p_ctx, ValType* arr, IdxType i)
+        {
+            int* arr_int_p = (int*)&((arr)[(i)&((m_gpu)-1)]);
+            int arr_int[2] = {roc_shmem_ctx_int_g(*p_ctx, &arr_int[0], ((i)>>(lg2_m_gpu))),
+                roc_shmem_ctx_int_g(*p_ctx, &arr_int[1], ((i)>>(lg2_m_gpu)))};
+            return *((double*)arr_int);
+        }
+        __inline__ __device__ void pgas_put_double(roc_shmem_ctx_t* p_ctx, ValType* arr, IdxType i, ValType val)
+        {
+            int* val_int_p = (int*)&val; 
+            int* arr_int_p = (int*)&(arr)[(i) & ((m_gpu) - 1)];
+            roc_shmem_ctx_int_p(*p_ctx, &arr_int_p[0], val_int_p[0], ((i)>>(lg2_m_gpu)));
+            roc_shmem_ctx_int_p(*p_ctx, &arr_int_p[1], val_int_p[1], ((i)>>(lg2_m_gpu)));
+        }
+
+
+
         //================================= Gate Definition ========================================
         //============== Unified 2-qubit Gate without comm optimization ================
         __device__ __inline__ void C2_GATE(roc_shmem_ctx_t* p_ctx, const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1)
