@@ -41,9 +41,6 @@ class ConfigParser
 public:
     std::map<std::string, ConfigOption> options;
 
-    // define a list of option that requires argument
-    std::vector<std::string> experiments = {"q", "qs", "j", "js", "t", "shots", "backend", "sim_methods", "threads", "noise_model", "init_state", "dumpfile", "layout", "layout_str"};
-
     // Constructor initializes default options
     ConfigParser()
     {
