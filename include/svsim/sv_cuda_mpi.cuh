@@ -5,7 +5,7 @@
 #include "../gate.hpp"
 #include "../circuit.hpp"
 
-#include "../private/config.hpp"
+#include "../config.hpp"
 #include "../private/cuda_util.cuh"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
@@ -41,7 +41,7 @@ namespace NWQSim
     class SV_CUDA_MPI : public QuantumState
     {
     public:
-        SV_CUDA_MPI(IdxType _n_qubits, const std::string& config_path) : QuantumState(_n_qubits, SimType::SV, config_path)
+        SV_CUDA_MPI(IdxType _n_qubits) : QuantumState(SimType::SV)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -144,23 +144,26 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-        /** 
+        /**
          * @brief Read an initial quantum state (TODO: Check for state purity/validity)
-         * @note 
+         * @note
          * @param fpath: Path to the input binary file
          * @param format: Format of the input (either "sv" or "dm")
          */
-        virtual void set_initial (std::string fpath, std::string format) override {
+        virtual void set_initial(std::string fpath, std::string format) override
+        {
             std::ifstream instream;
-            if (format != "sv") {
+            if (format != "sv")
+            {
                 throw std::runtime_error("SV-Sim only supports statevector input states\n");
             }
-            instream.open(fpath, std::ios::in|std::ios::binary);
-            if (instream.is_open()) {
+            instream.open(fpath, std::ios::in | std::ios::binary);
+            if (instream.is_open())
+            {
                 instream.seekg(sv_size_per_gpu * i_proc);
-                instream.read((char*)sv_real_cpu, sv_size_per_gpu);
+                instream.read((char *)sv_real_cpu, sv_size_per_gpu);
                 instream.seekg(dim * sizeof(ValType) + sv_size_per_gpu * i_proc);
-                instream.read((char*)sv_imag_cpu, sv_size_per_gpu);
+                instream.read((char *)sv_imag_cpu, sv_size_per_gpu);
                 cudaSafeCall(cudaMemcpy(sv_real, sv_real_cpu,
                                         sv_size_per_gpu, cudaMemcpyHostToDevice));
                 cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu,
@@ -170,56 +173,63 @@ namespace NWQSim
             std::cout << i_proc << std::endl;
         }
 
-
-        /** 
+        /**
          * @brief Dump the current quantum state to a binary output file
-         * @note 
+         * @note
          * @param outpath: Output path
          */
-        virtual void dump_res_state(std::string outpath) override {
-                        std::ofstream outstream;
-            
+        virtual void dump_res_state(std::string outpath) override
+        {
+            std::ofstream outstream;
+
             IdxType ticket = 1;
             // synchronize the file writes with a basic point-point ticket lock
-            if (i_proc != 0) {
+            if (i_proc != 0)
+            {
                 MPI_Recv(&ticket, 1, MPI_INT64_T, i_proc - 1, i_proc, comm_global, MPI_STATUS_IGNORE);
-                outstream.open(outpath, std::ios::app|std::ios::binary);
-            } else {
-                outstream.open(outpath, std::ios::trunc|std::ios::binary); // remove existing file
+                outstream.open(outpath, std::ios::app | std::ios::binary);
             }
-            if (!outstream.is_open()) {
+            else
+            {
+                outstream.open(outpath, std::ios::trunc | std::ios::binary); // remove existing file
+            }
+            if (!outstream.is_open())
+            {
 
                 MPI_Send(&ticket, 1, MPI_INT64_T, i_proc + 1, i_proc + 1, comm_global);
                 if (i_proc == 0)
-                    std::cout << "Could not open file " << outpath << std::endl; 
+                    std::cout << "Could not open file " << outpath << std::endl;
                 return;
             }
             cudaSafeCall(cudaMemcpy(sv_real_cpu, sv_real, sv_size_per_gpu, cudaMemcpyDeviceToHost));
             // append to the end of the file
-            outstream.write((char*)sv_real_cpu, sv_size_per_gpu);
+            outstream.write((char *)sv_real_cpu, sv_size_per_gpu);
             // outstream.write((char*)dm_imag_cpu, sizeof(ValType) * dm_size_per_gpu);
             // now write the imaginary part
             outstream.flush();
             outstream.close(); // close to flush the stream
-            if (i_proc != n_gpus - 1) {
+            if (i_proc != n_gpus - 1)
+            {
                 MPI_Send(&ticket, 1, MPI_INT64_T, i_proc + 1, i_proc + 1, comm_global);
-            } 
+            }
             // synchronize the file writes with a basic point-point ticket lock
-            if (i_proc != 0) {
+            if (i_proc != 0)
+            {
                 MPI_Recv(&ticket, 1, MPI_INT64_T, i_proc - 1, i_proc, comm_global, MPI_STATUS_IGNORE);
             }
 
             // reopen the file with the changes from the other threads
-            outstream.open(outpath, std::ios::app|std::ios::binary);
+            outstream.open(outpath, std::ios::app | std::ios::binary);
             cudaSafeCall(cudaMemcpy(sv_imag_cpu, sv_imag, sv_size_per_gpu, cudaMemcpyDeviceToHost));
             // outstream.write((char*)dm_real_cpu, sizeof(ValType) * dm_size_per_gpu);
-            outstream.write((char*)sv_imag_cpu, sv_size_per_gpu);
-            
+            outstream.write((char *)sv_imag_cpu, sv_size_per_gpu);
+
             outstream.flush();
             outstream.close();
-            if (i_proc != n_gpus - 1) {
+            if (i_proc != n_gpus - 1)
+            {
                 MPI_Send(&ticket, 1, MPI_INT64_T, i_proc + 1, i_proc + 1, comm_global);
-            } 
+            }
         };
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
@@ -860,11 +870,10 @@ namespace NWQSim
                 // BARR_NVSHMEM;
             }
         }
-         //============== Local 2-qubit Expectation Gate  ================
-        __device__ inline 
-        void EXPECT_C2_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1, const IdxType mask)
+        //============== Local 2-qubit Expectation Gate  ================
+        __device__ inline void EXPECT_C2_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1, const IdxType mask)
         {
-            // Functions very similarly to the two-qubit gate. Computes diagonalization and expectation value in-place for a weight-2 Pauli operator 
+            // Functions very similarly to the two-qubit gate. Computes diagonalization and expectation value in-place for a weight-2 Pauli operator
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             const IdxType per_pe_work = ((dim) >> (gpu_scale + 2));
@@ -919,15 +928,15 @@ namespace NWQSim
                 exp_val += hasEvenParity_cu(pos3 & mask, n_qubits) ? v3 : -v3;
             }
             // BARR_NVSHMEM;
-            if (tid < per_pe_work) {
+            if (tid < per_pe_work)
+            {
                 m_real[tid] = exp_val;
             }
         }
 
         //============== Unified 2-qubit Gate ================
         // Perform communication optimization here
-        __device__ inline
-        void EXPECT_C2V1_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1, IdxType mask)
+        __device__ inline void EXPECT_C2V1_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1, IdxType mask)
         {
             // Functions very similarly to the two-qubit gate with remote optimization.
             assert(qubit0 != qubit1); // Non-cloning
@@ -951,12 +960,13 @@ namespace NWQSim
 
                 if (i_proc > pair_gpu)
                 {
-                    if (tid < per_pe_work) {
+                    if (tid < per_pe_work)
+                    {
                         m_real[tid] = exp_val;
                     }
                     return;
                 }
-                
+
                 ValType *sv_real_remote = m_real;
                 ValType *sv_imag_remote = m_imag;
                 if (tid == 0)
@@ -964,7 +974,7 @@ namespace NWQSim
                 if (tid == 0)
                     nvshmem_double_get(sv_imag_remote, sv_imag, per_pe_num, pair_gpu);
                 grid.sync();
-                
+
                 IdxType index = (i_proc >> (q - (lg2_m_gpu) + 1)) << q - (lg2_m_gpu);
                 index |= i_proc & (((IdxType)1 << (q - (lg2_m_gpu))) - 1);
 
@@ -982,8 +992,7 @@ namespace NWQSim
                         term + SV4IDX(0),
                         term + SV4IDX(1),
                         term + SV4IDX(2),
-                        term + SV4IDX(3)
-                    };
+                        term + SV4IDX(3)};
                     el_real[0] = LOCAL_G_CUDA_MPI(sv_real, term + SV4IDX(0));
                     el_imag[0] = LOCAL_G_CUDA_MPI(sv_imag, term + SV4IDX(0));
                     el_real[3] = LOCAL_G_CUDA_MPI(sv_real_remote, term + SV4IDX(3));
@@ -1015,22 +1024,22 @@ namespace NWQSim
                             r_imag += (el_real[k] * gm_imag[j * 4 + k]) + (el_imag[k] * gm_real[j * 4 + k]);
                         }
                         ValType val = r_real * r_real + r_imag * r_imag;
-                        exp_val += hasEvenParity_cu(indices[j] & mask, n_qubits) ? val: -val;
+                        exp_val += hasEvenParity_cu(indices[j] & mask, n_qubits) ? val : -val;
                     }
                 }
-                if (tid < per_pe_work) {
+                if (tid < per_pe_work)
+                {
                     m_real[tid] = exp_val;
                 }
-                
             }
         }
 
-    // Compute the expectation value for a weight-four Pauli string 
-    __device__ inline 
-    void EXPECT_C4_GATE(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask) {
+        // Compute the expectation value for a weight-four Pauli string
+        __device__ inline void EXPECT_C4_GATE(const ValType *gm_real, const ValType *gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask)
+        {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
-                
+
             assert(qubit0 != qubit1); // Non-cloning
             assert(qubit0 != qubit2); // Non-cloning
             assert(qubit0 != qubit3); // Non-cloning
@@ -1048,8 +1057,8 @@ namespace NWQSim
             const IdxType s = max(v2, v3);
             ValType exp_val = 0.0;
             const IdxType per_pe_work = ((dim) >> (gpu_scale + 4));
-            
-            for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work; i+= blockDim.x * gridDim.x)
+
+            for (IdxType i = (i_proc)*per_pe_work + tid; i < (i_proc + 1) * per_pe_work; i += blockDim.x * gridDim.x)
             {
                 const IdxType term0 = MOD2E(i, p);
                 const IdxType term1 = MOD2E(DIV2E(i, p), q - p - 1) * EXP2E(p + 1);
@@ -1089,17 +1098,17 @@ namespace NWQSim
 
                     ValType val = res_real * res_real + res_imag * res_imag;
                     exp_val += hasEvenParity_cu((term + SV16IDX(j)) & mask, n_qubits) ? val : -val;
-            
                 }
             }
-            if (tid < per_pe_work) {
+            if (tid < per_pe_work)
+            {
                 m_real[tid] = exp_val;
             }
         }
 
         // Compute the expectation value of a weight-four Pauli operator (this time with communication optimizations, one qubit is remote)
-        __device__
-        void EXPECT_C4V1_GATE(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask) {
+        __device__ void EXPECT_C4V1_GATE(const ValType *gm_real, const ValType *gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask)
+        {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             assert(qubit0 != qubit1); // Non-cloning
@@ -1116,22 +1125,25 @@ namespace NWQSim
             const IdxType p = min(v0, v1);
             const IdxType q = min(min(v2, v3), max(v0, v1));
             const IdxType r = max(min(v2, v3), max(v0, v1));
-            const IdxType s = max(v2, v3);                
+            const IdxType s = max(v2, v3);
             const IdxType per_pe_work = ((dim) >> (gpu_scale + 3));
             const IdxType per_pe_num = ((dim) >> (gpu_scale));
             if (s < lg2_m_gpu)
             {
                 EXPECT_C4_GATE(gm_real, gm_imag, qubit0, qubit1, qubit2, qubit3, mask);
-                
-            } else {
+            }
+            else
+            {
                 ValType exp_val = 0.0;
 
                 // load data from pair node
                 IdxType pair_gpu = (i_proc) ^ ((IdxType)1 << (s - (lg2_m_gpu)));
                 assert(pair_gpu != i_proc);
-                if (i_proc > pair_gpu) {
-                    
-                    if (tid < per_pe_work) {
+                if (i_proc > pair_gpu)
+                {
+
+                    if (tid < per_pe_work)
+                    {
                         m_real[tid] = exp_val;
                     }
                     return;
@@ -1234,7 +1246,7 @@ namespace NWQSim
                         el_imag[14] = LOCAL_G_CUDA_MPI(sv_imag_remote, term + SV16IDX(14));
                         el_imag[15] = LOCAL_G_CUDA_MPI(sv_imag_remote, term + SV16IDX(15));
                     }
-                    
+
                     // #pragma unroll
                     for (unsigned j = 0; j < 16; j++)
                     {
@@ -1249,20 +1261,21 @@ namespace NWQSim
                         ValType val = res_real * res_real + res_imag * res_imag;
 
                         exp_val += hasEvenParity_cu((term + SV16IDX(j)) & mask, n_qubits) ? val : -val;
-                    // if (abs(val) > 1e-3) {
-                    //     printf("%lld %lld %lld %lld %lld %lld %lld %f %lld %f\n", tid, i_proc, index, j, term, i, term + SV16IDX(j), val, hasEvenParity_cu((term + SV16IDX(j)) & mask, n_qubits), exp_val);
-                    // }
-                        
+                        // if (abs(val) > 1e-3) {
+                        //     printf("%lld %lld %lld %lld %lld %lld %lld %f %lld %f\n", tid, i_proc, index, j, term, i, term + SV16IDX(j), val, hasEvenParity_cu((term + SV16IDX(j)) & mask, n_qubits), exp_val);
+                        // }
                     }
                 }
-                if (tid < per_pe_work) {
+                if (tid < per_pe_work)
+                {
                     m_real[tid] = exp_val;
                 }
             }
         }
 
         // Compute the expectation value of a diagonal-basis Pauli operator. No communication needed, just need the local sum
-        __device__ inline void EXPECT_C0_GATE(IdxType mask, ValType coeff) {
+        __device__ inline void EXPECT_C0_GATE(IdxType mask, ValType coeff)
+        {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             double exp_val = 0.0;
@@ -1275,56 +1288,62 @@ namespace NWQSim
                 // add/subtract depending on the Pauli parity relative to the state index
                 exp_val += hasEvenParity_cu(i & mask, n_qubits) ? val : -val;
             }
-            if (tid < per_pe_work) {
+            if (tid < per_pe_work)
+            {
                 // store accumulated result in m_real
                 m_real[tid] += coeff * exp_val;
             }
         }
 
         // Perform a parallel reduction over the locally cached expectation sums
-        __device__ inline
-        void EXPECT_REDUCE(ValType* output) {
+        __device__ inline void EXPECT_REDUCE(ValType *output)
+        {
             grid_group grid = this_grid();
             const int tid = blockDim.x * blockIdx.x + threadIdx.x;
             // ensure the reduction dimension is a power of 2
             IdxType gridlog2 = 63 - __clzll(blockDim.x * gridDim.x);
-            if (blockDim.x * gridDim.x & (((IdxType)1 << gridlog2) - 1)) {
+            if (blockDim.x * gridDim.x & (((IdxType)1 << gridlog2) - 1))
+            {
                 gridlog2 += 1;
             }
-            IdxType reduce_limit =(IdxType)1 << gridlog2;
+            IdxType reduce_limit = (IdxType)1 << gridlog2;
             reduce_limit = min(reduce_limit, dim >> gpu_scale);
             // Parallel reduction
             for (IdxType k = (reduce_limit >> 1); k > 0; k >>= 1)
             {
-                if (tid < k && tid + k < blockDim.x * gridDim.x) {
+                if (tid < k && tid + k < blockDim.x * gridDim.x)
+                {
                     m_real[tid] += m_real[tid + k];
                 }
                 grid.sync();
             }
             grid.sync();
-            if (tid == 0) {
+            if (tid == 0)
+            {
                 // write the output to the assigned pointer
                 *output = m_real[0];
             }
         }
-            // Compute the expectation value for a QWC group
-__device__ __inline__ void EXPECT_GATE(ObservableList* o)  {
+        // Compute the expectation value for a QWC group
+        __device__ __inline__ void EXPECT_GATE(ObservableList *o)
+        {
             grid_group grid = this_grid();
             const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
-            if (tid < m_gpu) {
+            if (tid < m_gpu)
+            {
                 m_real[tid] = 0;
-            
             }
             size_t nterms = o->numterms;
-            IdxType* zmasks = o->zmasks;
-            ValType* coeffs = o->coeffs;
-            for (IdxType obs_ind = 0; obs_ind < nterms; obs_ind++) {
+            IdxType *zmasks = o->zmasks;
+            ValType *coeffs = o->coeffs;
+            for (IdxType obs_ind = 0; obs_ind < nterms; obs_ind++)
+            {
                 EXPECT_C0_GATE(zmasks[obs_ind], coeffs[obs_ind]);
             }
             BARR_NVSHMEM;
             EXPECT_REDUCE(&o->exp_output);
         }
-        
+
         __device__ __inline__ void M_GATE(const IdxType qubit, const IdxType cur_index)
         {
             ValType rand = randoms_gpu[cur_index];
@@ -1780,8 +1799,8 @@ __device__ __inline__ void EXPECT_GATE(ObservableList* o)  {
             }
             BARR_NVSHMEM;
         }
-        virtual ValType *get_real() const override {return sv_real;};
-        virtual ValType *get_imag() const override {return sv_imag;};
+        virtual ValType *get_real() const override { return sv_real; };
+        virtual ValType *get_imag() const override { return sv_imag; };
     };
 
     __global__ void simulation_kernel_cuda_mpi(SV_CUDA_MPI *sv_gpu, IdxType n_gates)
@@ -1852,11 +1871,11 @@ __device__ __inline__ void EXPECT_GATE(ObservableList* o)  {
             }
             else if (op_name == OP::EXPECT)
             {
-                
-                ObservableList* o = (ObservableList*)((sv_gpu->gates_gpu)[t].data);
+
+                ObservableList *o = (ObservableList *)((sv_gpu->gates_gpu)[t].data);
                 BARR_NVSHMEM;
                 sv_gpu->EXPECT_GATE(o);
-                    
+
                 BARR_NVSHMEM;
             }
             // only need sync when operating on remote qubits

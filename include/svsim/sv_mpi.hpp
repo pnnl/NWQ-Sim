@@ -9,7 +9,7 @@
 #include "../circuit_pass/fusion.hpp"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
-#include "../private/config.hpp"
+#include "../config.hpp"
 #include "../private/exp_gate_declarations_host.hpp"
 #include <random>
 #include <cstring>
@@ -23,7 +23,7 @@ namespace NWQSim
     {
 
     public:
-        SV_MPI(IdxType _n_qubits, const std::string& config_path) : QuantumState(_n_qubits, SimType::SV, config_path)
+        SV_MPI(IdxType _n_qubits) : QuantumState(SimType::SV)
         {
             // SV initialization
             n_qubits = _n_qubits;
@@ -104,54 +104,63 @@ namespace NWQSim
             rng.seed(seed);
         }
 
-        virtual void set_initial (std::string fpath, std::string format) override {
+        virtual void set_initial(std::string fpath, std::string format) override
+        {
             std::ifstream instream;
-            if (format != "sv") {
+            if (format != "sv")
+            {
                 throw std::runtime_error("SV-Sim only supports statevector input states\n");
             }
-            instream.open(fpath, std::ios::in|std::ios::binary);
-            if (instream.is_open()) {
+            instream.open(fpath, std::ios::in | std::ios::binary);
+            if (instream.is_open())
+            {
                 instream.seekg(sv_size_per_cpu * i_proc);
-                instream.read((char*)sv_real, sv_size_per_cpu);
-                instream.read((char*)sv_imag, sv_size_per_cpu);
+                instream.read((char *)sv_real, sv_size_per_cpu);
+                instream.read((char *)sv_imag, sv_size_per_cpu);
                 instream.close();
             }
         }
 
-        virtual void dump_res_state(std::string outpath) override {
+        virtual void dump_res_state(std::string outpath) override
+        {
             std::ofstream outstream;
-            outstream.open(outpath, std::ios::out|std::ios::binary);
+            outstream.open(outpath, std::ios::out | std::ios::binary);
             IdxType ticket = 1;
             // synchronize the file writes with a basic point-point ticket lock
-            if (i_proc != 0) {
+            if (i_proc != 0)
+            {
                 MPI_Recv(&ticket, 1, MPI_INT64_T, i_proc - 1, i_proc, comm_global, MPI_STATUS_IGNORE);
             }
-            if (outstream.is_open()) {
+            if (outstream.is_open())
+            {
                 // append to the end of the file
                 outstream.seekp(0, std::ios::end);
-                outstream.write((char*)sv_real, sizeof(ValType) * sv_size_per_cpu);
+                outstream.write((char *)sv_real, sizeof(ValType) * sv_size_per_cpu);
                 outstream.close();
             }
-            if (i_proc != n_cpus - 1) {
+            if (i_proc != n_cpus - 1)
+            {
                 MPI_Send(&ticket, 1, MPI_INT64_T, i_proc + 1, i_proc + 1, comm_global);
-            } 
+            }
             // now for the imaginary part
             ticket = 1;
             // synchronize the file writes with a basic point-point ticket lock
-            if (i_proc != 0) {
+            if (i_proc != 0)
+            {
                 MPI_Recv(&ticket, 1, MPI_INT64_T, i_proc - 1, i_proc, comm_global, MPI_STATUS_IGNORE);
             }
-            outstream.open(outpath, std::ios::out|std::ios::binary);
-            if (outstream.is_open()) {
+            outstream.open(outpath, std::ios::out | std::ios::binary);
+            if (outstream.is_open())
+            {
                 // append to the end of the file
                 outstream.seekp(0, std::ios::end);
-                outstream.write((char*)sv_imag, sv_size_per_cpu);
+                outstream.write((char *)sv_imag, sv_size_per_cpu);
                 outstream.close();
             }
-            if (i_proc != n_cpus - 1) {
+            if (i_proc != n_cpus - 1)
+            {
                 MPI_Send(&ticket, 1, MPI_INT64_T, i_proc + 1, i_proc + 1, comm_global);
-            } 
-
+            }
         };
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
@@ -348,7 +357,7 @@ namespace NWQSim
 
                 if (Config::PRINT_SIM_TRACE && i_proc == 0)
                     printProgressBar(i, n_gates, start);
-            
+
                 auto g = gates[i];
 
                 // only need sync when operating on remote qubits
@@ -391,7 +400,7 @@ namespace NWQSim
                 else if (g.op_name == OP::EXPECT)
                 {
                     BARR_MPI;
-                    ObservableList* o = (ObservableList*)(g.data);
+                    ObservableList *o = (ObservableList *)(g.data);
                     EXPECT_GATE(o);
                     BARR_MPI;
                 }
@@ -585,7 +594,7 @@ namespace NWQSim
                     ValType *sv_imag_remote = m_imag;
                     MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     MPI_Recv(sv_imag_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    
+
                     IdxType index = (i_proc >> (q - (lg2_m_cpu) + 1)) << (q - (lg2_m_cpu));
                     index |= i_proc & (((IdxType)1 << (q - (lg2_m_cpu))) - 1);
                     for (IdxType i = (index)*per_pe_work; i < (index + 1) * per_pe_work; i++)
@@ -653,8 +662,8 @@ namespace NWQSim
             }
         }
 
-
-        virtual double EXPECT_C4_GATE(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask) {
+        virtual double EXPECT_C4_GATE(const ValType *gm_real, const ValType *gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask)
+        {
             assert(qubit0 != qubit1); // Non-cloning
             assert(qubit0 != qubit2); // Non-cloning
             assert(qubit0 != qubit3); // Non-cloning
@@ -672,7 +681,7 @@ namespace NWQSim
             const IdxType s = std::max(v2, v3);
             ValType exp_val = 0.0;
             const IdxType per_pe_work = ((dim) >> (cpu_scale + 4));
-            
+
             for (IdxType i = (i_proc)*per_pe_work; i < (i_proc + 1) * per_pe_work; i++)
             {
                 const IdxType term0 = MOD2E(i, p);
@@ -712,15 +721,15 @@ namespace NWQSim
                     }
 
                     ValType val = res_real * res_real + res_imag * res_imag;
-                
+
                     exp_val += hasEvenParity((term + SV16IDX(j)) & mask, n_qubits) ? val : -val;
                     // printf("val %f %lld\n", val, term + SV16IDX(j));
-            
                 }
             }
             return exp_val;
         }
-        ValType EXPECT_C4V1_GATE(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask) {
+        ValType EXPECT_C4V1_GATE(const ValType *gm_real, const ValType *gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask)
+        {
             assert(qubit0 != qubit1); // Non-cloning
             assert(qubit0 != qubit2); // Non-cloning
             assert(qubit0 != qubit3); // Non-cloning
@@ -735,14 +744,15 @@ namespace NWQSim
             const IdxType p = std::min(v0, v1);
             const IdxType q = std::min(std::min(v2, v3), std::max(v0, v1));
             const IdxType r = std::max(std::min(v2, v3), std::max(v0, v1));
-            const IdxType s = std::max(v2, v3);                
+            const IdxType s = std::max(v2, v3);
             const IdxType per_pe_work = ((dim) >> (cpu_scale + 3));
             const IdxType per_pe_num = ((dim) >> (cpu_scale));
             if (s < lg2_m_cpu)
             {
                 return EXPECT_C4_GATE(gm_real, gm_imag, qubit0, qubit1, qubit2, qubit3, mask);
-                
-            } else {
+            }
+            else
+            {
                 ValType exp_val = 0.0;
 
                 // load data from pair node
@@ -765,10 +775,11 @@ namespace NWQSim
                     MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     MPI_Recv(sv_imag_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     std::vector<bool> markers;
-                    if (i_proc == 0) {
+                    if (i_proc == 0)
+                    {
                         markers.resize(per_pe_num);
                     }
-                    
+
                     for (IdxType i = (index)*per_pe_work; i < (index + 1) * per_pe_work; i++)
                     {
                         ValType el_real[16];
@@ -781,7 +792,7 @@ namespace NWQSim
                         const IdxType term = term4 + term3 + term2 + term1 + term0;
                         if (qubit3 == s) // qubit3 is remote qubit
                         {
-                            
+
                             // printf("Qubit 3");
                             el_real[0] = LOCAL_G(sv_real, term + SV16IDX(0));
                             el_real[1] = LOCAL_G(sv_real_remote, term + SV16IDX(1));
@@ -857,7 +868,7 @@ namespace NWQSim
                             el_imag[14] = LOCAL_G(sv_imag_remote, term + SV16IDX(14));
                             el_imag[15] = LOCAL_G(sv_imag_remote, term + SV16IDX(15));
                         }
-                        
+
                         // #pragma unroll
                         for (unsigned j = 0; j < 16; j++)
                         {
@@ -872,16 +883,13 @@ namespace NWQSim
                             ValType val = res_real * res_real + res_imag * res_imag;
 
                             exp_val += hasEvenParity((term + SV16IDX(j)) & mask, n_qubits) ? val : -val;
-                            
                         }
-                       
                     }
                 }
                 BARR_MPI;
                 return exp_val;
             }
         }
-
 
         //============== Local 2-qubit Expectation Gate  ================
         ValType EXPECT_C2_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit0, const IdxType qubit1, const IdxType mask)
@@ -989,10 +997,10 @@ namespace NWQSim
                     ValType *sv_imag_remote = m_imag;
                     MPI_Recv(sv_real_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     MPI_Recv(sv_imag_remote, per_pe_num, MPI_DOUBLE, pair_cpu, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    
+
                     for (IdxType i = index * per_pe_work; i < (index + 1) * per_pe_work; i++)
                     {
-                        
+
                         ValType el_real[4];
                         ValType el_imag[4];
                         ValType res_real[4] = {0};
@@ -1005,8 +1013,7 @@ namespace NWQSim
                             term + SV4IDX(0),
                             term + SV4IDX(1),
                             term + SV4IDX(2),
-                            term + SV4IDX(3)
-                        };
+                            term + SV4IDX(3)};
                         el_real[0] = LOCAL_G(sv_real, term + SV4IDX(0));
                         el_imag[0] = LOCAL_G(sv_imag, term + SV4IDX(0));
                         el_real[3] = LOCAL_G(sv_real_remote, term + SV4IDX(3));
@@ -1038,7 +1045,7 @@ namespace NWQSim
                                 r_imag += (el_real[k] * gm_imag[j * 4 + k]) + (el_imag[k] * gm_real[j * 4 + k]);
                             }
                             ValType val = r_real * r_real + r_imag * r_imag;
-                            exp_val += hasEvenParity((term + SV4IDX(j)) & mask, n_qubits) ? val: -val;
+                            exp_val += hasEvenParity((term + SV4IDX(j)) & mask, n_qubits) ? val : -val;
                         }
                     }
                     return exp_val;
@@ -1108,7 +1115,8 @@ namespace NWQSim
             BARR_MPI;
         }
         // Compute the expectation value for a single operator in the diagonal basis
-        double EXPECT_C0_GATE(IdxType zmask) {
+        double EXPECT_C0_GATE(IdxType zmask)
+        {
             const IdxType per_pe_work = ((dim) >> (cpu_scale));
             ValType exp_val = 0;
             // iterate over locally stored values
@@ -1119,7 +1127,6 @@ namespace NWQSim
                 exp_val += hasEvenParity(i & zmask, n_qubits) ? val : -val;
             }
             return exp_val;
-            
         }
         /**
          * @brief Compute operator expectation values
@@ -1127,9 +1134,11 @@ namespace NWQSim
          *       The partial sums are reduced using an MPI
          * @param o: Pointer to a container with pointers to an array of qubit masks and coefficients, also stores the accumulated sum
          */
-        void EXPECT_GATE(ObservableList* o)  {
+        void EXPECT_GATE(ObservableList *o)
+        {
             ValType expect = 0;
-            for (size_t i = 0; i < o->numterms; i++) {
+            for (size_t i = 0; i < o->numterms; i++)
+            {
                 expect += o->coeffs[i] * EXPECT_C0_GATE(o->zmasks[i]);
             }
             // printf("%lld %f\n", i_proc, result);
@@ -1353,8 +1362,8 @@ namespace NWQSim
             }
             // BARR_MPI;
         }
-        virtual ValType *get_real() const override {return sv_real;};
-        virtual ValType *get_imag() const override {return sv_imag;};
+        virtual ValType *get_real() const override { return sv_real; };
+        virtual ValType *get_imag() const override { return sv_imag; };
     };
 
 } // namespace NWQSim

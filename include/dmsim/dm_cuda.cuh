@@ -5,7 +5,7 @@
 #include "../gate.hpp"
 #include "../circuit.hpp"
 
-#include "../private/config.hpp"
+#include "../config.hpp"
 #include "../private/cuda_util.cuh"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
@@ -38,15 +38,15 @@ namespace NWQSim
     // Simulation kernel runtime
     class DM_CUDA;
     __global__ void dm_simulation_kernel_cuda(DM_CUDA *dm_gpu, IdxType n_gates, IdxType n_qubits, bool tensor_core);
-    __global__ void fidelity_kernel(DM_CUDA* dm_gpu,
-                                   ValType* sv_real, 
-                                   ValType* sv_imag, 
-                                   ValType* result);
+    __global__ void fidelity_kernel(DM_CUDA *dm_gpu,
+                                    ValType *sv_real,
+                                    ValType *sv_imag,
+                                    ValType *result);
 
     class DM_CUDA : public QuantumState
     {
     public:
-        DM_CUDA(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits,SimType::DM, config)
+        DM_CUDA(IdxType _n_qubits) : QuantumState(SimType::DM)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -126,19 +126,24 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-        virtual void set_initial (std::string fpath, std::string format) override {
+        virtual void set_initial(std::string fpath, std::string format) override
+        {
             std::ifstream instream;
-            instream.open(fpath, std::ios::in|std::ios::binary);
-            if (instream.is_open()) {
-                if (format == "dm") {
-                    instream.read((char*)dm_real_cpu, dm_size);
-                    instream.read((char*)dm_imag_cpu, dm_size);
+            instream.open(fpath, std::ios::in | std::ios::binary);
+            if (instream.is_open())
+            {
+                if (format == "dm")
+                {
+                    instream.read((char *)dm_real_cpu, dm_size);
+                    instream.read((char *)dm_imag_cpu, dm_size);
                     cudaSafeCall(cudaMemcpy(dm_real, dm_real_cpu,
                                             dm_size, cudaMemcpyHostToDevice));
                     cudaSafeCall(cudaMemcpy(dm_imag, dm_imag_cpu,
                                             dm_size, cudaMemcpyHostToDevice));
                     instream.close();
-                } else {
+                }
+                else
+                {
                     IdxType sv_dim = 1 << n_qubits;
                     IdxType sv_mem = sv_dim * sizeof(ValType);
                     ValType *sv_real, *sv_imag, *sv_real_cpu, *sv_imag_cpu;
@@ -146,25 +151,25 @@ namespace NWQSim
                     SAFE_ALOC_GPU(sv_imag, sv_mem);
                     sv_real_cpu = new ValType[sv_dim];
                     sv_imag_cpu = new ValType[sv_dim];
-                    instream.read((char*)sv_real_cpu, sv_mem);
-                    instream.read((char*)sv_imag_cpu, sv_mem);
+                    instream.read((char *)sv_real_cpu, sv_mem);
+                    instream.read((char *)sv_imag_cpu, sv_mem);
                     cudaSafeCall(cudaMemcpy(sv_real, sv_real_cpu,
                                             sv_mem, cudaMemcpyHostToDevice));
                     cudaSafeCall(cudaMemcpy(sv_imag, sv_imag_cpu,
                                             sv_mem, cudaMemcpyHostToDevice));
-                    delete [] sv_real_cpu;
-                    delete [] sv_imag_cpu;
+                    delete[] sv_real_cpu;
+                    delete[] sv_imag_cpu;
                     int numBlocksPerSm;
                     int smem_size = 0;
                     cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
-                                                                            fidelity_kernel, THREADS_CTA_CUDA, smem_size));
-                    
+                                                                               fidelity_kernel, THREADS_CTA_CUDA, smem_size));
+
                     dim3 gridDim(1, 1, 1);
 
                     cudaDeviceProp deviceProp;
                     cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
                     gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
-                    void* args[] = {&dm_real, &dm_imag, &sv_real, &sv_imag, &sv_real, &sv_imag, &sv_dim, &sv_dim};
+                    void *args[] = {&dm_real, &dm_imag, &sv_real, &sv_imag, &sv_real, &sv_imag, &sv_dim, &sv_dim};
                     cudaLaunchCooperativeKernel((void *)outerProduct, gridDim,
                                                 THREADS_CTA_CUDA, args, smem_size);
                     cudaDeviceSynchronize();
@@ -177,16 +182,18 @@ namespace NWQSim
                 }
             }
         }
-        virtual void dump_res_state(std::string outpath) override {
+        virtual void dump_res_state(std::string outpath) override
+        {
             std::ofstream outstream;
-            outstream.open(outpath, std::ios::out|std::ios::binary);
-            if (outstream.is_open()) {
-                cudaSafeCall(cudaMemcpy(dm_real_cpu, dm_real, 
+            outstream.open(outpath, std::ios::out | std::ios::binary);
+            if (outstream.is_open())
+            {
+                cudaSafeCall(cudaMemcpy(dm_real_cpu, dm_real,
                                         dm_size, cudaMemcpyDeviceToHost));
-                cudaSafeCall(cudaMemcpy(dm_imag_cpu, dm_imag, 
+                cudaSafeCall(cudaMemcpy(dm_imag_cpu, dm_imag,
                                         dm_size, cudaMemcpyDeviceToHost));
-                outstream.write((char*)dm_real_cpu, sizeof(ValType) * dim);
-                outstream.write((char*)dm_imag_cpu, sizeof(ValType) * dim);
+                outstream.write((char *)dm_real_cpu, sizeof(ValType) * dim);
+                outstream.write((char *)dm_imag_cpu, sizeof(ValType) * dim);
                 outstream.close();
             }
         };
@@ -534,8 +541,8 @@ namespace NWQSim
             return term;
         }
 
-        virtual ValType *get_real() const override {return dm_real;};
-        virtual ValType *get_imag() const override {return dm_imag;};
+        virtual ValType *get_real() const override { return dm_real; };
+        virtual ValType *get_imag() const override { return dm_imag; };
 #ifdef FP64_TC_AVAILABLE
         //============== Unified 4-qubit Gate with TC V1 ================
         // This is with tensorcore optimization
@@ -907,7 +914,7 @@ namespace NWQSim
             const IdxType per_pe_work_dm = (dim);
 
             IdxType mask = ((IdxType)1 << qubit);
-            mask = (mask<<n_qubits) + mask;
+            mask = (mask << n_qubits) + mask;
 
             for (IdxType i = tid; i < per_pe_work_dm; i += blockDim.x * gridDim.x)
             {
@@ -925,15 +932,16 @@ namespace NWQSim
             }
             BARR_CUDA;
         }
-        
-        virtual ValType fidelity(std::shared_ptr<QuantumState> other) override {
-            ValType* result_cu;
+
+        virtual ValType fidelity(std::shared_ptr<QuantumState> other) override
+        {
+            ValType *result_cu;
             ValType result;
             int numBlocksPerSm;
             int smem_size = 0;
             cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
                                                                        fidelity_kernel, THREADS_CTA_CUDA, smem_size));
-            
+
             dim3 gridDim(1, 1, 1);
 
             cudaDeviceProp deviceProp;
@@ -946,9 +954,9 @@ namespace NWQSim
             // Copy the simulator instance to GPU
             cudaSafeCall(cudaMemcpy(dm_gpu, this,
                                     sizeof(DM_CUDA), cudaMemcpyHostToDevice));
-            ValType* sv_real = other->get_real();
-            ValType* sv_imag = other->get_imag();
-            void* args[] = {&dm_gpu, &sv_real, &sv_imag, &result_cu};
+            ValType *sv_real = other->get_real();
+            ValType *sv_imag = other->get_imag();
+            void *args[] = {&dm_gpu, &sv_real, &sv_imag, &result_cu};
             cudaLaunchCooperativeKernel((void *)fidelity_kernel, gridDim,
                                         THREADS_CTA_CUDA, args, smem_size);
             cudaSafeCall(cudaDeviceSynchronize());
@@ -957,26 +965,29 @@ namespace NWQSim
             cudaSafeCall(cudaFree(dm_gpu));
             return result;
         };
-        __device__ void fidelity_device(ValType* sv_real, 
-                                        ValType* sv_imag, 
-                                        ValType* result) {
-            const IdxType tid = threadIdx.x + blockIdx.x * blockDim.x; 
+        __device__ void fidelity_device(ValType *sv_real,
+                                        ValType *sv_imag,
+                                        ValType *result)
+        {
+            const IdxType tid = threadIdx.x + blockIdx.x * blockDim.x;
             grid_group grid = this_grid();
             IdxType vector_dim = (IdxType)1 << n_qubits;
             ValType local_real = 0;
-            if (tid < dim) {
+            if (tid < dim)
+            {
                 m_real[tid] = 0;
                 m_imag[tid] = 0;
-                for (size_t i = tid; i < dim; i += blockDim.x * gridDim.x) {
+                for (size_t i = tid; i < dim; i += blockDim.x * gridDim.x)
+                {
                     IdxType r = i >> n_qubits;
                     IdxType s = i & (vector_dim - 1);
                     ValType a = sv_real[s]; // ket
                     ValType b = sv_imag[s];
-                    ValType c = dm_real[r * vector_dim + s]; 
+                    ValType c = dm_real[r * vector_dim + s];
                     ValType d = dm_imag[r * vector_dim + s];
                     ValType g = sv_real[r]; // bra
                     ValType f = -sv_imag[r];
-                    ValType real_contrib =  a * c * g - a * d * f - b * c * f - b * d * g;
+                    ValType real_contrib = a * c * g - a * d * f - b * c * f - b * d * g;
                     ValType imag_contrib = a * c * f + a * d * g + b * c * g - b * d * f;
                     m_real[tid] += a * c * g - a * d * f - b * c * f - b * d * g;
                     m_imag[tid] += a * c * f + a * d * g + b * c * g - b * d * f;
@@ -985,33 +996,37 @@ namespace NWQSim
 
             grid.sync();
             IdxType gridlog2 = 63 - __clz(blockDim.x * gridDim.x);
-            if (blockDim.x * gridDim.x > ((IdxType)1 << gridlog2)) {
+            if (blockDim.x * gridDim.x > ((IdxType)1 << gridlog2))
+            {
                 gridlog2 += 1;
             }
 
             IdxType reduce_lim = min((1ll << gridlog2), dim);
-            for (IdxType k = reduce_lim >> 1; k > 0; k >>= 1) {
-                if (tid < k) {
+            for (IdxType k = reduce_lim >> 1; k > 0; k >>= 1)
+            {
+                if (tid < k)
+                {
                     m_real[tid] += m_real[tid + k];
                     m_imag[tid] += m_imag[tid + k];
                 }
                 grid.sync();
             }
-            if (tid == 0) {
-                assert(abs(m_imag[tid]) <=1e-10);
+            if (tid == 0)
+            {
+                assert(abs(m_imag[tid]) <= 1e-10);
                 *result = m_real[tid];
-            }                               
+            }
         }
     };
-    
-    __global__ 
-    void fidelity_kernel(DM_CUDA* dm_gpu,
-                                    ValType* sv_real, 
-                                    ValType* sv_imag, 
-                                    ValType* result) {
-        dm_gpu->fidelity_device(sv_real, sv_imag, result);           
+
+    __global__ void fidelity_kernel(DM_CUDA *dm_gpu,
+                                    ValType *sv_real,
+                                    ValType *sv_imag,
+                                    ValType *result)
+    {
+        dm_gpu->fidelity_device(sv_real, sv_imag, result);
     }
-    
+
     __global__ void dm_simulation_kernel_cuda(DM_CUDA *dm_gpu, IdxType n_gates, IdxType n_qubits, bool tensor_core)
     {
         IdxType cur_index = 0;
@@ -1055,6 +1070,5 @@ namespace NWQSim
             }
             grid.sync();
         }
-        
     }
 } // namespace NWQSim

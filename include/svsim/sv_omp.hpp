@@ -16,9 +16,12 @@ namespace NWQSim
     {
 
     public:
-        SV_OMP(IdxType _n_qubits, const std::string& config_path) : SV_CPU(_n_qubits, config_path)
+        SV_OMP(IdxType _n_qubits) : SV_CPU(_n_qubits)
         {
-            n_cpu = omp_get_max_threads();
+            if (Config::OMP_NUM_THREADS > 0)
+                omp_set_num_threads(Config::OMP_NUM_THREADS);
+            else
+                omp_set_num_threads(omp_get_max_threads());
         } // constructor
 
         ~SV_OMP() {} // virtual destructor
@@ -471,8 +474,8 @@ namespace NWQSim
             }
             BARR;
         }
-        virtual ValType *get_real() const override {return sv_real;};
-        virtual ValType *get_imag() const override {return sv_imag;};
+        virtual ValType *get_real() const override { return sv_real; };
+        virtual ValType *get_imag() const override { return sv_imag; };
     };
 
 } // namespace NWQSim

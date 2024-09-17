@@ -72,7 +72,7 @@ private:
     void dump_gates();
 
 public:
-    qasm_parser(){}
+    qasm_parser() {}
     void load_qasm_file(const char *filename);
     void load_qasm_string(const std::string qasm_string);
     void load_qobj_file(const char *filename);
@@ -85,7 +85,7 @@ public:
 
 void qasm_parser::parse_qasm()
 {
-    if ((*qasmStreamPtr).fail()) 
+    if ((*qasmStreamPtr).fail())
         throw runtime_error("qasm is not well configured (failed read or failed load)!\n");
     sr.add_replace("pi", "pi", token::e_pi);
     sr.add_replace("sin", "sin", token::e_func);
@@ -172,7 +172,6 @@ void qasm_parser::load_qasm_string(const std::string qasm_string)
     parse_qasm();
 }
 
-
 void qasm_parser::load_instruction()
 {
     bool has_eof = false, has_lcurly = false, has_rcurly = false;
@@ -251,10 +250,9 @@ void qasm_parser::load_instruction()
     }
 }
 
-
 void qasm_parser::parse_qobj()
 {
-    if ((*qobjStreamPtr).fail()) 
+    if ((*qobjStreamPtr).fail())
         throw runtime_error("qobj is not well configured (failed read or failed load)!\n");
     json qobj = json::parse(*qobjStreamPtr);
     list_gates = new vector<qasm_gate>;
@@ -264,7 +262,7 @@ void qasm_parser::parse_qobj()
     for (auto qr : qobj["header"]["qreg_sizes"])
     {
         qreg qreg;
-        qreg.name= qr[0];
+        qreg.name = qr[0];
         qreg.width = qr[1];
         qreg.offset = global_qubit_offset;
         global_qubit_offset += qreg.width;
@@ -281,7 +279,7 @@ void qasm_parser::parse_qobj()
         creg.qubit_indices.insert(creg.qubit_indices.end(), creg.width, UN_DEF);
         list_cregs.insert({creg.name, creg});
     }
-    
+
     //================ CREG ==================
     for (auto is : qobj["instructions"])
     {
@@ -294,14 +292,13 @@ void qasm_parser::parse_qobj()
             gate.name = MEASURE;
             gate.measured_qubit_index = is["qubits"][0];
             IdxType idx = is["memory"][0];
-            //cout << (qobj["header"]["clbit_labels"])[idx][0] << endl;
-            gate.creg_name = (qobj["header"]["clbit_labels"])[idx][0]; 
-            gate.creg_index = (qobj["header"]["clbit_labels"])[idx][1]; 
+            // cout << (qobj["header"]["clbit_labels"])[idx][0] << endl;
+            gate.creg_name = (qobj["header"]["clbit_labels"])[idx][0];
+            gate.creg_index = (qobj["header"]["clbit_labels"])[idx][1];
             list_gates->push_back(gate);
         }
         else if (op == "BARRIER")
         {
-
         }
         else
         {
@@ -315,7 +312,6 @@ void qasm_parser::parse_qobj()
         }
     }
     classify_measurements();
-
 }
 
 void qasm_parser::load_qobj_file(const char *filename)
@@ -329,7 +325,6 @@ void qasm_parser::load_qobj_string(const std::string qobj_string)
     qobjStreamPtr = std::make_unique<std::istringstream>(std::istringstream(qobj_string));
     parse_qobj();
 }
-
 
 void qasm_parser::dump_cur_inst()
 {
@@ -652,12 +647,15 @@ map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::
 
 IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string init_path, std::string init_format, IdxType repetition, bool print_metrics)
 {
-    if (init_path != "") {
+    if (init_path != "")
+    {
         state->set_initial(init_path, init_format);
-    } else {
+    }
+    else
+    {
         state->reset_state();
     }
-    
+
     std::shared_ptr<NWQSim::Circuit> circuit = std::make_shared<Circuit>(num_qubits());
     for (auto gate : *list_gates)
     {
@@ -679,7 +677,8 @@ IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string in
     if (!circuit->is_empty())
     {
         circuit->MA(repetition);
-        if (print_metrics) circuit->print_metrics();
+        if (print_metrics)
+            circuit->print_metrics();
         state->sim(circuit);
     }
     return state->get_results();

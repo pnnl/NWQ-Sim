@@ -5,7 +5,7 @@
 #include "../nwq_util.hpp"
 #include "../gate.hpp"
 #include "../circuit.hpp"
-#include "../private/config.hpp"
+#include "../config.hpp"
 
 #include "../circuit_pass/fusion.hpp"
 #include "../private/macros.hpp"
@@ -25,7 +25,7 @@ namespace NWQSim
     {
 
     public:
-        DM_CPU(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits, SimType::DM, config)
+        DM_CPU(IdxType _n_qubits) : QuantumState(SimType::DM)
         {
             // Initialize CPU side
             n_qubits = _n_qubits;
@@ -87,26 +87,33 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-        virtual void set_initial (std::string fpath, std::string format) override {
+        virtual void set_initial(std::string fpath, std::string format) override
+        {
             std::ifstream instream;
-            instream.open(fpath, std::ios::in|std::ios::binary);
-            if (format == "dm") {
-                if (instream.is_open()) {
-                    instream.read((char*)dm_real, dm_size * sizeof(ValType));
-                    instream.read((char*)dm_imag, dm_size * sizeof(ValType));
+            instream.open(fpath, std::ios::in | std::ios::binary);
+            if (format == "dm")
+            {
+                if (instream.is_open())
+                {
+                    instream.read((char *)dm_real, dm_size * sizeof(ValType));
+                    instream.read((char *)dm_imag, dm_size * sizeof(ValType));
                     instream.close();
                 }
-            } else {
+            }
+            else
+            {
                 // input is a statevector, take the outer product
                 IdxType sv_size = 1 << n_qubits;
-                ValType* imag_buffer = new ValType[sv_size];
-                instream.read((char*)m_real, sv_size * sizeof(ValType));
-                instream.read((char*)imag_buffer, sv_size * sizeof(ValType));
+                ValType *imag_buffer = new ValType[sv_size];
+                instream.read((char *)m_real, sv_size * sizeof(ValType));
+                instream.read((char *)imag_buffer, sv_size * sizeof(ValType));
                 instream.close();
-                for (IdxType ind = 0; ind < sv_size; ind++) {
+                for (IdxType ind = 0; ind < sv_size; ind++)
+                {
                     ValType a = m_real[ind];
                     ValType b = imag_buffer[ind];
-                    for (IdxType j = 0; j < sv_size; j ++) {
+                    for (IdxType j = 0; j < sv_size; j++)
+                    {
                         ValType c = m_real[j];
                         ValType d = -imag_buffer[j];
                         dm_real[ind * sv_size + j] = a * c - d * b;
@@ -116,15 +123,19 @@ namespace NWQSim
                 std::memset(m_real, 0, sv_size);
             }
         }
-        virtual void dump_res_state(std::string outpath) override {
+        virtual void dump_res_state(std::string outpath) override
+        {
             std::ofstream outstream;
-            outstream.open(outpath, std::ios::out|std::ios::binary);
-            if (outstream.is_open()) {
+            outstream.open(outpath, std::ios::out | std::ios::binary);
+            if (outstream.is_open())
+            {
                 std::cout << "Writing density matrix to " << outpath << std::endl;
-                outstream.write((char*)dm_real, sizeof(ValType) * dim);
-                outstream.write((char*)dm_imag, sizeof(ValType) * dim);
+                outstream.write((char *)dm_real, sizeof(ValType) * dim);
+                outstream.write((char *)dm_imag, sizeof(ValType) * dim);
                 outstream.close();
-            } else {
+            }
+            else
+            {
                 std::cout << "Could not open " + outpath << std::endl;
                 throw std::runtime_error("Could not open " + outpath + "\n");
             }
@@ -203,30 +214,33 @@ namespace NWQSim
             }
             */
             printf("----- Real+Imag DM ------\n");
-            for (IdxType i=0; i<num; i++)
+            for (IdxType i = 0; i < num; i++)
             {
-                for (IdxType j=0; j<num; j++)
+                for (IdxType j = 0; j < num; j++)
                 {
-                    printf("%lf+%lfj ", dm_real[i*num+j], dm_imag[i*num+j]);
+                    printf("%lf+%lfj ", dm_real[i * num + j], dm_imag[i * num + j]);
                 }
                 printf("\n");
             }
         }
-        
-        virtual ValType *get_real() const override {return dm_real;};
-        virtual ValType *get_imag() const override {return dm_imag;};
 
-        virtual ValType fidelity(std::shared_ptr<QuantumState> other) override {
+        virtual ValType *get_real() const override { return dm_real; };
+        virtual ValType *get_imag() const override { return dm_imag; };
+
+        virtual ValType fidelity(std::shared_ptr<QuantumState> other) override
+        {
             ValType result_real = 0;
             ValType result_imag = 0;
             const IdxType block_size = 32;
             IdxType vector_dim = (IdxType)1 << n_qubits;
-            double* sv_real = other->get_real();
-            double* sv_imag = other->get_imag();
-            for (IdxType ind = 0; ind < vector_dim; ind++) {
+            double *sv_real = other->get_real();
+            double *sv_imag = other->get_imag();
+            for (IdxType ind = 0; ind < vector_dim; ind++)
+            {
                 ValType a = sv_real[ind];
                 ValType b = -sv_imag[ind];
-                for (IdxType j = 0; j < vector_dim; j ++) {
+                for (IdxType j = 0; j < vector_dim; j++)
+                {
                     ValType c = dm_real[ind * vector_dim + j];
                     ValType d = dm_imag[ind * vector_dim + j];
                     ValType g = sv_real[j];
@@ -238,6 +252,7 @@ namespace NWQSim
             assert(abs(result_imag) <= 1e-10);
             return result_real;
         };
+
     protected:
         // n_qubits is the number of qubits
         IdxType n_qubits;
@@ -269,8 +284,8 @@ namespace NWQSim
             int n_gates = gates.size();
             for (int i = 0; i < n_gates; i++)
             {
-                if (Config::PRINT_SIM_TRACE)
-                    printProgressBar(i, n_gates, start);
+                // if (Config::PRINT_SIM_TRACE)
+                //     printProgressBar(i, n_gates, start);
 
                 auto g = gates[i];
 
@@ -305,7 +320,6 @@ namespace NWQSim
             {
                 std::cout << std::endl;
             }
-            
         }
 
         //============== Local 2-qubit Gate  ================
@@ -494,7 +508,7 @@ namespace NWQSim
         void RESET_GATE(const IdxType qubit)
         {
             IdxType mask = ((IdxType)1 << qubit);
-            mask = (mask<<n_qubits) + mask;
+            mask = (mask << n_qubits) + mask;
 
             for (IdxType i = 0; i < dim; i++)
             {

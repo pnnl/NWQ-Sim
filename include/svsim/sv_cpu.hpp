@@ -5,7 +5,7 @@
 #include "../nwq_util.hpp"
 #include "../gate.hpp"
 #include "../circuit.hpp"
-#include "../private/config.hpp"
+#include "../config.hpp"
 #include "private/exp_gate_declarations_host.hpp"
 
 #include "../circuit_pass/fusion.hpp"
@@ -24,7 +24,7 @@ namespace NWQSim
     {
 
     public:
-        SV_CPU(IdxType _n_qubits, const std::string& config_path) : QuantumState(_n_qubits, SimType::SV, config_path)
+        SV_CPU(IdxType _n_qubits) : QuantumState(SimType::SV)
         {
             // Initialize CPU side
             n_qubits = _n_qubits;
@@ -72,30 +72,35 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-        
-        virtual void set_initial (std::string fpath, std::string format) override {
+
+        virtual void set_initial(std::string fpath, std::string format) override
+        {
             std::ifstream instream;
-            if (format != "sv") {
+            if (format != "sv")
+            {
                 throw std::runtime_error("SV-Sim only supports statevector input states\n");
             }
-            instream.open(fpath, std::ios::in|std::ios::binary);
-            if (instream.is_open()) {
-                instream.read((char*)sv_real, sizeof(ValType) * dim);
-                instream.read((char*)sv_imag, sizeof(ValType) * dim);
+            instream.open(fpath, std::ios::in | std::ios::binary);
+            if (instream.is_open())
+            {
+                instream.read((char *)sv_real, sizeof(ValType) * dim);
+                instream.read((char *)sv_imag, sizeof(ValType) * dim);
             }
             instream.close();
         }
 
-        virtual void dump_res_state(std::string outpath) override {
+        virtual void dump_res_state(std::string outpath) override
+        {
             std::ofstream outstream;
-            outstream.open(outpath, std::ios::out|std::ios::binary);
-            if (outstream.is_open()) {
-                outstream.write((char*)sv_real, sizeof(ValType) * dim);
-                outstream.write((char*)sv_imag, sizeof(ValType) * dim);
+            outstream.open(outpath, std::ios::out | std::ios::binary);
+            if (outstream.is_open())
+            {
+                outstream.write((char *)sv_real, sizeof(ValType) * dim);
+                outstream.write((char *)sv_imag, sizeof(ValType) * dim);
                 outstream.close();
             }
         };
-        
+
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
             IdxType origional_gates = circuit->num_gates();
@@ -233,7 +238,7 @@ namespace NWQSim
                 }
                 else if (g.op_name == OP::EXPECT)
                 {
-                    ObservableList* o = (ObservableList*)(g.data);
+                    ObservableList *o = (ObservableList *)(g.data);
                     EXPECT_GATE(o);
                 }
                 else
@@ -489,7 +494,8 @@ namespace NWQSim
                 results[i] = lo;
             }
         }
-        virtual double EXPECT_C4_GATE(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask) {
+        virtual double EXPECT_C4_GATE(const ValType *gm_real, const ValType *gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask)
+        {
             assert(qubit0 != qubit1); // Non-cloning
             assert(qubit0 != qubit2); // Non-cloning
             assert(qubit0 != qubit3); // Non-cloning
@@ -545,13 +551,14 @@ namespace NWQSim
                     }
 
                     ValType val = res_real * res_real + res_imag * res_imag;
-                
+
                     exp_val += hasEvenParity((term + SV16IDX(j)) & mask, n_qubits) ? val : -val;
                 }
             }
             return exp_val;
         }
-        virtual double EXPECT_C2_GATE(const ValType* gm_real, const ValType* gm_imag, IdxType qubit0, IdxType qubit1, IdxType mask) {
+        virtual double EXPECT_C2_GATE(const ValType *gm_real, const ValType *gm_imag, IdxType qubit0, IdxType qubit1, IdxType mask)
+        {
             const IdxType per_pe_work = (dim >> 2);
             assert(qubit0 != qubit1); // Non-cloning
 
@@ -596,7 +603,7 @@ namespace NWQSim
                 ValType v1 = sv_real_pos1 * sv_real_pos1 + sv_imag_pos1 * sv_imag_pos1;
                 ValType v2 = sv_real_pos2 * sv_real_pos2 + sv_imag_pos2 * sv_imag_pos2;
                 ValType v3 = sv_real_pos3 * sv_real_pos3 + sv_imag_pos3 * sv_imag_pos3;
-                
+
                 exp_val += hasEvenParity(pos0 & mask, n_qubits) ? v0 : -v0;
                 exp_val += hasEvenParity(pos1 & mask, n_qubits) ? v1 : -v1;
                 exp_val += hasEvenParity(pos2 & mask, n_qubits) ? v2 : -v2;
@@ -604,17 +611,21 @@ namespace NWQSim
             }
             return exp_val;
         }
-        virtual double Expect_C0(IdxType mask) {
+        virtual double Expect_C0(IdxType mask)
+        {
             double exp_val = 0.0;
-            for (IdxType i = 0; i < dim; i++) {
+            for (IdxType i = 0; i < dim; i++)
+            {
                 double val = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
                 exp_val += hasEvenParity(i & mask, n_qubits) ? val : -val;
             }
             return exp_val;
         }
-        virtual void EXPECT_GATE(ObservableList* o)  {
+        virtual void EXPECT_GATE(ObservableList *o)
+        {
             ValType result = 0.0;
-            for (size_t i = 0; i < o->numterms; i++) {
+            for (size_t i = 0; i < o->numterms; i++)
+            {
                 result += o->coeffs[i] * Expect_C0(o->zmasks[i]);
             }
             o->exp_output = result;
@@ -676,10 +687,8 @@ namespace NWQSim
             }
         }
 
-    
-        virtual ValType *get_real() const override {return sv_real;};
-        virtual ValType *get_imag() const override {return sv_imag;};
-
+        virtual ValType *get_real() const override { return sv_real; };
+        virtual ValType *get_imag() const override { return sv_imag; };
     };
 
 } // namespace NWQSim
