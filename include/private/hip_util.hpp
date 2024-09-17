@@ -19,20 +19,21 @@
 
 
 // CLUSTER BASED
-#define BARR_ROC_SHMEM                         \
+//#define BARR_ROC_SHMEM                         \
+//    __threadfence_system(); \
+//    if (threadIdx.x == 0 && blockIdx.x == 0) \
+ //       roc_shmem_ctx_wg_barrier_all(*p_ctx);               \
+//    grid.sync();
+#define BARR_ROC_SHMEM  \
     __threadfence_system(); \
-    if (threadIdx.x == 0 && blockIdx.x == 0) \
         roc_shmem_ctx_wg_barrier_all(*p_ctx);               \
-    grid.sync();
-// #define BARR_ROC_SHMEM  \
-//         roc_shmem_ctx_wg_barrier_all(*p_ctx);               \
-//     grid.sync();
+   	grid.sync();
 
 // #define LOCAL_G_HIP_MPI(arr, i) arr[(i) & (m_gpu - 1)]
-// #define LOCAL_P_HIP_MPI(arr, i, val) arr[(i) & (m_gpu - 1)] = val;
+#define LOCAL_P_HIP_MPI(arr, i, val) arr[(i) & (m_gpu - 1)] = val;
 #define LOCAL_G_HIP_MPI(arr, i) arr[(i) & (m_gpu - 1)]
-#define LOCAL_P_HIP_MPI(arr, i, val) \
-roc_shmem_ctx_double_p(*p_ctx, &(arr)[(i) & (m_gpu - 1)], val, i_proc);\
+// #define LOCAL_P_HIP_MPI(arr, i, val) \
+// roc_shmem_ctx_double_p(*p_ctx, &(arr)[(i) & (m_gpu - 1)], val, i_proc);\
 //  roc_shmem_ctx_quiet(*p_ctx);
 // #define LOCAL_P_HIP_MPI(arr, i, val) roc_shmem_ctx_double_p(*p_ctx, &(arr)[(i) & (m_gpu - 1)], val, i_proc);
 

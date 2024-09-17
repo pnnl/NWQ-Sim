@@ -94,7 +94,7 @@ namespace NWQSim
                        sim_time, cpu_mem / 1024 / 1024, cpu_mem / 1024 / 1024);
                 printf("=====================================\n");
             }
-
+            print_res_state();
             //=========================================
         }
 
@@ -148,6 +148,8 @@ namespace NWQSim
             for (IdxType i = 0; i < num; i++)
             {
                 printf("%lf+%lfj, ", sv_real[i], sv_imag[i]);
+                if ((i + 1) % 8 == 0)
+                        printf("\n");
             }
             printf("]\n");
         }
