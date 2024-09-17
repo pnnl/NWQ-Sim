@@ -69,7 +69,7 @@ namespace NWQSim
                 sv_real[0] = 1.;
             cpu_mem = sv_size_per_cpu * 4;
 
-            rng.seed(time(0));
+            rng.seed(Config::RANDOM_SEED);
 
             if (i_proc == 0 && Config::PRINT_SIM_TRACE)
                 printf("SVSIM MPI is initialized!\n");

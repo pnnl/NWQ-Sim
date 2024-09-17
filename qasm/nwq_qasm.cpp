@@ -91,6 +91,11 @@ int main(int argc, char **argv)
         config_parser.print_configs();
     }
 
+    if (config_parser.get_value("seed") != "")
+    {
+        Config::RANDOM_SEED = std::stoi(config_parser.get_value("seed"));
+    }
+
 // If MPI or NVSHMEM backend, initialize MPI
 #ifdef MPI_ENABLED
     if (backend == "MPI" || backend == "NVGPU_MPI")

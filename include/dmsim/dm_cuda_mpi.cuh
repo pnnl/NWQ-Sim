@@ -103,7 +103,7 @@ namespace NWQSim
                                     cudaMemcpyHostToDevice));
             cudaSafeCall(cudaMemset(m_real, 0, dm_size_per_gpu));
             cudaSafeCall(cudaMemset(m_imag, 0, dm_size_per_gpu));
-            rng.seed(time(0));
+            rng.seed(Config::RANDOM_SEED);
         }
 
         ~DM_CUDA_MPI()

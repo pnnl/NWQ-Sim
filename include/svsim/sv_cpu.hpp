@@ -46,7 +46,7 @@ namespace NWQSim
 
             SAFE_ALOC_HOST(m_real, sv_size + sizeof(ValType));
             memset(m_real, 0, sv_size + sizeof(ValType));
-            rng.seed(time(0));
+            rng.seed(Config::RANDOM_SEED);
         }
 
         ~SV_CPU()

@@ -83,7 +83,7 @@ namespace NWQSim
             cudaSafeCall(cudaMemset(m_real, 0, dm_size + sizeof(ValType)));
             cudaSafeCall(cudaMemset(m_imag, 0, dm_size + sizeof(ValType)));
 
-            rng.seed(time(0));
+            rng.seed(Config::RANDOM_SEED);
         }
 
         ~DM_CUDA()

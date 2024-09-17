@@ -78,8 +78,7 @@ namespace NWQSim
                                   hipMemcpyHostToDevice));
             hipSafeCall(hipMemset(m_real, 0, dm_size + sizeof(ValType)));
             hipSafeCall(hipMemset(m_imag, 0, dm_size + sizeof(ValType)));
-
-            rng.seed(time(0));
+            rng.seed(Config::RANDOM_SEED);
         }
 
         ~DM_HIP()

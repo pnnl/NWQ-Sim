@@ -63,6 +63,7 @@ public:
         add_option("sim_method", "sv", "Simulation method", "METHOD", true);
         add_option("basis", "", "Run test benchmark with basis gates", "", false);
         add_option("disable_fusion", "", "Disable gate fusion (enabled by default)", "", false);
+        add_option("seed", "", "Set random seed", "INT", true);
 
         // Hardware options
         add_option("tensorcore", "", "Use tensor cores", "", false);

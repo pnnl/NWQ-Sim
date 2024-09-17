@@ -61,7 +61,7 @@ namespace NWQSim
             dm_real[0] = 1.;
             cpu_mem += dm_size * 2 + diag_size;
 
-            rng.seed(time(0));
+            rng.seed(Config::RANDOM_SEED);
         }
 
         ~DM_CPU()

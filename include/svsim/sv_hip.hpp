@@ -72,7 +72,7 @@ namespace NWQSim
             hipSafeCall(hipMemset(m_real, 0, sv_size + sizeof(ValType)));
             hipSafeCall(hipMemset(m_imag, 0, sv_size + sizeof(ValType)));
 
-            rng.seed(time(0));
+            rng.seed(Config::RANDOM_SEED);
         }
 
         ~SV_HIP()
