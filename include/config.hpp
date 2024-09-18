@@ -16,7 +16,7 @@ namespace NWQSim::Config
     inline bool ENABLE_AVX512 = false; // AVX512 is not supported yet
     inline int OMP_NUM_THREADS = -1;   // -1 means using the default number of threads
 
-    inline int RANDOM_SEED = time(NULL);
+    inline int RANDOM_SEED = 5489;
 
     using IdxType = long long;
     using ValType = double;
