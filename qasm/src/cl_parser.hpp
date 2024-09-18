@@ -1,37 +1,43 @@
 #pragma once
 
+#include <iostream>
 #include <map>
 #include <string>
 #include <vector>
-#include <getopt.h>
-#include <iostream>
-#include <functional>
-
-#include <algorithm> // For std::max
-#include <iomanip>   // For std::setw and std::left
-#include <sstream>   // For stringstream
+#include <iomanip>  // For std::setw
+#include <getopt.h> // For getopt_long
+#include <memory>
 
 // Class to represent a single configuration option
 class ConfigOption
 {
 public:
-    std::string name;
-    std::string description;
-    std::string value;
-    std::string desc_value;
-    bool requires_argument;
+    std::string long_name;     // Long flag (e.g., --shots)
+    char short_name;           // Short flag (e.g., -q)
+    std::string description;   // Description of the option
+    std::string value;         // Current value of the option (for argument flags)
+    std::string default_value; // Default value of the option (for argument flags)
+    std::string desc_value;    // Description of the value (for help messages)
+    bool requires_argument;    // Whether the option requires an argument
+    bool flag_set;             // For boolean flags: true if flag is provided
 
-    // Default constructor (required by std::map)
-    ConfigOption() : name(""), value(""), description(""), desc_value(""), requires_argument(false) {}
+    // Default constructor
+    ConfigOption() : long_name(""), short_name(0), description(""), value(""), default_value(""), desc_value(""), requires_argument(false), flag_set(false) {}
 
     // Constructor for initializing a configuration option
-    ConfigOption(const std::string &name, const std::string &default_value, const std::string &description, const std::string &desc_value, bool requires_argument)
-        : name(name), description(description), value(default_value), desc_value(desc_value), requires_argument(requires_argument) {}
+    ConfigOption(const std::string &long_name, char short_name, const std::string &default_value, const std::string &description, const std::string &desc_value, bool requires_argument)
+        : long_name(long_name), short_name(short_name), description(description), value(default_value), default_value(default_value), desc_value(desc_value), requires_argument(requires_argument), flag_set(false) {}
 
-    // Set value from string, converting to correct type if necessary
+    // Set value from string (only for argument flags)
     void set_value_from_string(const std::string &input)
     {
         value = input;
+    }
+
+    // Set flag to true (only for boolean flags)
+    void set_flag()
+    {
+        flag_set = true;
     }
 };
 
@@ -39,258 +45,363 @@ public:
 class ConfigParser
 {
 public:
-    std::map<std::string, ConfigOption> options;
+    // Use shared pointers to point to the same ConfigOption object
+    std::map<std::string, std::shared_ptr<ConfigOption>> long_options_map;
+    std::map<char, std::shared_ptr<ConfigOption>> short_options_map;
+
+    // Define the legacy options that need to be replaced
+    const std::map<std::string, std::string> legacy_options = {
+        {"-qs", "--qasm_string"},
+        {"-js", "--json_string"},
+        {"-metrics", "--metrics"},
+        {"-initial", "--init_file"},
+        {"-initial-format", "--init_format"},
+        {"-dump", "--dump_file"},
+        {"-layout", "--layout"},
+        {"-layout-string", "--layout_str"},
+        {"-device", "--device"},
+        {"-backend", "--backend"},
+        {"-backend_list", "--backend_list"},
+        {"-shots", "--shots"},
+        {"-sim", "--sim"},
+        {"-basis", "--basis"},
+        {"-fidelity", "--fidelity"}};
 
     // Constructor initializes default options
     ConfigParser()
     {
-        // Initialize configuration options with name, description, default value, and whether it requires an argument
+        // Initialize configuration options (LONG_FLAG, SHORT_FLAG, DEFAULT_VALUE, DESCRIPTION, DESC_VALUE, REQUIRES_ARGUMENT)
 
-        // Program execution options (FLAG, DEFAULT_VALUE, DESCRIPTION, DESC_VALUE, REQUIRES_ARGUMENT)
-        add_option("q", "", "Executes a simulation with the given QASM file", "FILE_PATH", true);
-        add_option("qs", "", "Executes a simulation with the given QASM string", "QASM_STR", true);
-        add_option("j", "", "Executes a simulation with the given json file with Qiskit experiment Qobj", "FILE_PATH", true);
-        add_option("js", "", "Executes a simulation with the given json string", "QOBJ_STR", true);
-        add_option("t", "", "Runs the testing benchmarks for the specific index provided", "INDEX", true);
-        add_option("a", "", "Runs all testing benchmarks", "", false);
+        // Program execution options
+        add_option("qasm_file", 'q', "", "Execute simulation with the given QASM file", "FILE_PATH", true);
+        add_option("qasm_string", 0, "", "Execute simulation with the provided QASM string", "STR", true); // Long flag only
+        add_option("json_file", 'j', "", "Execute simulation with the given JSON file (Qiskit Qobj)", "FILE_PATH", true);
+        add_option("json_string", 0, "", "Execute simulation with the provided JSON string (Qiskit Qobj)", "STR", true); // Long flag only
+        add_option("test", 't', "", "Run testing benchmarks for the specified index", "INT", true);
+        add_option("all_tests", 'a', "", "Run all available testing benchmarks", "", false); // Boolean flag, no argument
 
         // Circuit execution options
-        add_option("shots", "1024", "Number of shots", "SHOTS", true);
-        add_option("backend", "cpu", "Simulation backend to use", "BACKEND", true);
-        add_option("sim_method", "sv", "Simulation method", "METHOD", true);
-        add_option("basis", "", "Run test benchmark with basis gates", "", false);
-        add_option("disable_fusion", "", "Disable gate fusion (enabled by default)", "", false);
-        add_option("seed", "", "Set random seed", "INT", true);
-
-        // Hardware options
-        add_option("tensorcore", "", "Use tensor cores", "", false);
-        add_option("threads", "-1", "Number of OMP threads", "NUM_THREADS", true);
-        add_option("AVX512", "", "Use AVX512", "", false);
-        add_option("matrixcore", "", "Use MatrixCore", "", false);
+        add_option("shots", 's', "1024", "Specify the number of shots", "SHOTS", true);
+        add_option("backend", 'b', "cpu", "Specify the simulation backend", "BACKEND", true);
+        add_option("sim", 0, "sv", "Specify the simulation method", "METHOD", true);             // Long flag only
+        add_option("basis", 0, "", "Run the test benchmark using basis gates", "", false);       // Boolean flag, no argument
+        add_option("disable_fusion", 0, "", "Disable gate fusion ", "", false);                  // Boolean flag, no argument
+        add_option("random_seed", 0, "", "Set the random seed for the simulation", "INT", true); // Long flag only
 
         // Noise model options
-        add_option("noise_model", "", "Noise model", "FILE_PATH", true);
-        add_option("layout", "", "Path to json mapping logical qubits to device qubits, used when constructing the DM-Sim noise gates. (default: \"\", no mapping)", "FILE_PATH", true);
-        add_option("layout_str", "", "String denoting qubit layout. Format maps logical qubits (lq, 0...n_qubits) to physical qubits. Format is lq0=pq0;lq1=pq1...", "LAYOUT_STR", true);
+        add_option("device", 0, "", "Specify the device noise profile", "FILE_PATH", true);                       // Long flag only
+        add_option("layout", 0, "", "Path to JSON mapping logical qubits to physical qubits", "FILE_PATH", true); // Long flag only
+        add_option("layout_str", 0, "", "String format mapping logical qubits to physical qubits", "STR", true);  // Long flag only
 
         // Initial and resulting state file options
-        add_option("init_file", "", "Initial statevector/density matrix to enable simulation reuse/checkpointing", "FILE_PATH", true);
-        add_option("init_format", "", "Format of initial state, default is same as sim_method", "FILE_PATH", true);
-        add_option("dump_file", "", "Path to dump binary statevector/density matrix result", "FILE_PATH", true);
+        add_option("init_file", 0, "", "Path to the initial statevector/density matrix file", "FILE_PATH", true);       // Long flag only
+        add_option("init_format", 0, "", "Specify the format of the initial state", "FILE_PATH", true);                 // Long flag only
+        add_option("dump_file", 0, "", "Path to dump the binary statevector/density matrix result", "FILE_PATH", true); // Long flag only
 
         // Helper options
-        add_option("backend_list", "", "Print the list of available simulation backends", "", false);
-        add_option("metrics", "", "Print the metrics of the circuit", "", false);
-        add_option("verbose", "", "Verbose simulation trace", "", false);
-        add_option("fidelity", "", "Run both DM-Sim and SV-Sim and report the state fidelity", "", false);
-        add_option("h", "", "Prints the help message", "", false);
+        add_option("backend_list", 0, "", "Print the list of available simulation backends", "", false);    // Boolean flag, no argument
+        add_option("metrics", 0, "", "Print the metrics of the executed circuit", "", false);               // Boolean flag, no argument
+        add_option("verbose", 'v', "", "Enable verbose simulation trace", "", false);                       // Boolean flag, with short flag
+        add_option("fidelity", 'f', "", "Run both DM-Sim and SV-Sim and report state fidelity", "", false); // Boolean flag, no argument
+        add_option("help", 'h', "", "Print this help message", "", false);                                  // Boolean flag, with short flag
+
+        // Hardware options (prefixed with hw_)
+        add_option("hw_tensorcore", 0, "", "Enable the use of Tensor Cores", "", false);     // Boolean flag, no argument
+        add_option("hw_threads", 0, "-1", "Specify the number of OMP threads", "INT", true); // Long flag only
+        add_option("hw_avx512", 0, "", "Enable the use of AVX512", "", false);               // Boolean flag, no argument
+        add_option("hw_matrixcore", 0, "", "Enable the use of MatrixCore", "", false);       // Boolean flag, no argument
     }
 
-    // Add a configuration option
-    void add_option(const std::string &name, const std::string &default_value, const std::string &description, const std::string &desc_value, bool requires_argument)
+    // Method to add an option with both long and short flags
+    void add_option(const std::string &long_name, char short_name, const std::string &default_value, const std::string &description, const std::string &desc_value, bool requires_argument)
     {
-        options[name] = ConfigOption(name, default_value, description, desc_value, requires_argument);
+        // Create a shared pointer to the ConfigOption object
+        std::shared_ptr<ConfigOption> option = std::make_shared<ConfigOption>(long_name, short_name, default_value, description, desc_value, requires_argument);
+
+        // Add it to the long options map if long_name is provided
+        if (!long_name.empty())
+        {
+            long_options_map[long_name] = option;
+        }
+
+        // Add the same object to the short options map if a short_name is provided
+        if (short_name != 0)
+        {
+            short_options_map[short_name] = option;
+        }
     }
 
-    // Get the value of a configuration option
+    // Get the value of a configuration option (only for options that require arguments)
     std::string get_value(const std::string &name) const
     {
-        // std::cout << "name: " << name << std::endl;
-        return options.at(name).value;
+        // Check if it's a long flag
+        if (long_options_map.find(name) != long_options_map.end())
+        {
+            return long_options_map.at(name)->value;
+        }
+
+        // Raise an error if the option is not found
+        std::cerr << "Error: Option '" << name << "' not found.\n";
+        return "";
     }
 
-    // Parse the command-line arguments
-    void parse_command_line_arguments(int argc, char *argv[])
+    std::string get_value(char short_flag) const
     {
-        // Create long options array
+        // Check if it's a short flag
+        if (short_options_map.find(short_flag) != short_options_map.end())
+        {
+            return short_options_map.at(short_flag)->value;
+        }
+
+        // Raise an error if the option is not found
+        std::cerr << "Error: Option '" << short_flag << "' not found.\n";
+        return "";
+    }
+
+    // Check if a flag is set (only for boolean flags)
+    bool is_flag_set(const std::string &name) const
+    {
+        // Check if it's a long flag
+        if (long_options_map.find(name) != long_options_map.end())
+        {
+            return long_options_map.at(name)->flag_set;
+        }
+
+        // Raise an error if the option is not found
+        std::cerr << "Error: Option '" << name << "' not found.\n";
+        return false;
+    }
+
+    bool is_flag_set(char short_flag) const
+    {
+        // Check if it's a short flag
+        if (short_options_map.find(short_flag) != short_options_map.end())
+        {
+            return short_options_map.at(short_flag)->flag_set;
+        }
+
+        // Raise an error if the option is not found
+        std::cerr << "Error: Option '" << short_flag << "' not found.\n";
+        return false;
+    }
+
+    // Function to set a flag or assign a value
+    void set_flag_or_value(const std::string &name, const std::string &value = "")
+    {
+        // First check if it's a long flag
+        if (long_options_map.find(name) != long_options_map.end())
+        {
+            auto opt = long_options_map[name];
+            if (opt->requires_argument)
+            {
+                opt->set_value_from_string(value); // Set the value
+            }
+            else
+            {
+                opt->set_flag(); // Set the flag for boolean options
+            }
+        }
+        // Check for short flag
+        else if (name.size() == 1)
+        {
+            char short_name = name[0];
+            if (short_options_map.find(short_name) != short_options_map.end())
+            {
+                auto opt = short_options_map[short_name];
+                if (opt->requires_argument)
+                {
+                    opt->set_value_from_string(value); // Set the value
+                }
+                else
+                {
+                    opt->set_flag(); // Set the flag for boolean options
+                }
+            }
+        }
+    }
+
+    void preprocess_single_dash_options(int argc, char *argv[])
+    {
+        // Iterate over the arguments, starting from argv[1] (skipping the program name)
+        for (int i = 1; i < argc; ++i)
+        {
+            std::string arg = argv[i];
+
+            // Check if the argument is a legacy single-dash option
+            if (legacy_options.find(arg) != legacy_options.end())
+            {
+                // Print a warning to the user
+                std::cout << "Warning: '" << arg << "' is using a single dash. Please migrate to '" << legacy_options.at(arg) << "'.\n";
+
+                // Replace the single-dash option with the double-dash version
+                argv[i] = const_cast<char *>(legacy_options.at(arg).c_str());
+
+                std::cout << "Replaced with: " << argv[i] << std::endl;
+            }
+        }
+    }
+
+    void parse_arguments(int argc, char *argv[])
+    {
+
+        // Preprocess single-dash options that were used in previous versions
+        preprocess_single_dash_options(argc, argv);
+
+        // Build the long option structure for getopt_long
         std::vector<struct option> long_options;
         std::string short_options;
 
-        for (const auto &pair : options)
+        // Convert the config options into long options for getopt_long
+        for (const auto &entry : long_options_map)
         {
-            const ConfigOption &opt = pair.second;
-            long_options.push_back({opt.name.c_str(), opt.requires_argument ? required_argument : no_argument, nullptr, 0});
-        }
-        long_options.push_back({0, 0, 0, 0}); // End of options
+            const std::shared_ptr<ConfigOption> &opt = entry.second;
 
-        int opt;
-        int option_index = 0;
+            // Add long option to the long_options array
+            struct option long_option;
+            long_option.name = opt->long_name.c_str();                                      // Long option name
+            long_option.has_arg = opt->requires_argument ? required_argument : no_argument; // Does this option require an argument?
+            long_option.flag = nullptr;                                                     // This is null since we are not using flags directly
+            long_option.val = opt->short_name != 0 ? opt->short_name : 0;                   // Short flag value, or 0 if none
+            long_options.push_back(long_option);
 
-        // Parse arguments using getopt_long
-        while ((opt = getopt_long(argc, argv, "", long_options.data(), &option_index)) != -1)
-        {
-
-            const char *opt_name = long_options[option_index].name;
-
-            if (opt_name)
+            // Add short option if applicable
+            if (opt->short_name != 0)
             {
-                std::string option_key = opt_name;
-
-                // Handle cases where required arguments are missing
-                if (options[option_key].requires_argument && (optarg == nullptr || (optarg && std::string(optarg).substr(0, 2) == "--")))
+                short_options += opt->short_name;
+                if (opt->requires_argument)
                 {
-                    std::cerr << "Missing required argument for option: " << option_key << std::endl;
-                    exit(1); // Exit on missing required argument
+                    short_options += ":"; // `:` means this short option requires an argument
                 }
+            }
+        }
 
-                // Set value for flags or options with arguments
-                std::string value = optarg ? std::string(optarg) : "true"; // Use optarg if available, or "true" for flags
+        // Add a terminating zeroed-out option to indicate the end of options
+        long_options.push_back({0, 0, 0, 0});
 
-                if (options.count(option_key))
+        // Parsing arguments using getopt_long
+        int option_index = 0;
+        int c;
+        while ((c = getopt_long(argc, argv, short_options.c_str(), long_options.data(), &option_index)) != -1)
+        {
+            switch (c)
+            {
+            case 0: // This case is triggered for long flags without a short flag
+            {
+                const char *option_name = long_options[option_index].name;
+                if (long_options_map.count(option_name))
                 {
-                    options[option_key].set_value_from_string(value); // Update the ConfigParser option with the parsed value
+                    std::shared_ptr<ConfigOption> &opt = long_options_map[option_name];
+                    if (opt->requires_argument)
+                    {
+                        opt->set_value_from_string(optarg); // Set the argument value
+                    }
+                    else
+                    {
+                        opt->set_flag(); // Set the boolean flag to true
+                    }
                 }
+                break;
+            }
+
+            case '?': // Unrecognized option
+                std::cerr << "Unknown option: " << argv[optind - 1] << std::endl;
+                exit(EXIT_FAILURE);
+
+            default: // Short flag or long flag with short equivalent
+            {
+                char short_flag = static_cast<char>(c);
+                if (short_options_map.count(short_flag))
+                {
+                    std::shared_ptr<ConfigOption> &opt = short_options_map[short_flag];
+                    if (opt->requires_argument)
+                    {
+                        opt->set_value_from_string(optarg); // Set the argument value
+                    }
+                    else
+                    {
+                        opt->set_flag(); // Set the boolean flag to true
+                    }
+                }
+                break;
+            }
             }
         }
     }
 
-    // Function to print out the configurations with dynamic alignment and a header
     void print_help() const
     {
-        // Calculate the flag width dynamically
-        size_t flag_width = calculate_flag_width(options, true);
+        std::cout << "Usage: program [OPTIONS]\n\n";
+        std::cout << "Available options:\n";
 
-        // Set the total line width (e.g., 80 characters) and calculate the description width
-        const size_t total_width = 80;
-        const size_t description_width = total_width - flag_width;
+        // Define column widths for consistent alignment
+        const int short_flag_width = 6;
+        const int long_flag_width = 17;
+        const int argument_width = 13;
+        const int description_width = 80 - short_flag_width - long_flag_width - argument_width;
 
-        // Print the header
-        std::cout << std::left << std::setw(flag_width) << "Option"
-                  << "Description" << "\n";
-        std::cout << std::string(flag_width + description_width, '-') << "\n";
-
-        // Helper lambda to print a single option with formatting
-        auto print_option = [&](const ConfigOption &opt)
+        for (const auto &entry : long_options_map)
         {
-            // Format the flag and argument part
-            std::stringstream flag_output;
-            flag_output << "--" << opt.name;
-            if (opt.requires_argument)
+            auto opt = entry.second;
+
+            // Print short flag if it exists
+            if (opt->short_name != 0)
             {
-                flag_output << " <" << opt.desc_value << ">";
+                std::cout << "  -" << opt->short_name << ", ";
+            }
+            else
+            {
+                std::cout << "      "; // Maintain alignment if no short flag
             }
 
-            // Print the flag/argument part, and wrap the description
-            std::cout << std::left << std::setw(flag_width) << flag_output.str()
-                      << wrap_description(opt.description, description_width, flag_width) << "\n";
-        };
+            // Print long flag
+            std::cout << std::setw(long_flag_width) << std::left << "--" + opt->long_name;
 
-        // Loop through all options and print them
-        for (const auto &pair : options)
-        {
-            const ConfigOption &opt = pair.second;
-            print_option(opt);
+            // Print required argument if applicable
+            if (opt->requires_argument)
+            {
+                std::cout << std::setw(argument_width) << std::left << "<" + opt->desc_value + ">";
+            }
+            else
+            {
+                std::cout << std::setw(argument_width) << " "; // Maintain alignment if no argument
+            }
+
+            std::cout << std::setw(description_width) << std::left << opt->description << "\n";
         }
     }
 
-    // Function to print out the configurations in a tabular format
-    void print_configs() const
+    // Print the current configuration settings for debugging
+    void print_configurations() const
     {
-        // Calculate the flag width dynamically (for better alignment)
-        size_t flag_width = calculate_flag_width(options, false);
+        std::cout << "Current Configuration Settings:\n";
 
-        // Set the total line width (e.g., 60 characters) and calculate the value width
-        const size_t total_width = 30;
-        const size_t value_width = total_width - flag_width;
-
-        // Print the header with centered text
-        std::cout << center_text("Flag", flag_width)
-                  << center_text("Value", value_width) << "\n";
-
-        // Print the header underline
-        std::cout << std::string(total_width, '-') << "\n";
-
-        // Helper lambda to print a single option with formatting
-        auto print_option = [&](const ConfigOption &opt)
+        // Loop through the long options map and print their values
+        for (const auto &entry : long_options_map)
         {
-            // Format the flag and argument part
-            std::stringstream flag_output;
-            flag_output << opt.name;
+            auto opt = entry.second;
 
-            // Set value output (either a real value, "true/false" for flags)
-            std::string value_output = opt.requires_argument ? opt.value : opt.value.empty() ? "false"
-                                                                                             : "true";
+            // Debugging: Print current and default values
+            // std::cout << opt->long_name << ", Current Value: '" << opt->value << "', Default Value: '" << opt->default_value << "'\n";
 
-            // Print the formatted row with centered columns
-            std::cout << center_text(flag_output.str(), flag_width)
-                      << center_text(value_output, value_width) << "\n";
+            // Check if the current value is different from the default value
+            bool is_non_default = (opt->value != opt->default_value);
 
-            // Print a horizontal line after each row
-            std::cout << std::string(total_width, '-') << "\n";
-        };
+            // Print the flag name and its current value
+            std::cout << "--" << opt->long_name << " = " << opt->value;
 
-        // Loop through all options and print them in a tabular format with horizontal lines
-        for (const auto &pair : options)
-        {
-            const ConfigOption &opt = pair.second;
-            print_option(opt);
-        }
-    }
-
-private:
-    // Helper function to wrap descriptions to a certain width with indentation
-    std::string static wrap_description(const std::string &desc, size_t width, size_t indent)
-    {
-        std::stringstream wrapped;
-        size_t pos = 0;
-        size_t line_start = 0;
-
-        while (line_start < desc.size())
-        {
-            size_t end_pos = line_start + width;
-
-            // Try to break at the last space before the width limit, or at the width limit if no space
-            if (end_pos < desc.size() && desc[end_pos] != ' ')
+            // Indicate non-default values with an asterisk
+            if (is_non_default && !opt->value.empty())
             {
-                end_pos = desc.find_last_of(' ', end_pos);
-                if (end_pos == std::string::npos || end_pos <= line_start)
-                {
-                    end_pos = std::min(line_start + width, desc.size());
-                }
+                std::cout << " *";
             }
 
-            wrapped << desc.substr(line_start, end_pos - line_start) << "\n";
-
-            // Move to the start of the next line and add indentation
-            line_start = end_pos + 1;
-            if (line_start < desc.size())
+            // For boolean flags, check if they were set
+            if (!opt->requires_argument)
             {
-                wrapped << std::string(indent, ' ');
+                std::cout << " (Flag: " << (opt->flag_set ? "ON" : "OFF") << ")";
             }
+
+            std::cout << std::endl;
         }
-
-        return wrapped.str();
-    }
-    // Function to dynamically calculate the maximum flag width
-    size_t static calculate_flag_width(const std::map<std::string, ConfigOption> &options, bool include_value = true)
-    {
-        size_t max_width = 0;
-
-        // Find the maximum width of "--flag <value>" combination
-        for (const auto &pair : options)
-        {
-            const ConfigOption &opt = pair.second;
-            std::stringstream flag_output;
-            flag_output << "--" << opt.name;
-            if (opt.requires_argument && include_value)
-            {
-                flag_output << " <" << opt.desc_value << ">";
-            }
-            max_width = std::max(max_width, flag_output.str().length());
-        }
-
-        return max_width + 2; // Add some padding
-    }
-
-    // Helper function to center text in a given width
-    std::string center_text(const std::string &text, size_t width) const
-    {
-        if (text.length() >= width)
-        {
-            return text; // No need to center if text is longer than the width
-        }
-        size_t left_padding = (width - text.length()) / 2;
-        size_t right_padding = width - text.length() - left_padding;
-        return std::string(left_padding, ' ') + text + std::string(right_padding, ' ');
     }
 };

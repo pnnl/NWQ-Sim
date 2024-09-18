@@ -27,40 +27,40 @@ int main(int argc, char **argv)
 {
     // Create a Config object to parse command-line arguments
     ConfigParser config_parser;
-    config_parser.parse_command_line_arguments(argc, argv);
+    config_parser.parse_arguments(argc, argv);
 
-    // Helper function to retrieve boolean values
-    auto get_bool_value = [&](const std::string &key)
+    if (config_parser.is_flag_set("help") || argc == 1)
     {
-        return config_parser.get_value(key) == "true";
-    };
+        config_parser.print_help();
+        return 0;
+    }
 
     // Fetch and set configuration values
     IdxType total_shots = std::stoll(config_parser.get_value("shots"));
     std::string backend = config_parser.get_value("backend");
-    std::string simulation_method = config_parser.get_value("sim_method");
-    bool run_with_basis = get_bool_value("basis");
-    bool print_metrics = get_bool_value("metrics");
+    std::string simulation_method = config_parser.get_value("sim");
+    bool run_with_basis = config_parser.is_flag_set("basis");
+    bool print_metrics = config_parser.is_flag_set("metrics");
     std::string init_file = config_parser.get_value("init_file");
     std::string dumpfile = config_parser.get_value("dump_file");
-    bool report_fidelity = get_bool_value("fidelity");
+    bool report_fidelity = config_parser.is_flag_set("fidelity");
 
     // Handle init_format, fallback to simulation_method if empty
     std::string init_format = config_parser.get_value("init_format").empty() ? simulation_method : config_parser.get_value("init_format");
 
     // Enable specific features based on command-line options
-    Config::ENABLE_TENSOR_CORE = get_bool_value("tensorcore");
-    Config::ENABLE_MATRIX_CORE = get_bool_value("matrixcore");
-    Config::ENABLE_AVX512 = get_bool_value("AVX512");
-    Config::OMP_NUM_THREADS = std::stoi(config_parser.get_value("threads"));
-    Config::ENABLE_FUSION = get_bool_value("disable_fusion") ? false : true;
-    Config::PRINT_SIM_TRACE = get_bool_value("verbose");
+    Config::ENABLE_TENSOR_CORE = config_parser.is_flag_set("hw_tensorcore");
+    Config::ENABLE_MATRIX_CORE = config_parser.is_flag_set("hw_matrixcore");
+    Config::ENABLE_AVX512 = config_parser.is_flag_set("hw_avx512");
+    Config::OMP_NUM_THREADS = std::stoi(config_parser.get_value("hw_threads"));
+    Config::ENABLE_FUSION = config_parser.is_flag_set("disable_fusion") ? false : true;
+    Config::PRINT_SIM_TRACE = config_parser.is_flag_set("verbose");
 
     // Handle noise model related configurations
-    Config::ENABLE_NOISE = !config_parser.get_value("noise_model").empty();
+    Config::ENABLE_NOISE = !config_parser.get_value("device").empty();
     if (Config::ENABLE_NOISE)
     {
-        Config::readDeviceConfig(config_parser.get_value("noise_model"));
+        Config::readDeviceConfig(config_parser.get_value("device"));
         simulation_method = "dm";
     }
     std::string layoutfile = config_parser.get_value("layout");
@@ -74,26 +74,20 @@ int main(int argc, char **argv)
         Config::loadLayoutString(layoutstring);
     }
 
-    if (config_parser.get_value("backend_list") == "true")
+    if (config_parser.is_flag_set("backend_list"))
     {
         BackendManager::print_available_backends();
         return 0;
     }
 
-    if (config_parser.get_value("h") == "true")
-    {
-        config_parser.print_help();
-        return 0;
-    }
-
     if (Config::PRINT_SIM_TRACE)
     {
-        config_parser.print_configs();
+        config_parser.print_configurations();
     }
 
-    if (config_parser.get_value("seed") != "")
+    if (config_parser.get_value("random_seed") != "")
     {
-        Config::RANDOM_SEED = std::stoi(config_parser.get_value("seed"));
+        Config::RANDOM_SEED = std::stoi(config_parser.get_value("random_seed"));
     }
 
 // If MPI or NVSHMEM backend, initialize MPI
@@ -103,9 +97,9 @@ int main(int argc, char **argv)
         MPI_Init(&argc, &argv);
     }
 #endif
-    if (config_parser.get_value("q") != "")
+    if (config_parser.get_value("qasm_file") != "")
     {
-        std::string qasmFileStr = config_parser.get_value("q");
+        std::string qasmFileStr = config_parser.get_value("qasm_file");
 
         qasm_parser parser;
 
@@ -178,9 +172,9 @@ int main(int argc, char **argv)
         }
     }
 
-    if (config_parser.get_value("qs") != "")
+    if (config_parser.get_value("qasm_string") != "")
     {
-        std::string qasmString = config_parser.get_value("qs");
+        std::string qasmString = config_parser.get_value("qasm_string");
 
         qasm_parser parser;
         parser.load_qasm_string(qasmString + ";\n");
@@ -245,9 +239,10 @@ int main(int argc, char **argv)
             delete counts_dm;
         }
     }
-    if (config_parser.get_value("j") != "")
+
+    if (config_parser.get_value("json_file") != "")
     {
-        std::string qobjFileStr = config_parser.get_value("j");
+        std::string qobjFileStr = config_parser.get_value("json_file");
         qasm_parser parser;
         parser.load_qobj_file(qobjFileStr.c_str());
         if (!report_fidelity)
@@ -334,9 +329,10 @@ int main(int argc, char **argv)
             delete counts_dm;
         }
     }
-    if (config_parser.get_value("js") != "")
+
+    if (config_parser.get_value("json_string") != "")
     {
-        std::string qobjString = config_parser.get_value("js");
+        std::string qobjString = config_parser.get_value("json_string");
         qasm_parser parser;
         parser.load_qobj_string(qobjString);
         if (!report_fidelity)
@@ -425,15 +421,15 @@ int main(int argc, char **argv)
         }
     }
 
-    if (config_parser.get_value("t") != "")
+    if (config_parser.get_value("test") != "")
     {
         total_shots = 16384; // for verification
-        int benchmark_index = stoi(config_parser.get_value("t"));
+        int benchmark_index = stoi(config_parser.get_value("test"));
         ValType fidelity = run_brnchmark(backend, benchmark_index, total_shots, simulation_method, run_with_basis);
         BackendManager::safe_print("Fidelity between NWQSim and Qiskit Execution: %.4f\n", fidelity);
     }
 
-    if (config_parser.get_value("a") == "true")
+    if (config_parser.is_flag_set("all_tests"))
     {
         bool passed = true;
         for (int benchmark_index = 12; benchmark_index < 36; benchmark_index++)

@@ -66,9 +66,6 @@ namespace NWQSim
                 for (int i = 0; i < n_gates; i++)
                 {
 
-                    if (Config::PRINT_SIM_TRACE && omp_get_thread_num() == 0)
-                        printProgressBar(i, n_gates, start);
-
                     auto g = gates[i];
 
                     if (g.op_name == OP::C1)
