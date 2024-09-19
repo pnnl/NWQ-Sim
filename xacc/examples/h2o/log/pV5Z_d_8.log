@@ -1,7 +1,0 @@
-nOrbitals: 8
-Algorithm Started
-[2023-05-26 21:32:33.270] [xacc-logger] [info] [1;34mOperator pool: qubit-pool[0m
-[2023-05-26 21:32:33.270] [xacc-logger] [info] [1;34mNumber of operators in the pool: 80576[0m
-[2023-05-26 21:32:33.270] [xacc-logger] [info] [1;34mIteration: 1[0m
-[2023-05-26 21:32:33.270] [xacc-logger] [info] [1;34mComputing [H, A][0m
-[2023-05-26 21:32:33.270] [xacc-logger] [info] [1;34mPrinting commutators with absolute value above 0.000000[0m
