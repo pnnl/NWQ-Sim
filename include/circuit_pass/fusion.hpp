@@ -19,7 +19,7 @@
 #include <cstring>
 #include <algorithm>
 
-#include "../private/config.hpp"
+#include "../config.hpp"
 #include "../circuit.hpp"
 #include "../nwq_util.hpp"
 

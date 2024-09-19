@@ -18,7 +18,7 @@
 #include "noise_model.hpp"
 
 #include "../../gate.hpp"
-#include "../config.hpp"
+#include "../../config.hpp"
 #include "../sim_gate.hpp"
 
 using json = nlohmann::json;

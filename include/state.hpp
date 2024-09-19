@@ -3,31 +3,28 @@
 #include "nwq_util.hpp"
 #include "circuit.hpp"
 
-#include "private/config.hpp"
 #include "private/gate_factory/sv_gates.hpp"
 #include <stdexcept> // For std::runtime_error
 #include <vector>
 #include <string>
 
-
-
 namespace NWQSim
 {
-    struct ObservableList {
-        IdxType* zmasks;
+    struct ObservableList
+    {
+        IdxType *zmasks;
         ValType exp_output;
-        ValType* coeffs;
+        ValType *coeffs;
         IdxType numterms;
     };
     // Base class
     class QuantumState
     {
     public:
-        QuantumState(IdxType _n_qubits, SimType _sim_type, const std::string& configpath = "../default_config.json"): sim_type(_sim_type)
+        QuantumState(SimType _sim_type) : sim_type(_sim_type)
         {
-            Config::Load(configpath);
             registerGates();
-        }                          // constructor
+        } // constructor
         virtual ~QuantumState() {} // virtual destructor
 
         virtual void print_config(std::string sim_backend)
@@ -48,7 +45,8 @@ namespace NWQSim
 
         virtual ValType get_exp_z() = 0;
         virtual ValType get_exp_z(const std::vector<size_t> &in_bits) = 0;
-        virtual ValType fidelity(std::shared_ptr<QuantumState> other) {
+        virtual ValType fidelity(std::shared_ptr<QuantumState> other)
+        {
             throw std::runtime_error("Fidelity computation not implemented");
         };
         virtual void print_res_state() = 0;
@@ -67,11 +65,6 @@ namespace NWQSim
         virtual void clear_state()
         {
             throw std::runtime_error("Clear Buffer Not implemented");
-        }
-
-        void update_config(const std::string &filename)
-        {
-            Config::Update(filename);
         }
 
         IdxType i_proc = 0; // process id

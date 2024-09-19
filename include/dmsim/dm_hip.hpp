@@ -5,7 +5,7 @@
 #include "../gate.hpp"
 #include "../circuit.hpp"
 
-#include "../private/config.hpp"
+#include "../config.hpp"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
 #include "../private/hip_util.hpp"
@@ -24,13 +24,11 @@
 #include <hip/hip_runtime.h>
 #include <hip/hip_cooperative_groups.h>
 
-#ifdef FP64_HIPMC_AVAILABLE 
+#ifdef FP64_HIPMC_AVAILABLE
 #include <rocwmma/rocwmma.hpp>
 #include <hip/hip_ext.h>
 #include <hip/hip_fp16.h>
 #endif
-
-
 
 namespace NWQSim
 {
@@ -44,7 +42,7 @@ namespace NWQSim
     class DM_HIP : public QuantumState
     {
     public:
-        DM_HIP(IdxType _n_qubits, const std::string& config) : QuantumState(_n_qubits,SimType::DM, config)
+        DM_HIP(IdxType _n_qubits) : QuantumState(SimType::DM)
         {
             // Initialize the GPU
             n_qubits = _n_qubits;
@@ -80,8 +78,7 @@ namespace NWQSim
                                   hipMemcpyHostToDevice));
             hipSafeCall(hipMemset(m_real, 0, dm_size + sizeof(ValType)));
             hipSafeCall(hipMemset(m_imag, 0, dm_size + sizeof(ValType)));
-
-            rng.seed(time(0));
+            rng.seed(Config::RANDOM_SEED);
         }
 
         ~DM_HIP()
@@ -124,38 +121,43 @@ namespace NWQSim
         {
             rng.seed(seed);
         }
-        virtual void set_initial (std::string fpath, std::string format) override {
+        virtual void set_initial(std::string fpath, std::string format) override
+        {
             std::ifstream instream;
-            instream.open(fpath, std::ios::in|std::ios::binary);
+            instream.open(fpath, std::ios::in | std::ios::binary);
             // TODO: Implement HIP outer product
-            if (format != "dm") {
+            if (format != "dm")
+            {
                 throw std::runtime_error("HIP SV outer product not yet implemented\n");
             }
-            if (instream.is_open()) {
-                instream.read((char*)dm_real_cpu, dm_size * sizeof(ValType));
-                instream.read((char*)dm_imag_cpu, dm_size * sizeof(ValType));
+            if (instream.is_open())
+            {
+                instream.read((char *)dm_real_cpu, dm_size * sizeof(ValType));
+                instream.read((char *)dm_imag_cpu, dm_size * sizeof(ValType));
                 hipSafeCall(hipMemcpy(dm_real, dm_real_cpu,
-                                        dm_size, hipMemcpyHostToDevice));
+                                      dm_size, hipMemcpyHostToDevice));
                 hipSafeCall(hipMemcpy(dm_imag, dm_imag_cpu,
-                                        dm_size, hipMemcpyHostToDevice));
+                                      dm_size, hipMemcpyHostToDevice));
                 instream.close();
             }
         }
-        virtual void dump_res_state(std::string outpath) override {
+        virtual void dump_res_state(std::string outpath) override
+        {
             std::ofstream outstream;
-            outstream.open(outpath, std::ios::out|std::ios::binary);
-            if (outstream.is_open()) {
+            outstream.open(outpath, std::ios::out | std::ios::binary);
+            if (outstream.is_open())
+            {
                 hipSafeCall(hipMemcpy(dm_real_cpu, dm_real,
-                                    dm_size, hipMemcpyDeviceToHost));
+                                      dm_size, hipMemcpyDeviceToHost));
                 hipSafeCall(hipMemcpy(dm_imag_cpu, dm_imag,
-                                    dm_size, hipMemcpyDeviceToHost));
-                outstream.write((char*)dm_real_cpu, dm_size);
-                outstream.write((char*)dm_imag_cpu, dm_size);
+                                      dm_size, hipMemcpyDeviceToHost));
+                outstream.write((char *)dm_real_cpu, dm_size);
+                outstream.write((char *)dm_imag_cpu, dm_size);
                 outstream.close();
             }
         };
-        virtual ValType *get_real() const override {return dm_real;};
-        virtual ValType *get_imag() const override {return dm_imag;};
+        virtual ValType *get_real() const override { return dm_real; };
+        virtual ValType *get_imag() const override { return dm_imag; };
 
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
@@ -175,7 +177,7 @@ namespace NWQSim
             bool is_mc = false;
 
 #ifdef FP64_HIPMC_AVAILABLE
-            is_mc = Config::ENABLE_TENSOR_CORE;
+            is_mc = Config::ENABLE_MATRIX_CORE;
 #endif
 
             DM_HIP *dm_gpu;
@@ -515,7 +517,7 @@ namespace NWQSim
             const IdxType per_pe_work = ((dim) >> 4);
 
             extern __shared__ ValType els[];
-            ValType *el_real_s = &els[wid * 16 * 16 * 2];          // per warp 16*16 for real
+            ValType *el_real_s = &els[wid * 16 * 16 * 2];           // per warp 16*16 for real
             ValType *el_imag_s = &els[wid * 16 * 16 * 2 + 16 * 16]; // per warp 16*16 for imag
 
             assert(qubit0 != qubit1); // Non-cloning
@@ -535,20 +537,20 @@ namespace NWQSim
             const IdxType r = max(min(v2, v3), max(v0, v1));
             const IdxType s = max(v2, v3);
 
-            rocwmma::fragment<rocwmma::matrix_a,16,16,16, ValType, rocwmma::row_major> a_frag_real;
-            rocwmma::fragment<rocwmma::matrix_a,16,16,16, ValType, rocwmma::row_major> a_frag_imag;
-            rocwmma::fragment<rocwmma::matrix_b,16,16,16, ValType, rocwmma::col_major> b_frag_real;
-            rocwmma::fragment<rocwmma::matrix_b,16,16,16, ValType, rocwmma::col_major> b_frag_imag;
-            rocwmma::fragment<rocwmma::accumulator,16,16,16, ValType> c_frag_real;
-            rocwmma::fragment<rocwmma::accumulator,16,16,16, ValType> c_frag_imag;
+            rocwmma::fragment<rocwmma::matrix_a, 16, 16, 16, ValType, rocwmma::row_major> a_frag_real;
+            rocwmma::fragment<rocwmma::matrix_a, 16, 16, 16, ValType, rocwmma::row_major> a_frag_imag;
+            rocwmma::fragment<rocwmma::matrix_b, 16, 16, 16, ValType, rocwmma::col_major> b_frag_real;
+            rocwmma::fragment<rocwmma::matrix_b, 16, 16, 16, ValType, rocwmma::col_major> b_frag_imag;
+            rocwmma::fragment<rocwmma::accumulator, 16, 16, 16, ValType> c_frag_real;
+            rocwmma::fragment<rocwmma::accumulator, 16, 16, 16, ValType> c_frag_imag;
 
             for (IdxType i = (warpid << 4); i < per_pe_work; i += (nwarps << 4))
             {
-                #pragma unroll 
-                for (int j = 0; j < 16; j+=4)
+#pragma unroll
+                for (int j = 0; j < 16; j += 4)
                 {
-                    const int jj = j + (laneid>>4);
-                    const int ii = (laneid&15);
+                    const int jj = j + (laneid >> 4);
+                    const int ii = (laneid & 15);
                     const IdxType term = get_term(i + jj, p, q, r, s);
                     IdxType addr = term + SV16IDX(ii);
                     el_real_s[jj * 16 + ii] = LOCAL_G_HIP(dm_real, addr);
@@ -573,9 +575,9 @@ namespace NWQSim
                 a_frag_imag.x[3] = -a_frag_imag.x[3];
                 mma_sync(c_frag_real, a_frag_imag, b_frag_imag, c_frag_real);
 
-                //CUDA use X[0], X[1] of the first lane for the first two resulting elements.
-                //However, HIP use X[0] of all the 64 lanes for the first 64 resulting elements;
-                //X[1] of all the 64 lanes for the next 64 elements, etc.
+                // CUDA use X[0], X[1] of the first lane for the first two resulting elements.
+                // However, HIP use X[0] of all the 64 lanes for the first 64 resulting elements;
+                // X[1] of all the 64 lanes for the next 64 elements, etc.
 
                 // Store first result per segment-C
                 IdxType j0 = (laneid & 15);
@@ -585,19 +587,19 @@ namespace NWQSim
                 LOCAL_P_HIP(dm_imag, term0, c_frag_imag.x[0]);
                 // Store second result per segment-C
                 IdxType j1 = (laneid & 15);
-                IdxType k1 = (laneid >> 4)+4;
+                IdxType k1 = (laneid >> 4) + 4;
                 const IdxType term1 = get_term(i + j1, p, q, r, s) + SV16IDX(k1);
                 LOCAL_P_HIP(dm_real, term1, c_frag_real.x[1]);
                 LOCAL_P_HIP(dm_imag, term1, c_frag_imag.x[1]);
                 // Store third result per segment-C
                 IdxType j2 = (laneid & 15);
-                IdxType k2 = (laneid >> 4)+8;
+                IdxType k2 = (laneid >> 4) + 8;
                 const IdxType term2 = get_term(i + j2, p, q, r, s) + SV16IDX(k2);
                 LOCAL_P_HIP(dm_real, term2, c_frag_real.x[2]);
                 LOCAL_P_HIP(dm_imag, term2, c_frag_imag.x[2]);
                 // Store forth result per segment-C
                 IdxType j3 = (laneid & 15);
-                IdxType k3 = (laneid >> 4)+12;
+                IdxType k3 = (laneid >> 4) + 12;
                 const IdxType term3 = get_term(i + j3, p, q, r, s) + SV16IDX(k3);
                 LOCAL_P_HIP(dm_real, term3, c_frag_real.x[3]);
                 LOCAL_P_HIP(dm_imag, term3, c_frag_imag.x[3]);
@@ -714,7 +716,7 @@ namespace NWQSim
             const IdxType per_pe_work_dm = (dim);
 
             IdxType mask = ((IdxType)1 << qubit);
-            mask = (mask<<n_qubits) + mask;
+            mask = (mask << n_qubits) + mask;
 
             for (IdxType i = tid; i < per_pe_work_dm; i += blockDim.x * gridDim.x)
             {

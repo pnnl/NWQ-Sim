@@ -5,7 +5,7 @@
 
 #include "device_noise.hpp"
 #include "../sim_gate.hpp"
-#include "../config.hpp"
+#include "../../config.hpp"
 
 namespace NWQSim
 {

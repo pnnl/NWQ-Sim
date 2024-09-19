@@ -179,24 +179,29 @@ source ~/NWQ-Sim/environment/setup_theta.sh
 Then build NWQ-Sim using the steps in [Build from Source](#build_base)
 
 
-
 ## Program Runtime Configuration Options
 
 This guide provides detailed instructions on how to execute the compiled program along with the available command-line arguments to configure the program runtime.
 
 **Location:** Navigate to the `build` directory in your local project workspace.
 
-**Execution:** Run the executable program with the desired command-line arguments to adjust program behaviors as needed. Here is a comprehensive list of the command-line arguments:
+**Execution:**
 
-- `-q`: Executes a simulation with the given QASM file.
+Run the executable program with the desired command-line arguments to adjust program behaviors as needed. Below is a comprehensive list of the command-line arguments:
 
-- `-t <index>`: Runs the testing benchmarks for the specific index provided.
+- `-q, --qasm_file <FILE_PATH>`: Executes a simulation using the provided QASM file.
 
-- `-a`: Runs all testing benchmarks. 
+- `--qasm_string <STR>`: Executes a simulation using the provided QASM string.
 
-- `device`: Sets the path to a device configuration JSON file for density matrix simulation. Note that this overwrites the file specified in `default_config.json`.
+- `-j, --json_file <FILE_PATH>`: Executes simulation using the provided JSON file (Qiskit Qobj format).
 
-- `-backend list`: Lists all the available backends. The list of available backends are:
+- `--json_string <STR>`: Executes simulation using the provided JSON string (Qiskit Qobj format).
+
+- `-t, --test <INT>`: Runs the testing benchmarks for the specific index provided.
+
+- `-a, --all_tests`: Runs all available testing benchmarks.
+
+- `--backend_list`: Lists the available backends on the current platform. The complete list of available backends are:
   - CPU
   - OpenMP
   - MPI
@@ -204,26 +209,56 @@ This guide provides detailed instructions on how to execute the compiled program
   - NVGPU_MPI
   - AMDGPU
 
+- `-b, --backend <BACKEND>`: Sets the backend for your program to the specified one. The backend name string is case-insensitive.
 
-- `-backend <name>`: Sets the backend for your program to the specified one. The backend name string is case-insensitive.
+- `-s, --shots <SHOTS>`: Configures the total number of shots.
 
-- `-shots <value>`: Configures the total number of shots.
+- `--disable_fusion`: Disables gate fusion during simulation.
 
-- `-basis`: Activates the program to run benchmark circuits using only basis gates.
+- `--basis`: Activates the program to run benchmark circuits using only basis gates.
 
-- `-sim <method>`: Sets the simulation method. There are two available options:
+- `--sim <METHOD>`: Sets the simulation method. Available options:
   - `sv`: Statevector simulation.
-  - `dm`: Density Matrix simulation. Please note, when running with `dm`, the given circuit can only contain IBM basis gates and 2-qubit gates that are included in the device configuration file specified in the default_config.json file.
+  - `dm`: Density Matrix simulation. When using `dm`, the given circuit must contain only IBM basis gates and 2-qubit gates that are included in the device configuration file specified passed with `--device`.
 
-- `-fidelity`: Calculates the fidelity resulting from quantum noise channels. NOTES: 
-  - This will run **both** the Statevector and Density Matrix simulators, so the given circuit can only contain IBM basis gates and 2-qubit gates that are included in the device configuration file specified in the default_config.json file or passed with `-device`. 
-  - Make sure that default_config.json has `enable_noise: true`, otherwise the fidelity will always be 1 (useful for debugging)
+- `--random_seed <INT>`: Sets the random seed for the simulation.
+
+- `-v, --verbose`: Enables verbose simulation trace.
+
+- `--device <FILE_PATH>`: Sets the path to a device configuration JSON file for density matrix simulation. This automatically selects the Density Matrix simulator.
+
+- `--layout <FILE_PATH>`: Specifies the path to a JSON file mapping logical qubits to physical qubits.
+
+- `--layout_str <STR>`: Specifies a string format mapping logical qubits to physical qubits.
+
+- `-h, --help`: Prints the help message.
+
+- `-f, --fidelity`: Calculates the fidelity resulting from quantum noise channels. **Notes**:
+  - This runs **both** the Statevector and Density Matrix simulators, so the given circuit must contain only IBM basis gates and 2-qubit gates that are passed with `--device`.
+  - Make sure a device noise profile is provided with `--device`, otherwise, the fidelity will always be 1 (useful for debugging).
   - If running with `-backend NVGPU_MPI`, the Statevector simulator will only run on the root node, while the Density Matrix simulator will run on all nodes.
+
+- `--metrics`: Prints the metrics of the executed circuit.
+
+- `--init_file <FILE_PATH>`: Specifies the path to the initial state file.
+
+- `--init_format <FILE_PATH>`: Specifies the format of the initial state - Statevector or Density Matrix.
+
+- `--dump_file <FILE_PATH>`: Specifies the path to dump the binary statevector or density matrix result.
+
+- `--hw_tensorcore`: Enables the use of Tensor Cores on Nvidia GPUs.
+
+- `--hw_matrixcore`: Enables the use of MatrixCore hardware on AMD GPUs.
+
+- `--hw_threads <INT>`: Specifies the number of OpenMP threads to use.
+
+- `--hw_avx512`: Enables the use of AVX512 hardware instructions.
+
 
 **Example Usage:** To run the qasm frontend from the `build` directory with a specific backend, a total number of shots, and a simulation method, use the following command: 
 
 ```bash
-./qasm/nwq_qasm -backend <name> -shots <value> -sim <method> -q <path/to/qasm>
+./qasm/nwq_qasm --backend <name> --shots <value> --sim <method> -q <path/to/qasm>
 ```
 
 Replace `<name>`, `<value>`, `<method>`, and `<path/to/qasm>` with your desired backend name, number of shots, and simulation method respectively.
@@ -233,8 +268,42 @@ Please ensure that you replace `/qasm/nwq_qasm` with the actual name of your com
 To compute the fidelity, add the `-fidelity` flag (with an optional device JSON path):
 
 ```bash
-./qasm/nwq_qasm -backend <name> -shots <value> -sim <method> -q <path/to/qasm> -fidelity -device <path/to/device_json>
+./qasm/nwq_qasm --backend <name> --shots <value> --sim <method> -q <path/to/qasm> --fidelity --device <path/to/device_json>
 ```
+
+**Legacy Flag Options**
+
+The following options were part of earlier versions of NWQ-Sim and are still supported for backward compatibility. The primary changes include switching from single dashes (`-`) to double dashes (`--`) for long flags, and some argument names have been updated for better clarity. It is recommended to use the updated flags where applicable, but these legacy options will continue to function:
+
+- `-qs`: Equivalent to `--qasm_string`.
+
+- `-js`: Equivalent to `--json_string`.
+
+- `-metrics`: Equivalent to `--metrics`.
+
+- `-initial`: Equivalent to `--init_file`.
+
+- `-initial-format`: Equivalent to `--init_format`.
+
+- `-dump`: Equivalent to `--dump_file`.
+
+- `-layout`: Equivalent to `--layout`.
+
+- `-layout-string`: Equivalent to `--layout_str`.
+
+- `-device`: Equivalent to `--device`.
+
+- `-backend`: Equivalent to `--backend` or `-b`.
+
+- `-backend_list`: Equivalent to `--backend_list`.
+
+- `-shots`: Equivalent to `--shots` or `-s`.
+
+- `-sim`: Equivalent to `--sim`.
+
+- `-basis`: Equivalent to `--basis`.
+
+- `-fidelity`: Equivalent to `--fidelity` or `-f`.
 
 ### Running on Frontier HPC
 
@@ -244,11 +313,11 @@ source ~/NWQ-Sim/environment/setup_frontier.sh
 ```
 Launch multi-CPU execution for regular or interactive jobs:
 ```bash
-srun -N <nodes> -n <CPUS> ./qasm/nwq_qasm <NWQ-Sim Command> -backend MPI
+srun -N <nodes> -n <CPUS> ./qasm/nwq_qasm <NWQ-Sim Command> --backend MPI
 ```
 For example:
 ```bash
-srun -N 4 -n 32 ./qasm/nwq_qasm -backend MPI -q ../data/openqasm/adder_n28.qasm
+srun -N 4 -n 32 ./qasm/nwq_qasm --backend MPI -q ../data/openqasm/adder_n28.qasm
 ```
 
 ### Running on Summit HPC
@@ -260,11 +329,11 @@ source ~/NWQ-Sim/environment/setup_summit.sh
 
 Launch multi-GPU execution for regular or interactive jobs:
 ```bash
-jsrun -n<GPUS> -a1 -g1 -c1 -brs <NWQ-Sim Command> -backend NVGPU_MPI
+jsrun -n<GPUS> -a1 -g1 -c1 -brs <NWQ-Sim Command> --backend NVGPU_MPI
 ```
 When using multi-nodes, nvshmem requires the same number of PEs for all nodes. Since each Summit node has 6 GPUs, we need to specify 4 per nodes. An example is given in the following:
 ```bash
-jsrun -n 64 -a1 -g1 -c1 -r4 ./qasm/nwq_qasm -q ../data/openqasm/bv_n14.qasm -backend NVGPU_MPI
+jsrun -n 64 -a1 -g1 -c1 -r4 ./qasm/nwq_qasm -q ../data/openqasm/bv_n14.qasm --backend NVGPU_MPI
 ```
 
 Replace <GPUS> with the total number of GPUs, and <NWQ-Sim Command> with the NWQ-Sim execution command.
@@ -277,7 +346,7 @@ source ~/NWQ-Sim/environment/setup_perlmutter.sh
 
 Launch multi-GPU execution for regular or interactive jobs:
 ```bash
-srun -C gpu -N <NODES> -n <GPUS> -c 1 --gpus-per-task=1 --gpu-bind=single:1 <NWQ-Sim Command> -backend NVGPU_MPI
+srun -C gpu -N <NODES> -n <GPUS> -c 1 --gpus-per-task=1 --gpu-bind=single:1 <NWQ-Sim Command> --backend NVGPU_MPI
 ```
 
 Replace `<NODES>` with the number of compute nodes, `<GPUS>` with the total number of GPUs, and `<NWQ-Sim Command>` with the NWQ-Sim execution command.
@@ -292,7 +361,7 @@ source ~/NWQ-Sim/environment/setup_theta.sh
 
 Launch regular or interactive jobs and use the following command to execute:
 ```bash
-aprun -n <NODES> -N 1 <NWQ-Sim Command> -backend MPI
+aprun -n <NODES> -N 1 <NWQ-Sim Command> --backend MPI
 ```
 Replace `<NODES>` with the number of compute nodes
 

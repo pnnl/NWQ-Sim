@@ -59,7 +59,7 @@ public:
         else
         {
             printf(format, args...);
-                fflush(stdout);
+            fflush(stdout);
         }
 #else
         printf(format, args...);
@@ -92,7 +92,7 @@ public:
 #endif
     }
 
-    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, const std::string& config, NWQSim::IdxType numQubits, std::string simulator_method = "sv")
+    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "sv")
     {
         // Convert to uppercase
         std::transform(backend.begin(), backend.end(), backend.begin(),
@@ -101,22 +101,22 @@ public:
         if (backend == "CPU")
         {
             if (simulator_method == "sv")
-                return std::make_shared<NWQSim::SV_CPU>(numQubits, config);
+                return std::make_shared<NWQSim::SV_CPU>(numQubits);
             else
-                return std::make_shared<NWQSim::DM_CPU>(numQubits, config);
+                return std::make_shared<NWQSim::DM_CPU>(numQubits);
         }
 
 #ifdef OMP_ENABLED
         else if (backend == "OPENMP")
         {
-            return std::make_shared<NWQSim::SV_OMP>(numQubits, config);
+            return std::make_shared<NWQSim::SV_OMP>(numQubits);
         }
 #endif
 
 #ifdef MPI_ENABLED
         else if (backend == "MPI")
         {
-            return std::make_shared<NWQSim::SV_MPI>(numQubits, config);
+            return std::make_shared<NWQSim::SV_MPI>(numQubits);
         }
 #endif
 
@@ -124,9 +124,9 @@ public:
         else if (backend == "NVGPU")
         {
             if (simulator_method == "sv")
-                return std::make_shared<NWQSim::SV_CUDA>(numQubits, config);
+                return std::make_shared<NWQSim::SV_CUDA>(numQubits);
             else
-                return std::make_shared<NWQSim::DM_CUDA>(numQubits, config);
+                return std::make_shared<NWQSim::DM_CUDA>(numQubits);
         }
 #endif
 
@@ -134,9 +134,9 @@ public:
         else if (backend == "AMDGPU")
         {
             if (simulator_method == "sv")
-                return std::make_shared<NWQSim::SV_HIP>(numQubits, config);
+                return std::make_shared<NWQSim::SV_HIP>(numQubits);
             else
-                return std::make_shared<NWQSim::DM_HIP>(numQubits, config);
+                return std::make_shared<NWQSim::DM_HIP>(numQubits);
         }
 #endif
 
@@ -144,9 +144,9 @@ public:
         else if (backend == "NVGPU_MPI")
         {
             if (simulator_method == "sv")
-                return std::make_shared<NWQSim::SV_CUDA_MPI>(numQubits, config);
+                return std::make_shared<NWQSim::SV_CUDA_MPI>(numQubits);
             else
-                return std::make_shared<NWQSim::DM_CUDA_MPI>(numQubits, config);
+                return std::make_shared<NWQSim::DM_CUDA_MPI>(numQubits);
         }
 #endif
         else if (backend == "LIST")

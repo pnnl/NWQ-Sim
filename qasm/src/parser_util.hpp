@@ -333,8 +333,8 @@ int get_index(vector<string> vec, string target);
  */
 void print_counts(map<string, IdxType> *counts, IdxType repetition);
 
-char *getCmdOption(char **begin, char **end, const std::string &option);
-bool cmdOptionExists(char **begin, char **end, const std::string &option);
+// char *getCmdOption(char **begin, char **end, const std::string &option);
+// bool cmdOptionExists(char **begin, char **end, const std::string &option);
 
 /************************** IMPLEMENTATION OF UTILITY FUNCTIONS **************************/
 
@@ -374,17 +374,17 @@ void print_counts(map<string, IdxType> *counts, IdxType repetition)
     }
 }
 
-char *getCmdOption(char **begin, char **end, const string &option)
-{
-    char **itr = find(begin, end, option);
-    if (itr != end && ++itr != end)
-    {
-        return *itr;
-    }
-    return 0;
-}
+// char *getCmdOption(char **begin, char **end, const string &option)
+// {
+//     char **itr = find(begin, end, option);
+//     if (itr != end && ++itr != end)
+//     {
+//         return *itr;
+//     }
+//     return 0;
+// }
 
-bool cmdOptionExists(char **begin, char **end, const string &option)
-{
-    return find(begin, end, option) != end;
-}
+// bool cmdOptionExists(char **begin, char **end, const string &option)
+// {
+//     return find(begin, end, option) != end;
+// }
