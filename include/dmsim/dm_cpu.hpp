@@ -459,11 +459,20 @@ namespace NWQSim
 
             ValType gm_real[16];
             ValType gm_imag[16];
+
+            // printout gm_real and gm_imag
+            for (int i = 0; i < 16; i++)
+            {
+                gm_real[i] = 0;
+                gm_imag[i] = 0;
+            }
+
             if (random <= prob_of_one)
                 gm_real[15] = 1.0 / prob_of_one;
             else
                 gm_real[0] = 1.0 / (1.0 - prob_of_one);
             BARR;
+
             C2_GATE(gm_real, gm_imag, qubit, qubit + n_qubits);
             BARR;
             results[0] = (random <= prob_of_one ? 1 : 0);

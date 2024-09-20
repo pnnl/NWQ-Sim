@@ -38,7 +38,7 @@ private:
 
     vector<token> cur_inst;
 
-    bool contains_if = false;
+    bool multi_shot = false;
     bool measure_all = true;
     bool skip_if = false;
 
@@ -145,7 +145,7 @@ void qasm_parser::parse_qasm()
                     auto c_inst = slices(cur_inst, INST_IF_INST_START, cur_inst.size() - 1);
                     parse_gate(c_inst, cur_gate.conditional_inst);
                     list_gates->push_back(cur_gate);
-                    contains_if = true;
+                    multi_shot = true;
                 }
             }
             else
@@ -608,17 +608,18 @@ void qasm_parser::classify_measurements()
             list_gates->at(i).final_measurements = final_measurements;
 
             if (final_measurements)
-                measure_all = false;
+                measure_all = false; // If there are defined final measurements, we don't need to measure all qubits
+            else
+                multi_shot = true; // If there are intermediate measurements, we need to run the circuit multiple times
         }
         else
-
             final_measurements = false;
 }
 
 map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::string initpath, std::string init_format, IdxType repetition, bool print_metrics)
 {
     IdxType *results;
-    if (contains_if)
+    if (multi_shot)
     {
         results = new IdxType[repetition];
         for (IdxType i = 0; i < repetition; i++)
