@@ -674,13 +674,12 @@ IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string in
             execute_gate(state, circuit, gate);
         }
     }
-    if (!circuit->is_empty())
-    {
-        circuit->MA(repetition);
-        if (print_metrics)
-            circuit->print_metrics();
-        state->sim(circuit);
-    }
+
+    circuit->MA(repetition);
+    if (print_metrics)
+        circuit->print_metrics();
+    state->sim(circuit);
+
     return state->get_results();
 }
 
