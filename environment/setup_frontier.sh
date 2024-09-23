@@ -10,7 +10,7 @@ export LDFLAGS="-L${MPICH_DIR}/lib -lmpi ${CRAY_XPMEM_POST_LINK_OPTS} -lxpmem ${
 export MPICH_GPU_SUPPORT_ENABLED=1
 export MY_HIP_ARCH=gfx90a
 export rocshmem_DIR=/ccs/home/bpotter/rocshmem
-export ROC_SHMEM_MAX_NUM_CONTEXTS=114
+export ROC_SHMEM_MAX_NUM_CONTEXTS=104
 
 export cc=gcc
 export CC=g++

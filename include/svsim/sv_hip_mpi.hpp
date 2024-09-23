@@ -80,9 +80,9 @@ namespace NWQSim
             m_real = (ValType *)roc_shmem_malloc(sv_size_per_gpu);
             m_imag = (ValType *)roc_shmem_malloc(sv_size_per_gpu);
             /*This just a temp array to transfer the double data, will optimize it later. */
-            trans_double = (int *)roc_shmem_malloc(2*sizeof(int));
-            trans_double[0] = 0.0;
-            trans_double[1] = 0.0;
+            // trans_double = (int *)roc_shmem_malloc(2*sizeof(int));
+            // trans_double[0] = 0.0;
+            // trans_double[1] = 0.0;
             
             hipCheckError();
             gpu_mem += sv_size_per_gpu * 4;
@@ -400,8 +400,6 @@ namespace NWQSim
         // For measurement result
         IdxType *results = NULL;
         IdxType *results_gpu = NULL;
-
-        int *trans_double;
         // Random
         std::mt19937 rng;
         std::uniform_real_distribution<ValType> uni_dist;
@@ -460,35 +458,35 @@ namespace NWQSim
 
             return n_measures;
         }
-        __inline__ __device__ ValType pgas_get_double(roc_shmem_ctx_t* p_ctx, ValType* arr, IdxType i)
-        {
-            int* arr_int_p = (int*)&((arr)[(i)&((m_gpu)-1)]);
-            int arr_int[2] = {roc_shmem_ctx_int_g(*p_ctx, &arr_int_p[0], ((i)>>(lg2_m_gpu))),
-                              roc_shmem_ctx_int_g(*p_ctx, &arr_int_p[1], ((i)>>(lg2_m_gpu)))};
-            return *((double*)arr_int);
-        }
-        __inline__ __device__ void pgas_put_double(roc_shmem_ctx_t* p_ctx, ValType* arr, IdxType i, ValType val)
-        {
-            int* val_int_p = (int*)&val; 
-            int* arr_int_p = (int*)&(arr)[(i) & ((m_gpu) - 1)];
-            roc_shmem_ctx_int_p(*p_ctx, &arr_int_p[0], val_int_p[0], ((i)>>(lg2_m_gpu)));
-            roc_shmem_ctx_int_p(*p_ctx, &arr_int_p[1], val_int_p[1], ((i)>>(lg2_m_gpu)));
-        }
+        // __inline__ __device__ ValType pgas_get_double(roc_shmem_ctx_t* p_ctx, ValType* arr, IdxType i)
+        // {
+        //     int* arr_int_p = (int*)&((arr)[(i)&((m_gpu)-1)]);
+        //     int arr_int[2] = {roc_shmem_ctx_int_g(*p_ctx, &arr_int_p[0], ((i)>>(lg2_m_gpu))),
+        //                       roc_shmem_ctx_int_g(*p_ctx, &arr_int_p[1], ((i)>>(lg2_m_gpu)))};
+        //     return *((double*)arr_int);
+        // }
+        // __inline__ __device__ void pgas_put_double(roc_shmem_ctx_t* p_ctx, ValType* arr, IdxType i, ValType val)
+        // {
+        //     int* val_int_p = (int*)&val; 
+        //     int* arr_int_p = (int*)&(arr)[(i) & ((m_gpu) - 1)];
+        //     roc_shmem_ctx_int_p(*p_ctx, &arr_int_p[0], val_int_p[0], ((i)>>(lg2_m_gpu)));
+        //     roc_shmem_ctx_int_p(*p_ctx, &arr_int_p[1], val_int_p[1], ((i)>>(lg2_m_gpu)));
+        // }
 
-        __inline__ __device__ ValType pgas_get_longlong(roc_shmem_ctx_t* p_ctx, IdxType* arr, IdxType i, IdxType i_proc)
-        {
-            int* arr_int_p = (int*)&((arr)[i]);
-            int arr_int[2] = {roc_shmem_ctx_int_g(*p_ctx, &arr_int_p[0], i_proc),
-                              roc_shmem_ctx_int_g(*p_ctx, &arr_int_p[1], i_proc)};
-            return *((long long int*)arr_int);
-        }
-        __inline__ __device__ void pgas_put_longlong(roc_shmem_ctx_t* p_ctx, IdxType* arr, IdxType i, IdxType val, IdxType i_proc)
-        {
-            int* val_int_p = (int*)&val; 
-            int* arr_int_p = (int*)&(arr)[i];
-            roc_shmem_ctx_int_p(*p_ctx, &arr_int_p[0], val_int_p[0], i_proc);
-            roc_shmem_ctx_int_p(*p_ctx, &arr_int_p[1], val_int_p[1], i_proc);
-        }
+        // __inline__ __device__ ValType pgas_get_longlong(roc_shmem_ctx_t* p_ctx, IdxType* arr, IdxType i, IdxType i_proc)
+        // {
+        //     int* arr_int_p = (int*)&((arr)[i]);
+        //     int arr_int[2] = {roc_shmem_ctx_int_g(*p_ctx, &arr_int_p[0], i_proc),
+        //                       roc_shmem_ctx_int_g(*p_ctx, &arr_int_p[1], i_proc)};
+        //     return *((long long int*)arr_int);
+        // }
+        // __inline__ __device__ void pgas_put_longlong(roc_shmem_ctx_t* p_ctx, IdxType* arr, IdxType i, IdxType val, IdxType i_proc)
+        // {
+        //     int* val_int_p = (int*)&val; 
+        //     int* arr_int_p = (int*)&(arr)[i];
+        //     roc_shmem_ctx_int_p(*p_ctx, &arr_int_p[0], val_int_p[0], i_proc);
+        //     roc_shmem_ctx_int_p(*p_ctx, &arr_int_p[1], val_int_p[1], i_proc);
+        // }
 
         //============== Local Unified 1-qubit Gate ================
         __device__ __inline__ void C1_GATE(roc_shmem_ctx_t* p_ctx, const ValType *gm_real, const ValType *gm_imag, const IdxType qubit, IdxType t)
@@ -771,14 +769,17 @@ namespace NWQSim
             {
                 IdxType idx = (i_proc)*per_pe_work + i;
                 if ((idx & mask) == 0){
-                    LOCAL_P_HIP_MPI(m_real, i,0);
+                    // LOCAL_P_HIP_MPI(m_real, i,0);
+                    m_real[i] = 0;
                 }
                 else{
-                    ValType prob_i = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
-                    LOCAL_P_HIP_MPI(m_real, i , prob_i);
+                    // ValType prob_i = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
+                    // LOCAL_P_HIP_MPI(m_real, i , prob_i);
+                    m_real[i] = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
                 }
-                    
             }
+            __threadfence_system();
+
             BARR_ROC_SHMEM;
 
             // Parallel reduction
@@ -790,17 +791,20 @@ namespace NWQSim
                     if (local_gpu == i_proc)
                     {
                         IdxType local_idx = i & (m_gpu - 1);
-                        ValType tmp = m_real[local_idx] + PGAS_G(m_real, i + k);
-                        LOCAL_P_HIP_MPI(m_real, local_idx, tmp);
+                        // ValType tmp = m_real[local_idx] + PGAS_G(m_real, i + k);
+                        // LOCAL_P_HIP_MPI(m_real, local_idx, tmp);
+                        m_real[local_idx] += PGAS_G(m_real, i + k);
                     }
                 }
+                __threadfence_system();
                 BARR_ROC_SHMEM;
             }
 
             if (tid == 0 && i_proc != 0)
             {
-                ValType tmp2 = PGAS_G(m_real, 0);
-                LOCAL_P_HIP_MPI(m_real, 0, tmp2);
+                // ValType tmp2 = PGAS_G(m_real, 0);
+                // LOCAL_P_HIP_MPI(m_real, 0, tmp2);
+                m_real[0] = PGAS_G(m_real, 0);
             }
             BARR_ROC_SHMEM
             // grid.sync();
@@ -815,13 +819,17 @@ namespace NWQSim
                     IdxType idx = (i_proc)*per_pe_work + i;
                     if ((idx & mask) == 0)
                     {
-                        LOCAL_P_HIP_MPI(sv_real, i, 0);
-                        LOCAL_P_HIP_MPI(sv_imag, i, 0);
+                        // LOCAL_P_HIP_MPI(sv_real, i, 0);
+                        // LOCAL_P_HIP_MPI(sv_imag, i, 0);
+                        sv_real[i] = 0;
+                        sv_imag[i] = 0;
                     }
                     else
                     {
-                        LOCAL_P_HIP_MPI(sv_real, i, sv_real[i] * factor);
-                        LOCAL_P_HIP_MPI(sv_imag, i, sv_imag[i] * factor);
+                        // LOCAL_P_HIP_MPI(sv_real, i, sv_real[i] * factor);
+                        // LOCAL_P_HIP_MPI(sv_imag, i, sv_imag[i] * factor);
+                        sv_real[i] *= factor;
+                        sv_imag[i] *= factor;
                     }
                 }
             }
@@ -833,19 +841,23 @@ namespace NWQSim
                     IdxType idx = (i_proc)*per_pe_work + i;
                     if ((idx & mask) == 0)
                     {
-                        LOCAL_P_HIP_MPI(sv_real, i, sv_real[i] * factor);
-                        LOCAL_P_HIP_MPI(sv_imag, i, sv_imag[i] * factor);
+                        // LOCAL_P_HIP_MPI(sv_real, i, sv_real[i] * factor);
+                        // LOCAL_P_HIP_MPI(sv_imag, i, sv_imag[i] * factor);
+                        sv_real[i] *= factor;
+                        sv_imag[i] *= factor;
                     }
                     else
                     {
-                        LOCAL_P_HIP_MPI(sv_real, i, 0);
-                        LOCAL_P_HIP_MPI(sv_imag, i, 0);
+                        // LOCAL_P_HIP_MPI(sv_real, i, 0);
+                        // LOCAL_P_HIP_MPI(sv_imag, i, 0);
+                        sv_real[i] = 0;
+                        sv_imag[i] = 0;
                     }
                 }
             }
             if (tid == 0)
-                pgas_put_longlong(p_ctx,results_gpu,cur_index,(rand <= prob_of_one ? 1 : 0), i_proc);
-                // roc_shmem_ctx_longlong_p(*p_ctx, &results_gpu[cur_index], (rand <= prob_of_one ? 1 : 0), i_proc);
+                // pgas_put_longlong(p_ctx,results_gpu,cur_index,(rand <= prob_of_one ? 1 : 0), i_proc);
+                roc_shmem_ctx_longlong_p(*p_ctx, &results_gpu[cur_index], (rand <= prob_of_one ? 1 : 0), i_proc);
             BARR_ROC_SHMEM;
         }
 
@@ -931,13 +943,13 @@ namespace NWQSim
                         {
                             if (i_proc == 0)
                             {
-                                // roc_shmem_ctx_longlong_p(*p_ctx, &results_gpu[cur_index + i], j, i_proc);
-                                pgas_put_longlong(p_ctx,results_gpu, (cur_index + i), i, i_proc );
+                                roc_shmem_ctx_longlong_p(*p_ctx, &results_gpu[cur_index + i], j, i_proc);
+                                // pgas_put_longlong(p_ctx,results_gpu, (cur_index + i), i, i_proc );
                             }
                             else
                             {
-                                // roc_shmem_ctx_longlong_p(*p_ctx, &results_gpu[cur_index + i], j, 0);
-                                pgas_put_longlong(p_ctx,results_gpu, (cur_index + i), i, 0);
+                                roc_shmem_ctx_longlong_p(*p_ctx, &results_gpu[cur_index + i], j, 0);
+                                // pgas_put_longlong(p_ctx,results_gpu, (cur_index + i), i, 0);
                                 roc_shmem_ctx_quiet(*p_ctx);
                             }
                         }
@@ -964,11 +976,15 @@ namespace NWQSim
             {
                 IdxType idx = (i_proc)*per_pe_work + i;
                 if ((idx & mask) == 0) {
-                    LOCAL_P_HIP_MPI(m_real, i, 0);
+                    // LOCAL_P_HIP_MPI(m_real, i, 0);
+                   m_real[i] = 0;
+
                 }
                 else{
-                    ValType tmp = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
-                    LOCAL_P_HIP_MPI(m_real, i, tmp);
+                    // ValType tmp = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
+                    // LOCAL_P_HIP_MPI(m_real, i, tmp);
+                  m_real[i] = sv_real[i] * sv_real[i] + sv_imag[i] * sv_imag[i];
+
                 }
             }
             BARR_ROC_SHMEM;
@@ -982,9 +998,11 @@ namespace NWQSim
                     if (local_gpu == i_proc)
                     {
                         IdxType local_idx = i & (m_gpu - 1);
-                        ValType tmp = m_real[local_idx] + PGAS_G(m_real, i + k);
-                        // LOCAL_P_HIP_MPI(m_real, local_idx, tmp);
-                         m_real[local_idx] = tmp;
+                        // ValType tmp = m_real[local_idx] + PGAS_G(m_real, i + k);
+                        // // LOCAL_P_HIP_MPI(m_real, local_idx, tmp);
+                        //  m_real[local_idx] = tmp;
+                       m_real[local_idx] += PGAS_G(m_real, i + k);
+
                     }
                 }
                 BARR_ROC_SHMEM;
@@ -1204,10 +1222,10 @@ namespace NWQSim
                 }
                 grid.sync();
             }
-            uint64_t doubleBits;
-            memcpy((void *) &doubleBits, (void *) &m_real[0], sizeof(double));
-            trans_double[0] = static_cast<uint32_t>(doubleBits);
-            trans_double[1] = static_cast<int32_t>(doubleBits >> 32);
+            // uint64_t doubleBits;
+            // memcpy((void *) &doubleBits, (void *) &m_real[0], sizeof(double));
+            // trans_double[0] = static_cast<uint32_t>(doubleBits);
+            // trans_double[1] = static_cast<int32_t>(doubleBits >> 32);
             BARR_ROC_SHMEM;
             // if (i_proc == 1 && tid == 0)
             // {
@@ -1225,12 +1243,12 @@ namespace NWQSim
                 ValType beff = m_real[0];
                 for (IdxType m = 1; m < n_gpus; m++)
                 {
-                    // ValType remote = roc_shmem_ctx_double_g(*p_ctx, &m_real[0], m);
-                     uint32_t low = roc_shmem_ctx_int_g(*p_ctx, &trans_double[0], m);
-                    uint32_t high = roc_shmem_ctx_int_g(*p_ctx, &trans_double[1], m);
-                    uint64_t remote_int = (uint64_t) high << 32 | low;
-                    ValType remote;
-                    memcpy((void *) &remote, (void *) &remote_int, sizeof(ValType));
+                    ValType remote = roc_shmem_ctx_double_g(*p_ctx, &m_real[0], m);
+                    //  uint32_t low = roc_shmem_ctx_int_g(*p_ctx, &trans_double[0], m);
+                    // uint32_t high = roc_shmem_ctx_int_g(*p_ctx, &trans_double[1], m);
+                    // uint64_t remote_int = (uint64_t) high << 32 | low;
+                    // ValType remote;
+                    // memcpy((void *) &remote, (void *) &remote_int, sizeof(ValType));
                     m_real [0] += remote; 
                     printf("\n remote:%lf\n", remote);
                 }
