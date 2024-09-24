@@ -573,6 +573,7 @@ namespace NWQSim
                 }
                 BARR_ROC_SHMEM;
             }
+            grid.sync();
         }
 
         //============== Local 2-qubit Gate  ================
@@ -973,6 +974,7 @@ namespace NWQSim
             // ValType *m_real = m_real;
             IdxType mask = ((IdxType)1 << qubit);
 
+             BARR_ROC_SHMEM;
             for (IdxType i = tid; i < m_gpu; i += blockDim.x * gridDim.x)
             {
                 IdxType idx = (i_proc)*per_pe_work + i;
@@ -1342,20 +1344,20 @@ namespace NWQSim
                      sv_gpu->C2V1_GATE(p_ctx, gm_real, gm_imag, ctrl, qubit,t);
                  }
             }
-            else if (op_name == OP::RESET)
-            {
-                sv_gpu->RESET_GATE(p_ctx, qubit);
-            }
-            else if (op_name == OP::M)
-            {
-                sv_gpu->M_GATE(p_ctx, qubit, cur_index);
-                cur_index++;
-            }
-            else if (op_name == OP::MA)
-            {
-                sv_gpu->MA_GATE(p_ctx, repetition, cur_index);
-                cur_index += repetition;
-            }
+            // else if (op_name == OP::RESET)
+            // {
+            //     sv_gpu->RESET_GATE(p_ctx, qubit);
+            // }
+            // else if (op_name == OP::M)
+            // {
+            //     sv_gpu->M_GATE(p_ctx, qubit, cur_index);
+            //     cur_index++;
+            // }
+            // else if (op_name == OP::MA)
+            // {
+            //     sv_gpu->MA_GATE(p_ctx, repetition, cur_index);
+            //     cur_index += repetition;
+            // }
 
             // only need sync when operating on remote qubits
             if ((ctrl >= lg2_m_gpu) || (qubit >= lg2_m_gpu))

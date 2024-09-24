@@ -26,6 +26,7 @@
 //    grid.sync();
 #define BARR_ROC_SHMEM  \
     __threadfence_system(); \
+    grid.sync(); \
     roc_shmem_ctx_wg_barrier_all(*p_ctx);               \
    	grid.sync();
 
