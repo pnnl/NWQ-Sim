@@ -6,11 +6,15 @@
 #include "../gate.hpp"
 #include "../circuit.hpp"
 #include "../config.hpp"
-#include "private/exp_gate_declarations_host.hpp"
+#include "../private/exp_gate_declarations_host.hpp"
 
 #include "../circuit_pass/fusion.hpp"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
+
+/*TESTING HEADERS*/
+#include "stabalizer_sim.hpp"
+/*END TESTING HEADERS*/
 
 #include <random>
 #include <cstring>
@@ -112,6 +116,33 @@ namespace NWQSim
             sim_timer.start_timer();
 
             simulation_kernel(gates);
+
+            sim_timer.stop_timer();
+            sim_time = sim_timer.measure();
+
+            if (Config::PRINT_SIM_TRACE)
+            {
+                printf("\n============== SV-Sim ===============\n");
+                printf("n_qubits:%lld, n_gates:%lld, sim_gates:%lld, ncpus:%lld, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_cpu:%.3lf MB\n",
+                       n_qubits, origional_gates, n_gates, n_cpu, sim_time, 0.,
+                       sim_time, cpu_mem / 1024 / 1024, cpu_mem / 1024 / 1024);
+                printf("=====================================\n");
+            }
+
+            //=========================================
+        }
+
+        void cliffordSim(std::shared_ptr<NWQSim::Circuit> circuit) override
+        {
+            IdxType origional_gates = circuit->num_gates();
+            std::vector<SVGate> gates = fuse_circuit_sv(circuit);
+            IdxType n_gates = gates.size();
+            assert(circuit->num_qubits() == n_qubits);
+            double sim_time;
+            cpu_timer sim_timer;
+            sim_timer.start_timer();
+
+            clifford_simulation_kernel(gates);
 
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
