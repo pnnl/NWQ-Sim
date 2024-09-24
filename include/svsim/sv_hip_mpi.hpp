@@ -178,7 +178,8 @@ namespace NWQSim
             //Due to potential interference between rocshmem and hip-cooperative-group, we can 
             //only allocate thread blocks at most the same with number of SMs
             int numBlocksPerSm = 1;
-            gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
+            // gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
+            gridDim.x = 104
             void *args[] = {&sv_gpu, &n_gates};
             hipSafeCall(hipDeviceSynchronize());
             // roc_shmem_barrier_all();
