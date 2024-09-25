@@ -13,7 +13,7 @@
 #include "../private/sim_gate.hpp"
 
 /*TESTING HEADERS*/
-#include "stabalizer_sim.hpp"
+#include "../stabalizer_sim.hpp"
 /*END TESTING HEADERS*/
 
 #include <random>
@@ -285,6 +285,19 @@ namespace NWQSim
             }
         }
 
+        virtual void clifford_simulation_kernel(const std::vector<SVGate> &gates)
+        {
+            auto start = std::chrono::steady_clock::now();
+            tableau test = tableau(gates, n_qubits);
+            test.simulate();
+
+            if (Config::PRINT_SIM_TRACE)
+            {
+                std::cout << std::endl;
+            }
+        }
+
+        
         //============== C1 Gate ================
         // Arbitrary 1-qubit gate
         virtual void C1_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit)

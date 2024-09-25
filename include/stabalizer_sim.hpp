@@ -1,14 +1,14 @@
-#include "../state.hpp"
+#include "state.hpp"
 
-#include "../nwq_util.hpp"
-#include "../gate.hpp"
-#include "../circuit.hpp"
-#include "../private/config.hpp"
-#include "../private/exp_gate_declarations_host.hpp"
+#include "nwq_util.hpp"
+#include "gate.hpp"
+#include "circuit.hpp"
+#include "config.hpp"
+#include "private/exp_gate_declarations_host.hpp"
 
-#include "../circuit_pass/fusion.hpp"
-#include "../private/macros.hpp"
-#include "../private/sim_gate.hpp"
+#include "circuit_pass/fusion.hpp"
+#include "private/macros.hpp"
+#include "private/sim_gate.hpp"
 
 #include <random>
 #include <cstring>
