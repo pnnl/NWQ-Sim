@@ -13,7 +13,7 @@
 #include "../private/sim_gate.hpp"
 
 /*TESTING HEADERS*/
-#include "../stabalizer_sim.hpp"
+#include "../../stabalizer/stabalizer_sim.hpp"
 /*END TESTING HEADERS*/
 
 #include <random>
@@ -132,7 +132,7 @@ namespace NWQSim
             //=========================================
         }
 
-        void cliffordSim(std::shared_ptr<NWQSim::Circuit> circuit) override
+        void cliffordSim(std::shared_ptr<NWQSim::Circuit> circuit) 
         {
             IdxType origional_gates = circuit->num_gates();
             std::vector<SVGate> gates = fuse_circuit_sv(circuit);
@@ -149,7 +149,7 @@ namespace NWQSim
 
             if (Config::PRINT_SIM_TRACE)
             {
-                printf("\n============== SV-Sim ===============\n");
+                printf("\n============== Clifford-SV-Sim ===============\n");
                 printf("n_qubits:%lld, n_gates:%lld, sim_gates:%lld, ncpus:%lld, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_cpu:%.3lf MB\n",
                        n_qubits, origional_gates, n_gates, n_cpu, sim_time, 0.,
                        sim_time, cpu_mem / 1024 / 1024, cpu_mem / 1024 / 1024);

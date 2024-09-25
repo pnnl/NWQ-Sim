@@ -1,14 +1,14 @@
-#include "state.hpp"
+#include "../include/state.hpp"
 
-#include "nwq_util.hpp"
-#include "gate.hpp"
-#include "circuit.hpp"
-#include "config.hpp"
-#include "private/exp_gate_declarations_host.hpp"
+#include "../include/nwq_util.hpp"
+#include "../include/gate.hpp"
+#include "../include/circuit.hpp"
+#include "../include/config.hpp"
+#include "../include/private/exp_gate_declarations_host.hpp"
 
-#include "circuit_pass/fusion.hpp"
-#include "private/macros.hpp"
-#include "private/sim_gate.hpp"
+#include "../include/circuit_pass/fusion.hpp"
+#include "../include/private/macros.hpp"
+#include "../include/private/sim_gate.hpp"
 
 #include <random>
 #include <cstring>
@@ -149,9 +149,9 @@ namespace NWQSim
                 }
                 else    
                 {
-                    std::cout << "Non-Clifford or unrecognized gate" << std::endl
+                    std::cout << "../Non-Clifford or unrecognized gate" << std::endl
                                 << OP_NAMES[gate.op_name] << std::endl;
-                    std::logic_error("Invalid gate type");
+                    std::logic_error("../Invalid gate type");
                 }
             } //End for g
         } //End tableau_simulation
