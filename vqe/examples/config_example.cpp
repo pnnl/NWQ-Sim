@@ -56,7 +56,6 @@ int main(int argc, char** argv) {
                                 hamil,  // reference to Hamiltonian
                                 nlopt::algorithm::LD_MMA, // NLOpt algorithm for optimization
                                 callback_function, // Callback function for each energy evaluation
-                                "../default_config.json",
                                 0, // Random seed (passed to the SPSA gradient estimator for random perturbations)
                                 settings
                                 );

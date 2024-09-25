@@ -23,7 +23,6 @@ struct VQEParams {
 
   // Simulator options
   std::string backend = "CPU";
-  std::string config = "../default_config.json";
   uint32_t seed;
   // Optimizer settings
   NWQSim::VQE::OptimizerSettings optimizer_settings;
@@ -46,7 +45,6 @@ int show_help() {
   std::cout << "--list-backends, -l   List available backends and exit." << std::endl;
   std::cout << UNDERLINE << "OPTIONAL" << CLOSEUNDERLINE << std::endl;
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
-  std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
   std::cout << "--opt-config          Path to config file for NLOpt optimizer parameters" << std::endl;
   std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA" << std::endl;
   std::cout << "--lbound              Lower bound for classical optimizer. Defaults to -PI" << std::endl;
@@ -65,6 +63,9 @@ int show_help() {
   std::cout << "--adapt-fvaltol       Cutoff absolute tolerance for function value. Defaults to 1e-6" << std::endl;
   std::cout << "--qubit               Uses Qubit instead of Fermionic operators for ADAPT-VQE. Defaults to false" << std::endl;
   std::cout << "--adapt-pool          Sets the pool size for Qubit operators. Defaults to -1" << std::endl;
+  std::cout << UNDERLINE << "SIMULATOR OPTIONS" << CLOSEUNDERLINE << std::endl;
+  std::cout << "--num_threads         Specify the number of OMP threads. Defaults to use all hardware threads" << std::endl;
+  std::cout << "--disable_fusion      Disable gate fusion. Defaults to enabled" << std::endl;
   return 1;
 }
 
@@ -83,7 +84,6 @@ int parse_args(int argc, char** argv,
                VQEBackendManager& manager,
                VQEParams& params) {
   std::string opt_config_file = "";
-  params.config = "../default_config.json";
   std::string algorithm_name = "LN_COBYLA";
   NWQSim::VQE::OptimizerSettings& settings = params.optimizer_settings;
   params.seed = time(NULL);
@@ -115,9 +115,6 @@ int parse_args(int argc, char** argv,
       params.xacc = true;
     } else if (argname == "--ducc") {
       params.xacc = false;
-    } else 
-    if (argname == "--config") {
-      params.config = argv[++i];
     } else 
     if (argname == "--opt-config") {
       opt_config_file = argv[++i];
@@ -158,6 +155,10 @@ int parse_args(int argc, char** argv,
       settings.stop_val = std::atof(argv[++i]);
     } else if (argname == "--maxtime") {
       settings.max_time = std::atof(argv[++i]);
+    } else if (argname == "--num_threads") {
+      NWQSim::Config::OMP_NUM_THREADS = std::atoi(argv[++i]);
+    } else if (argname == "--disable_fusion") {
+      NWQSim::Config::ENABLE_FUSION = false;
     } else {
       fprintf(stderr, "\033[91mERROR:\033[0m Unrecognized option %s, type -h or --help for a list of configurable parameters\n", argv[i]);
       return show_help();
@@ -223,7 +224,6 @@ void optimize_ansatz(const VQEBackendManager& manager,
   // Set the callback function (silent is default)
   NWQSim::VQE::Callback callback = (params.adapt ? silent_callback_function : callback_function);
   std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(params.backend,
-                                                                           params.config,
                                                                            ansatz, 
                                                                            hamil, 
                                                                            params.algo, 

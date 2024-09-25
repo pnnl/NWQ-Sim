@@ -40,13 +40,12 @@ REQUIRED
 --nparticles, -n      Number of electrons in molecule
 ```
 
-The first class of optional arguments are used for configuring the simulator: selecting the backend, setting random seeds, and passing NWQ-Sim configuration JSON files
+The first class of optional arguments are used for configuring the simulator: selecting the backend and set the random seeds
 ```shell
 OPTIONAL
 --backend, -b         Simulation backend. Defaults to CPU
 --list-backends, -l   List available backends and exit.
 --seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)
---config              Path to NWQ-Sim config file. Defaults to "../default_config.json"
 ```
 
 NWQ-VQE uses the [NLOpt](https://nlopt.readthedocs.io/en/latest/) library for optimization algorithm implementations. To configure the NLOpt object, we support setting termination criteria, upper/lower bounds, and optimizer algorithms via command line. Algorithm-specific options can be set via a JSON file, see [mma_config.json](mma_config.json) for an example. The `--xacc` and `--ducc` flags set the orbital indexing scheme to either XACC or canonical orderings respectively. XACC is the default, and the flag is included for compatibility. To get a full list of valid NLOpt optimizer strings, refer to the [NLOpt documentation](https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/). An example of a correctly formatted string is `--optimizer LN_COBYLA`.
@@ -64,6 +63,11 @@ NWQ-VQE uses the [NLOpt](https://nlopt.readthedocs.io/en/latest/) library for op
 --ducc                Use DUCC indexing scheme, otherwise uses XACC scheme. (Defaults to true)
 ```
 
+Following are the options to set circuit simulation backend related parameters:
+```shell
+--num_threads         Specify the number of OMP threads. Defaults to use all hardware threads.
+--disable_fusion      Disable gate fusion. Defaults to enabled.
+```
 
 To run the $\mathrm{H_4}$ example using command line, run:
 ```shell

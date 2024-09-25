@@ -20,10 +20,9 @@ namespace NWQSim
                    std::shared_ptr<Hamiltonian> h, 
                    nlopt::algorithm optimizer_algorithm,
                    Callback _callback,
-                   const std::string& configpath,
                    IdxType seed = 0,
                    OptimizerSettings opt_settings = OptimizerSettings()): 
-                                      SV_CUDA(a->num_qubits(), configpath),
+                                      SV_CUDA(a->num_qubits()),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {
         // resize the expectation value data structure (to-do, just make a double)
         // allocate space for host, device memory for observable lists

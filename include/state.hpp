@@ -2,6 +2,7 @@
 
 #include "nwq_util.hpp"
 #include "circuit.hpp"
+#include "config.hpp"
 
 #include "private/gate_factory/sv_gates.hpp"
 #include <stdexcept> // For std::runtime_error

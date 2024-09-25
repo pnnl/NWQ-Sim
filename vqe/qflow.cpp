@@ -43,7 +43,6 @@ int parse_args(int argc, char** argv,
                VQEBackendManager& manager,
                 std::string& hamilfile,
                 std::string& backend,
-                std::string& config_path,
                 std::string& amplitudes,
                 NWQSim::IdxType& n_particles,
                 nlopt::algorithm& algo,
@@ -86,10 +85,6 @@ int parse_args(int argc, char** argv,
       hamilfile = argv[++i];
       continue;
     } else
-    if (argname == "--config") {
-      config_file = argv[++i];
-      continue;
-    }  else 
     if (argname == "-n" || argname == "--nparticles") {
       n_particles = std::atoll(argv[++i]);
     } else 
@@ -181,7 +176,6 @@ void silent_callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::Val
 
 void optimize_ansatz(const VQEBackendManager& manager,
                      const std::string& backend,
-                     const std::string& config,
                      const std::string& amplitudes,
                      std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil,
                      std::shared_ptr<NWQSim::VQE::Ansatz> ansatz,
@@ -199,7 +193,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
   if (!verbose) {
     NWQSim::Config::PRINT_SIM_TRACE = false;
   }
-  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, config, ansatz, hamil, algo, callback, seed, settings); 
+  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, callback, seed, settings); 
   params.resize(ansatz->numParams());
   std::cout << ansatz->numParams() << std::endl;
     std::fill(params.begin(), params.end(), 0);
@@ -236,7 +230,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
 
 int main(int argc, char** argv) {
   VQEBackendManager manager;
-  std::string hamil_path, backend, config, amplitudes;
+  std::string hamil_path, backend, amplitudes;
   NWQSim::IdxType n_part;
   NWQSim::VQE::OptimizerSettings settings;
   nlopt::algorithm algo;
@@ -245,7 +239,7 @@ int main(int argc, char** argv) {
   unsigned seed;
   bool use_xacc, local, verbose;
   int n_trials;
-  if (parse_args(argc, argv, manager, hamil_path, backend, config, amplitudes,  n_part, algo, settings, n_trials, use_xacc, local, verbose, seed, delta, eta)) {
+  if (parse_args(argc, argv, manager, hamil_path, backend, amplitudes, n_part, algo, settings, n_trials, use_xacc, local, verbose, seed, delta, eta)) {
     return 1;
   }
 #ifdef MPI_ENABLED
@@ -268,7 +262,7 @@ int main(int argc, char** argv) {
   ansatz->buildAnsatz();
   std::vector<double> params;
   manager.safe_print("Beginning VQE loop...\n");
-  optimize_ansatz(manager, backend, config, amplitudes, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta);
+  optimize_ansatz(manager, backend, amplitudes, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta);
 #ifdef MPI_ENABLED
   if (backend == "MPI" || backend == "NVGPU_MPI")
   {
