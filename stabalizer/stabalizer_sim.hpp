@@ -21,7 +21,7 @@ namespace NWQSim
     class tableau
     {
     public:
-        tableau(const std::vector<SVGate> &_gates, uint _numQubits)
+        tableau(std::vector<Gate> &_gates, uint _numQubits)
         {
             gates = _gates;
             g = gates.size();
@@ -30,7 +30,10 @@ namespace NWQSim
             z.resize(2*n+1, std::vector<uint>(n,0));
             r.resize(2*n+1, 0);
         }
-
+        IdxType *get_outcomes()
+        {
+            return outcome;
+        }
         void simulate()
         {
             //For swapping rows
@@ -131,7 +134,7 @@ namespace NWQSim
                             r[p] = 0;
                         z[p][a] = 1;
 
-                        int outcome = r[p];                
+                        outcome[a] = r[p];                
                     }
                     else
                     {
@@ -143,22 +146,23 @@ namespace NWQSim
                                 rowsum(2*n+1, i+n);
                             }
                         }
-                        int outcome = r[2*n+1];
+                        outcome[a] = r[2*n+1];
                     }
 
                 }
                 else    
                 {
-                    std::cout << "../Non-Clifford or unrecognized gate" << std::endl
+                    std::cout << "Non-Clifford or unrecognized gate" << std::endl
                                 << OP_NAMES[gate.op_name] << std::endl;
-                    std::logic_error("../Invalid gate type");
+                    std::logic_error("Invalid gate type");
                 }
             } //End for g
         } //End tableau_simulation
     protected:
         int g;
         int n;
-        std::vector<SVGate> gates;
+        IdxType *outcome;
+        std::vector<Gate> gates;
         std::vector<std::vector<uint>> x;
         std::vector<std::vector<uint>> z;
         std::vector<uint> r;
