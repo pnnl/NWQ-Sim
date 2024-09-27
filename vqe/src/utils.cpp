@@ -174,7 +174,7 @@ std::string to_fermionic_string(const std::vector<FermionOperator>& product, con
 };
 
 
-const std::regex pattern("^\\s*(\\d+)\\s+(\\d+)\\s+(?:(\\d+)\\s+(\\d+)){0,1}\\s+([\\d\\.\\+e-]+)");
+const std::regex pattern("^\\s*(\\d+)\\s+(\\d+)\\s+(?:(\\d+)\\s+(\\d+)){0,1}\\s+([\\d\\.\\+e-]+)", std::regex_constants::multiline);
 /**
  * @brief Read in a set of amplitudes
  * @note   
@@ -191,10 +191,10 @@ void read_amplitudes(std::string fpath, std::vector<ValType>& params, const std:
     std::string line;
     std::smatch match;
     while(std::getline(infile, line)) {
-
         if (line.length() == 0) {
           continue;
         }
+
         if (std::regex_search(line, match, pattern)) {
           ValType amplitude = std::stod(match.str(5));
           std::string key;

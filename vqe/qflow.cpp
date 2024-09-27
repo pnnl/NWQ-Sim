@@ -210,6 +210,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
   std::cout << ansatz->numParams() << std::endl;
     std::fill(params.begin(), params.end(), 0);
   if (amplitudes != "") {
+    std::cout << "Reading amplitudes from " << amplitudes << std::endl;
     NWQSim::VQE::read_amplitudes(amplitudes, params, ansatz->get_excitation_map());
   }
   std::cout << params << std::endl;
