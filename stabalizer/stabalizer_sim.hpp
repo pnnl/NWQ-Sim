@@ -21,151 +21,44 @@ namespace NWQSim
     class tableau
     {
     public:
+
         tableau(std::vector<Gate> &_gates, uint _numQubits)
         {
             gates = _gates;
             g = gates.size();
             n = _numQubits;
-            x.resize(2*n+1, std::vector<uint>(n,0));
-            z.resize(2*n+1, std::vector<uint>(n,0));
-            r.resize(2*n+1, 0);
-        }
-        IdxType *get_outcomes()
-        {
-            return outcome;
-        }
-        void simulate()
-        {
-            //For swapping rows
-            std::vector<uint> tempRow(n);
+            result = 0;
 
-            for (int j = 0; j < g; j++)
+            outcomes.resize(n);
+            outcomes.assign(outcomes.size(), 0);
+            x.resize(2*n+1, std::vector<uint>(n,0)); //first 2n+1 x n block. first n represents destabalizers
+                                                     //second n represents stabalizers + 1 extra row
+            z.resize(2*n+1, std::vector<uint>(n,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
+            r.resize(2*n+1, 0); //column on the right with 2n+1 rows
+            //The 2n+1 th row is scratch space
+            //Intialize the identity tableau
+            for(int i = 0; i < n; i++)
             {
-                auto gate = gates[j];
-                int a = gate.qubit;
-                if (gate.op_name == OP::X)
-                {
-                    for(int i = 0; i < 2*n; i++)
-                        z[a][i] = z[a][i] ^ 1;
-                }
-                else if (gate.op_name == OP::Y)
-                {
-                    for(int i = 0; i < 2*n; i++)
-                    {
-                        x[a][i] = x[a][i] ^ 1;
-                        z[a][i] = z[a][i] ^ 1;
-                    }
-                }
-                else if (gate.op_name == OP::Z)
-                {
-                    for(int i = 0; i < 2*n; i++)
-                        x[a][i] = x[a][i] ^ 1;
-                }
-                else if (gate.op_name == OP::H)
-                {
-                    //Phase
-                    for(int i = 0; i < 2*n; i++)
-                        r[i] = r[i] ^ ((x[i][a] >> 1) + z[i][a]);
+                x[i][i] = 1;
+                z[i+n][i] = 1;
+            }
+        }
 
-                    //Entry
-                    tempRow = x[a];
-                    x[a] = z[a];
-                    z[a] = tempRow;    
+        //Convert a vector of 1's and 0's to an IdxType decimal number
+        void get_outcomes(IdxType*& result)
+        {
+            int conversion = 0;
 
-                }
-                else if (gate.op_name == OP::S)
-                {
-                    int a = gate.qubit;
+            for (int i = 0; i < outcomes.size(); i++) {
+                conversion = (conversion << 1) | outcomes[i];  // Left shift and add the current bit
+            } 
+            
+            //std::cout << "Conversion: " << conversion << std::endl;
 
-                    for(int i = 0; i < 2*n; i++)
-                    {
-                        //Phase
-                        r[i] = r[i] ^ ((x[i][a] >> 1) + z[i][a]);
+            result = new long long(static_cast<long long>(conversion));
 
-                        //Entry
-                        z[i][a] = z[i][a] ^ x[i][a];
-                    }
-
-                }
-                else if (gate.op_name == OP::CX)
-                {  
-                    int a = gate.ctrl;
-                    int b = gate.qubit;
-                    for(int i = 0; i < 2*n; i++)
-                    {
-                        //Phase
-                        r[i] = r[i] ^ (((x[i][a] >> 1) + z[i][b])*(x[i][b]^z[i][a]^1));
-
-                        //Entry
-                        x[b][i] = x[b][i] ^ x[a][i];
-                        z[a][i] = z[a][i] ^ z[b][i];
-                    }
-                }
-                else if (gate.op_name == OP::M)
-                {  
-                    int a = gate.ctrl;
-                    int p = -1;
-                    for(int i = n; i < n; i++)
-                    {
-                        if(x[i][a])
-                        {
-                            p = i;
-                            break;
-                        }
-                    }
-                    if(p > -1)
-                    {
-                        for(int i = 0; i < 2 * n; i++)
-                        {
-                            if((i != p) && (x[i][a] == 1))
-                            {
-                                rowsum(i, p);
-                            }
-                        }
-                        x[p-n] = x[p];
-                        z[p-n] = z[p];
-                        std::fill(x[p].begin(), x[p].end(), 0);
-                        std::fill(z[p].begin(), z[p].end(), 0);
-
-                        std::srand(std::time(0));
-                        if(std::rand() % 2)
-                            r[p] = 1;
-                        else
-                            r[p] = 0;
-                        z[p][a] = 1;
-
-                        outcome[a] = r[p];                
-                    }
-                    else
-                    {
-                        x[2*n + 1].assign(x[2*n + 1].size(),0);
-                        for(int i = 0; i < n; i++)
-                        {
-                            if(x[i][a] == 1)
-                            {
-                                rowsum(2*n+1, i+n);
-                            }
-                        }
-                        outcome[a] = r[2*n+1];
-                    }
-
-                }
-                else    
-                {
-                    std::cout << "Non-Clifford or unrecognized gate" << std::endl
-                                << OP_NAMES[gate.op_name] << std::endl;
-                    std::logic_error("Invalid gate type");
-                }
-            } //End for g
-        } //End tableau_simulation
-    protected:
-        int g;
-        int n;
-        IdxType *outcome;
-        std::vector<Gate> gates;
-        std::vector<std::vector<uint>> x;
-        std::vector<std::vector<uint>> z;
-        std::vector<uint> r;
+            //std::cout << "Result: " << result[0] << std::endl;
+        }
 
         void rowsum(int h, int i)
         {
@@ -195,5 +88,151 @@ namespace NWQSim
             else
                 r[h] = 1;
         } //End rowsum
+
+        //Simulate the gates from a circuit in the tableau
+        void simulate()
+        {
+            //For swapping rows
+            std::vector<uint> tempRow(n);
+
+            for (int k = 0; k < g; k++)
+            {
+                auto gate = gates[k];
+                //std::cout << "Current gate " << k << std::endl;
+                int a = gate.qubit;
+
+                if (gate.op_name == OP::H)
+                {
+                    //Phase
+                    for(int i = 0; i < 2*n; i++)
+                        r[i] = r[i] ^ ((x[i][a] << 1) + z[i][a]);
+
+                    //Entry
+                    tempRow = x[a];
+                    x[a] = z[a];
+                    z[a] = tempRow; 
+                    tempRow = x[a+n];
+                    x[a+n] = z[a+n];
+                    z[a+n] = tempRow;    
+                }
+                else if (gate.op_name == OP::S)
+                {
+                    int a = gate.qubit;
+
+                    for(int i = 0; i < 2*n; i++)
+                    {
+                        //Phase
+                        r[i] = r[i] ^ ((x[i][a] << 1) + z[i][a]);
+
+                        //Entry
+                        z[i][a] = z[i][a] ^ x[i][a];
+                        z[i][a+n] = z[i][a+n] ^ x[i][a+n];
+
+                    }
+
+                }
+                else if (gate.op_name == OP::CX)
+                {  
+                    int a = gate.ctrl;
+                    int b = gate.qubit;
+                    for(int i = 0; i < 2*n; i++)
+                    {
+                        //Phase
+                        r[i] = r[i] ^ (((x[i][a] << 1) + z[i][b])*(x[i][b]^z[i][a]^1));
+
+                        //Entry
+                        x[i][b] = x[i][b] ^ x[i][a];
+                        z[i][a] = z[i][a] ^ z[i][b];
+                    }
+                }
+                else if (gate.op_name == OP::M)
+                {  
+                    int a = gate.qubit;
+                    int p = -1;
+                    for(int p_index = n; p_index < 2*n; p_index++)
+                    {  
+                        //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
+                        if(x[p_index][a])
+                        {
+                            p = p_index;
+                            break;
+                        }
+                    }
+                    
+                    if(p > -1)
+                    {
+                        //std::cout << "Found a p > -1" << std::endl;
+
+                        for(int i = 0; i < 2 * n; i++)
+                        {
+                            if((i != p) && (x[i][a] == 1))
+                            {
+                                rowsum(i, p);
+                            }
+                        }
+                        x[p-n] = x[p];
+                        z[p-n] = z[p];
+                        std::fill(x[p].begin(), x[p].end(), 0);
+                        std::fill(z[p].begin(), z[p].end(), 0);
+
+                        std::random_device rd;
+                        std::mt19937 gen(rd());  // Mersenne Twister engine
+
+                        // Define the range for random numbers
+                        std::uniform_int_distribution<> distr(0, 1);
+
+                        // Generate and display a random number
+                        int randomBit = distr(gen);
+                        
+                        if(randomBit)
+                        {
+                            //std::cout << "Random result of 1" << std::endl;
+                            r[p] = 1;
+                        }
+                        else
+                        {
+                            //std::cout << "Random result of 0" << std::endl;
+                            r[p] = 0;
+                        }
+                        z[p][a] = 1;
+
+                        outcomes[a] = r[p];                
+                    }
+                    else
+                    {
+                        //std::cout << "P = -1" << std::endl;
+
+                        //Set the scratch space row to be 0
+                        x[2*n + 1].assign(x[2*n + 1].size(),0);
+
+                        for(int i = 0; i < n; i++)
+                        {
+                            if(x[i][a] == 1)
+                            {
+                                //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
+                                rowsum(2*n+1, i+n);
+                            }
+                        }
+                        outcomes[a] = r[2*n+1];
+                    }
+                //std::cout << "Result at qubit " << a << " = "  << outcomes[a] << std::endl;
+                } //End M
+                else    
+                {
+                    std::cout << "Non-Clifford or unrecognized gate" << std::endl
+                                << OP_NAMES[gate.op_name] << std::endl;
+                    std::logic_error("Invalid gate type");
+                }
+            } //End for g
+        } //End tableau_simulation
+    protected:
+        int g;
+        int n;
+        std::vector<int> outcomes; //Basically a vector of binary numbers
+        IdxType* result;
+        std::vector<Gate> gates;
+        std::vector<std::vector<uint>> x;
+        std::vector<std::vector<uint>> z;
+        std::vector<uint> r;
     }; //End tableau class
 } //End namespace NWQSim

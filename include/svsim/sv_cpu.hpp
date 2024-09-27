@@ -293,7 +293,15 @@ namespace NWQSim
             auto start = std::chrono::steady_clock::now();
             tableau test = tableau(gates, n_qubits);
             test.simulate();
-            results = test.get_outcomes();
+            std::cout << "Test_kernel" << std::endl;
+
+            SAFE_FREE_HOST(results);
+            SAFE_ALOC_HOST(results, sizeof(IdxType));
+            memset(results, 0, sizeof(IdxType));
+
+            //Set results
+            test.get_outcomes(results);
+            std::cout << "Result pointer " << results;
 
             if (Config::PRINT_SIM_TRACE)
             {
