@@ -80,38 +80,61 @@ namespace NWQSim {
                     virt_down_3,
                     virt_up_4});
               IdxType mixed_term2 = fermion_operators.size();
-              // Mixed term 2: beta_4*alpha_3*beta_2*alpha_1
+              // Mixed term 2: alpha_4*beta_3*beta_2*alpha_1
               fermion_operators.push_back({
                     occ_down_1,
                     occ_up_2,
+                    virt_up_3,
+                    virt_down_4});
+              IdxType mixed_term3 = fermion_operators.size();
+              // Mixed term 3: beta_4*alpha_3*alpha_1*beta_2
+              fermion_operators.push_back({
+                    occ_up_2,
+                    occ_down_1,
                     virt_down_3,
                     virt_up_4});
+              IdxType mixed_term4 = fermion_operators.size();
+              // Mixed term 4: alpha_4*beta_3*beta_1*alpha_2
+              fermion_operators.push_back({
+                    occ_down_2,
+                    occ_up_1,
+                    virt_up_3,
+                    virt_down_4});
+             
               // Add the parameter pointers, all 4 values determined by two parameters
               if (symm_enforce) {
-                symmetries[alpha_term] = {{mixed_term1, 1.0}, {mixed_term2, 1.0}};
-                symmetries[beta_term] = {{mixed_term1, 1.0}, {mixed_term2, 1.0}};
-                symmetries[mixed_term1] = {{mixed_term1, 1.0}};
+                symmetries[alpha_term] = {{mixed_term2, 1.0}, {mixed_term4, -1.0}};
+                symmetries[beta_term] = {{mixed_term2, 1.0}, {mixed_term4, -1.0}};
+                symmetries[mixed_term1] = {{mixed_term2, 1.0}};
                 symmetries[mixed_term2] = {{mixed_term2, 1.0}};
+                symmetries[mixed_term3] = {{mixed_term4, 1.0}};
+                symmetries[mixed_term4] = {{mixed_term4, 1.0}};
 
-                fermion_ops_to_params[mixed_term1] = unique_params++;
                 fermion_ops_to_params[mixed_term2] = unique_params++;
-                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term1], env)] = unique_params - 2;
-                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term2], env)] = unique_params - 1;
+                fermion_ops_to_params[mixed_term4] = unique_params++;
+                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term2], env)] = unique_params - 2;
+                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term4], env)] = unique_params - 1;
               } else {
 
                 symmetries[alpha_term] = {{alpha_term, 1.0}};
                 symmetries[beta_term] = {{beta_term, 1.0}};
                 symmetries[mixed_term1] = {{mixed_term1, 1.0}};
                 symmetries[mixed_term2] = {{mixed_term2, 1.0}};
+                symmetries[mixed_term3] = {{mixed_term3, 1.0}};
+                symmetries[mixed_term4] = {{mixed_term4, 1.0}};
 
                 fermion_ops_to_params[alpha_term] = unique_params++;
                 fermion_ops_to_params[beta_term] = unique_params++;
                 fermion_ops_to_params[mixed_term1] = unique_params++;
                 fermion_ops_to_params[mixed_term2] = unique_params++;
-                excitation_index_map[to_fermionic_string(fermion_operators[alpha_term], env)] = unique_params - 4;
-                excitation_index_map[to_fermionic_string(fermion_operators[beta_term], env)] = unique_params - 3;
-                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term1], env)] = unique_params - 2;
-                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term2], env)] = unique_params - 1;
+                fermion_ops_to_params[mixed_term3] = unique_params++;
+                fermion_ops_to_params[mixed_term4] = unique_params++;
+                excitation_index_map[to_fermionic_string(fermion_operators[alpha_term], env)] = unique_params - 6;
+                excitation_index_map[to_fermionic_string(fermion_operators[beta_term], env)] = unique_params - 5;
+                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term1], env)] = unique_params - 4;
+                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term2], env)] = unique_params - 3;
+                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term3], env)] = unique_params - 2;
+                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term4], env)] = unique_params - 1;
               }
             }
           }
@@ -138,14 +161,37 @@ namespace NWQSim {
               symmetries[term] = {{term, 1.0}};
               term++;
               fermion_operators.push_back({
-                    occ_up_1,
                     occ_down_1,
-                    virt_down_3,
-                    virt_up_2});
-            fermion_ops_to_params[term] = unique_params++;
-            symmetries[term] = {{term, 1.0}};
-            excitation_index_map[to_fermionic_string(fermion_operators[term-1], env)] = unique_params - 2;
-            excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
+                    occ_up_1,
+                    virt_up_2,
+                    virt_down_3});
+            if (symm_enforce) {
+              symmetries[term] = {{term - 1, 1.0}};
+              excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
+            } else {
+              fermion_ops_to_params[term] = unique_params++;
+              symmetries[term] = {{term, 1.0}};
+              excitation_index_map[to_fermionic_string(fermion_operators[term-1], env)] = unique_params - 2;
+              excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
+            }
+            //   term++;
+            //   fermion_operators.push_back({
+            //         occ_down_1,
+            //         occ_up_1,
+            //         virt_up_3,
+            //         virt_down_2});
+            // fermion_ops_to_params[term] = unique_params++;
+            // symmetries[term] = {{term, 1.0}};
+            //   term++;
+            //   fermion_operators.push_back({
+            //         occ_down_1,
+            //         occ_up_1,
+            //         virt_up_2,
+            //         virt_down_3});
+            // fermion_ops_to_params[term] = unique_params++;
+            // symmetries[term] = {{term, 1.0}};
+            // excitation_index_map[to_fermionic_string(fermion_operators[term-3], env)] = unique_params - 4;
+            // excitation_index_map[to_fermionic_string(fermion_operators[term-2], env)] = unique_params - 3;
           }
         }
       }
@@ -171,18 +217,41 @@ namespace NWQSim {
               fermion_ops_to_params[term] = unique_params++;
               symmetries[term] = {{term, 1.0}};
               excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
-
-              if (r > s) {
+              if (r < s) {
                 term++;
-                fermion_operators.push_back({
-                      occ_up_2,
-                      occ_down_1,
-                      virt_down_3,
-                      virt_up_3});
+               fermion_operators.push_back({
+                    occ_down_1,
+                    occ_up_2,
+                    virt_up_3,
+                    virt_down_3});
+              if (symm_enforce) {
+                symmetries[term] = {{term - 1, 1.0}};
+                excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
+              } else {
                 fermion_ops_to_params[term] = unique_params++;
                 symmetries[term] = {{term, 1.0}};
+                excitation_index_map[to_fermionic_string(fermion_operators[term-1], env)] = unique_params - 2;
                 excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
               }
+                // fermion_operators.push_back({
+                //       occ_down_2,
+                //       occ_up_1,
+                //       virt_up_3,
+                //       virt_down_3});
+                // fermion_ops_to_params[term] = unique_params++;
+                // symmetries[term] = {{term, 1.0}};
+                // excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
+                // term++;
+                // fermion_operators.push_back({
+                //       occ_down_1,
+                //       occ_up_2,
+                //       virt_up_3,
+                //       virt_down_3});
+                // fermion_ops_to_params[term] = unique_params++;
+                // symmetries[term] = {{term, 1.0}};
+                // excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
+              }
+              
           }
         }
       }
@@ -206,8 +275,9 @@ namespace NWQSim {
     };
     void UCCSD::buildAnsatz() {
       getFermionOps();
-      assert((n_doubles + n_singles) == fermion_operators.size());
-      std::cout << "Generated " << n_doubles + n_singles << " operators." << std::endl;
+      // assert((n_doubles + n_singles) == fermion_operators.size());
+      std::cout << n_singles << " " << n_doubles << std::endl;
+      std::cout << "Generated " << fermion_operators.size() << " operators." << std::endl;
       theta->resize(unique_params * trotter_n);
       // exit(0);
       std::vector<std::vector<PauliOperator> > pauli_oplist;
