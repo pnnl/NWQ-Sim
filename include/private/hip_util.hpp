@@ -11,11 +11,11 @@
 #define LOCAL_P_HIP(arr, i, val) arr[(i)] = val;
 #define BARR_HIP grid.sync();
 
-#define PGAS_P(arr, i, val) roc_shmem_ctx_double_p(*p_ctx, &(arr)[(i) & ((m_gpu) - 1)], (val), ((i) >> (lg2_m_gpu)));
-#define PGAS_G(arr, i) roc_shmem_ctx_double_g(*p_ctx, &(arr)[(i) & ((m_gpu) - 1)], ((i) >> (lg2_m_gpu)))
+// #define PGAS_P(arr, i, val) roc_shmem_ctx_double_p(*p_ctx, &(arr)[(i) & ((m_gpu) - 1)], (val), ((i) >> (lg2_m_gpu)));
+// #define PGAS_G(arr, i) roc_shmem_ctx_double_g(*p_ctx, &(arr)[(i) & ((m_gpu) - 1)], ((i) >> (lg2_m_gpu)))
 
-// #define PGAS_P(arr, i, val) pgas_put_double(p_ctx, arr, i, val)
-// #define PGAS_G(arr, i) pgas_get_double(p_ctx, arr, i)
+#define PGAS_P(arr, i, val) pgas_put_double(p_ctx, arr, i, val)
+#define PGAS_G(arr, i) pgas_get_double(p_ctx, arr, i)
 
 
 // CLUSTER BASED

@@ -283,6 +283,53 @@ aprun -n <NODES> -N 1 <NWQ-Sim Command> -backend MPI
 ```
 Replace `<NODES>` with the number of compute nodes
 
+## Run NWQ-sim on Frontier with `rocshmem`
+We provide ready-to-go instructions to run your applications on Frontier with `rocshmem`:
+```sh
+cd NWQ-sim 
+mkdir build
+cd build
+source ../environment/setup_frontier.sh
+cmake ..
+sed -i 's|/opt/rocm-5.3.0/llvm/bin/clang++|hipcc|g' qasm/CMakeFiles/nwq_qasm.dir/build.make
+make
+srun -N4 -n4 -c8 ./qasm/nwq_qasm -sim sv -backend AMDGPU_MPI -q <your_app>.qasm
+```
+#### Run our benchmark
+We also provide a sbatch script to run our test benchmarks with fidelity checking. Create a `run.sbatch` file in the build directory with the following content:
+
+```sh
+#!/bin/bash
+#SBATCH -A <your_account>
+#SBATCH -t <your_time>
+#SBATCH -J <your_project_name>
+#SBATCH -o %j.out
+#SBATCH -e %j.err
+#SBATCH -N 4
+#SBATCH --ntasks-per-node=1
+#SBATCH --gpus-per-task=1
+#SBATCH --gpu-bind=none
+
+source ../environment/setup_frontier.sh
+for test in {20..40}
+do
+    echo " ================================ Begin to run test ${test} ================================ "
+    srun -N4 -n4 -c8 ./qasm/nwq_qasm -backend AMDGPU_MPI -sim sv -t $test
+    echo " *********================================********* end *********================================********* "
+done
+```
+
+Then run:
+```sh
+sbatch run.sbatch
+```
+In the `.out` file, you can check the fidelity for each test. They should always be larger than 0.9.
+
+#### Known Issues
+
+1. The `roc_shmem_ctx_wg_<TYPE>_g` operation may result in some unexpected values. We believe this is caused by the communication part of `rocshmem`, so we suggest running multiple times to get reliable results.
+2. We are currently not using the original `roc_shmem_ctx_wg_double_g` and `roc_shmem_ctx_wg_longlong_g` functions, as they do not work properly in the 1.6.2 version and the cmake has not been updated to enable the latest 1.6.3 version. We have implemented our own `_g` functions. Performance can be improved if we can use an updated `_g` version.
+3. `roc_shmem_ctx_wg_barrier_all` seems to not write memory back to global memory. We are trying to add some synchronization operations manually. In other words, performance can be significantly improved if the synchronization works well and we only sync when necessary.
 
 ## NWQ-Sim for Chemistry Simulations
 
