@@ -23,19 +23,21 @@ int main(){
 		circuit ->CX(0, 3);
 		circuit ->CX(0, 4);
 
+		// circuit ->H(0);
 		circuit ->H(1);
 		circuit ->H(2);
 		circuit ->H(3);
 		circuit ->H(4);
 
-		circuit ->S(1);
-		circuit ->S(2);
-		circuit ->S(3);
-		circuit ->S(4);
+		// circuit ->S(0);
+		// circuit ->S(1);
+		// circuit ->S(2);
+		// circuit ->S(3);
+		// circuit ->S(4);
 
-		circuit ->CX(1, 2);
-		circuit ->CX(1, 3);
-		circuit ->CX(1, 4);
+		// circuit ->CX(1, 2);
+		// circuit ->CX(1, 3);
+		// circuit ->CX(1, 4);
 	}
 	circuit->M(0);
 	circuit->M(1);

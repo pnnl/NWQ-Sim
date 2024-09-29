@@ -60,6 +60,36 @@ namespace NWQSim
             //std::cout << "Result: " << result[0] << std::endl;
         }
 
+        std::string get_stabalizers()
+        {
+            int x_val;
+            int z_val;
+            std::string stabalizers;
+            for(int i = 0; i < n; i++)
+            {
+                x_val = x[i+n][i];
+                z_val = z[i+n][i];
+                assert((x_val < 2) && (z_val < 2));
+                if(x_val)
+                {
+                    if(z_val)
+                        stabalizers += 'Y';
+                    else
+                        stabalizers += "Z";
+                }
+                else
+                {
+                    if(z_val)
+                        stabalizers += 'X';
+                    else
+                        stabalizers += 'I';
+                }
+            }//For columns(qubits)
+            return stabalizers;
+        }
+
+
+
         void rowsum(int h, int i)
         {
             int sum = 0;
@@ -161,7 +191,7 @@ namespace NWQSim
                     
                     if(p > -1)
                     {
-                        //std::cout << "Found a p > -1" << std::endl;
+                        std::cout << "Random measurement ";
 
                         for(int i = 0; i < 2 * n; i++)
                         {
@@ -196,24 +226,27 @@ namespace NWQSim
                         }
                         z[p][a] = 1;
 
-                        outcomes[a] = r[p];                
+                        outcomes[a] = r[p];
+
+                        std::cout << outcomes[a] << std::endl;                
                     }
                     else
                     {
-                        //std::cout << "P = -1" << std::endl;
+                        std::cout << "Deterministic measurement ";
 
                         //Set the scratch space row to be 0
-                        x[2*n + 1].assign(x[2*n + 1].size(),0);
+                        x[2*n].assign(x[2*n].size(),0);
 
                         for(int i = 0; i < n; i++)
                         {
                             if(x[i][a] == 1)
                             {
                                 //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
-                                rowsum(2*n+1, i+n);
+                                rowsum(2*n, i+n);
                             }
                         }
-                        outcomes[a] = r[2*n+1];
+                        outcomes[a] = r[2*n];
+                        std::cout << outcomes[a] << std::endl;
                     }
                 //std::cout << "Result at qubit " << a << " = "  << outcomes[a] << std::endl;
                 } //End M

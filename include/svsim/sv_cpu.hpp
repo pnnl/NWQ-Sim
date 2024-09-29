@@ -301,7 +301,10 @@ namespace NWQSim
 
             //Set results
             test.get_outcomes(results);
-            std::cout << "Result pointer " << results;
+            std::cout << "Result pointer " << results << std::endl;
+
+            //See stabalziers
+            std::cout << "\n----- Stabalizers: " << test.get_stabalizers() << " -----" << std::endl;
 
             if (Config::PRINT_SIM_TRACE)
             {
