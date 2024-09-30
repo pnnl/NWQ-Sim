@@ -37,8 +37,8 @@ namespace NWQSim
         virtual void reset_state() = 0;
         virtual void set_seed(IdxType seed) = 0;
 
-        virtual void sim(std::shared_ptr<NWQSim::Circuit> circuit) = 0;
-        virtual void clifford_sim(std::shared_ptr<NWQSim::Circuit> circuit) = 0;
+        virtual void sim(std::shared_ptr<NWQSim::Circuit> circuit, double& time) = 0;
+        virtual void clifford_sim(std::shared_ptr<NWQSim::Circuit> circuit, double& time) = 0;
 
         virtual IdxType *get_results() = 0;
         virtual IdxType measure(IdxType qubit) = 0;

@@ -141,7 +141,7 @@ namespace NWQSim
             }
         };
 
-        void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
+        void sim(std::shared_ptr<NWQSim::Circuit> circuit, double &sim_time) override
         {
             IdxType origional_gates = circuit->num_gates();
 
@@ -153,7 +153,7 @@ namespace NWQSim
 
             assert(circuit->num_qubits() == n_qubits);
 
-            double sim_time;
+            //double sim_time;
             cpu_timer sim_timer;
             sim_timer.start_timer();
 
@@ -174,7 +174,7 @@ namespace NWQSim
             //=========================================
         }
 
-        void clifford_sim(std::shared_ptr<NWQSim::Circuit> circuit) override{};
+        void clifford_sim(std::shared_ptr<NWQSim::Circuit> circuit, double& sim_time) override{};
 
         IdxType *get_results() override
         {

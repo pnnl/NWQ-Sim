@@ -53,7 +53,7 @@ namespace NWQSim
                 conversion = (conversion << 1) | outcomes[i];  // Left shift and add the current bit
             } 
             
-            //std::cout << "Conversion: " << conversion << std::endl;
+            std::cout << "Conversion: " << conversion << std::endl;
 
             result = new long long(static_cast<long long>(conversion));
 
@@ -156,8 +156,6 @@ namespace NWQSim
 
                         //Entry
                         z[i][a] = z[i][a] ^ x[i][a];
-                        z[i][a+n] = z[i][a+n] ^ x[i][a+n];
-
                     }
 
                 }
@@ -252,7 +250,7 @@ namespace NWQSim
                 } //End M
                 else    
                 {
-                    std::cout << "Non-Clifford or unrecognized gate" << std::endl
+                    std::cout << "Non-Clifford or unrecognized gate: "
                                 << OP_NAMES[gate.op_name] << std::endl;
                     std::logic_error("Invalid gate type");
                 }

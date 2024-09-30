@@ -105,13 +105,13 @@ namespace NWQSim
             }
         };
 
-        void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
+        void sim(std::shared_ptr<NWQSim::Circuit> circuit, double &sim_time) override
         {
             IdxType origional_gates = circuit->num_gates();
             std::vector<SVGate> gates = fuse_circuit_sv(circuit);
             IdxType n_gates = gates.size();
             assert(circuit->num_qubits() == n_qubits);
-            double sim_time;
+            //double sim_time;
             cpu_timer sim_timer;
             sim_timer.start_timer();
 
@@ -132,9 +132,9 @@ namespace NWQSim
             //=========================================
         }
 
-        void clifford_sim(std::shared_ptr<NWQSim::Circuit> circuit) override
+        void clifford_sim(std::shared_ptr<NWQSim::Circuit> circuit, double& sim_time) override
         {
-            double sim_time;
+            //double sim_time;
             cpu_timer sim_timer;
             sim_timer.start_timer();
 
@@ -301,7 +301,7 @@ namespace NWQSim
 
             //Set results
             test.get_outcomes(results);
-            std::cout << "Result pointer " << results << std::endl;
+            //std::cout << "Result pointer " << results << std::endl;
 
             //See stabalziers
             std::cout << "\n----- Stabalizers: " << test.get_stabalizers() << " -----" << std::endl;
