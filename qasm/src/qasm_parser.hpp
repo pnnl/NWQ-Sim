@@ -172,16 +172,8 @@ void qasm_parser::parse_qasm()
                         else
                             cur_gate.qubits.push_back(qubits.second[j][i]);
                     }
-
-                    std::cout << "Modifying noise: " << cur_gate.mod_type << " " << cur_gate.noise_name << " " << cur_gate.noise_value << " ";
-                    for (auto q : cur_gate.qubits)
-                    {
-                        std::cout << q << " ";
-                    }
-                    std::cout << std::endl;
                     list_gates->push_back(cur_gate);
                 }
-                std::cout << std::endl;
             }
             else
             // parse quantum gates

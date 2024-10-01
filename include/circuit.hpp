@@ -171,12 +171,6 @@ namespace NWQSim
         // ===================== Standard Gates =========================
         void MOD_NOISE(std::string mod_op, std::string mod_noise, ValType value, const std::vector<IdxType> &qubit_list)
         {
-            std::cout << "Modifying noise: " << mod_op << " " << mod_noise << " " << value << " ";
-            for (auto q : qubit_list)
-            {
-                std::cout << q << " ";
-            }
-            std::cout << std::endl;
             Gate G(OP::MOD_NOISE, 0);
 
             G.mod_op = mod_op;

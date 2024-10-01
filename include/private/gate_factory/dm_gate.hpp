@@ -31,7 +31,6 @@ namespace NWQSim
         std::vector<DMGate> sim_dm_gates;
 
         NoiseModel noise_model(Config::device_noise_file, Config::device_layout_file, Config::device_layout_str);
-        noise_model.print();
 
         bool default_noise = true;
 

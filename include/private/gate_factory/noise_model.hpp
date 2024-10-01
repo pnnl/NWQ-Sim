@@ -234,8 +234,8 @@ namespace NWQSim
                 }
             }
 
-            print();
-            std::cout << "\n\n";
+            // print();
+            // std::cout << "\n\n";
         }
 
         void loadLayoutFile(const std::string &filename, bool required = true)
