@@ -65,7 +65,7 @@ private:
     void classify_measurements();
 
     void execute_gate(shared_ptr<QuantumState> state, std::shared_ptr<NWQSim::Circuit> circuit, qasm_gate gate);
-    IdxType *sub_execute(shared_ptr<QuantumState> state, std::string init_path, std::string init_format, IdxType repetition, bool print_metrics);
+    IdxType *sub_execute(shared_ptr<QuantumState> state, std::string init_path, std::string init_format, IdxType repetition);
 
     void dump_defined_gates();
     void dump_cur_inst();
@@ -73,13 +73,14 @@ private:
 
 public:
     qasm_parser() {}
-    void load_qasm_file(const char *filename);
+    void load_qasm_file(const std::string filename);
     void load_qasm_string(const std::string qasm_string);
-    void load_qobj_file(const char *filename);
+    void load_qobj_file(const std::string filename);
     void load_qobj_string(const std::string qobj_string);
+    void print_metrics();
 
     IdxType num_qubits();
-    map<string, IdxType> *execute(shared_ptr<QuantumState> state, std::string initpath, std::string init_format, IdxType repetition, bool print_metrics = false);
+    map<string, IdxType> *execute(shared_ptr<QuantumState> state, std::string initpath, std::string init_format, IdxType repetition);
     ~qasm_parser();
 };
 
@@ -187,7 +188,160 @@ void qasm_parser::parse_qasm()
     // dump_gates();
 }
 
-void qasm_parser::load_qasm_file(const char *filename)
+static void append_ccx_qubits(std::vector<std::vector<IdxType>> &qubits, IdxType qubit0, IdxType qubit1, IdxType qubit2)
+{
+    // H(qubit2);
+    qubits.push_back({qubit2});
+    // CX(qubit1, qubit2);
+    qubits.push_back({qubit1, qubit2});
+    // TDG(qubit2);
+    qubits.push_back({qubit2});
+    // CX(qubit0, qubit2);
+    qubits.push_back({qubit0, qubit2});
+    // T(qubit2);
+    qubits.push_back({qubit2});
+    // CX(qubit1, qubit2);
+    qubits.push_back({qubit1, qubit2});
+    // T(qubit1);
+    qubits.push_back({qubit1});
+    // TDG(qubit2);
+    qubits.push_back({qubit2});
+    // CX(qubit0, qubit2);
+    qubits.push_back({qubit0, qubit2});
+    // T(qubit2);
+    qubits.push_back({qubit2});
+    // CX(qubit0, qubit1);
+    qubits.push_back({qubit0, qubit1});
+    // T(qubit0);
+    qubits.push_back({qubit0});
+    // TDG(qubit1);
+    qubits.push_back({qubit1});
+    // H(qubit2);
+    qubits.push_back({qubit2});
+    // CX(qubit0, qubit1);
+    qubits.push_back({qubit0, qubit1});
+}
+
+void qasm_parser::print_metrics()
+{
+    IdxType n_qubits = num_qubits();
+
+    // Track the total number of single-qubit gates and two-qubit gates in the circuit
+    IdxType n_measure = 0;
+
+    std::vector<std::vector<IdxType>> target_qubits; // Store the target qubits of each gate
+    for (IdxType i = 0; i < list_gates->size(); i++)
+    {
+        if (list_gates->at(i).name == MEASURE)
+        {
+            n_measure++;
+            continue;
+        }
+        else if (list_gates->at(i).name == IF || list_gates->at(i).name == MODIFY_NOISE || list_gates->at(i).name == BARRIER)
+        {
+            continue;
+        }
+        else if (list_gates->at(i).name == "CCX")
+        {
+            append_ccx_qubits(target_qubits, list_gates->at(i).qubits[0], list_gates->at(i).qubits[1], list_gates->at(i).qubits[2]);
+        }
+        else if (list_gates->at(i).name == "CSWAP")
+        {
+            // CX(qubit2, qubit1);
+            target_qubits.push_back({list_gates->at(i).qubits[2], list_gates->at(i).qubits[1]});
+            // CCX(qubit0, qubit1, qubit2);
+            append_ccx_qubits(target_qubits, list_gates->at(i).qubits[0], list_gates->at(i).qubits[1], list_gates->at(i).qubits[2]);
+            // CX(qubit2, qubit1);
+            target_qubits.push_back({list_gates->at(i).qubits[2], list_gates->at(i).qubits[1]});
+        }
+        else
+        {
+            target_qubits.push_back(list_gates->at(i).qubits);
+        }
+    }
+
+    // Loop over each gate in the circuit and update the depth of the corresponding qubits
+    // Initialize a vector to track the current depth of each qubit
+    std::vector<IdxType> qubit_depth(n_qubits, 0);
+    // Initialize a vector to track the number of two-qubit gates applied to each qubit
+    std::vector<IdxType> qubit_g2_gates(n_qubits, 0);
+    IdxType g1_gates = 0;
+    IdxType g2_gates = 0;
+    IdxType max_depth = 0;
+    IdxType one_q_gates = 0;
+    IdxType two_q_gates = 0;
+
+    for (IdxType i = 0; i < target_qubits.size(); i++)
+    {
+        IdxType target = target_qubits[i][0];
+        IdxType ctrl = target_qubits[i].size() == 1 ? -1 : target_qubits[i][1];
+
+        // Calculate the depth of this gate based on the depths of the control and target qubits
+        IdxType depth;
+        if (ctrl == -1)
+        {
+            // Single-qubit gate
+            depth = qubit_depth[target] + 1;
+            g1_gates++;
+        }
+        else
+        {
+            // Two-qubit gate
+            depth = std::max(qubit_depth[ctrl], qubit_depth[target]) + 1;
+            g2_gates++;
+
+            // Increment the number of two-qubit gates applied to each qubit
+            qubit_g2_gates[ctrl]++;
+            qubit_g2_gates[target]++;
+
+            if (ctrl == target)
+                printf("Exception: target==ctrl\n");
+        }
+        // Update the depth of the control and target qubits
+        if (ctrl == -1)
+        {
+            one_q_gates++;
+        }
+        else
+        {
+            qubit_depth[ctrl] = depth;
+            two_q_gates++;
+        }
+        qubit_depth[target] = depth;
+        // Update the maximum depth if the current depth is greater than the previous maximum
+        if (depth > max_depth)
+        {
+            max_depth = depth;
+        }
+    }
+
+    n_measure = n_measure == 0 ? n_qubits : n_measure; // If no measurements are present, assume measure all qubits
+
+    // Calculate the gate density, retention lifespan, and entanglement variance of the circuit
+    ValType gate_density = (g1_gates + 2 * g2_gates) / (ValType)(max_depth * n_qubits);
+    ValType retention_lifespan = log(max_depth);
+    ValType measurement_density = log((ValType)max_depth * n_qubits) / (ValType)n_measure;
+
+    IdxType sum_g2_gates = 0;
+    for (auto val : qubit_g2_gates)
+    {
+        sum_g2_gates += val;
+    }
+    ValType average_g2_gates = sum_g2_gates / (ValType)n_qubits;
+
+    ValType entanglement_var = 0;
+    for (auto val : qubit_g2_gates)
+    {
+        entanglement_var += log(pow(val - average_g2_gates, 2) + 1);
+    }
+    entanglement_var /= n_qubits;
+
+    // Print the results to the console
+    safe_print("Circuit Depth: %lld; One-qubit Gates: %lld; Two-qubit Gates: %lld; Gate Density: %.4lf; Retention Lifespan: %.4lf; Measurement Density: %.4lf; Entanglement Variance: %.4lf\n\n",
+               max_depth, one_q_gates, two_q_gates, gate_density, retention_lifespan, measurement_density, entanglement_var);
+}
+
+void qasm_parser::load_qasm_file(const std::string filename)
 {
     qasmStreamPtr = std::make_unique<std::ifstream>(std::ifstream(filename));
     parse_qasm();
@@ -341,7 +495,7 @@ void qasm_parser::parse_qobj()
     classify_measurements();
 }
 
-void qasm_parser::load_qobj_file(const char *filename)
+void qasm_parser::load_qobj_file(const std::string filename)
 {
     qobjStreamPtr = std::make_unique<std::ifstream>(std::ifstream(filename, ios::binary));
     parse_qobj();
@@ -643,7 +797,7 @@ void qasm_parser::classify_measurements()
             final_measurements = false;
 }
 
-map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::string initpath, std::string init_format, IdxType repetition, bool print_metrics)
+map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::string initpath, std::string init_format, IdxType repetition)
 {
     IdxType *results;
     if (multi_shot)
@@ -651,13 +805,13 @@ map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::
         results = new IdxType[repetition];
         for (IdxType i = 0; i < repetition; i++)
         {
-            IdxType *sub_result = sub_execute(state, initpath, init_format, 1, print_metrics);
+            IdxType *sub_result = sub_execute(state, initpath, init_format, 1);
             results[i] = sub_result[0];
         }
     }
     else
     {
-        results = sub_execute(state, initpath, init_format, repetition, print_metrics);
+        results = sub_execute(state, initpath, init_format, repetition);
     }
     map<IdxType, IdxType> result_dict;
     for (IdxType i = 0; i < repetition; i++)
@@ -673,7 +827,7 @@ map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::
         return convert_dictionary(result_dict, list_cregs);
 }
 
-IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string init_path, std::string init_format, IdxType repetition, bool print_metrics)
+IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string init_path, std::string init_format, IdxType repetition)
 {
     if (init_path != "")
     {
@@ -704,8 +858,6 @@ IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string in
     }
 
     circuit->MA(repetition);
-    if (print_metrics)
-        circuit->print_metrics();
     state->sim(circuit);
 
     return state->get_results();

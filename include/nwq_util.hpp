@@ -6,6 +6,8 @@
 #include <vector>
 #include <chrono>
 #include <iomanip>
+#include <cstdarg>
+#include <cstdio>
 
 /***********************************************
  * Constant configuration:
@@ -185,10 +187,11 @@ namespace NWQSim
         return (ValType)std::rand() / (ValType)RAND_MAX;
     }
 
-    // Variadic template to act like printf
-    template <typename... Args>
-    static void safe_print(Args &&...args)
+    static void safe_print(const char *format, ...)
     {
+        va_list args;
+        va_start(args, format);
+
 #ifdef MPI_ENABLED
         int flag;
         MPI_Initialized(&flag);
@@ -197,19 +200,14 @@ namespace NWQSim
             int rank;
             MPI_Comm_rank(MPI_COMM_WORLD, &rank);
             if (rank == 0)
-            {
-                (std::cout << ... << args);
-                std::cout.flush();
-            }
+                vprintf(format, args);
         }
         else
-        {
-            (std::cout << ... << args);
-            std::cout.flush();
-        }
+            vprintf(format, args);
+
 #else
-        (std::cout << ... << args);
-        std::cout.flush();
+        vprintf(format, args);
 #endif
+        va_end(args);
     }
 } // namespace NWQSim

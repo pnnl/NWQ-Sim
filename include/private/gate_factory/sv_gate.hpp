@@ -47,7 +47,7 @@ namespace NWQSim
                 }
                 else if (!(g.op_name == OP::M || g.op_name == OP::RESET || g.op_name == OP::EXPECT || g.op_name == OP::MOD_NOISE))
                 {
-                    safe_print(g.op_name);
+                    safe_print("%s\n", g.op_name);
                     throw std::runtime_error("Invalid gate operation");
                 }
 

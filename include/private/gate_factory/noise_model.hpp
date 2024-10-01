@@ -280,167 +280,85 @@ namespace NWQSim
 
         void print(int precision = 3)
         {
-            safe_print("Noise Profile:\n");
+            std::cout << "Noise Profile:\n";
 
             // Print basic information
-            safe_print("Device Name: ", backend_config["name"], "\n");
-            safe_print("Version: ", backend_config["version"], "\n");
-            safe_print("Number of Qubits: ", backend_config["num_qubits"], "\n");
+            std::cout << "Device Name: " << backend_config["name"] << "\n";
+            std::cout << "Version: " << backend_config["version"] << "\n";
+            std::cout << "Number of Qubits: " << backend_config["num_qubits"] << "\n";
 
             // Print basis gates
-            safe_print("Basis Gates: ");
+            std::cout << "Basis Gates: ";
             for (const auto &gate : backend_config["basis_gates"])
             {
-                safe_print(gate, " ");
+                std::cout << gate << " ";
             }
-            safe_print("\n");
+            std::cout << "\n";
 
             // Print T1 values in scientific notation
-            safe_print("T1 Times (in seconds):\n");
+            std::cout << "T1 Times (in seconds):\n";
             for (auto &[qubit, value] : backend_config["T1"].items())
             {
-                safe_print("  Qubit ", qubit, ": ", formatWithPrecision(value, precision), "\n");
+                std::cout << "  Qubit " << qubit << ": " << formatWithPrecision(value, precision) << "\n";
             }
 
             // Print T2 values in scientific notation
-            safe_print("T2 Times (in seconds):\n");
+            std::cout << "T2 Times (in seconds):\n";
             for (auto &[qubit, value] : backend_config["T2"].items())
             {
-                safe_print("  Qubit ", qubit, ": ", formatWithPrecision(value, precision), "\n");
+                std::cout << "  Qubit " << qubit << ": " << formatWithPrecision(value, precision) << "\n";
             }
 
             // Print frequencies in scientific notation
-            safe_print("Frequencies (in Hz):\n");
+            std::cout << "Frequencies (in Hz):\n";
             for (auto &[qubit, value] : backend_config["freq"].items())
             {
-                safe_print("  Qubit ", qubit, ": ", formatWithPrecision(value, precision), "\n");
+                std::cout << "  Qubit " << qubit << ": " << formatWithPrecision(value, precision) << "\n";
             }
 
             // Print readout lengths in scientific notation
-            safe_print("Readout Lengths (in seconds):\n");
+            std::cout << "Readout Lengths (in seconds):\n";
             for (auto &[qubit, value] : backend_config["readout_length"].items())
             {
-                safe_print("  Qubit ", qubit, ": ", formatWithPrecision(value, precision), "\n");
+                std::cout << "  Qubit " << qubit << ": " << formatWithPrecision(value, precision) << "\n";
             }
 
             // Print measurement error probabilities in scientific notation
-            safe_print("Measurement Error Probabilities (Meas0_Prep1):\n");
+            std::cout << "Measurement Error Probabilities (Meas0_Prep1):\n";
             for (auto &[qubit, value] : backend_config["prob_meas0_prep1"].items())
             {
-                safe_print("  Qubit ", qubit, ": ", formatWithPrecision(value, precision), "\n");
+                std::cout << "  Qubit " << qubit << ": " << formatWithPrecision(value, precision) << "\n";
             }
 
-            safe_print("Measurement Error Probabilities (Meas1_Prep0):\n");
+            std::cout << "Measurement Error Probabilities (Meas1_Prep0):\n";
             for (auto &[qubit, value] : backend_config["prob_meas1_prep0"].items())
             {
-                safe_print("  Qubit ", qubit, ": ", formatWithPrecision(value, precision), "\n");
+                std::cout << "  Qubit " << qubit << ": " << formatWithPrecision(value, precision) << "\n";
             }
 
             // Print gate lengths in scientific notation
-            safe_print("Gate Lengths (in seconds):\n");
+            std::cout << "Gate Lengths (in seconds):\n";
             for (auto &[gate, value] : backend_config["gate_lens"].items())
             {
-                safe_print("  ", gate, ": ", formatWithPrecision(value, precision), "\n");
+                std::cout << "  " << gate << ": " << formatWithPrecision(value, precision) << "\n";
             }
 
             // Print gate errors in scientific notation
-            safe_print("Gate Errors:\n");
+            std::cout << "Gate Errors:\n";
             for (auto &[gate, value] : backend_config["gate_errs"].items())
             {
-                safe_print("  ", gate, ": ", formatWithPrecision(value, precision), "\n");
+                std::cout << "  " << gate << ": " << formatWithPrecision(value, precision) << "\n";
             }
 
             // Print coupling map
-            safe_print("CX Coupling Map:\n");
+            std::cout << "CX Coupling Map:\n";
             for (const auto &coupling : backend_config["cx_coupling"])
             {
-                safe_print("  ", coupling, "\n");
+                std::cout << "  " << coupling << "\n";
             }
 
-            safe_print("========================\n");
+            std::cout << "========================\n";
         }
-
-        // void print(int precision = 3)
-        // {
-        //     std::cout << "Noise Profile:\n";
-
-        //     // Print basic information
-        //     std::cout << "Device Name: " << backend_config["name"] << "\n";
-        //     std::cout << "Version: " << backend_config["version"] << "\n";
-        //     std::cout << "Number of Qubits: " << backend_config["num_qubits"] << "\n";
-
-        //     // Print basis gates
-        //     std::cout << "Basis Gates: ";
-        //     for (const auto &gate : backend_config["basis_gates"])
-        //     {
-        //         std::cout << gate << " ";
-        //     }
-        //     std::cout << "\n";
-
-        //     // Print T1 values in scientific notation
-        //     std::cout << "T1 Times (in seconds):\n";
-        //     for (auto &[qubit, value] : backend_config["T1"].items())
-        //     {
-        //         std::cout << "  Qubit " << qubit << ": " << formatWithPrecision(value, precision) << "\n";
-        //     }
-
-        //     // Print T2 values in scientific notation
-        //     std::cout << "T2 Times (in seconds):\n";
-        //     for (auto &[qubit, value] : backend_config["T2"].items())
-        //     {
-        //         std::cout << "  Qubit " << qubit << ": " << formatWithPrecision(value, precision) << "\n";
-        //     }
-
-        //     // Print frequencies in scientific notation
-        //     std::cout << "Frequencies (in Hz):\n";
-        //     for (auto &[qubit, value] : backend_config["freq"].items())
-        //     {
-        //         std::cout << "  Qubit " << qubit << ": " << formatWithPrecision(value, precision) << "\n";
-        //     }
-
-        //     // Print readout lengths in scientific notation
-        //     std::cout << "Readout Lengths (in seconds):\n";
-        //     for (auto &[qubit, value] : backend_config["readout_length"].items())
-        //     {
-        //         std::cout << "  Qubit " << qubit << ": " << formatWithPrecision(value, precision) << "\n";
-        //     }
-
-        //     // Print measurement error probabilities in scientific notation
-        //     std::cout << "Measurement Error Probabilities (Meas0_Prep1):\n";
-        //     for (auto &[qubit, value] : backend_config["prob_meas0_prep1"].items())
-        //     {
-        //         std::cout << "  Qubit " << qubit << ": " << formatWithPrecision(value, precision) << "\n";
-        //     }
-
-        //     std::cout << "Measurement Error Probabilities (Meas1_Prep0):\n";
-        //     for (auto &[qubit, value] : backend_config["prob_meas1_prep0"].items())
-        //     {
-        //         std::cout << "  Qubit " << qubit << ": " << formatWithPrecision(value, precision) << "\n";
-        //     }
-
-        //     // Print gate lengths in scientific notation
-        //     std::cout << "Gate Lengths (in seconds):\n";
-        //     for (auto &[gate, value] : backend_config["gate_lens"].items())
-        //     {
-        //         std::cout << "  " << gate << ": " << formatWithPrecision(value, precision) << "\n";
-        //     }
-
-        //     // Print gate errors in scientific notation
-        //     std::cout << "Gate Errors:\n";
-        //     for (auto &[gate, value] : backend_config["gate_errs"].items())
-        //     {
-        //         std::cout << "  " << gate << ": " << formatWithPrecision(value, precision) << "\n";
-        //     }
-
-        //     // Print coupling map
-        //     std::cout << "CX Coupling Map:\n";
-        //     for (const auto &coupling : backend_config["cx_coupling"])
-        //     {
-        //         std::cout << "  " << coupling << "\n";
-        //     }
-
-        //     std::cout << "========================\n";
-        // }
 
     private:
         std::unordered_map<std::string, double> defaultNoiseParameters;
