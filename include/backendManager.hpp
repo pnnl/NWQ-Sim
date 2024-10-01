@@ -39,56 +39,28 @@
 class BackendManager
 {
 public:
-    // Variadic template to act like printf
-    template <typename... Args>
-    static void safe_print(const char *format, Args... args)
-    {
-#ifdef MPI_ENABLED
-        int flag;
-        MPI_Initialized(&flag);
-        if (flag)
-        {
-            int rank;
-            MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-            if (rank == 0)
-            {
-                printf(format, args...);
-                fflush(stdout);
-            }
-        }
-        else
-        {
-            printf(format, args...);
-            fflush(stdout);
-        }
-#else
-        printf(format, args...);
-        fflush(stdout);
-#endif
-    }
-
     static void print_available_backends()
     {
-        safe_print("Available backends:\n");
-        safe_print("- CPU\n");
+        NWQSim::safe_print("Available backends:\n");
+        NWQSim::safe_print("- CPU\n");
 #ifdef OMP_ENABLED
-        safe_print("- OpenMP\n");
+        NWQSim::safe_print("- OpenMP\n");
 #endif
 
 #ifdef MPI_ENABLED
-        safe_print("- MPI\n");
+        NWQSim::safe_print("- MPI\n");
 #endif
 
 #ifdef CUDA_ENABLED
-        safe_print("- NVGPU\n");
+        NWQSim::safe_print("- NVGPU\n");
 #endif
 
 #ifdef CUDA_MPI_ENABLED
-        safe_print("- NVGPU_MPI\n");
+        NWQSim::safe_print("- NVGPU_MPI\n");
 #endif
 
 #ifdef HIP_ENABLED
-        safe_print("- AMDGPU\n");
+        NWQSim::safe_print("- AMDGPU\n");
 #endif
     }
 
@@ -156,7 +128,7 @@ public:
         }
         else
         {
-            safe_print("Invalid backend name: %s. Please use one of the available backends. (Case insensitive)\n", backend.c_str());
+            NWQSim::safe_print("Invalid backend name: %s. Please use one of the available backends. (Case insensitive)\n", backend.c_str());
             print_available_backends();
             exit(1);
         }

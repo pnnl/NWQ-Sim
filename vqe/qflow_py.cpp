@@ -143,9 +143,9 @@ int main(int argc, char** argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &i_proc);
   }
 #endif
-  manager.safe_print("Reading Hamiltonian...\n");
+  NWQSim::safe_print("Reading Hamiltonian...\n");
   std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(hamil_path, n_part);
-  manager.safe_print("Constructing UCCSD Ansatz...\n");
+  NWQSim::safe_print("Constructing UCCSD Ansatz...\n");
 
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
     hamil->getEnv(),
@@ -154,11 +154,11 @@ int main(int argc, char** argv) {
   );
   std::vector<double> params;
   double fval;
-  manager.safe_print("Beginning VQE loop...\n");
+  NWQSim::safe_print("Beginning VQE loop...\n");
   optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, params, fval);
   std::ostringstream paramstream;
   paramstream << params;
-  manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters: %s\n", fval, paramstream.str().c_str());
+  NWQSim::safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters: %s\n", fval, paramstream.str().c_str());
 #ifdef MPI_ENABLED
   if (backend == "MPI" || backend == "NVGPU_MPI")
   {

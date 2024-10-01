@@ -147,7 +147,6 @@ namespace NWQSim
                     T1_2 = noise_model.get_t1(q2);
                     T2_2 = noise_model.get_t2(q2);
 
-                    // std::cout << name << std::endl;
                     gate_len = noise_model.get_gate_len(gate_name, q1, q2);
                     err_rate = noise_model.get_gate_err(gate_name, q1, q2);
                 }

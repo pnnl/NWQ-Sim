@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vqe_state.hpp"
+#include "nwq_util.hpp"
 #include "backendManager.hpp"
 #include "svsim_vqe/sv_cpu_vqe.hpp"
 
@@ -69,7 +70,7 @@ public:
         }
         else
         {
-            safe_print("Invalid backend name: %s. Please use one of the available backends. (Case insensitive)\n", backend.c_str());
+            NWQSim::safe_print("Invalid backend name: %s. Please use one of the available backends. (Case insensitive)\n", backend.c_str());
             print_available_backends();
             exit(1);
         }

@@ -118,7 +118,7 @@ int main(int argc, char **argv)
         }
         else
         {
-            BackendManager::safe_print("Starting Statevector Simulation...");
+            safe_print("Starting Statevector Simulation...");
             std::string sv_backend = (backend == "NVGPU_MPI" ? "NVGPU" : backend);
             std::shared_ptr<NWQSim::QuantumState> sv_state = BackendManager::create_state(sv_backend, parser.num_qubits(), "sv");
             std::shared_ptr<NWQSim::QuantumState> dm_state = BackendManager::create_state(backend, parser.num_qubits(), "dm");
@@ -135,7 +135,7 @@ int main(int argc, char **argv)
                 delete counts_sv;
             }
 
-            BackendManager::safe_print("Starting Density Matrix Simulation...");
+            safe_print("Starting Density Matrix Simulation...");
             if (!dm_state)
             {
                 std::cerr << "Failed to create backend\n";
@@ -156,7 +156,7 @@ int main(int argc, char **argv)
             //     dm_state->dump_res_state(dumpfile);
             // }
             ValType fidelity = dm_state->fidelity(sv_state);
-            BackendManager::safe_print("State Fidelity: %e\n", fidelity);
+            safe_print("State Fidelity: %e\n", fidelity);
             delete counts_dm;
         }
     }
@@ -190,7 +190,7 @@ int main(int argc, char **argv)
         }
         else
         {
-            BackendManager::safe_print("Starting Statevector Simulation...");
+            safe_print("Starting Statevector Simulation...");
             std::string sv_backend = (backend == "NVGPU_MPI" ? "NVGPU" : backend);
             std::shared_ptr<NWQSim::QuantumState> sv_state = BackendManager::create_state(sv_backend, parser.num_qubits(), "sv");
             if (!sv_state)
@@ -206,7 +206,7 @@ int main(int argc, char **argv)
                 delete counts_sv;
             }
 
-            BackendManager::safe_print("Starting Density Matrix Simulation...");
+            safe_print("Starting Density Matrix Simulation...");
             std::shared_ptr<NWQSim::QuantumState> dm_state = BackendManager::create_state(backend, parser.num_qubits(), "dm");
             if (!dm_state)
             {
@@ -224,7 +224,7 @@ int main(int argc, char **argv)
                 dm_state->dump_res_state(dumpfile);
             }
             ValType fidelity = dm_state->fidelity(sv_state);
-            BackendManager::safe_print("State Fidelity: %e\n", fidelity);
+            safe_print("State Fidelity: %e\n", fidelity);
             delete counts_dm;
         }
     }
@@ -266,7 +266,7 @@ int main(int argc, char **argv)
         }
         else
         {
-            BackendManager::safe_print("Starting Statevector Simulation...");
+            safe_print("Starting Statevector Simulation...");
             std::string sv_backend = (backend == "NVGPU_MPI" ? "NVGPU" : backend);
             std::shared_ptr<NWQSim::QuantumState> sv_state = BackendManager::create_state(sv_backend, parser.num_qubits(), "sv");
             if (!sv_state)
@@ -291,7 +291,7 @@ int main(int argc, char **argv)
                 delete counts_sv;
             }
 
-            BackendManager::safe_print("Starting Density Matrix Simulation...");
+            safe_print("Starting Density Matrix Simulation...");
             std::shared_ptr<NWQSim::QuantumState> dm_state = BackendManager::create_state(backend, parser.num_qubits(), "dm");
             if (!dm_state)
             {
@@ -314,7 +314,7 @@ int main(int argc, char **argv)
                 cout << "----------" << endl;
             }
             ValType fidelity = dm_state->fidelity(sv_state);
-            BackendManager::safe_print("State Fidelity: %e\n", fidelity);
+            safe_print("State Fidelity: %e\n", fidelity);
             delete counts_dm;
         }
     }
@@ -356,7 +356,7 @@ int main(int argc, char **argv)
         }
         else
         {
-            BackendManager::safe_print("Starting Statevector Simulation...");
+            safe_print("Starting Statevector Simulation...");
             std::string sv_backend = (backend == "NVGPU_MPI" ? "NVGPU" : backend);
             std::shared_ptr<NWQSim::QuantumState> sv_state = BackendManager::create_state(sv_backend, parser.num_qubits(), "sv");
             if (!sv_state)
@@ -382,7 +382,7 @@ int main(int argc, char **argv)
                 delete counts_sv;
             }
 
-            BackendManager::safe_print("Starting Density Matrix Simulation...");
+            safe_print("Starting Density Matrix Simulation...");
             std::shared_ptr<NWQSim::QuantumState> dm_state = BackendManager::create_state(backend, parser.num_qubits(), "dm");
             if (!dm_state)
             {
@@ -405,7 +405,7 @@ int main(int argc, char **argv)
                 cout << "----------" << endl;
             }
             ValType fidelity = dm_state->fidelity(sv_state);
-            BackendManager::safe_print("State Fidelity: %e\n", fidelity);
+            safe_print("State Fidelity: %e\n", fidelity);
             delete counts_dm;
         }
     }
@@ -415,7 +415,7 @@ int main(int argc, char **argv)
         total_shots = 16384; // for verification
         int benchmark_index = stoi(config_parser.get_value("test"));
         ValType fidelity = run_brnchmark(backend, benchmark_index, total_shots, simulation_method, run_with_basis);
-        BackendManager::safe_print("Fidelity between NWQSim and Qiskit Execution: %.4f\n", fidelity);
+        safe_print("Fidelity between NWQSim and Qiskit Execution: %.4f\n", fidelity);
     }
 
     if (config_parser.is_flag_set("all_tests"))
@@ -426,14 +426,14 @@ int main(int argc, char **argv)
             ValType fidelity = run_brnchmark(backend, benchmark_index, total_shots, simulation_method, run_with_basis);
             if (fidelity < pass_threshold)
             {
-                BackendManager::safe_print("Benchmark %d fidelity: %.4f Failed!\n", benchmark_index, fidelity);
+                safe_print("Benchmark %d fidelity: %.4f Failed!\n", benchmark_index, fidelity);
                 passed = false;
             }
         }
         if (passed)
-            BackendManager::safe_print("All benchmarks passed!\n");
+            safe_print("All benchmarks passed!\n");
         else
-            BackendManager::safe_print("TESTING FAILED!\n");
+            safe_print("TESTING FAILED!\n");
     }
 // Finalize MPI if necessary
 #ifdef MPI_ENABLED
