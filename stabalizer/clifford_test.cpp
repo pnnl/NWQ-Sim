@@ -13,11 +13,9 @@ int main(){
 	std::ofstream outfile("qubits_time.txt");
 	//std::ofstream outfile("qubits_memory.txt");
 
-	for(int rounds = 0; rounds < 101; rounds++){
-		for(int n_qubits = 10; n_qubits < 11; n_qubits++)
+	for(int rounds = 0; rounds < 1; rounds++){
+		for(int n_qubits = 10; n_qubits < 12; n_qubits++)
 		{
-			// Create a circuit with 2 qubits
-			//int n_qubits = 20;
 			auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 			for(int j = 0; j < rounds; j++)
 			{

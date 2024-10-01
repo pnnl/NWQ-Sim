@@ -60,7 +60,8 @@ namespace NWQSim
             //std::cout << "Result: " << result[0] << std::endl;
         }
 
-        std::string get_stabalizers()
+        //Get the stabilizers in the tableau
+        std::string get_stabilizers()
         {
             int x_val;
             int z_val;
@@ -155,7 +156,7 @@ namespace NWQSim
         void simulate()
         {
             //For swapping rows
-            std::vector<uint> tempRow(n);
+            uint tempVal;
 
             for (int k = 0; k < g; k++)
             {
@@ -165,17 +166,16 @@ namespace NWQSim
 
                 if (gate.op_name == OP::H)
                 {
-                    //Phase
+                    
                     for(int i = 0; i < 2*n; i++)
+                    {
+                        //Phase
                         r[i] = r[i] ^ ((x[i][a] << 1) + z[i][a]);
-
-                    //Entry
-                    tempRow = x[a];
-                    x[a] = z[a];
-                    z[a] = tempRow; 
-                    tempRow = x[a+n];
-                    x[a+n] = z[a+n];
-                    z[a+n] = tempRow;    
+                        //Entry
+                        tempVal = x[i][a];
+                        x[i][a] = z[i][a];
+                        z[i][a] = tempVal; 
+                    } 
                 }
                 else if (gate.op_name == OP::S)
                 {
