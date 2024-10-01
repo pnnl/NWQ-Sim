@@ -4,7 +4,6 @@
 #include <vector>
 #include <iomanip>
 
-
 #include "../include/backendManager.hpp"
 #include "../include/state.hpp"
 #include "../include/circuit.hpp"
@@ -37,7 +36,6 @@ int main(){
 				}
 			}
 
-			
 			for(int i = 0; i < n_qubits; i++)
 			{
 				circuit -> M(i);
@@ -66,7 +64,6 @@ int main(){
 			outfile << std::setw(5) << n_qubits << " ";
 			outfile << std::setw(5) << state1_time << " ";
 			outfile << std::setw(5) << state2_time << "\n";
-
 
 			std::cout << "Done" << std::endl;
 		}

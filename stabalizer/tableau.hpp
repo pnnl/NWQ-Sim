@@ -88,7 +88,39 @@ namespace NWQSim
             return stabalizers;
         }
 
-
+        //Takes a default (or any) tableau and sets its stabalizers according to
+        //a Pauli string provided
+        void set_stabalizers(tableau& T, std::string pauliString)
+        {
+            for(int qubit = 0; qubit < T.n; qubit++)
+            {
+                for(int i = 0; i < 2*T.n+1; i++)
+                {
+                    switch(pauliString[qubit])
+                    {
+                        case 'I':
+                            T.x[i][qubit] = 0;
+                            T.z[i][qubit] = 0;
+                            break;
+                        case 'X':
+                            T.x[i][qubit] = 0;
+                            T.z[i][qubit] = 1;
+                            break;
+                        case 'Y':
+                            T.x[i][qubit] = 1;
+                            T.z[i][qubit] = 1;
+                            break;
+                        case 'Z':
+                            T.x[i][qubit] = 1;
+                            T.z[i][qubit] = 0;
+                            break;
+                        default:
+                            std::logic_error("Invalid stabilizer");
+                            break;
+                    }
+                }//All rows (2*n rows, destabilizers and stabilizers)
+            }//All columns (qubits)
+        }
 
         void rowsum(int h, int i)
         {

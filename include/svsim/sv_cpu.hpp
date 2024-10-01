@@ -13,7 +13,7 @@
 #include "../private/sim_gate.hpp"
 
 /*TESTING HEADERS*/
-#include "../../stabalizer/stabalizer_sim.hpp"
+#include "../../stabalizer/tableau.hpp"
 /*END TESTING HEADERS*/
 
 #include <random>
