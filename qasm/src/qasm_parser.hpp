@@ -148,6 +148,41 @@ void qasm_parser::parse_qasm()
                     multi_shot = true;
                 }
             }
+            else if (cur_inst[INST_NAME].value == MODIFY_NOISE)
+            {
+                int qubit_start_index = cur_inst[1].value == "RESET" ? 3 : 4;
+
+                auto qubits = get_qubits(cur_inst, qubit_start_index, cur_inst.size() - 1, list_qregs);
+
+                for (IdxType i = 0; i < qubits.first; i++)
+                {
+                    qasm_gate cur_gate;
+                    cur_gate.name = MODIFY_NOISE;
+                    cur_gate.mod_type = cur_inst[1].value;
+                    cur_gate.noise_name = cur_inst[2].value;
+                    if (cur_inst[1].value != "RESET")
+                    {
+                        cur_gate.noise_value = stod(cur_inst[3].value);
+                    }
+
+                    for (size_t j = 0; j < qubits.second.size(); j++)
+                    {
+                        if (qubits.second[j].size() == 1)
+                            cur_gate.qubits.push_back(qubits.second[j][0]);
+                        else
+                            cur_gate.qubits.push_back(qubits.second[j][i]);
+                    }
+
+                    std::cout << "Modifying noise: " << cur_gate.mod_type << " " << cur_gate.noise_name << " " << cur_gate.noise_value << " ";
+                    for (auto q : cur_gate.qubits)
+                    {
+                        std::cout << q << " ";
+                    }
+                    std::cout << std::endl;
+                    list_gates->push_back(cur_gate);
+                }
+                std::cout << std::endl;
+            }
             else
             // parse quantum gates
             {
@@ -712,6 +747,8 @@ void qasm_parser::execute_gate(shared_ptr<QuantumState> state, std::shared_ptr<N
             list_cregs.at(gate.creg_name).qubit_indices[gate.creg_index] = gate.measured_qubit_index;
         }
     }
+    else if (gate_name == MODIFY_NOISE)
+        circuit->MOD_NOISE(gate.mod_type, gate.noise_name, gate.noise_value, gate.qubits);
     else if (gate_name == "U")
         circuit->U(params[0], params[1], params[2], qubits[0]);
     else if (gate_name == "U1")

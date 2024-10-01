@@ -57,22 +57,11 @@ int main(int argc, char **argv)
     Config::PRINT_SIM_TRACE = config_parser.is_flag_set("verbose");
 
     // Handle noise model related configurations
-    Config::ENABLE_NOISE = !config_parser.get_value("device").empty();
-    if (Config::ENABLE_NOISE)
-    {
-        Config::readDeviceConfig(config_parser.get_value("device"));
-        simulation_method = "dm";
-    }
-    std::string layoutfile = config_parser.get_value("layout");
-    if (!layoutfile.empty())
-    {
-        Config::loadLayoutFile(layoutfile);
-    }
-    std::string layoutstring = config_parser.get_value("layout_str");
-    if (!layoutstring.empty())
-    {
-        Config::loadLayoutString(layoutstring);
-    }
+    Config::device_noise_file = config_parser.get_value("device");
+    Config::ENABLE_NOISE = !Config::device_noise_file.empty();
+    simulation_method = Config::ENABLE_NOISE ? "dm" : simulation_method;
+    Config::device_layout_file = config_parser.get_value("layout");
+    Config::device_layout_str = config_parser.get_value("layout_str");
 
     if (config_parser.is_flag_set("backend_list"))
     {

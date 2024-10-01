@@ -30,16 +30,6 @@ namespace NWQSim
             // Initialize CPU side
             n_qubits = _n_qubits;
 
-            if (Config::ENABLE_NOISE)
-            {
-                IdxType device_qubits = Config::backend_config["num_qubits"];
-                if (n_qubits > device_qubits)
-                {
-                    std::string msg = "Error: Circuit uses " + std::to_string(n_qubits) + " qubits, more than " + std::to_string(device_qubits) + "qubits in the device!!\n";
-                    throw std::logic_error(msg.c_str());
-                }
-            }
-
             dim = (IdxType)1 << (2 * n_qubits);
             half_dim = (IdxType)1 << (2 * n_qubits - 1);
             dm_size = dim * (IdxType)sizeof(ValType);

@@ -45,7 +45,7 @@ namespace NWQSim
                 {
                     sv_gate.qubit = g.repetition;
                 }
-                else if (!(g.op_name == OP::M || g.op_name == OP::RESET || g.op_name == OP::EXPECT))
+                else if (!(g.op_name == OP::M || g.op_name == OP::RESET || g.op_name == OP::EXPECT || g.op_name == OP::MOD_NOISE))
                 {
                     std::cout << g.op_name << std::endl;
                     throw std::runtime_error("Invalid gate operation");
@@ -259,10 +259,10 @@ namespace NWQSim
                                     S2I, 0, 0, 0,
                                     0, 0, 0, S2I,
                                     0, 0, S2I, 0};
-                ValType imag[16] =  {0,  0,  0,  S2I,
-                                     0,  0, -S2I,  0,
-                                     0,  S2I,  0,  0,
-                                    -S2I,  0,  0,  0};
+                ValType imag[16] = {0, 0, 0, S2I,
+                                    0, 0, -S2I, 0,
+                                    0, S2I, 0, 0,
+                                    -S2I, 0, 0, 0};
                 memcpy(gm_real, real, 16 * sizeof(ValType));
                 memcpy(gm_imag, imag, 16 * sizeof(ValType));
                 return OP::C2;

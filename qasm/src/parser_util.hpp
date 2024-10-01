@@ -63,6 +63,7 @@ const string GATE("GATE");
 const string IF("IF");
 const string MEASURE("MEASURE");
 const string BARRIER("BARRIER");
+const string MODIFY_NOISE("MODIFY_NOISE");
 
 struct qasm_gate
 {
@@ -82,6 +83,11 @@ struct qasm_gate
     IdxType if_offset;
     IdxType if_creg_val;
     vector<qasm_gate> *conditional_inst;
+
+    // Fields used for modify noise operations
+    string mod_type = "";
+    string noise_name = "";
+    ValType noise_value = 0;
 };
 
 struct defined_gate

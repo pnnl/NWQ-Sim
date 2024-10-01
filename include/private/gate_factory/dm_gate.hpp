@@ -7,196 +7,89 @@
 // PNNL-IPID: 32166, ECCN: EAR99, IR: PNNL-SA-161181
 // BSD Lincese.
 // ---------------------------------------------------------------------------
-#ifndef DEVICE_NOISE_HPP_
-#define DEVICE_NOISE_HPP_
+#pragma once
 
 #include <fstream>   // std::ifstream
 #include <vector>    // std::vector, to tell if a gate is 1 or 2 qubits
 #include <algorithm> // std::find
 #include <complex>
-#include "../nlohmann/json.hpp" // json parser
+
+#include "noise_util.hpp"
 #include "noise_model.hpp"
+#include "../sim_gate.hpp"
 
 #include "../../gate.hpp"
 #include "../../config.hpp"
-#include "../sim_gate.hpp"
-
-using json = nlohmann::json;
 
 namespace NWQSim
 {
-    // Records all names of 2 qubit gates
-    std::vector<OP> gates2q{OP::CX, OP::ECR};
+    DMGate generateDMGate(NoiseModel noise_model, OP gate_op, int q1, int q2, double theta, bool default_noise);
+    void getMeasureSP(NoiseModel noise_model, std::complex<double> *gate_sp, int qubit_index, bool relaxation_noise = false);
 
-    //================ Set gates =================
-    inline
-    void set_X(std::complex<double> *res)
+    std::vector<DMGate> getDMGates(const std::vector<Gate> &gates, const IdxType n_qubits)
     {
-        /******************************************
-         * Pauli-X gate: bit-flip or NOT gate
-         *  X = [0 1]
-         *      [1 0]
-         ******************************************/
-        const std::complex<double> x_gate[2][2] = {{{0, 0}, {1, 0}},
-                                                   {{1, 0}, {0, 0}}};
-        std::copy(&x_gate[0][0], &x_gate[0][0] + 4, res);
-    }
-    inline
-    void set_ID(std::complex<double> *res)
-    {
-        /******************************************
-         * Identiy gate, this is meaningful
-         * for noisy simulation
-         ******************************************/
-        const std::complex<double> id_gate[2][2] = {{{1, 0}, {0, 0}},
-                                                    {{0, 0}, {1, 0}}};
-        std::copy(&id_gate[0][0], &id_gate[0][0] + 4, res);
-    }
-    inline
-    void set_SX(std::complex<double> *res)
-    {
-        /******************************************
-         * sqrt(X) gate, basis gate for IBM-Q
-         * SX = 1/2 [1+i 1-i]
-         *          [1-i 1+i]
-         ******************************************/
-        const std::complex<double> sx_gate[2][2] = {{std::complex<double>(0.5, 0.5), std::complex<double>(0.5, -0.5)},
-                                                    {std::complex<double>(0.5, -0.5), std::complex<double>(0.5, 0.5)}};
-        std::copy(&sx_gate[0][0], &sx_gate[0][0] + 4, res);
-    }
-    inline
-    void set_RZ(std::complex<double> *res, double theta)
-    {
-        /******************************************
-         * Rotation around Z axis
-         * RZ = [cos(a/2)-i*sin(a/2)  0]
-         *      [0  cos(a/2)+i*sin(a/2)]
-         ******************************************/
-        const std::complex<double> rz_gate[2][2] = {
-            {{cos(theta / 2), -sin(theta / 2)}, {0, 0}},
-            {{0, 0}, {cos(theta / 2), sin(theta / 2)}}};
-        std::copy(&rz_gate[0][0], &rz_gate[0][0] + 4, res);
-    }
-    inline
-    void set_CX(std::complex<double> *res)
-    {
-        /******************************************
-         * Controlled X gate (CNOT)
-         * Apply X when the control qubit is 1
-         ******************************************/
+        std::vector<DMGate> sim_dm_gates;
 
-        const std::complex<double> cx_gate[4][4] = {{{1, 0}, {0, 0}, {0, 0}, {0, 0}},
-                                                    {{0, 0}, {1, 0}, {0, 0}, {0, 0}},
-                                                    {{0, 0}, {0, 0}, {0, 0}, {1, 0}},
-                                                    {{0, 0}, {0, 0}, {1, 0}, {0, 0}}};
-        std::copy(&cx_gate[0][0], &cx_gate[0][0] + 16, res);
-    }
+        NoiseModel noise_model(Config::device_noise_file, Config::device_layout_file, Config::device_layout_str);
+        noise_model.print();
 
-    // ---------------------------------------------- Convert Superoperator to Choi Matrix -------------------------------
-    // I think this is not necessary since we can compare the noise channel with identity, where later one is unitary
-    // So we just compute the trace of noise superoperator and divided it by dim^2 to get process fidelity
+        bool default_noise = true;
 
-    // // Ref Eq.(4.3) in https://arxiv.org/pdf/1111.6950.pdf
-    // void colReshuffle1q(int dim, int a, int b, int* new_a, int* new_b) {
-    //     // To bits
-    //     std::bitset<2> bit_a (a);
-    //     std::bitset<2> bit_b (b);
-    //     // Split to two halves
-    //     std::bitset<1> a_right = std::bitset<1> ((bit_a >> 1).to_ulong());
-    //     std::bitset<1> a_left = std::bitset<1> (((bit_a << 1) >> 1).to_ulong());
-    //     std::bitset<1> b_right = std::bitset<1> ((bit_b >> 1).to_ulong());
-    //     std::bitset<1> b_left = std::bitset<1> (((bit_b << 1) >> 1).to_ulong());
-    //     // Reshuffle
-    //     std::bitset<2> new_bit_a (b_left.to_string()+a_left.to_string());
-    //     std::bitset<2> new_bit_b (b_right.to_string()+a_right.to_string());
-
-    //     // Convert back to integer
-    //     *new_a = static_cast<int>(new_bit_a.to_ulong());
-    //     *new_b = static_cast<int>(new_bit_b.to_ulong());
-    // }
-
-    // void colReshuffle2q(int dim, int a, int b, int* new_a, int* new_b) {
-    //     // To bits
-    //     std::bitset<4> bit_a (a);
-    //     std::bitset<4> bit_b (b);
-    //     // Split to two halves
-    //     std::bitset<2> a_right = std::bitset<2> ((bit_a >> 2).to_ulong());
-    //     std::bitset<2> a_left = std::bitset<2> (((bit_a << 2) >> 2).to_ulong());
-    //     std::bitset<2> b_right = std::bitset<2> ((bit_b >> 2).to_ulong());
-    //     std::bitset<2> b_left = std::bitset<2> (((bit_b << 2) >> 2).to_ulong());
-    //     // Reshuffle
-    //     std::bitset<4> new_bit_a (b_left.to_string()+a_left.to_string());
-    //     std::bitset<4> new_bit_b (b_right.to_string()+a_right.to_string());
-
-    //     // Convert back to integer
-    //     *new_a = static_cast<int>(new_bit_a.to_ulong());
-    //     *new_b = static_cast<int>(new_bit_b.to_ulong());
-    // }
-
-    // // Superoperator to Choi
-    // void sp2choi(std::complex<double>* noise_sp, int dim, std::complex<double>* noise_choi, bool if_normalize = true) {
-    //     double rate = 1/dim;
-    //     for (int i=0; i<dim; i++) {
-    //         for (int j=0; j<dim; j++) {
-    //             // Do reshuffle on coordinates
-    //             int new_i;
-    //             int new_j;
-    //             if (dim == 4) {// 1-qubit
-    //                 colReshuffle1q(4, i, j, &new_i, &new_j);
-    //             } else if (dim == 16) {
-    //                 colReshuffle2q(16, i, j, &new_i, &new_j);
-    //             } else {
-    //                 throw std::invalid_argument( "Only 1 or 2-qubit gates." );
-    //             }
-    //             // Do normalization if necessary
-    //             if ( if_normalize) {
-    //                 noise_choi[new_i*dim+new_j] = rate * noise_sp[i*dim+j];
-    //             } else {
-    //                 noise_choi[new_i*dim+new_j] = noise_sp[i*dim+j];
-    //             }
-
-    //         }
-    //     }
-    // }
-    // ---------------------------------------------------------------------------------------------------------------
-
-    /**
-     * @brief Compute process fidelity of a given noisy superoperator (to the ideal situation, i.e., identity operator) in dimension dim
-     *        Ref: https://qiskit.org/documentation/stubs/qiskit.quantum_info.process_fidelity.html#qiskit.quantum_info.process_fidelity
-     *
-     * @param noise_sp
-     * @param dim
-     * @return double
-     */
-    double procFid(std::complex<double> *noise_sp, int dim)
-    {
-        double trace = 0.0;
-        double rate = 1.0 / dim;
-        for (int i = 0; i < dim; i++)
+        if (n_qubits > noise_model.get_num_qubits())
         {
-            trace += std::real(noise_sp[i * dim + i]); // the number should be real anyway
+            std::string msg = "Error: Circuit uses " + std::to_string(n_qubits) + " qubits, more than " + std::to_string(noise_model.get_num_qubits()) + "qubits in the device!!\n";
+            throw std::logic_error(msg.c_str());
         }
 
-        return trace * rate;
-    }
+        for (const auto &g : gates)
+        {
+            if (g.op_name == MOD_NOISE)
+            {
+                noise_model.modify_noise(g.mod_op, g.mod_noise, g.mod_value, g.mod_qubits);
+                default_noise = false;
+            }
+            else if (g.op_name == OP::RESET)
+            {
+                sim_dm_gates.push_back(DMGate(OP::RESET, g.qubit, g.ctrl));
+            }
+            else if (g.op_name == OP::M)
+            {
+                if (Config::ENABLE_NOISE)
+                {
+                    std::complex<double> noisy_operator[4][4] = {};
+                    getMeasureSP(noise_model, noisy_operator[0], g.qubit);
 
-    /**
-     * @brief Compute average gate fidelity of a given noisy superoperator (to the ideal situation, i.e., identity operator) in dimension dim
-     *        Ref: https://qiskit.org/documentation/stubs/qiskit.quantum_info.average_gate_fidelity.html#qiskit.quantum_info.average_gate_fidelity
-     *           Equation: (dim*process_fidelity + 1)/(dim+1)   <---- this is a special case because we compare an operator to identity operator which is unitary
-     *
-     * @param noise_sp
-     * @param dim
-     * @return double
-     */
-    double aveGateFid(std::complex<double> *noise_sp, int dim)
-    { // note, dim is dimension of superoperator, which is square of state_dim
-        double state_dim = std::sqrt(dim);
-        double process_fidelity = procFid(noise_sp, dim);
-        double denom = 1.0 / (state_dim + 1.0);
-        double ave_fidelity = (state_dim * process_fidelity + 1.0) * denom;
+                    DMGate noisy_dm_gate(OP::C2, g.qubit, g.ctrl);
+                    noisy_dm_gate.set_gm(noisy_operator[0], 4);
 
-        return ave_fidelity;
+                    sim_dm_gates.push_back(noisy_dm_gate);
+                }
+
+                sim_dm_gates.push_back(DMGate(OP::M, g.qubit, g.ctrl));
+            }
+            else if (g.op_name == OP::MA)
+            {
+                if (Config::ENABLE_NOISE)
+                {
+                    for (IdxType i = 0; i < n_qubits; i++)
+                    {
+                        std::complex<double> noisy_operator[4][4] = {};
+                        getMeasureSP(noise_model, noisy_operator[0], i);
+
+                        DMGate noisy_dm_gate(OP::C2, i, g.ctrl);
+                        noisy_dm_gate.set_gm(noisy_operator[0], 4);
+
+                        sim_dm_gates.push_back(noisy_dm_gate);
+                    }
+                }
+                sim_dm_gates.push_back(DMGate(OP::MA, g.repetition, g.ctrl));
+            }
+            else
+            {
+                sim_dm_gates.push_back(generateDMGate(noise_model, g.op_name, g.qubit, g.ctrl, g.theta, default_noise));
+            }
+        }
+        return sim_dm_gates;
     }
 
     // Create gate error superoperator
@@ -210,7 +103,7 @@ namespace NWQSim
      * @param q1 the (first) qubit that the gate applied on. For 1-qubit gate, just fill this parameter and ignore the next parameter.
      * @param q2 the second qubit that a two-qubit gate applied on. It is only used for a two-qubit gate.
      */
-    DMGate generateDMGate(OP gate_op, int q1, int q2 = -1, double theta = 0)
+    DMGate generateDMGate(NoiseModel noise_model, OP gate_op, int q1, int q2, double theta, bool default_noise)
     {
         std::string gate_name(OP_NAMES[gate_op]);
         std::transform(gate_name.begin(), gate_name.end(), gate_name.begin(), [](unsigned char c)
@@ -247,31 +140,23 @@ namespace NWQSim
                 double qubit_dim_double = (double)qubit_dim;
                 double sp_dim_double = (double)sp_dim;
                 // Read qubits properties
-                std::string str_q1 = Config::qindex(q1); // key must be string
-                std::string str_q2 = Config::qindex(q2); // key must be string
-
                 double T1_1, T1_2, T2_1, T2_2, gate_len, err_rate;
                 try
                 {
-                    T1_1 = Config::backend_config["T1"][str_q1];
-                    T2_1 = Config::backend_config["T2"][str_q1];
-                    T1_2 = Config::backend_config["T1"][str_q2];
-                    T2_2 = Config::backend_config["T2"][str_q2];
-                    
-                    std::string name = gate_name + str_q1 + "_" + str_q2;
-                    if (Config::backend_config["gate_lens"].find(name) == Config::backend_config["gate_lens"].end()) {
-                        name = gate_name + str_q2 + "_" + str_q1;
-                    }
-                    // std::cout << name << std::endl;
-                    gate_len = Config::backend_config["gate_lens"][name];
-                    err_rate = Config::backend_config["gate_errs"][name];
+                    T1_1 = noise_model.get_t1(q1);
+                    T2_1 = noise_model.get_t2(q1);
+                    T1_2 = noise_model.get_t1(q2);
+                    T2_2 = noise_model.get_t2(q2);
 
+                    // std::cout << name << std::endl;
+                    gate_len = noise_model.get_gate_len(gate_name, q1, q2);
+                    err_rate = noise_model.get_gate_err(gate_name, q1, q2);
                 }
                 catch (...)
                 {
                     // std::strin
-                    throw std::invalid_argument("2-qubit gate: " + 
-                                                std::string(OP_NAMES[gate_op])+ str_q1 + str_q2+  
+                    throw std::invalid_argument("2-qubit gate: " +
+                                                std::string(OP_NAMES[gate_op]) + std::to_string(q1) + std::to_string(q2) +
                                                 " properties is not contained in the configuration file.");
                 }
 
@@ -282,9 +167,9 @@ namespace NWQSim
                 double tr_infid = 1.0 - tr_fid;
                 addTRErr2Q(gate_len, T1_1, T2_1, gate_len, T1_2, T2_2, ideal_gate, tr_sp, true);
                 // Depolarizing Error
-                if (err_rate <= tr_infid)
+                if (default_noise && err_rate <= tr_infid)
                 {
-                    // If relaxation error is already too large, skip depolarizing error
+                    // In the default mode, if relaxation error is already too large, skip depolarizing error
                     std::copy(&tr_sp[0][0], &tr_sp[0][0] + sp_dim * sp_dim, gate_sp[0]);
                 }
                 else
@@ -355,12 +240,11 @@ namespace NWQSim
                 double qubit_dim_double = (double)qubit_dim;
                 double sp_dim_double = (double)sp_dim;
                 // Read qubits properties
-                std::string str_q1 = Config::qindex(q1); // key must be string
-                double T1, T2; 
+                double T1, T2;
                 try
                 {
-                    T1 = Config::backend_config["T1"][str_q1];
-                    T2 = Config::backend_config["T2"][str_q1];
+                    T1 = noise_model.get_t1(q1);
+                    T2 = noise_model.get_t2(q1);
                 }
                 catch (...)
                 {
@@ -370,30 +254,30 @@ namespace NWQSim
 
                 if (gate_op == OP::DELAY)
                 {
-                    //Delay gate
+                    // Delay gate
                     addTRErr1Q(theta, T1, T2, ideal_gate, tr_sp, false);
                     std::copy(&tr_sp[0][0], &tr_sp[0][0] + sp_dim * sp_dim, gate_sp[0]);
                 }
                 else
                 {
                     double gate_len, err_rate;
-                    try 
+                    try
                     {
-                        gate_len = Config::backend_config["gate_lens"][gate_name + str_q1];
-                        err_rate = Config::backend_config["gate_errs"][gate_name + str_q1];
+                        gate_len = noise_model.get_gate_len(gate_name, q1);
+                        err_rate = noise_model.get_gate_err(gate_name, q1);
                     }
                     catch (...)
                     {
                         throw std::invalid_argument("1-qubit gate properties is not contained in the configuration file.");
                     }
-                    //Other 1-qubit gates
+                    // Other 1-qubit gates
                     std::complex<double> tr_sp_noise[sp_dim][sp_dim] = {};
                     addTRErr1Q(gate_len, T1, T2, ideal_gate, tr_sp_noise, false);
                     double tr_fid = aveGateFid(tr_sp_noise[0], sp_dim);
                     double tr_infid = 1.0 - tr_fid;
                     addTRErr1Q(gate_len, T1, T2, ideal_gate, tr_sp, true);
                     // Depolarizing Error
-                    if (err_rate <= tr_infid)
+                    if (default_noise && err_rate <= tr_infid)
                     {
                         // If relaxation error is already too large, skip depolarizing error
                         std::copy(&tr_sp[0][0], &tr_sp[0][0] + sp_dim * sp_dim, gate_sp[0]);
@@ -432,29 +316,28 @@ namespace NWQSim
     /**
      * @brief Computer a measurement noise superoperator for a given qubit from a backend noise configuratio nfile
      *
-     * @param backend_config nlohmann::json object, stores information for backend noise parameters, can be load from function readConfigFile()
      * @param noise_sp where the noise superoperator is saved
      * @param qubit_index the measured qubit
      * @param relaxation_noise if the relaxation noise should be added. Defult is false, since the parameter estimation usually already consider this part
      */
-    void getMeasureSP(std::complex<double> *gate_sp,
+    void getMeasureSP(NoiseModel noise_model,
+                      std::complex<double> *gate_sp,
                       int qubit_index,
-                      bool relaxation_noise = false)
+                      bool relaxation_noise)
     {
         if (qubit_index < 0)
         {
             throw std::invalid_argument("Qubit index must be non-negative.");
         }
         // Read qubits properties
-        std::string str_q = std::to_string(qubit_index); // key must be string
         double T1, T2, rd_len, p_1g0, p_0g1;
         try
         {
-            T1 = Config::backend_config["T1"][str_q];
-            T2 = Config::backend_config["T2"][str_q];
-            rd_len = Config::backend_config["readout_length"][str_q];
-            p_1g0 = Config::backend_config["prob_meas1_prep0"][str_q];
-            p_0g1 = Config::backend_config["prob_meas0_prep1"][str_q];
+            T1 = noise_model.get_t1(qubit_index);
+            T2 = noise_model.get_t2(qubit_index);
+            rd_len = noise_model.get_readout_length(qubit_index);
+            p_1g0 = noise_model.get_readout_m1p0(qubit_index);
+            p_0g1 = noise_model.get_readout_m0p1(qubit_index);
         }
         catch (...)
         {
@@ -471,6 +354,4 @@ namespace NWQSim
             addMeaErr1Q(p_1g0, p_0g1, noise_sp_mat);
         }
     }
-
-} // end of namespace DMSim
-#endif
+}

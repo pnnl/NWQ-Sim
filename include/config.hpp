@@ -1,6 +1,5 @@
 #pragma once
 
-#include "private/nlohmann/json.hpp"
 #include <fstream>
 #include <string>
 #include <vector>
@@ -18,13 +17,14 @@ namespace NWQSim::Config
 
     inline int RANDOM_SEED = 5489;
 
+    inline std::string device_noise_file = "";
+    inline std::string device_layout_file = "";
+    inline std::string device_layout_str = "";
+
     using IdxType = long long;
     using ValType = double;
 
-    inline nlohmann::json backend_config = {};
-    inline nlohmann::json layout = {};
-
-    inline void printConfig(IdxType i_proc, const std::string &sim_backend)
+    void printConfig(IdxType i_proc, const std::string &sim_backend)
     {
         if (i_proc == 0)
         {
@@ -46,73 +46,5 @@ namespace NWQSim::Config
         }
     }
 
-    /**
-     * @brief Read json file that stores backend noise properties from input path. Output from the function in the python script device_config.py
-     *        See an example usage in backedn_noise_validation.cpp
-     *
-     * @param path the absolute path path where json file locates. e.g., "./Data/"
-     */
-    inline void readDeviceConfig(const std::string &path)
-    {
-        std::ifstream f(path);
-        if (f.fail())
-            throw std::logic_error("Device config file not found at " + path);
-        backend_config = nlohmann::json::parse(f);
-        if (layout.empty())
-        {
-            IdxType n_qubits;
-            backend_config["num_qubits"].get_to(n_qubits);
-            for (IdxType n = 0; n < n_qubits; n++)
-            {
-                layout[std::to_string(n)] = (int)n;
-            }
-        }
-    }
-
-    inline std::string qindex(IdxType q)
-    {
-        return std::to_string(static_cast<IdxType>(
-            layout[std::to_string(q)]));
-    }
-
-    inline void loadLayoutFile(const std::string &filename, bool required = true)
-    {
-        std::ifstream i(filename);
-        if (!i.is_open())
-        {
-            return;
-            // throw std::runtime_error("Could not open " + filename);
-        }
-        layout = nlohmann::json::parse(i);
-        i.close();
-    }
-
-    inline void loadLayoutString(std::string s)
-    {
-        size_t pos_start = 0;
-        size_t pos_end;
-        std::string token;
-        while ((pos_end = s.find(",", pos_start)) != std::string::npos)
-        {
-            token = s.substr(pos_start, pos_end - pos_start);
-            size_t src_end = token.find("=");
-            if (src_end == std::string::npos)
-            {
-                throw std::invalid_argument("Ill-formatted layout string\n");
-            }
-            std::string log_qb = token.substr(0, src_end);
-            std::string phys_qb = token.substr(src_end + 1);
-            layout[log_qb] = std::stoll(phys_qb);
-            pos_start = pos_end + 1;
-        }
-        token = s.substr(pos_start);
-        if (token.length())
-        {
-            size_t src_end = token.find("=");
-            std::string log_qb = token.substr(0, src_end);
-            std::string phys_qb = token.substr(src_end + 1);
-            layout[log_qb] = std::stoll(phys_qb);
-        }
-    }
-
+ 
 }
