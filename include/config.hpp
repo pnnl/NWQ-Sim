@@ -25,7 +25,7 @@ namespace NWQSim::Config
     using IdxType = long long;
     using ValType = double;
 
-    void printConfig(IdxType i_proc, const std::string &sim_backend)
+    static void printConfig(IdxType i_proc, const std::string &sim_backend)
     {
         if (i_proc == 0)
         {

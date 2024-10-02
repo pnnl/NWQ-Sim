@@ -11,7 +11,6 @@
 #include "../include/backendManager.hpp"
 #include "../include/nwq_util.hpp"
 
-
 namespace xacc
 {
     namespace quantum
@@ -149,7 +148,7 @@ namespace xacc
 
         void NWQAccelerator::initialize(const HeterogeneousMap &params)
         {
-            
+
             if (params.stringExists("sim-type"))
             {
                 simulation_type = params.getString("sim-type");
@@ -192,7 +191,7 @@ namespace xacc
             const std::shared_ptr<CompositeInstruction> circuit)
         {
 
-            m_state = BackendManager::create_state(backend_name,"../default_config.json",  buffer->size(), simulation_type);
+            m_state = BackendManager::create_state(backend_name, buffer->size(), simulation_type);
 
             if (!m_state)
             {
@@ -276,7 +275,7 @@ namespace xacc
                 // Basis-change + measures
                 auto obsCircuits = kernelDecomposed.getObservedSubCircuits();
 
-                m_state = BackendManager::create_state(backend_name, "../default_config.json", buffer->size(), simulation_type);
+                m_state = BackendManager::create_state(backend_name, buffer->size(), simulation_type);
                 if (!m_state)
                 {
                     throw std::logic_error("NWQ-Sim was not installed or selected backend is not supported.");
@@ -316,8 +315,6 @@ namespace xacc
                 }
                 m_state->clear_state();
             }
-            
-
         }
 
     } // namespace quantum

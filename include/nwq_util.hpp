@@ -9,6 +9,9 @@
 #include <cstdarg>
 #include <cstdio>
 
+#ifdef MPI_ENABLED
+#include <mpi.h>
+#endif
 /***********************************************
  * Constant configuration:
  ***********************************************/
