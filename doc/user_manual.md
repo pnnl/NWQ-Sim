@@ -446,7 +446,7 @@ MODIFY_NOISE SET READOUT_M0P1 0.02 q[0], q[1], q[3];
 - **Precision**: The `<VALUE>` for `SCALE` and `SET` operations is treated as a floating-point number and can represent very small or large adjustments.
 - **Multiple Qubits**: You can specify multiple qubits in one operation for single-qubit noise parameters (e.g., `q[0], q[1], q[3]`). You can also use a qubit register to target all qubits associated with it.
 - **Case Insensitivity**: The API is case-insensitive, so both uppercase and lowercase commands are valid.
-
+- **Independent Noise Channel** In our noise model, we apply thermal relaxation error and depolarization error independently. The **thermal relaxation error** depends on the qubit's relaxation times $T_1$ and $T_2$, as well as the **gate length** (duration of the quantum operation). The **depolarization error** is determined by the specified **error rate** of the gate. By modeling these errors separately, we capture both the time-dependent decoherence effects and the gate-specific operational errors in our quantum system.
 
 ## NWQ-Sim for Chemistry Simulations
 

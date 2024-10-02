@@ -19,20 +19,20 @@ namespace NWQSim
     {
 
     public:
-        NoiseModel(const std::string &device_filename, const std::string &layout_filename, const std::string &layout_str)
+        NoiseModel(const std::string &device_filename, const std::string &mapping_filename, const std::string &mapping_str)
         {
             std::ifstream f(device_filename);
             if (f.fail())
                 throw std::logic_error("Device config file not found at " + device_filename);
             backend_config = nlohmann::json::parse(f);
 
-            if (!layout_str.empty())
+            if (!mapping_str.empty())
             {
-                loadLayoutString(layout_str);
+                loadMappingString(mapping_str);
             }
-            else if (!layout_filename.empty())
+            else if (!mapping_filename.empty())
             {
-                loadLayoutFile(layout_filename);
+                loadMappingFile(mapping_filename);
             }
             else
             {
@@ -40,14 +40,14 @@ namespace NWQSim
                 backend_config["num_qubits"].get_to(n_qubits);
                 for (IdxType n = 0; n < n_qubits; n++)
                 {
-                    layout[std::to_string(n)] = (int)n;
+                    mapping[std::to_string(n)] = (int)n;
                 }
             }
 
             f.close();
 
             default_backend_config = backend_config;
-            default_layout = layout;
+            default_mapping = mapping;
         }
 
         IdxType get_num_qubits()
@@ -238,7 +238,7 @@ namespace NWQSim
             // std::cout << "\n\n";
         }
 
-        void loadLayoutFile(const std::string &filename, bool required = true)
+        void loadMappingFile(const std::string &filename, bool required = true)
         {
             std::ifstream i(filename);
             if (!i.is_open())
@@ -246,11 +246,11 @@ namespace NWQSim
                 return;
                 // throw std::runtime_error("Could not open " + filename);
             }
-            layout = nlohmann::json::parse(i);
+            mapping = nlohmann::json::parse(i);
             i.close();
         }
 
-        void loadLayoutString(std::string s)
+        void loadMappingString(std::string s)
         {
             size_t pos_start = 0;
             size_t pos_end;
@@ -261,11 +261,11 @@ namespace NWQSim
                 size_t src_end = token.find("=");
                 if (src_end == std::string::npos)
                 {
-                    throw std::invalid_argument("Ill-formatted layout string\n");
+                    throw std::invalid_argument("Ill-formatted mapping string\n");
                 }
                 std::string log_qb = token.substr(0, src_end);
                 std::string phys_qb = token.substr(src_end + 1);
-                layout[log_qb] = std::stoll(phys_qb);
+                mapping[log_qb] = std::stoll(phys_qb);
                 pos_start = pos_end + 1;
             }
             token = s.substr(pos_start);
@@ -274,7 +274,7 @@ namespace NWQSim
                 size_t src_end = token.find("=");
                 std::string log_qb = token.substr(0, src_end);
                 std::string phys_qb = token.substr(src_end + 1);
-                layout[log_qb] = std::stoll(phys_qb);
+                mapping[log_qb] = std::stoll(phys_qb);
             }
         }
 
@@ -364,15 +364,15 @@ namespace NWQSim
         std::unordered_map<std::string, double> defaultNoiseParameters;
 
         nlohmann::json backend_config = {};
-        nlohmann::json layout = {};
+        nlohmann::json mapping = {};
 
         nlohmann::json default_backend_config = {};
-        nlohmann::json default_layout = {};
+        nlohmann::json default_mapping = {};
 
         std::string qindex(IdxType q)
         {
             return std::to_string(static_cast<IdxType>(
-                layout[std::to_string(q)]));
+                mapping[std::to_string(q)]));
         }
 
         std::string gname(const std::string &gate_name, IdxType q1, IdxType q2 = -1)

@@ -23,7 +23,7 @@
 
 namespace NWQSim
 {
-    DMGate generateDMGate(NoiseModel noise_model, OP gate_op, int q1, int q2, double theta, bool default_noise);
+    DMGate generateDMGate(NoiseModel noise_model, OP gate_op, int q1, int q2, double theta);
     void getMeasureSP(NoiseModel noise_model, std::complex<double> *gate_sp, int qubit_index, bool relaxation_noise = false);
 
     std::vector<DMGate> getDMGates(const std::vector<Gate> &gates, const IdxType n_qubits)
@@ -31,8 +31,6 @@ namespace NWQSim
         std::vector<DMGate> sim_dm_gates;
 
         NoiseModel noise_model(Config::device_noise_file, Config::device_layout_file, Config::device_layout_str);
-
-        bool default_noise = true;
 
         if (n_qubits > noise_model.get_num_qubits())
         {
@@ -45,7 +43,6 @@ namespace NWQSim
             if (g.op_name == MOD_NOISE)
             {
                 noise_model.modify_noise(g.mod_op, g.mod_noise, g.mod_value, g.mod_qubits);
-                default_noise = false;
             }
             else if (g.op_name == OP::RESET)
             {
@@ -85,7 +82,7 @@ namespace NWQSim
             }
             else
             {
-                sim_dm_gates.push_back(generateDMGate(noise_model, g.op_name, g.qubit, g.ctrl, g.theta, default_noise));
+                sim_dm_gates.push_back(generateDMGate(noise_model, g.op_name, g.qubit, g.ctrl, g.theta));
             }
         }
         return sim_dm_gates;
@@ -102,7 +99,7 @@ namespace NWQSim
      * @param q1 the (first) qubit that the gate applied on. For 1-qubit gate, just fill this parameter and ignore the next parameter.
      * @param q2 the second qubit that a two-qubit gate applied on. It is only used for a two-qubit gate.
      */
-    DMGate generateDMGate(NoiseModel noise_model, OP gate_op, int q1, int q2, double theta, bool default_noise)
+    DMGate generateDMGate(NoiseModel noise_model, OP gate_op, int q1, int q2, double theta)
     {
         std::string gate_name(OP_NAMES[gate_op]);
         std::transform(gate_name.begin(), gate_name.end(), gate_name.begin(), [](unsigned char c)
@@ -159,37 +156,12 @@ namespace NWQSim
                 }
 
                 std::complex<double> tr_sp[sp_dim][sp_dim] = {};
-                std::complex<double> tr_sp_noise[sp_dim][sp_dim] = {};
-                addTRErr2Q(gate_len, T1_1, T2_1, gate_len, T1_2, T2_2, ideal_gate, tr_sp_noise, false);
-                double tr_fid = aveGateFid(tr_sp_noise[0], 16);
-                double tr_infid = 1.0 - tr_fid;
                 addTRErr2Q(gate_len, T1_1, T2_1, gate_len, T1_2, T2_2, ideal_gate, tr_sp, true);
-                // Depolarizing Error
-                if (default_noise && err_rate <= tr_infid)
-                {
-                    // In the default mode, if relaxation error is already too large, skip depolarizing error
-                    std::copy(&tr_sp[0][0], &tr_sp[0][0] + sp_dim * sp_dim, gate_sp[0]);
-                }
-                else
-                {                                                                      // add depolarizing error
-                    double err_rate_max = qubit_dim_double / (qubit_dim_double + 1.0); // 2^n/(2^n+1), n = 1
-                    double err_rate_fixed = err_rate;
-                    if (err_rate > err_rate_max)
-                    { // if when error rate is too large, I think this actually means MODEL FAILURE
-                        err_rate_fixed = err_rate_max;
-                    }
-                    double dep_rate = qubit_dim_double * (err_rate_fixed - tr_infid) / (qubit_dim_double * tr_fid - 1.0);
-                    double dep_rate_max = fmin(1.0, sp_dim_double / (sp_dim_double - 1.0)); // maximum depolarizing rate (note this is not the error probability)
-                    double dep_rate_fixed = dep_rate;
-                    if (dep_rate > dep_rate_max)
-                    { // Again, I think this actually means MODEL FAILURE
-                        dep_rate_fixed = dep_rate_max;
-                    }
-                    // Now we construct depolarizing error
-                    std::complex<double> dep_sp[sp_dim][sp_dim] = {};
-                    addDepErr2Q(dep_rate_fixed, ideal_gate, dep_sp, false);
-                    dotProd(tr_sp[0], dep_sp[0], gate_sp[0], sp_dim);
-                }
+
+                // Now we construct depolarizing error
+                std::complex<double> dep_sp[sp_dim][sp_dim] = {};
+                addDepErr2Q(err_rate, ideal_gate, dep_sp, false);
+                dotProd(tr_sp[0], dep_sp[0], gate_sp[0], sp_dim);
             }
 
             DMGate gate(OP::C4, q1, q2);
@@ -269,39 +241,12 @@ namespace NWQSim
                         throw std::invalid_argument("1-qubit gate properties is not contained in the configuration file.");
                     }
                     // Other 1-qubit gates
-                    std::complex<double> tr_sp_noise[sp_dim][sp_dim] = {};
-                    addTRErr1Q(gate_len, T1, T2, ideal_gate, tr_sp_noise, false);
-                    double tr_fid = aveGateFid(tr_sp_noise[0], sp_dim);
-                    double tr_infid = 1.0 - tr_fid;
                     addTRErr1Q(gate_len, T1, T2, ideal_gate, tr_sp, true);
-                    // Depolarizing Error
-                    if (default_noise && err_rate <= tr_infid)
-                    {
-                        // If relaxation error is already too large, skip depolarizing error
-                        std::copy(&tr_sp[0][0], &tr_sp[0][0] + sp_dim * sp_dim, gate_sp[0]);
-                    }
-                    else
-                    {                                                                      // add depolarizing error
-                        double err_rate_max = qubit_dim_double / (qubit_dim_double + 1.0); // 2^n/(2^n+1), n = 1
-                        double err_rate_fixed = err_rate;
 
-                        if (err_rate > err_rate_max)
-                        { // if when error rate is too large, I think this actually means MODEL FAILURE
-                            err_rate_fixed = err_rate_max;
-                        }
-                        double dep_rate = qubit_dim_double * (err_rate_fixed - tr_infid) / (qubit_dim_double * tr_fid - 1.0);
-                        double dep_rate_max = fmin(1.0, sp_dim_double / (sp_dim_double - 1.0)); // maximum depolarizing rate (note this is not the error probability)
-                        double dep_rate_fixed = dep_rate;
-
-                        if (dep_rate > dep_rate_max)
-                        { // Again, I think this actually means MODEL FAILURE
-                            dep_rate_fixed = dep_rate_max;
-                        }
-                        // Now we construct depolarizing error
-                        std::complex<double> dep_sp[sp_dim][sp_dim] = {};
-                        addDepErr1Q(dep_rate_fixed, ideal_gate, dep_sp, false);
-                        dotProd(tr_sp[0], dep_sp[0], gate_sp[0], sp_dim);
-                    }
+                    // Now we construct depolarizing error
+                    std::complex<double> dep_sp[sp_dim][sp_dim] = {};
+                    addDepErr1Q(err_rate, ideal_gate, dep_sp, false);
+                    dotProd(tr_sp[0], dep_sp[0], gate_sp[0], sp_dim);
                 }
             }
             DMGate gate(OP::C2, q1, q2);
