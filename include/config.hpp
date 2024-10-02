@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <time.h>
 
 namespace NWQSim::Config
 {
@@ -15,7 +16,7 @@ namespace NWQSim::Config
     inline bool ENABLE_AVX512 = false; // AVX512 is not supported yet
     inline int OMP_NUM_THREADS = -1;   // -1 means using the default number of threads
 
-    inline int RANDOM_SEED = 5489;
+    inline int RANDOM_SEED = time(NULL); // 5489
 
     inline std::string device_noise_file = "";
     inline std::string device_layout_file = "";
@@ -46,5 +47,4 @@ namespace NWQSim::Config
         }
     }
 
- 
 }

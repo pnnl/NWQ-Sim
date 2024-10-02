@@ -24,6 +24,20 @@ using namespace nlohmann;
 
 class qasm_parser
 {
+public:
+    qasm_parser() {}
+    ~qasm_parser();
+
+    void load_qasm_file(const std::string filename);
+    void load_qasm_string(const std::string qasm_string);
+    void load_qobj_file(const std::string filename);
+    void load_qobj_string(const std::string qobj_string);
+
+    void print_metrics();
+    IdxType num_qubits();
+
+    map<string, IdxType> *execute(shared_ptr<QuantumState> state, std::string initpath, std::string init_format, IdxType repetition);
+
 private:
     /* data */
     map<string, qreg> list_qregs;
@@ -70,18 +84,6 @@ private:
     void dump_defined_gates();
     void dump_cur_inst();
     void dump_gates();
-
-public:
-    qasm_parser() {}
-    void load_qasm_file(const std::string filename);
-    void load_qasm_string(const std::string qasm_string);
-    void load_qobj_file(const std::string filename);
-    void load_qobj_string(const std::string qobj_string);
-    void print_metrics();
-
-    IdxType num_qubits();
-    map<string, IdxType> *execute(shared_ptr<QuantumState> state, std::string initpath, std::string init_format, IdxType repetition);
-    ~qasm_parser();
 };
 
 void qasm_parser::parse_qasm()
