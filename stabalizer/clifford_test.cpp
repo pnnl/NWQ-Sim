@@ -12,9 +12,11 @@
 int main(){
 	std::ofstream outfile("qubits_time.txt");
 	//std::ofstream outfile("qubits_memory.txt");
-
+	
+	int number_of_qubits = 12;
+	
 	for(int rounds = 0; rounds < 1; rounds++){
-		for(int n_qubits = 10; n_qubits < 12; n_qubits++)
+		for(int n_qubits = 10; n_qubits < number_of_qubits; n_qubits++)
 		{
 			auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 			for(int j = 0; j < rounds; j++)
@@ -68,6 +70,22 @@ int main(){
 	}
 
 	outfile.close();
+
+	auto circuit = std::make_shared<NWQSim::Circuit>(number_of_qubits);
+	circuit -> H(0);
+	circuit -> M(0);
+	NWQSim::tableau test = NWQSim::tableau(circuit, number_of_qubits);
+	test.simulate();
+
+	std::cout << "Stabilizers with initial gates: " << test.get_stabilizers() << std::endl;
+
+	auto circuit2 = std::make_shared<NWQSim::Circuit>(number_of_qubits);
+	circuit2 -> CX(0,1);
+	circuit2 -> M(1);
+	test.add_gates(circuit2);
+	test.simulate();
+
+	std::cout << "Stabilizers after added gates: " << test.get_stabilizers() << std::endl;
 
 	return 0;
 }

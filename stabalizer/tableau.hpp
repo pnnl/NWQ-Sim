@@ -21,7 +21,7 @@ namespace NWQSim
     class tableau
     {
     public:
-
+        //Constructor with a full set of gates
         tableau(std::vector<Gate> &_gates, uint _numQubits)
         {
             gates = _gates;
@@ -42,6 +42,36 @@ namespace NWQSim
                 x[i][i] = 1;
                 z[i+n][i] = 1;
             }
+            
+        }
+
+        //Manual constructor. Add gates later if necessary
+        tableau(std::shared_ptr<Circuit>& circuit, uint _numQubits)
+        {
+            gates = circuit->get_gates();
+            g = gates.size();
+            n = _numQubits;
+            result = 0;
+
+            outcomes.resize(n);
+            outcomes.assign(outcomes.size(), 0);
+            x.resize(2*n+1, std::vector<uint>(n,0)); //first 2n+1 x n block. first n represents destabalizers
+                                                     //second n represents stabalizers + 1 extra row
+            z.resize(2*n+1, std::vector<uint>(n,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
+            r.resize(2*n+1, 0); //column on the right with 2n+1 rows
+            //The 2n+1 th row is scratch space
+            //Intialize the identity tableau
+            for(int i = 0; i < n; i++)
+            {
+                x[i][i] = 1;
+                z[i+n][i] = 1;
+            }
+        }
+
+        void add_gates(std::shared_ptr<Circuit>& new_circ)
+        {
+            gates = new_circ->get_gates();
+            g = gates.size();
         }
 
         //Convert a vector of 1's and 0's to an IdxType decimal number
@@ -123,6 +153,7 @@ namespace NWQSim
             }//All columns (qubits)
         }
 
+        //Sub-process in measurement gates
         void rowsum(int h, int i)
         {
             int sum = 0;
