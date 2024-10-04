@@ -72,11 +72,6 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    if (Config::PRINT_SIM_TRACE)
-    {
-        config_parser.print_configurations();
-    }
-
     if (config_parser.get_value("random_seed") != "")
     {
         Config::RANDOM_SEED = std::stoi(config_parser.get_value("random_seed"));
@@ -89,6 +84,11 @@ int main(int argc, char **argv)
         MPI_Init(&argc, &argv);
     }
 #endif
+
+    if (Config::PRINT_SIM_TRACE)
+    {
+        config_parser.print_configurations();
+    }
 
     qasm_parser parser;
     bool is_qobj = false;

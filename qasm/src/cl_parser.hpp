@@ -373,7 +373,7 @@ public:
     // Print the current configuration settings for debugging
     void print_configurations() const
     {
-        std::cout << "Current Configuration Settings:\n";
+        safe_print("Current Configuration Settings:\n");
 
         // Loop through the long options map and print their values
         for (const auto &entry : long_options_map)
@@ -387,21 +387,21 @@ public:
             bool is_non_default = (opt->value != opt->default_value);
 
             // Print the flag name and its current value
-            std::cout << "--" << opt->long_name << " = " << opt->value;
+            printf("--%s = %s", opt->long_name.c_str(), opt->value.c_str());
 
             // Indicate non-default values with an asterisk
             if (is_non_default && !opt->value.empty())
             {
-                std::cout << " *";
+                printf(" *");
             }
 
             // For boolean flags, check if they were set
             if (!opt->requires_argument)
             {
-                std::cout << " (Flag: " << (opt->flag_set ? "ON" : "OFF") << ")";
+                printf(" (Flag: %s)", opt->flag_set ? "ON" : "OFF");
             }
 
-            std::cout << std::endl;
+            printf("\n");
         }
     }
 };
