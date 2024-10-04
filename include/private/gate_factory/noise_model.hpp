@@ -276,7 +276,8 @@ namespace NWQSim
                     // Perform the operation
                     if (mod_op == "scale")
                     {
-                        gate_parameters[keyword][gate_key] *= value;
+                        // cap the scaled value to 1.0
+                        gate_parameters[keyword][gate_key] = std::min(value * gate_parameters[keyword][gate_key], 1.0);
                     }
                     else if (mod_op == "set")
                     {
@@ -300,7 +301,7 @@ namespace NWQSim
                         // Perform the operation
                         if (mod_op == "scale")
                         {
-                            gate_parameters[keyword][gate_key] *= value;
+                            gate_parameters[keyword][gate_key] = std::min(gate_parameters[keyword][gate_key] * value, 1.0);
                         }
                         else if (mod_op == "set")
                         {
