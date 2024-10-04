@@ -139,13 +139,14 @@ namespace NWQSim
                 double T1_1, T1_2, T2_1, T2_2, gate_len, err_rate;
                 try
                 {
-                    T1_1 = noise_model.get_t1(q1);
-                    T2_1 = noise_model.get_t2(q1);
-                    T1_2 = noise_model.get_t1(q2);
-                    T2_2 = noise_model.get_t2(q2);
+                    T1_1 = noise_model.get_qubit_parameter(T1_KEY, q1);
+                    T2_1 = noise_model.get_qubit_parameter(T2_KEY, q1);
 
-                    gate_len = noise_model.get_gate_len(gate_name, q1, q2);
-                    err_rate = noise_model.get_gate_err(gate_name, q1, q2);
+                    T1_2 = noise_model.get_qubit_parameter(T1_KEY, q2);
+                    T2_2 = noise_model.get_qubit_parameter(T2_KEY, q2);
+
+                    gate_len = noise_model.get_gate_parameter(GATE_LENS_KEY, gate_name, q1, q2);
+                    err_rate = noise_model.get_gate_parameter(GATE_ERRS_KEY, gate_name, q1, q2);
                 }
                 catch (...)
                 {
@@ -213,8 +214,8 @@ namespace NWQSim
                 double T1, T2;
                 try
                 {
-                    T1 = noise_model.get_t1(q1);
-                    T2 = noise_model.get_t2(q1);
+                    T1 = noise_model.get_qubit_parameter(T1_KEY, q1);
+                    T2 = noise_model.get_qubit_parameter(T2_KEY, q1);
                 }
                 catch (...)
                 {
@@ -233,8 +234,8 @@ namespace NWQSim
                     double gate_len, err_rate;
                     try
                     {
-                        gate_len = noise_model.get_gate_len(gate_name, q1);
-                        err_rate = noise_model.get_gate_err(gate_name, q1);
+                        gate_len = noise_model.get_gate_parameter(GATE_LENS_KEY, gate_name, q1);
+                        err_rate = noise_model.get_gate_parameter(GATE_ERRS_KEY, gate_name, q1);
                     }
                     catch (...)
                     {
@@ -276,11 +277,11 @@ namespace NWQSim
         double T1, T2, rd_len, p_1g0, p_0g1;
         try
         {
-            T1 = noise_model.get_t1(qubit_index);
-            T2 = noise_model.get_t2(qubit_index);
-            rd_len = noise_model.get_readout_length(qubit_index);
-            p_1g0 = noise_model.get_readout_m1p0(qubit_index);
-            p_0g1 = noise_model.get_readout_m0p1(qubit_index);
+            T1 = noise_model.get_qubit_parameter(T1_KEY, qubit_index);
+            T2 = noise_model.get_qubit_parameter(T2_KEY, qubit_index);
+            rd_len = noise_model.get_qubit_parameter(READOUT_LENGTH_KEY, qubit_index);
+            p_1g0 = noise_model.get_qubit_parameter(PROB_MEAS1_PREP0_KEY, qubit_index);
+            p_0g1 = noise_model.get_qubit_parameter(PROB_MEAS0_PREP1_KEY, qubit_index);
         }
         catch (...)
         {
