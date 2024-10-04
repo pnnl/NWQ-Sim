@@ -387,21 +387,21 @@ public:
             bool is_non_default = (opt->value != opt->default_value);
 
             // Print the flag name and its current value
-            printf("--%s = %s", opt->long_name.c_str(), opt->value.c_str());
+            safe_print("--%s = %s", opt->long_name.c_str(), opt->value.c_str());
 
             // Indicate non-default values with an asterisk
             if (is_non_default && !opt->value.empty())
             {
-                printf(" *");
+                safe_print(" *");
             }
 
             // For boolean flags, check if they were set
             if (!opt->requires_argument)
             {
-                printf(" (Flag: %s)", opt->flag_set ? "ON" : "OFF");
+                safe_print(" (Flag: %s)", opt->flag_set ? "ON" : "OFF");
             }
 
-            printf("\n");
+            safe_print("\n");
         }
     }
 };

@@ -39,6 +39,10 @@ int main(int argc, char **argv)
     // Fetch and set configuration values
     IdxType total_shots = std::stoll(config_parser.get_value("shots"));
     std::string backend = config_parser.get_value("backend");
+    std::transform(backend.begin(), backend.end(), backend.begin(),
+                       [](unsigned char c)
+                       { return std::toupper(c); });
+        
     std::string simulation_method = config_parser.get_value("sim");
     bool run_with_basis = config_parser.is_flag_set("basis");
 
@@ -62,7 +66,7 @@ int main(int argc, char **argv)
     // Handle noise model related configurations
     Config::device_noise_file = config_parser.get_value("device");
     Config::ENABLE_NOISE = !Config::device_noise_file.empty();
-    simulation_method = Config::ENABLE_NOISE ? "dm" : simulation_method;
+    simulation_method = Config::ENABLE_NOISE ? "DM" : simulation_method;
     Config::device_layout_file = config_parser.get_value("layout");
     Config::device_layout_str = config_parser.get_value("layout_str");
 

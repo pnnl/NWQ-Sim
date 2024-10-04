@@ -64,15 +64,20 @@ public:
 #endif
     }
 
-    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "sv")
+    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "SV")
     {
         // Convert to uppercase
         std::transform(backend.begin(), backend.end(), backend.begin(),
                        [](unsigned char c)
                        { return std::toupper(c); });
+        
+         // Convert to uppercase
+        std::transform(simulator_method.begin(), simulator_method.end(), simulator_method.begin(),
+                       [](unsigned char c)
+                       { return std::toupper(c); });
         if (backend == "CPU")
         {
-            if (simulator_method == "sv")
+            if (simulator_method == "SV")
                 return std::make_shared<NWQSim::SV_CPU>(numQubits);
             else
                 return std::make_shared<NWQSim::DM_CPU>(numQubits);
@@ -95,7 +100,7 @@ public:
 #ifdef CUDA_ENABLED
         else if (backend == "NVGPU")
         {
-            if (simulator_method == "sv")
+            if (simulator_method == "SV")
                 return std::make_shared<NWQSim::SV_CUDA>(numQubits);
             else
                 return std::make_shared<NWQSim::DM_CUDA>(numQubits);
@@ -105,7 +110,7 @@ public:
 #ifdef HIP_ENABLED
         else if (backend == "AMDGPU")
         {
-            if (simulator_method == "sv")
+            if (simulator_method == "SV")
                 return std::make_shared<NWQSim::SV_HIP>(numQubits);
             else
                 return std::make_shared<NWQSim::DM_HIP>(numQubits);
@@ -115,7 +120,7 @@ public:
 #ifdef CUDA_MPI_ENABLED
         else if (backend == "NVGPU_MPI")
         {
-            if (simulator_method == "sv")
+            if (simulator_method == "SV")
                 return std::make_shared<NWQSim::SV_CUDA_MPI>(numQubits);
             else
                 return std::make_shared<NWQSim::DM_CUDA_MPI>(numQubits);
