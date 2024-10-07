@@ -13,7 +13,7 @@
 #include "../private/sim_gate.hpp"
 
 /*TESTING HEADERS*/
-#include "../../stabalizer/tableau.hpp"
+#include "../../stabilizer/tableau.hpp"
 /*END TESTING HEADERS*/
 
 #include <random>
@@ -291,7 +291,7 @@ namespace NWQSim
         virtual void clifford_simulation_kernel(std::vector<Gate> &gates)
         {
             auto start = std::chrono::steady_clock::now();
-            tableau test = tableau(gates, n_qubits);
+            Tableau test = Tableau(gates, n_qubits);
             test.simulate();
             std::cout << "Test_kernel" << std::endl;
 
@@ -304,7 +304,7 @@ namespace NWQSim
             //std::cout << "Result pointer " << results << std::endl;
 
             //See stabalziers
-            std::cout << "\n----- Stabalizers: " << test.get_stabilizers() << " -----" << std::endl;
+            std::cout << "\n----- stabilizers: " << test.get_stabilizers() << " -----" << std::endl;
 
             if (Config::PRINT_SIM_TRACE)
             {

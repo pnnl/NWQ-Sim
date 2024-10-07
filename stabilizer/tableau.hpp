@@ -18,11 +18,11 @@
 
 namespace NWQSim
 {
-    class tableau
+    class Tableau
     {
     public:
         //Constructor with a full set of gates
-        tableau(std::vector<Gate> &_gates, uint _numQubits)
+        Tableau(std::vector<Gate> &_gates, uint _numQubits)
         {
             gates = _gates;
             g = gates.size();
@@ -31,11 +31,12 @@ namespace NWQSim
 
             outcomes.resize(n);
             outcomes.assign(outcomes.size(), 0);
-            x.resize(2*n+1, std::vector<uint>(n,0)); //first 2n+1 x n block. first n represents destabalizers
-                                                     //second n represents stabalizers + 1 extra row
+            x.resize(2*n+1, std::vector<uint>(n,0)); //first 2n+1 x n block. first n represents destabilizers
+                                                     //second n represents stabilizers + 1 extra row
             z.resize(2*n+1, std::vector<uint>(n,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
             r.resize(2*n+1, 0); //column on the right with 2n+1 rows
             //The 2n+1 th row is scratch space
+
             //Intialize the identity tableau
             for(int i = 0; i < n; i++)
             {
@@ -46,7 +47,7 @@ namespace NWQSim
         }
 
         //Manual constructor. Add gates later if necessary
-        tableau(std::shared_ptr<Circuit>& circuit, uint _numQubits)
+        Tableau(std::shared_ptr<Circuit>& circuit, uint _numQubits)
         {
             gates = circuit->get_gates();
             g = gates.size();
@@ -55,8 +56,8 @@ namespace NWQSim
 
             outcomes.resize(n);
             outcomes.assign(outcomes.size(), 0);
-            x.resize(2*n+1, std::vector<uint>(n,0)); //first 2n+1 x n block. first n represents destabalizers
-                                                     //second n represents stabalizers + 1 extra row
+            x.resize(2*n+1, std::vector<uint>(n,0)); //first 2n+1 x n block. first n represents destabilizers
+                                                     //second n represents stabilizers + 1 extra row
             z.resize(2*n+1, std::vector<uint>(n,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
             r.resize(2*n+1, 0); //column on the right with 2n+1 rows
             //The 2n+1 th row is scratch space
@@ -66,7 +67,7 @@ namespace NWQSim
                 x[i][i] = 1;
                 z[i+n][i] = 1;
             }
-        }
+        }   
 
         void add_gates(std::shared_ptr<Circuit>& new_circ)
         {
@@ -95,7 +96,7 @@ namespace NWQSim
         {
             int x_val;
             int z_val;
-            std::string stabalizers;
+            std::string stabilizers;
             for(int i = 0; i < n; i++)
             {
                 x_val = x[i+n][i];
@@ -104,24 +105,24 @@ namespace NWQSim
                 if(x_val)
                 {
                     if(z_val)
-                        stabalizers += 'Y';
+                        stabilizers += 'Y';
                     else
-                        stabalizers += "Z";
+                        stabilizers += "Z";
                 }
                 else
                 {
                     if(z_val)
-                        stabalizers += 'X';
+                        stabilizers += 'X';
                     else
-                        stabalizers += 'I';
+                        stabilizers += 'I';
                 }
             }//For columns(qubits)
-            return stabalizers;
+            return stabilizers;
         }
 
-        //Takes a default (or any) tableau and sets its stabalizers according to
+        //Takes a default (or any) tableau and sets its stabilizers according to
         //a Pauli string provided
-        void set_stabalizers(tableau& T, std::string pauliString)
+        void set_stabilizers(Tableau& T, std::string pauliString)
         {
             for(int qubit = 0; qubit < T.n; qubit++)
             {
@@ -151,6 +152,66 @@ namespace NWQSim
                     }
                 }//All rows (2*n rows, destabilizers and stabilizers)
             }//All columns (qubits)
+        }
+        
+        //Function to swap two rows of the tableau
+        void swapRows(int row1, int row2) {
+            std::swap(x[row1], x[row2]);
+            std::swap(z[row1], z[row2]);
+            std::swap(r[row1], r[row2]);
+        }
+
+        //Function to add row2 to row1 (mod 2)
+        void addRows(int row1, int row2) {
+            for (int i = 0; i < n; ++i) {
+                x[row1][i] ^= x[row2][i];  //XOR for mod 2 addition
+                z[row1][i] ^= z[row2][i];  //XOR for mod 2 addition
+            }
+            r[row1] = (r[row1] + r[row2]) % 4;  //Phase flip
+        }
+
+        //Algorithm to reduce the tableau to rref        
+        void gaussianElimination() 
+        {
+            //Perform Gaussian elimination on the destabilizers (first half of the rows)
+            for (int col = 0; col < n; col++) {
+                int pivotRow = -1;
+                for (int row = col; row < n; row++) {
+                    if (x[row][col] == 1 || z[row][col] == 1) {
+                        pivotRow = row;
+                        break;
+                    }
+                }
+                if (pivotRow == -1) continue;
+                if (pivotRow != col) {
+                    swapRows(pivotRow, col);
+                }
+                for (int row = 0; row < n; row++) {
+                    if (row != col && (x[row][col] == 1 || z[row][col] == 1)) {
+                        addRows(row, col);
+                    }
+                }
+            }
+
+            //Perform Gaussian elimination on the stabilizers (second half of the rows)
+            for (int col = 0; col < n; col++) {
+                int pivotRow = -1;
+                for (int row = n + col; row < 2 * n; row++) {
+                    if (x[row][col] == 1 || z[row][col] == 1) {
+                        pivotRow = row;
+                        break;
+                    }
+                }
+                if (pivotRow == -1) continue;
+                if (pivotRow != (n + col)) {
+                    swapRows(pivotRow, n + col);
+                }
+                for (int row = n; row < 2 * n; row++) {
+                    if (row != (n + col) && (x[row][col] == 1 || z[row][col] == 1)) {
+                        addRows(row, n + col);
+                    }
+                }
+            }
         }
 
         //Sub-process in measurement gates
@@ -202,7 +263,7 @@ namespace NWQSim
                     {
                         //Phase
                         r[i] = r[i] ^ ((x[i][a] << 1) + z[i][a]);
-                        //Entry
+                        //Entry -- swap x and z bits
                         tempVal = x[i][a];
                         x[i][a] = z[i][a];
                         z[i][a] = tempVal; 
@@ -243,13 +304,13 @@ namespace NWQSim
                     for(int p_index = n; p_index < 2*n; p_index++)
                     {  
                         //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
-                        if(x[p_index][a])
+                        if(x[p_index][a] != 0)
                         {
                             p = p_index;
                             break;
                         }
                     }
-                    
+                    //A p such that x[p][a] = 1 exists
                     if(p > -1)
                     {
                         std::cout << "Random measurement ";
@@ -263,11 +324,15 @@ namespace NWQSim
                         }
                         x[p-n] = x[p];
                         z[p-n] = z[p];
-                        std::fill(x[p].begin(), x[p].end(), 0);
-                        std::fill(z[p].begin(), z[p].end(), 0);
+                        //Change all the columns in row p to be 0
+                        for(int i = 0; i < n; i++)
+                        {
+                            x[p][i] = 0;
+                            z[p][i] = 0;                        
+                        }
 
                         std::random_device rd;
-                        std::mt19937 gen(rd());  // Mersenne Twister engine
+                        std::mt19937 gen(rd());  //Mersenne Twister engine
 
                         // Define the range for random numbers
                         std::uniform_int_distribution<> distr(0, 1);
@@ -296,8 +361,14 @@ namespace NWQSim
                         std::cout << "Deterministic measurement ";
 
                         //Set the scratch space row to be 0
-                        x[2*n].assign(x[2*n].size(),0);
+                        //i is the column indexer in this case
+                        for(int i = 0; i < n; i++)
+                        {
+                            x[2*n][i] = 0;
+                            z[2*n][i] = 0;
+                        }
 
+                        //Run rowsum subroutine
                         for(int i = 0; i < n; i++)
                         {
                             if(x[i][a] == 1)
@@ -306,6 +377,7 @@ namespace NWQSim
                                 rowsum(2*n, i+n);
                             }
                         }
+                        //The result is the 
                         outcomes[a] = r[2*n];
                         std::cout << outcomes[a] << std::endl;
                     }
@@ -317,7 +389,10 @@ namespace NWQSim
                                 << OP_NAMES[gate.op_name] << std::endl;
                     std::logic_error("Invalid gate type");
                 }
-            } //End for g
+
+                gaussianElimination();
+            } //End gates for loop
+
         } //End tableau_simulation
     protected:
         int g;
