@@ -26,9 +26,9 @@ namespace NWQSim
         Circuit(IdxType _n_qubits) : n_qubits(_n_qubits), n_expect(0)
         {
             // Implementation of constructor
-            gates = std::make_shared<std::vector<Gate> >();
+            gates = std::make_shared<std::vector<Gate>>();
         }
-        ~Circuit(){};
+        ~Circuit() {};
 
         IdxType num_qubits() { return n_qubits; };
         IdxType num_gates() { return gates->size(); };
@@ -39,12 +39,13 @@ namespace NWQSim
         {
             return *gates;
         }
-        IdxType num_expect() {
+        IdxType num_expect()
+        {
             return n_expect;
         }
         void set_gates(std::vector<Gate> new_gates)
         {
-            gates = std::make_shared<std::vector<Gate> >(new_gates);
+            gates = std::make_shared<std::vector<Gate>>(new_gates);
         }
         void set_num_qubits(IdxType _n_qubits)
         {
@@ -98,6 +99,10 @@ namespace NWQSim
                     n_measure++;
                     continue;
                 }
+                if (gates->at(i).op_name == OP::MOD_NOISE)
+                {
+                    continue; // Skip noise update gate
+                }
                 IdxType ctrl = gates->at(i).ctrl;
                 IdxType target = gates->at(i).qubit;
 
@@ -142,7 +147,7 @@ namespace NWQSim
             // Calculate the gate density, retention lifespan, and entanglement variance of the circuit
             ValType gate_density = (g1_gates + 2 * g2_gates) / (ValType)(max_depth * n_qubits);
             ValType retention_lifespan = log(max_depth);
-            ValType measurement_density = log((ValType)max_depth * n_qubits)/(ValType)n_measure;
+            ValType measurement_density = log((ValType)max_depth * n_qubits) / (ValType)n_measure;
 
             IdxType sum_g2_gates = 0;
             for (auto val : qubit_g2_gates)
@@ -159,11 +164,26 @@ namespace NWQSim
             entanglement_var /= n_qubits;
 
             // Print the results to the console
-            printf("Circuit Depth: %lld; One-qubit Gates: %lld; Two-qubit Gates: %lld; Gate Density: %.4lf; Retention Lifespan: %.4lf; Measurement Density: %.4lf; Entanglement Variance: %.4lf\n\n", 
-                    max_depth, one_q_gates, two_q_gates, gate_density, retention_lifespan, measurement_density, entanglement_var);
+            printf("Circuit Depth: %lld; One-qubit Gates: %lld; Two-qubit Gates: %lld; Gate Density: %.4lf; Retention Lifespan: %.4lf; Measurement Density: %.4lf; Entanglement Variance: %.4lf\n\n",
+                   max_depth, one_q_gates, two_q_gates, gate_density, retention_lifespan, measurement_density, entanglement_var);
         }
 
         // ===================== Standard Gates =========================
+        void MOD_NOISE(std::string mod_op, std::string mod_noise, ValType value, const std::vector<IdxType> &qubit_list)
+        {
+            Gate G(OP::MOD_NOISE, 0);
+
+            G.mod_op = mod_op;
+            G.mod_noise = mod_noise;
+            G.mod_value = value;
+
+            for (auto q : qubit_list)
+            {
+                G.mod_qubits.push_back(q);
+            }
+
+            gates->push_back(G);
+        }
 
         void X(IdxType qubit)
         {
@@ -210,12 +230,12 @@ namespace NWQSim
             Gate G(OP::S, qubit);
             gates->push_back(G);
         }
-        void EXPECT(void* obsptr)
+        void EXPECT(void *obsptr)
         {
             // Compute the expectation value of a list of observables (data stored in the ObservableList struct)
             Gate G(OP::EXPECT, 0, -1, 1, 0, 0, 0, 0, obsptr);
             gates->push_back(G);
-            n_expect ++;
+            n_expect++;
         }
         void SDG(IdxType qubit)
         {
@@ -453,7 +473,8 @@ namespace NWQSim
             Gate G(OP::CU, qubit, ctrl, 2, theta, phi, lam);
             gates->push_back(G);
         }
-        void ECR(IdxType ctrl, IdxType qubit) {
+        void ECR(IdxType ctrl, IdxType qubit)
+        {
             /******************************************
              * Echoed Cross-Resonance Gate
              * Implements 1/sqrt(2) (IX - XY)

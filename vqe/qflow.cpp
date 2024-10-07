@@ -220,11 +220,11 @@ void optimize_ansatz(const VQEBackendManager& manager,
   }
 
   std::ostringstream strstream;
-  manager.safe_print("\nFinished in %llu iterations. Initial Energy %f, Final Energy %f\nPrinting excitation amplitudes:\n", num_iterations, initial_ene, final_ene);
+  NWQSim::safe_print("\nFinished in %llu iterations. Initial Energy %f, Final Energy %f\nPrinting excitation amplitudes:\n", num_iterations, initial_ene, final_ene);
   for (auto& i: param_tuple) {
     strstream << i.first << ": " << i.second << std::endl;
   }
-  manager.safe_print("%s", strstream.str().c_str());
+  NWQSim::safe_print("%s", strstream.str().c_str());
 }
 
 
@@ -250,9 +250,9 @@ int main(int argc, char** argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &i_proc);
   }
 #endif
-  manager.safe_print("Reading Hamiltonian...\n");
+  NWQSim::safe_print("Reading Hamiltonian...\n");
   std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(hamil_path, n_part, use_xacc);
-  manager.safe_print("Constructing UCCSD Ansatz...\n");
+  NWQSim::safe_print("Constructing UCCSD Ansatz...\n");
 
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
     hamil->getEnv(),
@@ -261,7 +261,7 @@ int main(int argc, char** argv) {
   );
   ansatz->buildAnsatz();
   std::vector<double> params;
-  manager.safe_print("Beginning VQE loop...\n");
+  NWQSim::safe_print("Beginning VQE loop...\n");
   optimize_ansatz(manager, backend, amplitudes, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta);
 #ifdef MPI_ENABLED
   if (backend == "MPI" || backend == "NVGPU_MPI")

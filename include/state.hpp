@@ -4,7 +4,7 @@
 #include "circuit.hpp"
 #include "config.hpp"
 
-#include "private/gate_factory/sv_gates.hpp"
+#include "private/gate_factory/sv_gate.hpp"
 #include <stdexcept> // For std::runtime_error
 #include <vector>
 #include <string>

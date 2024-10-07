@@ -17,6 +17,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <memory>
 #include <string>
 #include <cstring>
 namespace NWQSim
@@ -220,11 +221,11 @@ namespace NWQSim
          * for noisy simulation
          ******************************************/
         ID,
-		/******************************************
+        /******************************************
          * Delay gate, this is an ID gate with
          * variable gate length for noisy simulation
          ******************************************/
-        DELAY, 
+        DELAY,
         /******************************************
          * SWAP gate: swap the position of two qubits
          * SWAP = [1,0,0,0]
@@ -264,7 +265,11 @@ namespace NWQSim
         /************
          * Expectation
          ***********/
-        EXPECT
+        EXPECT,
+        /************
+         * Modify noise
+         ***********/
+        MOD_NOISE
     };
 
     // Name of the gate for tracing purpose
@@ -307,7 +312,7 @@ namespace NWQSim
         "RZZ",
         // Other
         "ID",
-		"DELAY",
+        "DELAY",
         "SWAP",
         "M",
         "MA",
@@ -315,7 +320,9 @@ namespace NWQSim
         "C1",
         "C2",
         "C4",
-        "EXPECT"};
+        "EXPECT",
+        "MOD_NOISE"};
+
     /***********************************************
      * Gate Definition
      ***********************************************/
@@ -332,7 +339,12 @@ namespace NWQSim
         ValType lam;
         ValType gamma = 0;
         IdxType repetition;
-        void* data; // extra data (e.g. Pauli operators)
+        void *data; // extra data (e.g. Pauli operators)
+
+        std::string mod_op;
+        std::string mod_noise;
+        ValType mod_value;
+        std::vector<IdxType> mod_qubits;
 
         Gate(enum OP _op_name,
              IdxType _qubit,
@@ -342,15 +354,16 @@ namespace NWQSim
              ValType _phi = 0,
              ValType _lam = 0,
              IdxType _repetition = 0,
-             void* _data = NULL) : op_name(_op_name),
-                                        qubit(_qubit),
-                                        ctrl(_ctrl),
-                                        n_qubits(_n_qubits),
-                                        theta(_theta),
-                                        phi(_phi),
-                                        lam(_lam),
-                                        repetition(_repetition),
-                                        data(_data) {}
+             void *_data = NULL) : op_name(_op_name),
+                                   qubit(_qubit),
+                                   ctrl(_ctrl),
+                                   n_qubits(_n_qubits),
+                                   theta(_theta),
+                                   phi(_phi),
+                                   lam(_lam),
+                                   repetition(_repetition),
+                                   data(_data) {}
+
         Gate(const Gate &g) : op_name(g.op_name),
                               qubit(g.qubit),
                               ctrl(g.ctrl),
@@ -359,12 +372,25 @@ namespace NWQSim
                               phi(g.phi),
                               lam(g.lam),
                               repetition(g.repetition),
-                              data(g.data) {}
+                              data(g.data),
+                              mod_op(g.mod_op),
+                              mod_noise(g.mod_noise),
+                              mod_value(g.mod_value)
+        {
+            for (auto q : g.mod_qubits)
+            {
+                mod_qubits.push_back(q);
+            }
+        }
+
         ~Gate() {}
 
         // for dumping the gate
         std::string gateToString()
         {
+            if (op_name == MOD_NOISE)
+                return ""; // Skip noise update gate
+
             std::stringstream ss;
             ss << OP_NAMES[op_name];
             if (theta != 0.0 || phi != 0.0 || lam != 0.0)
