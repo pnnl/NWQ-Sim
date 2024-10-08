@@ -42,138 +42,237 @@ namespace NWQSim {
           }
         }
       }
-      /*===========Double Excitations===========*/
-      // Mixed-spin symmetries, all distinct spatial orbitals
       for (IdxType i = 0; i < env.n_occ; i++) {
-        FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
-        FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
-        // Strictly greater than i
-        for (IdxType j = i+1; j < env.n_occ; j++) {
-          FermionOperator occ_down_2 (j, Occupied, Down, Annihilation, env.xacc_scheme);
-          FermionOperator occ_up_2 (j, Occupied, Up, Annihilation, env.xacc_scheme);
+        FermionOperator occupied_annihilation_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
+        FermionOperator occupied_annihilation_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
+        for (IdxType j = 0; j < env.n_occ; j++) {
+          FermionOperator occupied_annihilation_up_2 (j, Occupied, Up, Annihilation, env.xacc_scheme);
+          FermionOperator occupied_annihilation_down_2 (j, Occupied, Down, Annihilation, env.xacc_scheme);
           for (IdxType r = 0; r < env.n_virt; r++) {
-          FermionOperator virt_down_3 (r, Virtual, Down, Creation, env.xacc_scheme);
-          FermionOperator virt_up_3 (r, Virtual, Up, Creation, env.xacc_scheme);
-            // Strictly greater than r 
-            for (IdxType s = r+1; s < env.n_virt; s++) {
-              FermionOperator virt_down_4 (s, Virtual, Down, Creation, env.xacc_scheme);
-              FermionOperator virt_up_4 (s, Virtual, Up, Creation, env.xacc_scheme);
-              IdxType alpha_term = fermion_operators.size();
-              // All alpha excitation: alpha_4*alpha_3*alpha_2*alpha_1
-              fermion_operators.push_back({
-                    occ_down_1,
-                    occ_down_2,
-                    virt_down_3,
-                    virt_down_4});
-              IdxType beta_term = fermion_operators.size();
-              // All beta excitation: beta_4*beta_3*beta_2*beta_1
-              fermion_operators.push_back({
-                    occ_up_1, 
-                    occ_up_2,
-                    virt_up_3,
-                    virt_up_4});
-              IdxType mixed_term1 = fermion_operators.size();
-              // Mixed term 1: beta_4*alpha_3*alpha_2*beta_1
-              fermion_operators.push_back({
-                    occ_up_1,
-                    occ_down_2,
-                    virt_down_3,
-                    virt_up_4});
-              IdxType mixed_term2 = fermion_operators.size();
-              // Mixed term 2: alpha_4*beta_3*beta_2*alpha_1
-              fermion_operators.push_back({
-                    occ_down_1,
-                    occ_up_2,
-                    virt_up_3,
-                    virt_down_4});
-              IdxType mixed_term3 = fermion_operators.size();
-              // Mixed term 3: beta_4*alpha_3*alpha_1*beta_2
-              fermion_operators.push_back({
-                    occ_up_2,
-                    occ_down_1,
-                    virt_down_3,
-                    virt_up_4});
-              IdxType mixed_term4 = fermion_operators.size();
-              // Mixed term 4: alpha_4*beta_3*beta_1*alpha_2
-              fermion_operators.push_back({
-                    occ_down_2,
-                    occ_up_1,
-                    virt_up_3,
-                    virt_down_4});
-             
-              // Add the parameter pointers, all 4 values determined by two parameters
-              if (symm_enforce) {
-                symmetries[alpha_term] = {{mixed_term2, 1.0}, {mixed_term4, -1.0}};
-                symmetries[beta_term] = {{mixed_term2, 1.0}, {mixed_term4, -1.0}};
-                symmetries[mixed_term1] = {{mixed_term2, 1.0}};
-                symmetries[mixed_term2] = {{mixed_term2, 1.0}};
-                symmetries[mixed_term3] = {{mixed_term4, 1.0}};
-                symmetries[mixed_term4] = {{mixed_term4, 1.0}};
-
-                fermion_ops_to_params[mixed_term2] = unique_params++;
-                fermion_ops_to_params[mixed_term4] = unique_params++;
-                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term2], env)] = unique_params - 2;
-                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term4], env)] = unique_params - 1;
-              } else {
-
-                symmetries[alpha_term] = {{alpha_term, 1.0}};
-                symmetries[beta_term] = {{beta_term, 1.0}};
-                symmetries[mixed_term1] = {{mixed_term1, 1.0}};
-                symmetries[mixed_term2] = {{mixed_term2, 1.0}};
-                symmetries[mixed_term3] = {{mixed_term3, 1.0}};
-                symmetries[mixed_term4] = {{mixed_term4, 1.0}};
-
-                fermion_ops_to_params[alpha_term] = unique_params++;
-                fermion_ops_to_params[beta_term] = unique_params++;
-                fermion_ops_to_params[mixed_term1] = unique_params++;
-                fermion_ops_to_params[mixed_term2] = unique_params++;
-                fermion_ops_to_params[mixed_term3] = unique_params++;
-                fermion_ops_to_params[mixed_term4] = unique_params++;
-                excitation_index_map[to_fermionic_string(fermion_operators[alpha_term], env)] = unique_params - 6;
-                excitation_index_map[to_fermionic_string(fermion_operators[beta_term], env)] = unique_params - 5;
-                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term1], env)] = unique_params - 4;
-                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term2], env)] = unique_params - 3;
-                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term3], env)] = unique_params - 2;
-                excitation_index_map[to_fermionic_string(fermion_operators[mixed_term4], env)] = unique_params - 1;
+            FermionOperator occupied_virtual_up_1 (r, Virtual, Up, Creation, env.xacc_scheme);
+            FermionOperator occupied_virtual_down_1 (r, Virtual, Down, Creation, env.xacc_scheme);
+            
+            for (IdxType s = 0; s < env.n_virt; s++) {
+              FermionOperator occupied_virtual_up_2 (s, Virtual, Up, Creation, env.xacc_scheme);
+              FermionOperator occupied_virtual_down_2 (s, Virtual, Down, Creation, env.xacc_scheme);
+              if (r != s && i != j) {
+                symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
+                fermion_ops_to_params[fermion_operators.size()] = unique_params++;
+                fermion_operators.push_back({occupied_annihilation_up_1,
+                                            occupied_annihilation_up_2,
+                                            occupied_virtual_up_1,
+                                            occupied_virtual_up_2});
+                symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
+                fermion_ops_to_params[fermion_operators.size()] = unique_params++;
+                excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params-1;
+                fermion_operators.push_back({occupied_annihilation_down_1,
+                                            occupied_annihilation_down_2,
+                                            occupied_virtual_down_1,
+                                            occupied_virtual_down_2});
               }
+
+              symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
+              fermion_ops_to_params[fermion_operators.size()] = unique_params++;
+              excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params-1;
+              fermion_operators.push_back({occupied_annihilation_up_1,
+                                           occupied_annihilation_down_2,
+                                           occupied_virtual_down_1,
+                                           occupied_virtual_up_2});
+
+              symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
+              fermion_ops_to_params[fermion_operators.size()] = unique_params++;
+              excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params-1;
+              fermion_operators.push_back({occupied_annihilation_down_1,
+                                           occupied_annihilation_up_2,
+                                           occupied_virtual_up_1,
+                                           occupied_virtual_down_2});
+              
+
             }
           }
         }
-      }
+        }
+      /*===========Double Excitations===========*/
+      // Mixed-spin symmetries, all distinct spatial orbitals
+      // for (IdxType i = 0; i < env.n_occ; i++) {
+      //   FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
+      //   FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
+      //   // Strictly greater than i
+      //   for (IdxType j = i+1; j < env.n_occ; j++) {
+      //     if (i == j) {
+      //       continue;
+      //     }
+      //     FermionOperator occ_down_2 (j, Occupied, Down, Annihilation, env.xacc_scheme);
+      //     FermionOperator occ_up_2 (j, Occupied, Up, Annihilation, env.xacc_scheme);
+      //     for (IdxType r = 0; r < env.n_virt; r++) {
+      //       FermionOperator virt_down_3 (r, Virtual, Down, Creation, env.xacc_scheme);
+      //       FermionOperator virt_up_3 (r, Virtual, Up, Creation, env.xacc_scheme);
+      //       // Strictly greater than r 
+      //       for (IdxType s = r+1; s < env.n_virt; s++) {
+      //         if (r == s) {
+      //           continue;
+      //         }
+      //         FermionOperator virt_down_4 (s, Virtual, Down, Creation, env.xacc_scheme);
+      //         FermionOperator virt_up_4 (s, Virtual, Up, Creation, env.xacc_scheme);
+      //         IdxType alpha_term = fermion_operators.size();
+      //         // All alpha excitation: alpha_4*alpha_3*alpha_2*alpha_1
+      //         fermion_operators.push_back({
+      //               occ_down_1,
+      //               occ_down_2,
+      //               virt_down_3,
+      //               virt_down_4});
+      //         IdxType beta_term = fermion_operators.size();
+      //         // All beta excitation: beta_4*beta_3*beta_2*beta_1
+      //         fermion_operators.push_back({
+      //               occ_up_1, 
+      //               occ_up_2,
+      //               virt_up_3,
+      //               virt_up_4});
+      //         IdxType mixed_term1 = fermion_operators.size();
+      //         // Mixed term 1: beta_4*alpha_3*alpha_2*beta_1
+      //         fermion_operators.push_back({
+      //               occ_up_1,
+      //               occ_down_2,
+      //               virt_down_3,
+      //               virt_up_4});
+      //         IdxType mixed_term2 = fermion_operators.size();
+      //         // Mixed term 2: alpha_4*beta_3*beta_2*alpha_1
+      //         fermion_operators.push_back({
+      //               occ_down_1,
+      //               occ_up_2,
+      //               virt_up_3,
+      //               virt_down_4});
+      //         IdxType mixed_term3 = fermion_operators.size();
+      //         // Mixed term 3: beta_4*alpha_3*alpha_1*beta_2
+      //         fermion_operators.push_back({
+      //               occ_up_2,
+      //               occ_down_1,
+      //               virt_down_3,
+      //               virt_up_4});
+      //         IdxType mixed_term4 = fermion_operators.size();
+      //         // Mixed term 4: alpha_4*beta_3*beta_1*alpha_2
+      //         fermion_operators.push_back({
+      //               occ_down_2,
+      //               occ_up_1,
+      //               virt_up_3,
+      //               virt_down_4});
+      //         IdxType mixed_term5 = fermion_operators.size();
+      //         // Mixed term 3: beta_4*alpha_3*alpha_1*beta_2
+      //         fermion_operators.push_back({
+      //               occ_up_2,
+      //               occ_down_1,
+      //               virt_down_4,
+      //               virt_up_3});
+      //         IdxType mixed_term6 = fermion_operators.size();
+      //         // Mixed term 4: alpha_4*beta_3*beta_1*alpha_2
+      //         fermion_operators.push_back({
+      //               occ_down_2,
+      //               occ_up_1,
+      //               virt_up_4,
+      //               virt_down_3});
+      //         IdxType mixed_term7 = fermion_operators.size();
+      //         // Mixed term 3: beta_4*alpha_3*alpha_1*beta_2
+      //         fermion_operators.push_back({
+      //               occ_up_1,
+      //               occ_down_2,
+      //               virt_down_4,
+      //               virt_up_3});
+      //         IdxType mixed_term8 = fermion_operators.size();
+      //         // Mixed term 4: alpha_4*beta_3*beta_1*alpha_2
+      //         fermion_operators.push_back({
+      //               occ_down_1,
+      //               occ_up_2,
+      //               virt_up_4,
+      //               virt_down_3});
+             
+      //         // Add the parameter pointers, all 4 values determined by two parameters
+      //         if (symm_enforce) {
+      //           symmetries[alpha_term] = {{mixed_term2, 1.0}, {mixed_term4, -1.0}};
+      //           symmetries[beta_term] = {{mixed_term2, 1.0}, {mixed_term4, -1.0}};
+      //           symmetries[mixed_term1] = {{mixed_term2, 1.0}};
+      //           symmetries[mixed_term2] = {{mixed_term2, 1.0}};
+      //           symmetries[mixed_term3] = {{mixed_term4, 1.0}};
+      //           symmetries[mixed_term4] = {{mixed_term4, 1.0}};
+
+      //           fermion_ops_to_params[mixed_term2] = unique_params++;
+      //           fermion_ops_to_params[mixed_term4] = unique_params++;
+      //           excitation_index_map[to_fermionic_string(fermion_operators[mixed_term2], env)] = unique_params - 2;
+      //           excitation_index_map[to_fermionic_string(fermion_operators[mixed_term4], env)] = unique_params - 1;
+      //         } else {
+
+      //           symmetries[alpha_term] = {{alpha_term, 1.0}};
+      //           symmetries[beta_term] = {{beta_term, 1.0}};
+      //           symmetries[mixed_term1] = {{mixed_term1, 1.0}};
+      //           symmetries[mixed_term2] = {{mixed_term2, 1.0}};
+      //           symmetries[mixed_term3] = {{mixed_term3, 1.0}};
+      //           symmetries[mixed_term4] = {{mixed_term4, 1.0}};
+      //           symmetries[mixed_term5] = {{mixed_term5, 1.0}};
+      //           symmetries[mixed_term6] = {{mixed_term6, 1.0}};
+      //           symmetries[mixed_term7] = {{mixed_term7, 1.0}};
+      //           symmetries[mixed_term8] = {{mixed_term8, 1.0}};
+
+      //           fermion_ops_to_params[alpha_term] = unique_params++;
+      //           fermion_ops_to_params[beta_term] = unique_params++;
+      //           fermion_ops_to_params[mixed_term1] = unique_params++;
+      //           fermion_ops_to_params[mixed_term2] = unique_params++;
+      //           fermion_ops_to_params[mixed_term3] = unique_params++;
+      //           fermion_ops_to_params[mixed_term4] = unique_params++;
+      //           fermion_ops_to_params[mixed_term5] = unique_params++;
+      //           fermion_ops_to_params[mixed_term6] = unique_params++;
+      //           fermion_ops_to_params[mixed_term7] = unique_params++;
+      //           fermion_ops_to_params[mixed_term8] = unique_params++;
+      //           excitation_index_map[to_fermionic_string(fermion_operators[alpha_term], env)] = unique_params - 10;
+      //           excitation_index_map[to_fermionic_string(fermion_operators[beta_term], env)] = unique_params - 9;
+      //           excitation_index_map[to_fermionic_string(fermion_operators[mixed_term1], env)] = unique_params - 8;
+      //           excitation_index_map[to_fermionic_string(fermion_operators[mixed_term2], env)] = unique_params - 7;
+      //           excitation_index_map[to_fermionic_string(fermion_operators[mixed_term3], env)] = unique_params - 6;
+      //           excitation_index_map[to_fermionic_string(fermion_operators[mixed_term4], env)] = unique_params - 5;
+      //           excitation_index_map[to_fermionic_string(fermion_operators[mixed_term5], env)] = unique_params - 4;
+      //           excitation_index_map[to_fermionic_string(fermion_operators[mixed_term6], env)] = unique_params - 3;
+      //           excitation_index_map[to_fermionic_string(fermion_operators[mixed_term7], env)] = unique_params - 2;
+      //           excitation_index_map[to_fermionic_string(fermion_operators[mixed_term8], env)] = unique_params - 1;
+      //         }
+      //       }
+      //     }
+      //   }
+      // }
       // Degenerate occupied excitations (WITHOUT the degenerate occupied/degenerate virtual)
-      for (IdxType i = 0; i < env.n_occ; i++) {
-        FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
-        FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
-          for (IdxType r = 1; r < env.n_virt; r++) {
-          FermionOperator virt_down_2 (r, Virtual, Down, Creation, env.xacc_scheme);
-          FermionOperator virt_up_2 (r, Virtual, Up, Creation, env.xacc_scheme);
-            // disallow r == s
-            for (IdxType s = 0; s < r; s++) {
-            FermionOperator virt_down_3 (s, Virtual, Down, Creation, env.xacc_scheme);
-            FermionOperator virt_up_3 (s, Virtual, Up, Creation, env.xacc_scheme);
-              IdxType term = fermion_operators.size();
-              fermion_operators.push_back({
-                    occ_up_1,
-                    occ_down_1,
-                    virt_down_2,
-                    virt_up_3});
-              fermion_ops_to_params[term] = unique_params++;
-              symmetries[term] = {{term, 1.0}};
-              term++;
-              fermion_operators.push_back({
-                    occ_down_1,
-                    occ_up_1,
-                    virt_up_2,
-                    virt_down_3});
-            if (symm_enforce) {
-              symmetries[term] = {{term - 1, 1.0}};
-              excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
-            } else {
-              fermion_ops_to_params[term] = unique_params++;
-              symmetries[term] = {{term, 1.0}};
-              excitation_index_map[to_fermionic_string(fermion_operators[term-1], env)] = unique_params - 2;
-              excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
-            }
+      // for (IdxType i = 0; i < env.n_occ; i++) {
+      //   FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
+      //   FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
+      //     for (IdxType r = 1; r < env.n_virt; r++) {
+      //     FermionOperator virt_down_2 (r, Virtual, Down, Creation, env.xacc_scheme);
+      //     FermionOperator virt_up_2 (r, Virtual, Up, Creation, env.xacc_scheme);
+      //       // disallow r == s
+      //       for (IdxType s = 0; s < env.n_virt; s++) {
+      //         if (s == r) {
+      //           continue;
+      //         }
+      //       FermionOperator virt_down_3 (s, Virtual, Down, Creation, env.xacc_scheme);
+      //       FermionOperator virt_up_3 (s, Virtual, Up, Creation, env.xacc_scheme);
+      //         IdxType term = fermion_operators.size();
+      //         fermion_operators.push_back({
+      //               occ_up_1,
+      //               occ_down_1,
+      //               virt_down_2,
+      //               virt_up_3});
+      //         fermion_ops_to_params[term] = unique_params++;
+      //         symmetries[term] = {{term, 1.0}};
+      //         term++;
+      //         fermion_operators.push_back({
+      //               occ_down_1,
+      //               occ_up_1,
+      //               virt_up_2,
+      //               virt_down_3});
+      //       if (symm_enforce) {
+      //         symmetries[term] = {{term - 1, 1.0}};
+      //         excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
+      //       } else {
+      //         fermion_ops_to_params[term] = unique_params++;
+      //         symmetries[term] = {{term, 1.0}};
+      //         excitation_index_map[to_fermionic_string(fermion_operators[term-1], env)] = unique_params - 2;
+      //         excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
+      //       }
             //   term++;
             //   fermion_operators.push_back({
             //         occ_down_1,
@@ -192,69 +291,69 @@ namespace NWQSim {
             // symmetries[term] = {{term, 1.0}};
             // excitation_index_map[to_fermionic_string(fermion_operators[term-3], env)] = unique_params - 4;
             // excitation_index_map[to_fermionic_string(fermion_operators[term-2], env)] = unique_params - 3;
-          }
-        }
-      }
+      //     }
+      //   }
+      // }
 
       // Degenerate virtual excitations (WITH the degenerate occupied/degenerate virtual)
-      for (IdxType i = 0; i < env.n_virt; i++) {
-        FermionOperator virt_down_3 (i, Virtual, Down, Creation, env.xacc_scheme);
-        FermionOperator virt_up_3 (i, Virtual, Up, Creation, env.xacc_scheme);
-          for (IdxType r = 0; r < env.n_occ; r++) {
-        FermionOperator occ_down_1 (r, Occupied, Down, Annihilation, env.xacc_scheme);
-        FermionOperator occ_up_1 (r, Occupied, Up, Annihilation, env.xacc_scheme);
-            // allow r == s
-            for (IdxType s = 0; s < r + 1; s++) {
-            FermionOperator occ_down_2 (s, Occupied, Down, Annihilation, env.xacc_scheme);
-            FermionOperator occ_up_2 (s, Occupied, Up, Annihilation, env.xacc_scheme);
+      // for (IdxType i = 0; i < env.n_virt; i++) {
+      //   FermionOperator virt_down_3 (i, Virtual, Down, Creation, env.xacc_scheme);
+      //   FermionOperator virt_up_3 (i, Virtual, Up, Creation, env.xacc_scheme);
+      //     for (IdxType r = 0; r < env.n_occ; r++) {
+      //   FermionOperator occ_down_1 (r, Occupied, Down, Annihilation, env.xacc_scheme);
+      //   FermionOperator occ_up_1 (r, Occupied, Up, Annihilation, env.xacc_scheme);
+      //       // allow r == s
+      //       for (IdxType s = 0; s < env.n_occ; s++) {
+      //       FermionOperator occ_down_2 (s, Occupied, Down, Annihilation, env.xacc_scheme);
+      //       FermionOperator occ_up_2 (s, Occupied, Up, Annihilation, env.xacc_scheme);
               
-              IdxType term = fermion_operators.size();
-              fermion_operators.push_back({
-                    occ_up_1,
-                    occ_down_2,
-                    virt_down_3,
-                    virt_up_3});
-              fermion_ops_to_params[term] = unique_params++;
-              symmetries[term] = {{term, 1.0}};
-              excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
-              if (r < s) {
-                term++;
-               fermion_operators.push_back({
-                    occ_down_1,
-                    occ_up_2,
-                    virt_up_3,
-                    virt_down_3});
-              if (symm_enforce) {
-                symmetries[term] = {{term - 1, 1.0}};
-                excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
-              } else {
-                fermion_ops_to_params[term] = unique_params++;
-                symmetries[term] = {{term, 1.0}};
-                excitation_index_map[to_fermionic_string(fermion_operators[term-1], env)] = unique_params - 2;
-                excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
-              }
-                // fermion_operators.push_back({
-                //       occ_down_2,
-                //       occ_up_1,
-                //       virt_up_3,
-                //       virt_down_3});
-                // fermion_ops_to_params[term] = unique_params++;
-                // symmetries[term] = {{term, 1.0}};
-                // excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
-                // term++;
-                // fermion_operators.push_back({
-                //       occ_down_1,
-                //       occ_up_2,
-                //       virt_up_3,
-                //       virt_down_3});
-                // fermion_ops_to_params[term] = unique_params++;
-                // symmetries[term] = {{term, 1.0}};
-                // excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
-              }
+      //         IdxType term = fermion_operators.size();
+      //         fermion_operators.push_back({
+      //               occ_up_1,
+      //               occ_down_2,
+      //               virt_down_3,
+      //               virt_up_3});
+      //         fermion_ops_to_params[term] = unique_params++;
+      //         symmetries[term] = {{term, 1.0}};
+      //         excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
+      //         if (r < s) {
+      //           term++;
+      //          fermion_operators.push_back({
+      //               occ_down_1,
+      //               occ_up_2,
+      //               virt_up_3,
+      //               virt_down_3});
+      //         if (symm_enforce) {
+      //           symmetries[term] = {{term - 1, 1.0}};
+      //           excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
+      //         } else {
+      //           fermion_ops_to_params[term] = unique_params++;
+      //           symmetries[term] = {{term, 1.0}};
+      //           excitation_index_map[to_fermionic_string(fermion_operators[term-1], env)] = unique_params - 2;
+      //           excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
+      //         }
+      //           // fermion_operators.push_back({
+      //           //       occ_down_2,
+      //           //       occ_up_1,
+      //           //       virt_up_3,
+      //           //       virt_down_3});
+      //           // fermion_ops_to_params[term] = unique_params++;
+      //           // symmetries[term] = {{term, 1.0}};
+      //           // excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
+      //           // term++;
+      //           // fermion_operators.push_back({
+      //           //       occ_down_1,
+      //           //       occ_up_2,
+      //           //       virt_up_3,
+      //           //       virt_down_3});
+      //           // fermion_ops_to_params[term] = unique_params++;
+      //           // symmetries[term] = {{term, 1.0}};
+      //           // excitation_index_map[to_fermionic_string(fermion_operators[term], env)] = unique_params - 1;
+      //         }
               
-          }
-        }
-      }
+      //     }
+      //   }
+      // }
 #ifndef NDEBUG
       // Print out the generated Fermionic operators
       for (size_t i = 0; i < fermion_operators.size(); i++) {

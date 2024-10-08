@@ -282,7 +282,7 @@ namespace NWQSim {
           n_singles = 2 * env.n_occ * env.n_virt;
           IdxType c2virtual = choose2(env.n_virt);
           IdxType c2occupied = choose2(env.n_occ);
-          n_doubles = 2 * (env.n_occ) * (env.n_virt) * (env.n_occ) * (env.n_virt);
+          n_doubles = 10 * (env.n_occ) * (env.n_virt) * (env.n_occ) * (env.n_virt);
           fermion_operators.reserve(n_singles + n_doubles);
           symmetries = std::vector<std::vector<std::pair<IdxType, ValType> > >((n_singles + n_doubles));
           fermion_ops_to_params.resize(n_doubles + n_singles);

@@ -49,8 +49,7 @@ if(CUDAToolkit_FOUND)
         set(CMAKE_CUDA_ARCHITECTURES "${CUDA_ARCH}")
     endif()
     
-    set(CMAKE_CUDA_FLAGS_DEBUG "-g -G")
-
+    # set(CMAKE_CUDA_FLAGS_DEBUG "-g -G")
 
     set(CMAKE_CUDA_FLAGS_RELEASE "-O3")
     set(CMAKE_CUDA_STANDARD 17)
