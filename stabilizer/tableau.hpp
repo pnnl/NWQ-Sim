@@ -107,12 +107,12 @@ namespace NWQSim
                     if(z_val)
                         stabilizers += 'Y';
                     else
-                        stabilizers += "Z";
+                        stabilizers += "X";
                 }
                 else
                 {
                     if(z_val)
-                        stabilizers += 'X';
+                        stabilizers += 'Z';
                     else
                         stabilizers += 'I';
                 }
