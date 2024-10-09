@@ -69,6 +69,19 @@ namespace NWQSim
             }
         }   
 
+        void tableau_resize()
+        {
+            outcomes.resize(n);
+            outcomes.assign(outcomes.size(), 0);
+
+            //Add rows to x, z, r/
+            x.resize(2*n+1); //first 2n+1 x n block. first n represents destabilizers
+                                                     //second n represents stabilizers + 1 extra row
+            z.resize(2*n+1); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
+            r.resize(2*n+1); //column on the right with 2n+1 rows
+            //The 2n+1 th row is scratch space
+        }
+
         void add_gates(std::shared_ptr<Circuit>& new_circ)
         {
             gates = new_circ->get_gates();
@@ -91,38 +104,44 @@ namespace NWQSim
             //std::cout << "Result: " << result[0] << std::endl;
         }
 
-        //Get the stabilizers in the tableau
-        std::string get_stabilizers()
+        //Get the stabilizers in the tableau, i.e. all of the Pauli strings that stabilize the circuit
+        std::vector<std::string> get_stabilizers()
         {
             int x_val;
             int z_val;
             std::string stabilizers;
-            for(int i = 0; i < n; i++)
+            std::vector<std::string> pauliStrings;
+            for(int i = n; i < 2*n; i++) //rows of stabilizers
             {
-                x_val = x[i+n][i];
-                z_val = z[i+n][i];
-                assert((x_val < 2) && (z_val < 2));
-                if(x_val)
+                stabilizers.clear(); //clear the temporary stabilizers string
+                for(int j = 0; j < n; j++) //qubits/cols
                 {
-                    if(z_val)
-                        stabilizers += 'Y';
+                    x_val = x[i][j];
+                    z_val = z[i][j];
+                    assert((x_val < 2) && (z_val < 2));
+                    if(x_val)
+                    {
+                        if(z_val)
+                            stabilizers += 'Y';
+                        else
+                            stabilizers += "X";
+                    }
                     else
-                        stabilizers += "X";
-                }
-                else
-                {
-                    if(z_val)
-                        stabilizers += 'Z';
-                    else
-                        stabilizers += 'I';
-                }
-            }//For columns(qubits)
-            return stabilizers;
+                    {
+                        if(z_val)
+                            stabilizers += 'Z';
+                        else
+                            stabilizers += 'I';
+                    }
+                }//For columns(qubits)
+                pauliStrings.push_back(stabilizers);
+            }//For rows(pauli strings)
+            return pauliStrings;
         }
 
         //Takes a default (or any) tableau and sets its stabilizers according to
         //a Pauli string provided
-        void set_stabilizers(Tableau& T, std::string pauliString)
+        void set_stabilizers(std::string pauliString)
         {
             for(int qubit = 0; qubit < T.n; qubit++)
             {
@@ -152,6 +171,43 @@ namespace NWQSim
                     }
                 }//All rows (2*n rows, destabilizers and stabilizers)
             }//All columns (qubits)
+        }
+
+        //Takes a default (or any) tableau and sets its stabilizers according to
+        //a Pauli string provided
+        void add_stabilizer(std::string pauliString)
+        {
+            //Start by adding a row to T
+            n++;
+            tableau_resize();
+
+            assert(pauliString.length() <= n);
+
+            for(int i = 0; i < pauliString.length(); i++)
+            {
+                switch(pauliString[i])
+                {
+                    case 'I':
+                        x[x.size()][i] = 0;
+                        z[z.size()][i] = 0;
+                        break;
+                    case 'X':
+                        x[x.size()][i] = 0;
+                        z[z.size()][i] = 1;
+                        break;
+                    case 'Y':
+                        x[x.size()][i] = 1;
+                        z[z.size()][i] = 1;
+                        break;
+                    case 'Z':
+                        x[x.size()][i] = 1;
+                        z[z.size()][i] = 0;
+                        break;
+                    default:
+                        std::logic_error("Invalid stabilizer");
+                        break;
+                }
+            }//All columns represented in the pauli string (qubits)
         }
         
         //Function to swap two rows of the tableau
