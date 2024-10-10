@@ -303,8 +303,16 @@ namespace NWQSim
             test.get_outcomes(results);
             //std::cout << "Result pointer " << results << std::endl;
 
-            //See stabalziers
-            std::cout << "\n----- stabilizers: " << test.get_stabilizers() << " -----" << std::endl;
+            //See stabilizers
+            std::cout << "\n------ stabilizers: " << std::endl;
+            std::vector<std::string> paulistrings = test.get_stabilizers();
+            for(int i = 0; i < paulistrings.size(); i++)
+            {
+                std::cout << paulistrings[i] << std::endl;
+            }
+            std::cout << "------" << std::endl; 
+
+
 
             if (Config::PRINT_SIM_TRACE)
             {

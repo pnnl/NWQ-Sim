@@ -20,9 +20,7 @@ int main(){
 		{
 			auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 			circuit -> H(0);
-			circuit -> H(1);
-			circuit -> H(2);
-			circuit -> H(3);
+			circuit -> CX(0,1);
 
 			// circuit -> CX(0,1);
 			// circuit -> CX(1,2);
@@ -47,7 +45,7 @@ int main(){
 			// {
 			// 	circuit -> M(i);
 			// }
-			circuit -> M(0);
+			circuit -> M(1);
 			// circuit -> M(1);
 			// circuit -> M(2);
 			// circuit -> M(3);
@@ -82,22 +80,40 @@ int main(){
 
 	outfile.close();
 
-	// auto circuit = std::make_shared<NWQSim::Circuit>(number_of_qubits);
-	// circuit -> H(0);
-	// circuit -> CX(0,1);
-	// circuit -> M(1);
+	auto circuit = std::make_shared<NWQSim::Circuit>(number_of_qubits);
+	circuit -> H(0);
+	circuit -> CX(0,1);
+	circuit -> M(1);
 
-	// NWQSim::Tableau test = NWQSim::Tableau(circuit, number_of_qubits);
-	// test.simulate();
+	NWQSim::Tableau test = NWQSim::Tableau(circuit, number_of_qubits);
+	test.simulate();
 
-	// std::cout << "Stabilizers with initial gates: " << test.get_stabilizers() << std::endl;
+    std::cout << "\n------ initial stabilizers: " << std::endl;
+	std::vector<std::string> paulistrings = test.get_stabilizers();
+	for(int i = 0; i < paulistrings.size(); i++)
+	{
+		std::cout << paulistrings[i] << std::endl;
+	}
+	std::cout << "------" << std::endl; 
 
-	// auto circuit2 = std::make_shared<NWQSim::Circuit>(number_of_qubits);
-	
-	// test.add_gates(circuit2);
-	// test.simulate();
+	test.add_stabilizer("IXYZ");
+	//test.simulate();
 
-	// std::cout << "Stabilizers after added gates: " << test.get_stabilizers() << std::endl;
+	std::cout << "\n------ destabilizers after addition: " << std::endl;
+	paulistrings = test.get_destabilizers();
+	for(int i = 0; i < paulistrings.size(); i++)
+	{
+		std::cout << paulistrings[i] << std::endl;
+	}
+	std::cout << "------" << std::endl; 
+
+	std::cout << "\n------ stabilizers after addition: " << std::endl;
+	paulistrings = test.get_stabilizers();
+	for(int i = 0; i < paulistrings.size(); i++)
+	{
+		std::cout << paulistrings[i] << std::endl;
+	}
+	std::cout << "------" << std::endl; 
 
 	return 0;
 }
