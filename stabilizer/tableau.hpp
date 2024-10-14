@@ -239,7 +239,7 @@ namespace NWQSim
             //Perform Gaussian elimination on the destabilizers (first half of the rows)
             for (int col = 0; col < cols; col++) {
                 int pivotRow = -1;
-                for (int row = col; row < rows/2; row++) {
+                for (int row = col; row < rows-1; row++) {
                     if (x[row][col] == 1 || z[row][col] == 1) {
                         pivotRow = row;
                         break;
@@ -249,29 +249,9 @@ namespace NWQSim
                 if (pivotRow != col) {
                     swapRows(pivotRow, col);
                 }
-                for (int row = 0; row < rows/2; row++) {
+                for (int row = 0; row < rows-1; row++) {
                     if (row != col && (x[row][col] == 1 || z[row][col] == 1)) {
                         addRows(row, col);
-                    }
-                }
-            }
-
-            //Perform Gaussian elimination on the stabilizers (second half of the rows)
-            for (int col = 0; col < cols; col++) {
-                int pivotRow = -1;
-                for (int row = rows/2 + col; row < rows-1; row++) {
-                    if (x[row][col] == 1 || z[row][col] == 1) {
-                        pivotRow = row;
-                        break;
-                    }
-                }
-                if (pivotRow == -1) continue;
-                if (pivotRow != (n + col)) {
-                    swapRows(pivotRow, n + col);
-                }
-                for (int row = rows/2; row < rows-1; row++) {
-                    if (row != (n + col) && (x[row][col] == 1 || z[row][col] == 1)) {
-                        addRows(row, n + col);
                     }
                 }
             }
@@ -452,11 +432,19 @@ namespace NWQSim
                                 << OP_NAMES[gate.op_name] << std::endl;
                     std::logic_error("Invalid gate type");
                 }
-
-                gaussianElimination();
             } //End gates for loop
+        } //End simulate
 
-        } //End tableau_simulation
+        //Converts the tableau to a graph-state matrix
+        void convert_to_graph()
+        {
+            gaussianElimination();
+
+
+        }
+
+
+
     protected:
         int g;
         int n;
