@@ -202,6 +202,7 @@ namespace NWQSim
           // nlopt::result optimization_result = optimizer.optimize(parameters, final_ene); // MZ
           optimizer.optimize(parameters, final_ene); // MZ
           opt_result = optimizer.last_optimize_result(); // MZ: this is the correct way to get the result, otherwise always give 0
+          num_evals = optimizer.get_numevals(); // MZ: get numebr of function evaluations
       }
 
       // Function declarations (overloaded by backends) 
@@ -242,6 +243,7 @@ namespace NWQSim
       std::shared_ptr<Hamiltonian> get_hamiltonian() const { return hamil; }
       IdxType get_iteration() const {return iteration;};
       nlopt::result get_optresult() const {return opt_result;}; // MZ
+      unsigned int get_numevals() const { return num_evals;}; // MZ
       protected:
         std::shared_ptr<Ansatz> ansatz;                    // state preparation circuit
         std::shared_ptr<Ansatz> measurement;               // circuit to measure expectation values
@@ -257,7 +259,8 @@ namespace NWQSim
         std::vector<std::vector<ValType> > coeffs;         // vector of diagonalized operator coefficients
         double expectation_value;                          // last computed expectation value
         nlopt::algorithm optimizer_algorithm;              // NLOpt optimization algorithm for circuit updates 
-        nlopt::result opt_result;                 //MZ: the ability to access it would be helpful for future extension
+        nlopt::result opt_result;                          //MZ: optimzation success or fail and the reason
+        unsigned int num_evals;                            //MZ: total number of evaluations
 
       
 

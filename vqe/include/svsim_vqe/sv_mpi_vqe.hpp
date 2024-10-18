@@ -191,6 +191,7 @@ namespace NWQSim
             // nlopt::result optimization_result = optimizer.optimize(parameters, final_ene); //MZ
             optimizer.optimize(parameters, final_ene); //MZ
             opt_result = optimizer.last_optimize_result(); // MZ: this is the correct way to get the result, otherwise always give 0
+            num_evals = optimizer.get_numevals(); // MZ: get numebr of function evaluations
             // energy(parameters);
             stat = EXIT_LOOP;
             for(IdxType i = 1; i < n_cpus; i++) {

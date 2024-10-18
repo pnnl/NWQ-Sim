@@ -205,12 +205,12 @@ void silent_callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::Val
 //-------------------------------------------------------------------------------------------------
 // MZ: sorry, original callback function is too much
 void print_header() {
-    std::cout << std::left  << "  "
-              << std::setw(11) << "Iteration"
+    std::cout << "\n----- Iteration Summary -----\n" << std::left
+              << std::setw(12) << " Iteration"
               << std::setw(20) << "Objective Value"
               << std::setw(50) << "Parameters (first 5)"
               << std::endl;
-    std::cout  << "  " << std::string(81, '-') << std::endl;
+    std::cout << std::string(81, '-') << std::endl;
 }
 
 // Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
@@ -218,7 +218,7 @@ void callback_function_simple(const std::vector<NWQSim::ValType>& x, NWQSim::Val
   if (iteration == 0) {
     print_header();
   }
-  std::cout << std::left  << "  "
+  std::cout << std::left << " "
             << std::setw(11) << iteration
             << std::setw(20) << std::scientific << std::setprecision(8) << fval;
   
@@ -243,13 +243,11 @@ std::string get_termination_reason(nlopt::result result) {
         {nlopt::ROUNDOFF_LIMITED, "Roundoff limited"},
         {nlopt::FORCED_STOP, "Forced stop"}
     };
-
     auto it = reason_map.find(result);
     if (it != reason_map.end()) {
         return it->second;
     } else {
-        std::cout << result << std::endl;
-        return "Unknown reason";
+        return "Unknown reason, code: " + std::to_string(result);
     }
 }
 //-------------------------------------------------------------------------------------------------
@@ -266,13 +264,12 @@ std::string get_termination_reason(nlopt::result result) {
  * @param  fval: Energy value (reference, output)
  * @retval None
  */
-void optimize_ansatz(const VQEBackendManager& manager,
+std::shared_ptr<NWQSim::VQE::VQEState> optimize_ansatz(const VQEBackendManager& manager,
                      VQEParams params,
                      std::shared_ptr<NWQSim::VQE::Ansatz> ansatz,
                      std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil,
                      std::vector<double>& x,
-                     double& fval,
-                     nlopt::result& opt_res) { // MZ for adding  nlopt::result optimization_result
+                     double& fval) {
   // Set the callback function (silent is default)
   // NWQSim::VQE::Callback callback = (params.adapt ? silent_callback_function : callback_function); // MZ: sorry, original callback function is too much
   NWQSim::VQE::Callback callback = (params.adapt ? silent_callback_function : callback_function_simple); // MZ: sorry, original callback function is too much
@@ -309,8 +306,8 @@ void optimize_ansatz(const VQEBackendManager& manager,
   } else {
     state->initialize(); // Initialize the state (AKA allocating measurement data structures and building the measurement circuit)
     state->optimize(x, fval); // MAIN OPTIMIZATION LOOP
-    opt_res = state->get_optresult(); // MZ
   }
+  return state; // MZ: I need information
 }
 
 
@@ -368,18 +365,21 @@ int main(int argc, char** argv) {
   // }                                                                                                   // MZ: comment out for better printing
 
   try { // MZ: catch exception
-      nlopt::result opt_res;   // MZ
-      optimize_ansatz(manager, params, ansatz,  hamil, x, fval, opt_res); // MZ: add optimization_result
+      std::shared_ptr<NWQSim::VQE::VQEState> opt_info = optimize_ansatz(manager, params, ansatz,  hamil, x, fval); // MZ: add opt_result
+
       // Print out the Fermionic operators with their excitations                                        
       std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters(); 
       // MZ: A better summary at the end so I don't scroll all the way up, especially with gradient-free optimizater    
       manager.safe_print("\n----- Result Summary -----\n"); 
-      manager.safe_print("  Circuit Stats: %lld Gates with %lld parameters\n" ,ansatz->num_gates(), ansatz->numParams());
-      std::string ter_rea = "  Optimization terminated: "+get_termination_reason(opt_res)+"\n";
+      manager.safe_print("Ansatz: UCCSD\n");  // MZ: don't want to scroll all the way up to see this
+      manager.safe_print("No. of Pauli Observables: %lld \n", hamil->num_ops()); // MZ: don't want to scroll all the way up to see this
+      manager.safe_print("Circuit Stats: %lld Gates with %lld parameters\n" ,ansatz->num_gates(), ansatz->numParams()); // MZ: don't want to scroll all the way up to see this
+      std::string ter_rea = "Optimization terminated: "+get_termination_reason(opt_info->get_optresult())+"\n";
       manager.safe_print(ter_rea.c_str());
-      manager.safe_print("  Final objective value: %e\n  Final parameters:\n", fval); 
+      manager.safe_print("Total No. of function evaluations: %d\n", opt_info->get_numevals());
+      manager.safe_print("Final objective value: %e\nFinal parameters:\n", fval); 
       for (auto& pair: param_map) {                                                                       
-        manager.safe_print("    %s :: %e\n", pair.first.c_str(), pair.second);  
+        manager.safe_print("  %s :: %e\n", pair.first.c_str(), pair.second);  
       }                                                                                            
     } 
     catch(std::exception &e) {
