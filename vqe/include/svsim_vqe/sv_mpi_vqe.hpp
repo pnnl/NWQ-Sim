@@ -188,7 +188,9 @@ namespace NWQSim
           }
           MPI_Bcast(parameters.data(), parameters.size(), MPI_DOUBLE, 0, comm_global);
           if (i_proc == 0) {
-            nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
+            // nlopt::result optimization_result = optimizer.optimize(parameters, final_ene); //MZ
+            optimizer.optimize(parameters, final_ene); //MZ
+            opt_result = optimizer.last_optimize_result(); // MZ: this is the correct way to get the result, otherwise always give 0
             // energy(parameters);
             stat = EXIT_LOOP;
             for(IdxType i = 1; i < n_cpus; i++) {

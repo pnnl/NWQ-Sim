@@ -183,7 +183,9 @@ virtual void fill_obslist(IdxType index) override {
             parameters = std::vector<ValType>(ansatz->numParams(), 0.0);
           }
           if (i_proc == 0) {
-            nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
+            // nlopt::result optimization_result = optimizer.optimize(parameters, final_ene); // MZ
+            optimizer.optimize(parameters, final_ene); // MZ
+            opt_result = optimizer.last_optimize_result(); // MZ: the correct way to get the result of the optimization, otherwise gives 0
             
             // std::cout << energy(parameters) << std::endl;iteration = 1;
             // std::cout << zmasks[1376] << std::endl;
