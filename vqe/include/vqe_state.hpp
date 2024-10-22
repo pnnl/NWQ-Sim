@@ -203,6 +203,7 @@ namespace NWQSim
           optimizer.optimize(parameters, final_ene); // MZ
           opt_result = optimizer.last_optimize_result(); // MZ: this is the correct way to get the result, otherwise always give 0
           num_evals = optimizer.get_numevals(); // MZ: get numebr of function evaluations
+          
       }
 
       // Function declarations (overloaded by backends) 
@@ -244,6 +245,8 @@ namespace NWQSim
       IdxType get_iteration() const {return iteration;};
       nlopt::result get_optresult() const {return opt_result;}; // MZ
       unsigned int get_numevals() const { return num_evals;}; // MZ
+      double get_duration() const { return opt_duration;}; // MZ
+      void set_duration(double value) { opt_duration = value; }; //MZ
       protected:
         std::shared_ptr<Ansatz> ansatz;                    // state preparation circuit
         std::shared_ptr<Ansatz> measurement;               // circuit to measure expectation values
@@ -261,6 +264,7 @@ namespace NWQSim
         nlopt::algorithm optimizer_algorithm;              // NLOpt optimization algorithm for circuit updates 
         nlopt::result opt_result;                          //MZ: optimzation success or fail and the reason
         unsigned int num_evals;                            //MZ: total number of evaluations
+        double opt_duration;                               //MZ: time the optimization
 
       
 
