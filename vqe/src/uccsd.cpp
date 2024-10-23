@@ -73,7 +73,7 @@ namespace NWQSim {
       // use the mixed excitation terms as the free variables (alpha_r beta_s beta_j alpha_i - alpha_s beta_r beta_i alpha_j)
       IdxType mixed_term1 = fermion_operators.size();
       IdxType mixed_term2 = fermion_operators.size() + 1;
-      if (symm_level >= 3) {
+      if (symm_level >= 4) {
         // s _r _j i
         add_double_excitation(i_alpha, j_beta, r_beta, s_alpha, {{mixed_term1, 1.0}}, true);
         // s _r _i j
