@@ -29,6 +29,7 @@ struct VQEParams {
   // Optimizer settings
   NWQSim::VQE::OptimizerSettings optimizer_settings;
   nlopt::algorithm algo;
+  IdxType symm_level = 0;
 
   // ADAPT-VQE options
   bool adapt = false;
@@ -47,6 +48,7 @@ int show_help() {
   std::cout << "--list-backends, -l   List available backends and exit." << std::endl;
   std::cout << UNDERLINE << "OPTIONAL" << CLOSEUNDERLINE << std::endl;
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
+  std::cout << "--symm                Symmetry level (0->none, 1->single, 2->double non-mixed+single, 3->all). Defaults to 0." << std::endl;
   std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
   std::cout << "--opt-config          Path to config file for NLOpt optimizer parameters" << std::endl;
   std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA" << std::endl;
@@ -106,6 +108,7 @@ int parse_args(int argc, char** argv,
     } else 
     if (argname == "-n" || argname == "--nparticles") {
       params.nparticles = std::atoll(argv[++i]);
+      std::cout << params.nparticles << std::endl;
     } else 
     if (argname == "--seed") {
       params.seed = (unsigned)std::atoi(argv[++i]);
@@ -132,6 +135,9 @@ int parse_args(int argc, char** argv,
     if (argname == "--abstol") {
       settings.abs_tol = std::atof(argv[++i]);
     }  else 
+    if (argname == "--symm") {
+      params.symm_level = (unsigned)std::atoi(argv[++i]);;
+    } else
     if (argname == "--ubound") {
       settings.ubound = std::atof(argv[++i]);
     }  else 
@@ -356,7 +362,8 @@ int main(int argc, char** argv) {
     ansatz  = std::make_shared<NWQSim::VQE::UCCSD>(
       hamil->getEnv(),
       NWQSim::VQE::getJordanWignerTransform,
-      1
+      1,
+      params.symm_level
     );
   }
   ansatz->buildAnsatz();

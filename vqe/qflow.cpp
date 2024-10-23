@@ -20,7 +20,7 @@ int show_help() {
   std::cout << "--ducc                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl;
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
   std::cout << "--verbose             Print optimizer information on each iteration. Defaults to false" << std::endl;
-  std::cout << "--no-symm             Remove symmetry enforcement." << std::endl;
+  std::cout << "--symm                Symmetry level (0->none, 1->single, 2->double non-mixed+single, 3->all). Defaults to 0." << std::endl;
   std::cout << UNDERLINE << "OPTIONAL (Global Minimizer)" << CLOSEUNDERLINE << std::endl;
   std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA" << std::endl;
   std::cout << "--optimizer-config    Path to config file for NLOpt optimizer parameters" << std::endl;
@@ -53,7 +53,7 @@ int parse_args(int argc, char** argv,
                 bool& use_xacc,
                 bool& local,
                 bool& verbose,
-                bool& symm_enforce,
+                uint64_t& symm_level,
                 unsigned& seed,
                 double& delta,
                 double& eta) {
@@ -70,7 +70,7 @@ int parse_args(int argc, char** argv,
   use_xacc = false;
   local = false;
   verbose = false;
-  symm_enforce = true;
+  symm_level = 0;
   settings.lbound = -2;
   settings.ubound = 2;
   for (size_t i = 1; i < argc; i++) {
@@ -105,8 +105,8 @@ int parse_args(int argc, char** argv,
     if (argname == "--seed") {
       seed = (unsigned)std::atoi(argv[++i]);
     } else
-    if (argname == "--no-symm") {
-      symm_enforce = false;
+    if (argname == "--symm") {
+      symm_level = (unsigned)std::atoi(argv[++i]);;
     } else
     if (argname == "--xacc") {
       use_xacc = true;
@@ -253,10 +253,11 @@ int main(int argc, char** argv) {
   double delta;
   double eta;
   unsigned seed;
-  bool use_xacc, local, verbose, symm_enforce;
+  uint64_t symm_level;
+  bool use_xacc, local, verbose;
   int n_trials;
   if (parse_args(argc, argv, manager, hamil_path, backend, config, amplitudes,  n_part, algo, settings, 
-                 n_trials, use_xacc, local, verbose, symm_enforce, 
+                 n_trials, use_xacc, local, verbose, symm_level, 
                   seed, delta, eta)) {
     return 1;
   }
@@ -276,7 +277,7 @@ int main(int argc, char** argv) {
     hamil->getEnv(),
     NWQSim::VQE::getJordanWignerTransform,
     1,
-    symm_enforce
+    symm_level
   );
   ansatz->buildAnsatz();
   std::vector<double> params;

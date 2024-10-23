@@ -262,7 +262,7 @@ namespace NWQSim {
         IdxType n_doubles;
         IdxType trotter_n;
         IdxType unique_params;
-        bool symm_enforce;
+        IdxType symm_level;
         Transformer qubit_transform;
         /** 
          * Enforce symmetries for each term. Each fermionic term will have one symmetry entry. If no symmetries are enforced, 
@@ -276,10 +276,10 @@ namespace NWQSim {
         void add_double_excitation(FermionOperator i, FermionOperator j, FermionOperator r, FermionOperator s,  const std::vector<std::pair<IdxType, double>>& symm_expr, bool param);
         void add_double_excitation(FermionOperator i, FermionOperator j, FermionOperator r, FermionOperator s);
       public:
-        UCCSD(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1, bool _symm_enforce = true): 
+        UCCSD(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1, IdxType _symm_level = 0): 
                                   env(_env),
                                   trotter_n(_trotter_n),
-                                  symm_enforce(_symm_enforce),
+                                  symm_level(_symm_level),
                                   qubit_transform(_qubit_transform),
                                   Ansatz(2 * _env.n_spatial) {
           n_singles = 2 * env.n_occ * env.n_virt;

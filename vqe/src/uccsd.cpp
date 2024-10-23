@@ -42,7 +42,7 @@ namespace NWQSim {
       FermionOperator r_alpha (r, Virtual, Up, Creation, env.xacc_scheme);
       FermionOperator r_beta (r, Virtual, Down, Creation, env.xacc_scheme);
       if ((i == j && r != s) || (i != j && r == s)) {
-        if (symm_enforce) {
+        if (symm_level >= 3) {
           IdxType term1 = fermion_operators.size();
           // only one parameter needed to enforce the symmetry 
           add_double_excitation(i_alpha, j_beta, r_beta, s_alpha, {{term1, 1.0}}, true);
@@ -57,7 +57,8 @@ namespace NWQSim {
         }
         return;
       } else if (i == j && r == s) {
-        if (symm_enforce) {
+        // double excitation
+        if (symm_level >= 2) {
           // only one parameter needed to enforce the symmetry 
           IdxType term1 = fermion_operators.size();
           add_double_excitation(i_alpha, j_beta, r_beta, s_alpha, {{term1, 1.0}}, true);
@@ -72,7 +73,7 @@ namespace NWQSim {
       // use the mixed excitation terms as the free variables (alpha_r beta_s beta_j alpha_i - alpha_s beta_r beta_i alpha_j)
       IdxType mixed_term1 = fermion_operators.size();
       IdxType mixed_term2 = fermion_operators.size() + 1;
-      if (symm_enforce) {
+      if (symm_level >= 3) {
         // s _r _j i
         add_double_excitation(i_alpha, j_beta, r_beta, s_alpha, {{mixed_term1, 1.0}}, true);
         // s _r _i j
@@ -159,7 +160,7 @@ namespace NWQSim {
         FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
         for (IdxType q = 0; q < env.n_virt; q++) {
           FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
-          if (symm_enforce) {
+          if (symm_level >= 1) {
             // Add a pointer to the corresponding Up spin term to share parameters
             symmetries[fermion_operators.size()] = {{fermion_operators.size() - env.n_occ * env.n_virt, 1.0}};
             fermion_operators.push_back({occupied_annihilation_down, virtual_creation_down});
