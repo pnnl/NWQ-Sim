@@ -272,6 +272,9 @@ namespace NWQSim {
         std::vector<IdxType> fermion_ops_to_params; // map from fermion operators to parameters (used in update)
         std::vector<std::vector<FermionOperator> > fermion_operators;
         virtual void getFermionOps();
+        void generate_mixed_excitation(IdxType i, IdxType j, IdxType r, IdxType s);
+        void add_double_excitation(FermionOperator i, FermionOperator j, FermionOperator r, FermionOperator s,  const std::vector<std::pair<IdxType, double>>& symm_expr, bool param);
+        void add_double_excitation(FermionOperator i, FermionOperator j, FermionOperator r, FermionOperator s);
       public:
         UCCSD(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1, bool _symm_enforce = true): 
                                   env(_env),
