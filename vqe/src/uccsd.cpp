@@ -47,14 +47,17 @@ namespace NWQSim {
           // only one parameter needed to enforce the symmetry 
           add_double_excitation(i_alpha, j_beta, r_beta, s_alpha, {{term1, 1.0}}, true);
           add_double_excitation(j_alpha, i_beta, s_beta, r_alpha, {{term1, 1.0}}, false);
-          add_double_excitation(i_beta, j_alpha, s_alpha, r_beta, {{term1, 1.0}}, false);
-          add_double_excitation(j_beta, i_alpha, r_alpha, s_beta, {{term1, 1.0}}, false);
+          add_double_excitation(i_beta, j_alpha, r_alpha, s_beta, {{term1, 1.0}}, false);
+          add_double_excitation(j_beta, i_alpha, s_alpha, r_beta, {{term1, 1.0}}, false);
         } else {
-          add_double_excitation(i_alpha, j_beta, r_beta, s_alpha);
-          add_double_excitation(i_alpha, j_beta, s_beta, r_alpha);
-          add_double_excitation(i_beta, j_alpha, s_alpha, r_beta);
-          add_double_excitation(j_beta, i_alpha, r_alpha, s_beta);
+
+            add_double_excitation(i_alpha, j_beta, r_beta, s_alpha);
+            add_double_excitation(j_alpha, i_beta, s_beta, r_alpha);
+            add_double_excitation(i_beta, j_alpha, r_alpha, s_beta);
+            add_double_excitation(j_beta, i_alpha, s_alpha, r_beta);
+         
         }
+
         return;
       } else if (i == j && r == s) {
         // double excitation
@@ -96,11 +99,11 @@ namespace NWQSim {
         // r _s _j i
         add_double_excitation(i_alpha, j_beta, s_beta, r_alpha, {{mixed_term2, 1.0}}, false);
         // _r s j _i = s _r _i j
-        add_double_excitation(i_alpha, j_beta, s_beta, r_alpha, {{mixed_term2, 1.0}}, false);
+        add_double_excitation(i_beta, j_alpha, s_alpha, r_beta, {{mixed_term2, 1.0}}, false);
         // r _s _i j = s _r _j i
-        add_double_excitation(i_alpha, j_beta, s_beta, r_alpha, {{mixed_term1, 1.0}}, false);
+        add_double_excitation(j_alpha, i_beta, s_beta, r_alpha, {{mixed_term1, 1.0}}, false);
         // _r s i _j = s _r _j i
-        add_double_excitation(i_beta, j_alpha, s_alpha, r_beta, {{mixed_term1, 1.0}}, false);
+        add_double_excitation(j_beta, i_alpha, s_alpha, r_beta, {{mixed_term1, 1.0}}, false);
       } else {
         // s _r _j i
         add_double_excitation(i_alpha, j_beta, r_beta, s_alpha);
@@ -124,11 +127,11 @@ namespace NWQSim {
         // r _s _j i
         add_double_excitation(i_alpha, j_beta, s_beta, r_alpha);
         // _r s j _i
-        add_double_excitation(i_alpha, j_beta, s_beta, r_alpha);
-        // r _s _i j
-        add_double_excitation(i_alpha, j_beta, s_beta, r_alpha);
-        // _r s i _j
         add_double_excitation(i_beta, j_alpha, s_alpha, r_beta);
+        // r _s _i j
+        add_double_excitation(j_alpha, i_beta, s_beta, r_alpha);
+        // _r s i _j
+        add_double_excitation(j_beta, i_alpha, s_alpha, r_beta);
       }
       
 
