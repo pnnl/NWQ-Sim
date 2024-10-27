@@ -136,6 +136,7 @@ namespace NWQSim {
         }
         // Accessors
         virtual IdxType numParams() const { return theta->size(); };
+        virtual IdxType numOps() const { return theta->size(); }; // MZ: # params and # operators could be different with further implementation
         const std::shared_ptr<std::vector<IdxType> > getParamGateIndices() const {return parameterized_gates;}
         const std::shared_ptr<std::vector<std::vector<std::pair<IdxType, ValType> > > > getParamGatePointers() const {return gate_parameter_pointers;}
         std::vector<ValType> getGateParams() const {
@@ -360,6 +361,7 @@ namespace NWQSim {
         
         const MolecularEnvironment& getEnv() const {return env;};
         virtual IdxType numParams() const override { return unique_params; };
+        virtual IdxType numOps() const override {return fermion_operators.size();};
     };
     
   };// namespace vqe

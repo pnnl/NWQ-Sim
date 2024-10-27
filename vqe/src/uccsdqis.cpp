@@ -107,6 +107,7 @@ namespace NWQSim {
         
         const MolecularEnvironment& getEnv() const {return env;};
         virtual IdxType numParams() const override { return unique_params; };
+        virtual IdxType numOps() const override { return fermion_operators.size(); };
 
     void add_double_excitation(FermionOperator i, FermionOperator j, FermionOperator r, FermionOperator s) {
         // MZ: just for notes, i,j occupied, r,s virtual
@@ -175,13 +176,22 @@ namespace NWQSim {
     // mixed
     for (IdxType i = 0; i < env.n_occ; i++) {
         FermionOperator i_occ_ann_up (i, Occupied, Up, Annihilation, env.xacc_scheme);
+        auto qi = getQubitIndex(i, Up, Occupied, env.n_occ, env.n_virt, env.xacc_scheme); // MZ: DEBUG
         for (IdxType r = 0; r < env.n_virt; r++) {
             FermionOperator r_virt_cre_up (r, Virtual, Up, Creation, env.xacc_scheme);
+            auto qr = getQubitIndex(r, Up, Virtual,  env.n_occ, env.n_virt, env.xacc_scheme); // MZ: DEBUG
             for (IdxType j = 0; j < env.n_occ; j++) {
                 FermionOperator j_occ_ann_dw (j, Occupied, Down, Annihilation, env.xacc_scheme);
+                auto qj = getQubitIndex(j, Down, Occupied, env.n_occ, env.n_virt, env.xacc_scheme); // MZ: DEBUG
                 for (IdxType s = 0; s < env.n_virt; s++) {
                     FermionOperator s_virt_cre_dw (s, Virtual, Down, Creation, env.xacc_scheme);
+                    auto qs = getQubitIndex(s, Down, Virtual,  env.n_occ, env.n_virt, env.xacc_scheme); // MZ: DEBUG
+                    // if ((i == j && r != s) || (i != j && r == s)) {
+                    //   std::cout << "\n  DEBUG: speicial case: " << i << " " << j << " " << r << " " << s  << std::endl;
+                    //   std::cout << "  DEBUG: speicial case: " << qi << " " << qj << " " << qr << " " << qs  << std::endl;
+                    // }
                     add_double_excitation(i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw); // MZ: alpha-beta, not need for beta-alpha
+                    // add_double_excitation(j_occ_ann_dw, i_occ_ann_up, r_virt_cre_up, s_virt_cre_dw);
                 }
             }
         }

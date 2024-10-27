@@ -4,7 +4,7 @@
 #include <string>
 #include "circuit/dynamic_ansatz.hpp"
 #include "vqe_adapt.hpp"
-// #include "src/uccsdfull.cpp" // MZ: backup calss for UCCSD before symmetries
+#include "src/uccsdqis.cpp"
 #include <chrono>
 
 #define UNDERLINE "\033[4m"
@@ -238,17 +238,17 @@ void callback_function_simple(const std::vector<NWQSim::ValType>& x, NWQSim::Val
 
 std::string get_termination_reason(nlopt::result result) {
     static const std::map<nlopt::result, std::string> reason_map = {
-        {nlopt::SUCCESS, "Success"},
-        {nlopt::STOPVAL_REACHED, "Stopval reached"},
-        {nlopt::FTOL_REACHED, "Ftol reached"},
-        {nlopt::XTOL_REACHED, "Xtol reached"},
-        {nlopt::MAXEVAL_REACHED, "Max evaluations reached"},
-        {nlopt::MAXTIME_REACHED, "Max time reached"},
-        {nlopt::FAILURE, "Failure"},
+        {nlopt::SUCCESS, "Optimization converged successfully"},
+        {nlopt::STOPVAL_REACHED, "Objective function value reached the specified stop value"},
+        {nlopt::FTOL_REACHED, "Function tolerance reached"},
+        {nlopt::XTOL_REACHED, "Variable tolerance reached"},
+        {nlopt::MAXEVAL_REACHED, "Maximum number of evaluations reached"},
+        {nlopt::MAXTIME_REACHED, "Maximum allowed time reached"},
+        {nlopt::FAILURE, "Optimization failed"},
         {nlopt::INVALID_ARGS, "Invalid arguments"},
         {nlopt::OUT_OF_MEMORY, "Out of memory"},
         {nlopt::ROUNDOFF_LIMITED, "Roundoff limited"},
-        {nlopt::FORCED_STOP, "Forced stop"}
+        {nlopt::FORCED_STOP, "Optimization was forcibly stopped by a callback function"}
     };
     auto it = reason_map.find(result);
     if (it != reason_map.end()) {
@@ -358,13 +358,17 @@ int main(int argc, char** argv) {
     ansatz = std::make_shared<NWQSim::VQE::DynamicAnsatz>(hamil->getEnv(), pool);
   } else {
     // Static UCCSD ansatz
-    // ansatz  = std::make_shared<NWQSim::VQE::UCCSDFull>(// MZ: backup class before any change on symmetries
     ansatz  = std::make_shared<NWQSim::VQE::UCCSD>(
       hamil->getEnv(),
       NWQSim::VQE::getJordanWignerTransform,
       1,
       params.symm_level
     );
+    //   ansatz  = std::make_shared<NWQSim::VQE::UCCSDQis>(
+    //   hamil->getEnv(),
+    //   NWQSim::VQE::getJordanWignerTransform,
+    //   1
+    // );
   }
   ansatz->buildAnsatz();
 
@@ -392,10 +396,15 @@ int main(int argc, char** argv) {
       // Print out the Fermionic operators with their excitations                                        
       std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters(); 
       // MZ: A better summary at the end so I don't scroll all the way up, especially with gradient-free optimizater    
-      manager.safe_print("\n----- Result Summary -----\n"); 
-      manager.safe_print("Ansatz                   : UCCSD\n");  // MZ: don't want to scroll all the way up to see this
+      manager.safe_print("\n----- Result Summary -----\n");
+      if (params.adapt) {
+        manager.safe_print("Method                  : ADAPT-VQE\n");
+      } else {
+        manager.safe_print("Method                  : VQE\n");
+      }
+      manager.safe_print("Ansatz                  : UCCSD\n");  // MZ: don't want to scroll all the way up to see this
       manager.safe_print("No. of Pauli Observables: %lld \n", hamil->num_ops()); // MZ: don't want to scroll all the way up to see this
-      manager.safe_print("Circuit Stats           : %lld Gates with %lld parameters\n" ,ansatz->num_gates(), ansatz->numParams()); // MZ: don't want to scroll all the way up to see this
+      manager.safe_print("Circuit Stats           : %lld Gates with %lld parameters and %lld operators\n" ,ansatz->num_gates(), ansatz->numParams(), ansatz->numOps()); // MZ: don't want to scroll all the way up to see this
       std::string ter_rea = "Optimization terminated : "+get_termination_reason(opt_info->get_optresult())+"\n";
       manager.safe_print(ter_rea.c_str());
       manager.safe_print("No. of function eval.   : %d\n", opt_info->get_numevals());

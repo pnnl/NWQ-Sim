@@ -3,7 +3,9 @@
 #include "utils.hpp"
 #include "vqe_state.hpp"
 #include <unordered_map>
+#include "src/uccsdqis.cpp"
 #include <sstream>
+#include <chrono>
 #define UNDERLINE "\033[4m"
 
 #define CLOSEUNDERLINE "\033[0m"
@@ -17,7 +19,7 @@ int show_help() {
   std::cout << "--backend, -b         Simulation backend. Defaults to CPU" << std::endl;
   std::cout << "--list-backends, -l   List available backends and exit." << std::endl;
   std::cout << "--amplitudes          List of initial amplitudes." << std::endl;
-  std::cout << "--ducc                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl;
+  std::cout << "--xass                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl; // MZ: it was --ducc, but the code only detects -- ducc
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
   std::cout << "--verbose             Print optimizer information on each iteration. Defaults to false" << std::endl;
   std::cout << "--symm                Symmetry level (0->none, 1->single, 2->double non-mixed+single, 3->all). Defaults to 0." << std::endl;
@@ -185,6 +187,53 @@ void silent_callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::Val
   
 }
 
+void print_header() {
+    std::cout << "\n----- Iteration Summary -----\n" << std::left
+              << std::setw(8) << " Iter."
+              << std::setw(22) << "Objective Value"
+              << std::setw(55) << "Parameters (first 5)"
+              << std::endl;
+    std::cout << std::string(83, '-') << std::endl;
+}
+
+// Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
+void callback_function_simple(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fval, NWQSim::IdxType iteration) {
+  if (iteration == 0) {
+    print_header();
+  }
+  std::cout << std::left << " "
+            << std::setw(7) << iteration
+            << std::setw(22) << std::fixed << std::setprecision(15) << fval;
+  
+  std::cout << std::fixed << std::setprecision(6);
+  for (size_t i = 0; i < std::min(x.size(), size_t(5)); ++i) {
+      std::cout  << std::setw(11) << x[i];
+  }
+  std::cout << std::endl;
+}
+
+std::string get_termination_reason(nlopt::result result) {
+    static const std::map<nlopt::result, std::string> reason_map = {
+        {nlopt::SUCCESS, "Optimization converged successfully"},
+        {nlopt::STOPVAL_REACHED, "Objective function value reached the specified stop value"},
+        {nlopt::FTOL_REACHED, "Function tolerance reached"},
+        {nlopt::XTOL_REACHED, "Variable tolerance reached"},
+        {nlopt::MAXEVAL_REACHED, "Maximum number of evaluations reached"},
+        {nlopt::MAXTIME_REACHED, "Maximum allowed time reached"},
+        {nlopt::FAILURE, "Optimization failed"},
+        {nlopt::INVALID_ARGS, "Invalid arguments"},
+        {nlopt::OUT_OF_MEMORY, "Out of memory"},
+        {nlopt::ROUNDOFF_LIMITED, "Roundoff limited"},
+        {nlopt::FORCED_STOP, "Optimization was forcibly stopped by a callback function"}
+    };
+    auto it = reason_map.find(result);
+    if (it != reason_map.end()) {
+        return it->second;
+    } else {
+        return "Unknown reason, code: " + std::to_string(result);
+    }
+}
+
 void optimize_ansatz(const VQEBackendManager& manager,
                      const std::string& backend,
                      const std::string& config,
@@ -201,7 +250,8 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      double delta,
                      double eta) {
   double fval;
-  NWQSim::VQE::Callback callback = verbose ? carriage_return_callback_function: silent_callback_function;
+  // NWQSim::VQE::Callback callback = verbose ? carriage_return_callback_function: silent_callback_function;
+  NWQSim::VQE::Callback callback = verbose ? callback_function_simple: silent_callback_function;
   if (!verbose) {
     NWQSim::Config::PRINT_SIM_TRACE = false;
   }
@@ -218,6 +268,8 @@ void optimize_ansatz(const VQEBackendManager& manager,
   long long num_iterations = 0;
   std::vector<std::pair<std::string, double> > param_tuple;
   state->initialize();
+
+  auto start_time = std::chrono::high_resolution_clock::now(); // MZ: time the optimization
   if (local) {
   param_tuple = state->follow_fixed_gradient(params, 
                                               initial_ene, 
@@ -234,13 +286,44 @@ void optimize_ansatz(const VQEBackendManager& manager,
     param_tuple = ansatz->getFermionicOperatorParameters();
     num_iterations = state->get_iteration();
   }
+  auto end_time = std::chrono::high_resolution_clock::now(); // MZ: time the optimization
+  double opt_duration = std::chrono::duration<double>(end_time - start_time).count(); // MZ: time the optimization
+  state -> set_duration(opt_duration); // MZ: time the optimization
 
   std::ostringstream strstream;
-  manager.safe_print("\nFinished in %llu iterations. Initial Energy %f, Final Energy %f\nPrinting excitation amplitudes:\n", num_iterations, initial_ene, final_ene);
-  for (auto& i: param_tuple) {
-    strstream << i.first << ": " << i.second << std::endl;
-  }
-  manager.safe_print("%s", strstream.str().c_str());
+  // manager.safe_print("\nFinished in %llu iterations. Initial Energy %f, Final Energy %f\nPrinting excitation amplitudes:\n", num_iterations, initial_ene, final_ene);
+  // for (auto& i: param_tuple) {
+  //   strstream << i.first << ": " << i.second << std::endl;
+  // }
+  // manager.safe_print("%s", strstream.str().c_str());
+  try { // MZ: catch exception
+      double total_seconds = state -> get_duration();
+      // Calculate hours, minutes, and seconds
+      int hours = static_cast<int>(total_seconds) / 3600;
+      int minutes = (static_cast<int>(total_seconds) % 3600) / 60;
+      double seconds = total_seconds - (hours * 3600 + minutes * 60);
+
+      // Print out the Fermionic operators with their excitations                                        
+      std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters(); 
+      manager.safe_print("\n----- Result Summary -----\n"); 
+      manager.safe_print("Method                  : QFlow\n");
+      manager.safe_print("Ansatz                  : UCCSD\n"); 
+      manager.safe_print("No. of Pauli Observables: %lld \n", hamil->num_ops());
+      manager.safe_print("Circuit Stats           : %lld Gates with %lld parameters and %lld operators\n" ,ansatz->num_gates(), ansatz->numParams(), ansatz->numOps() ); // MZ: don't want to scroll all the way up to see this
+      std::string ter_rea = "Optimization terminated : "+get_termination_reason(state->get_optresult())+"\n";
+      manager.safe_print(ter_rea.c_str());
+      manager.safe_print("No. of iterations       : %d\n", num_iterations);
+      manager.safe_print("Evaluation Time         : %d hrs %d mins %.4f secs\n", hours, minutes, seconds);
+      manager.safe_print("Initial objective value : %.16f\n", initial_ene); 
+      manager.safe_print("Final objective value   : %.16f\nFinal parameters:\n", final_ene); 
+      for (auto& i: param_tuple) {
+        strstream << i.first << ": " << i.second << std::endl;
+      }
+      manager.safe_print("%s", strstream.str().c_str());                                                                                            
+    } 
+    catch(std::exception &e) {
+        std::cout << "Optimization failed: " << e.what() << std::endl;
+    } // MZ: catch exception
 }
 
 
@@ -279,6 +362,11 @@ int main(int argc, char** argv) {
     1,
     symm_level
   );
+  // std::shared_ptr<NWQSim::VQE::Ansatz> ansatz  = std::make_shared<NWQSim::VQE::UCCSDQis>(
+  // hamil->getEnv(),
+  // NWQSim::VQE::getJordanWignerTransform,
+  // 1
+  // );
   ansatz->buildAnsatz();
   std::vector<double> params;
   manager.safe_print("Beginning VQE loop...\n");
