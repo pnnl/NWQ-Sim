@@ -42,6 +42,17 @@ Integrated Option:
 
 Manual Option: In this mode, you can add gates to the tableau, or construct it with a Pauli string of stabilizers.
 
-1. Create an NWQSim::tableau object with an initial NWQSim::Circuit (this can be empty, gates can be appended later).
+1. Create an NWQSim::tableau object with or without an initial NWQSim::Circuit (this can be empty, gates can be appended later).
+    Tableau T = Tableau(# qubits) or Tableau T = Tableau(circuit)
 2. Use the functions in tableau.hpp to directly interact with the tableau.
-3. Add gates with 'tableau'.add_gates(circuit). Each time gates are added, call 'tableau'.simulate() to ensure the tableau is up to date.
+    - Exchange stabilizers directly with T.add_stabilizer(paulistring) and T.replace_stabilizer(paulistring)
+        - Tableau initialize as square identities, in which case replace might make sense if you want to maintain the shape
+    - Apply new quantum gates to the tableau with T.add_gates(circuit)
+3. Read data or apply matrix operations
+    - T.convert_to_graph() returns a 2D vector of the CZ graph adjacency matrix
+    - T.get_stabilizers() reads the stabilizers of the Tableau
+    - T.get_outcomes() returns the integer value of any measurements in the circuit
+    - T.measure_all(# shots) acts like a measurement gate on every qubit and provides return data on a configurable number of shots
+        - measure_all does not destroy data in the tableau like a measurement, rather it is a non-destructive peek at the measurement outcomes in the Tableau's current state
+    - T.print_table() provides a visualization of the Tableau
+        - T.print_table(table) can also be used to print an X and Z only tableau like the one returned by convert_to_graph

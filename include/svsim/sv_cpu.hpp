@@ -292,7 +292,6 @@ namespace NWQSim
         {
             auto start = std::chrono::steady_clock::now();
             Tableau test = Tableau(gates, n_qubits);
-            test.simulate();
             std::cout << "Test_kernel" << std::endl;
 
             SAFE_FREE_HOST(results);
