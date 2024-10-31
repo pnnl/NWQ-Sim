@@ -132,36 +132,6 @@ namespace NWQSim
             //=========================================
         }
 
-        void clifford_sim(std::shared_ptr<NWQSim::Circuit> circuit, double& sim_time) override
-        {
-            //double sim_time;
-            cpu_timer sim_timer;
-            sim_timer.start_timer();
-
-            std::vector<Gate> cliffGates = circuit->get_gates();
-            
-            IdxType original_gates = circuit->num_gates();
-            IdxType n_gates = cliffGates.size();
-
-            assert(circuit->num_qubits() == n_qubits);
-
-            clifford_simulation_kernel(cliffGates);
-
-            sim_timer.stop_timer();
-            sim_time = sim_timer.measure();
-
-            if (Config::PRINT_SIM_TRACE)
-            {
-                printf("\n============== Clifford-SV-Sim ===============\n");
-                printf("n_qubits:%lld, n_gates:%lld, sim_gates:%lld, ncpus:%lld, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_cpu:%.3lf MB\n",
-                       n_qubits, original_gates, n_gates, n_cpu, sim_time, 0.,
-                       sim_time, cpu_mem / 1024 / 1024, cpu_mem / 1024 / 1024);
-                printf("=====================================\n");
-            }
-
-            //=========================================
-        }
-
         IdxType *get_results() override
         {
             return results;

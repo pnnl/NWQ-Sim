@@ -33,7 +33,8 @@ namespace NWQSim
     enum class SimType
     {
         SV,
-        DM
+        DM,
+        STAB
     };
     inline std::string formatDuration(std::chrono::seconds input_seconds)
     {

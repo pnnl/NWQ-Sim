@@ -4,7 +4,6 @@
 #include "circuit.hpp"
 #include "config.hpp"
 
-
 #include "private/gate_factory/sv_gates.hpp"
 #include <stdexcept> // For std::runtime_error
 #include <vector>
@@ -38,7 +37,6 @@ namespace NWQSim
         virtual void set_seed(IdxType seed) = 0;
 
         virtual void sim(std::shared_ptr<NWQSim::Circuit> circuit, double& time) = 0;
-        virtual void clifford_sim(std::shared_ptr<NWQSim::Circuit> circuit, double& time) = 0;
 
         virtual IdxType *get_results() = 0;
         virtual IdxType measure(IdxType qubit) = 0;
