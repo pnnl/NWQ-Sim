@@ -38,6 +38,7 @@ int show_help() {
   std::cout << "-g,--grad-samples     SPSA gradient samples." << std::endl;
   std::cout << "--delta               Perturbation magnitude for SPSA" << std::endl;
   std::cout << "--eta                 Gradient descent step size." << std::endl;
+  std::cout << "--qis                 Use Qiskit-like Ansatz (0->False, 1->True). Default to 0." << std::endl;
   return 1;
 }
 
@@ -58,7 +59,8 @@ int parse_args(int argc, char** argv,
                 uint64_t& symm_level,
                 unsigned& seed,
                 double& delta,
-                double& eta) {
+                double& eta,
+                int& use_qis) {
   std::string config_file = "";
   std::string algorithm_name = "LN_COBYLA";
   hamilfile = "";
@@ -75,6 +77,7 @@ int parse_args(int argc, char** argv,
   symm_level = 0;
   settings.lbound = -2;
   settings.ubound = 2;
+  use_qis = 0;
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
     if (argname == "-h" || argname == "--help") {
@@ -147,6 +150,8 @@ int parse_args(int argc, char** argv,
       settings.stop_val = std::atof(argv[++i]);
     } else if (argname == "--maxtime") {
       settings.max_time = std::atof(argv[++i]);
+    } else if (argname == "--qis") {
+      use_qis = std::atoi(argv[++i]);
     } else {
       fprintf(stderr, "\033[91mERROR:\033[0m Unrecognized option %s, type -h or --help for a list of configurable parameters\n", argv[i]);
       return show_help();
@@ -339,9 +344,10 @@ int main(int argc, char** argv) {
   uint64_t symm_level;
   bool use_xacc, local, verbose;
   int n_trials;
+  int use_qis;
   if (parse_args(argc, argv, manager, hamil_path, backend, config, amplitudes,  n_part, algo, settings, 
                  n_trials, use_xacc, local, verbose, symm_level, 
-                  seed, delta, eta)) {
+                  seed, delta, eta, use_qis)) {
     return 1;
   }
 #ifdef MPI_ENABLED
@@ -356,17 +362,23 @@ int main(int argc, char** argv) {
   std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(hamil_path, n_part, use_xacc);
   manager.safe_print("Constructing UCCSD Ansatz...\n");
 
-  std::shared_ptr<NWQSim::VQE::Ansatz> ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
-    hamil->getEnv(),
-    NWQSim::VQE::getJordanWignerTransform,
-    1,
-    symm_level
-  );
-  // std::shared_ptr<NWQSim::VQE::Ansatz> ansatz  = std::make_shared<NWQSim::VQE::UCCSDQis>(
-  // hamil->getEnv(),
-  // NWQSim::VQE::getJordanWignerTransform,
-  // 1
-  // );
+  std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
+  if (not use_qis) {
+    ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
+      hamil->getEnv(),
+      NWQSim::VQE::getJordanWignerTransform,
+      1,
+      symm_level
+    );
+  } else {
+    ansatz = std::make_shared<NWQSim::VQE::UCCSDQis>(
+      hamil->getEnv(),
+      NWQSim::VQE::getJordanWignerTransform,
+      1,
+      symm_level
+    );
+  }
+
   ansatz->buildAnsatz();
   std::vector<double> params;
   manager.safe_print("Beginning VQE loop...\n");
