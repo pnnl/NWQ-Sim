@@ -37,8 +37,15 @@ namespace NWQSim::Config
                       << "\033[1;32m" << (ENABLE_NOISE ? "Enabled" : "Disabled") << "\033[0m" << std::endl;
             std::cout << std::left << std::setw(40) << "\033[1;33mTensor Core:\033[0m"
                       << "\033[1;32m" << (ENABLE_TENSOR_CORE ? "Enabled" : "Disabled") << "\033[0m" << std::endl;
-            std::cout << std::left << std::setw(40) << "\033[1;33mSimulation Backend:\033[0m"
-                      << "\033[1;32m" << (sim_backend == "sv" ? "SVSim" : "DMSim") << "\033[0m" << std::endl;
+            std::cout << std::left << std::setw(40) << "\033[1;33mSimulation Backend:\033[0m" << "\033[1;32m";
+            if(sim_backend == "sv")
+                std::cout << "SVSim";
+            else if(sim_backend == "dm")
+                std::cout << "DMSim";
+            else
+                std::cout << "STABSim"; 
+            std::cout << "\033[0m" << std::endl;
+
             if (Config::PRINT_SIM_TRACE)
             {
                 std::cout << std::endl;

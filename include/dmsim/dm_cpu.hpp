@@ -174,8 +174,6 @@ namespace NWQSim
             //=========================================
         }
 
-        void clifford_sim(std::shared_ptr<NWQSim::Circuit> circuit, double& sim_time) override{};
-
         IdxType *get_results() override
         {
             return results;
