@@ -270,6 +270,7 @@ namespace NWQSim
             return DM;
         }
 
+
         //Get the stabilizers in the tableau, i.e. all of the Pauli strings that stabilize a certain circuit
         std::vector<std::string> get_stabilizers()
         {
@@ -579,102 +580,6 @@ namespace NWQSim
         } //End rowsum
 
         //Provides a bit/shot measurement output without affecting the original tableau
-        // IdxType* measure_all(IdxType shots = 2048) override
-        // {
-        //     IdxType* shotCounts = new IdxType[1<<n];
-        //     int singleOutcome = -1;
-        //     for(int shot = 0; shot < shots; shot++)
-        //     {
-        //         //Make a copy of the class being measured so many shots can be performed
-        //         std::vector<std::vector<int>> temp_x = x;
-        //         std::vector<std::vector<int>> temp_z = z;
-        //         std::vector<int> temp_r = r;
-        //         for(int a = 0; a < n; a++)
-        //         {  
-        //             //Store measurement outcomes of each bit
-        //             // int single_outcome;
-        //             int p = -1;
-        //             for(int p_index = rows/2; p_index < rows-1; p_index++)
-        //             {  
-        //                 //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
-        //                 if(temp_x[p_index][a] != 0)
-        //                 {
-        //                     p = p_index;
-        //                     break;
-        //                 }
-        //             }
-        //             //A p such that x[p][a] = 1 exists
-        //             if(p > -1)
-        //             {
-        //                 //std::cout << "Random measurement ";
-        //                 for(int i = 0; i < rows-1; i++)
-        //                 {
-        //                     if((i != p) && (temp_x[i][a] == 1))
-        //                     {
-        //                         rowsum(i, p, temp_x, temp_z, temp_r);
-        //                     }
-        //                 }
-        //                 temp_x[p-(rows/2)] = temp_x[p];
-        //                 temp_z[p-(rows/2)] = temp_z[p];
-        //                 //Change all the columns in row p to be 0
-        //                 for(int i = 0; i < n; i++)
-        //                 {
-        //                     temp_x[p][i] = 0;
-        //                     temp_z[p][i] = 0;                        
-        //                 }
-        //                 std::random_device rd;
-        //                 std::mt19937 gen(rd());  //Mersenne Twister engine
-        //                 //Define the range for random numbers
-        //                 std::uniform_int_distribution<> distr(0, 1);
-        //                 //Generate and display a random number
-        //                 int randomBit = distr(gen);
-        //                 if(randomBit)
-        //                 {
-        //                     //std::cout << "Random result of 1" << std::endl;
-        //                     temp_r[p] = 1;
-        //                 }
-        //                 else
-        //                 {
-        //                     //std::cout << "Random result of 0" << std::endl;
-        //                     temp_r[p] = 0;
-        //                 }
-        //                 temp_z[p][a] = 1;
-        //                 outcomes[a] = temp_r[p];
-        //                 //std::cout << outcomes[a] << std::endl;                
-        //             }
-        //             else
-        //             {
-        //                 //std::cout << "Deterministic measurement ";
-        //                 //Set the scratch space row to be 0
-        //                 //i is the column indexer in this case
-        //                 for(int i = 0; i < n; i++)
-        //                 {
-        //                     temp_x[rows-1][i] = 0;
-        //                     temp_z[rows-1][i] = 0;
-        //                 }
-        //                 //Run rowsum subroutine
-        //                 for(int i = 0; i < rows/2; i++)
-        //                 {
-        //                     if(temp_x[i][a] == 1)
-        //                     {
-        //                         //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
-        //                         rowsum(rows-1, i+(rows/2), temp_x, temp_z, temp_r);
-        //                     }
-        //                 }
-        //                 outcomes[a] = temp_r[rows-1];
-        //                 //std::cout << outcomes[a] << std::endl;
-        //             }
-        //             //Convert the bit array outcomes[] to an int singleOutcome
-        //             singleOutcome += outcomes[a] << a;
-        //         //std::cout << "Result at qubit " << a << " = "  << outcomes[a] << std::endl;
-        //         } //End M
-        //         //Increment the count when an outcome is found
-        //         shotCounts[singleOutcome]++;
-        //     }//End shots
-        //     return shotCounts;
-        // }
-
-        //Provides a bit/shot measurement output without affecting the original tableau
         IdxType* measure_all(IdxType shots = 2048) override
         {
             //Each index of shotResults is a possible result from a full measurement, ex. 01100101 in an 8 qubit system
@@ -895,7 +800,7 @@ namespace NWQSim
                     for(int i = 0; i < rows-1; i++)
                     {
                         //Phase
-                        r[i] = r[i] ^ ((x[i][a] << 1) + z[i][a]);
+                        r[i] ^= (x[i][a] && z[i][a]);
                         //Entry -- swap x and z bits
                         tempVal = x[i][a];
                         x[i][a] = z[i][a];
@@ -909,10 +814,10 @@ namespace NWQSim
                     for(int i = 0; i < rows-1; i++)
                     {
                         //Phase
-                        r[i] = r[i] ^ ((x[i][a] << 1) + z[i][a]);
+                        r[i] ^= (x[i][a] & z[i][a]);
 
                         //Entry
-                        z[i][a] = z[i][a] ^ x[i][a];
+                        z[i][a] ^= x[i][a];
                     }
 
                 }
@@ -923,11 +828,11 @@ namespace NWQSim
                     for(int i = 0; i < rows-1; i++)
                     {
                         //Phase
-                        r[i] = r[i] ^ (((x[i][a] << 1) + z[i][b])*(x[i][b]^z[i][a]^1));
+                        r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
 
                         //Entry
-                        x[i][b] = x[i][b] ^ x[i][a];
-                        z[i][a] = z[i][a] ^ z[i][b];
+                        x[i][b] ^= x[i][a];
+                        z[i][a] ^= z[i][b];
                     }
                 }
                 else if (gate.op_name == OP::M)
@@ -1016,6 +921,34 @@ namespace NWQSim
                     }
                 //std::cout << "Result at qubit " << a << " = "  << outcomes[a] << std::endl;
                 } //End M
+                else if (gate.op_name == OP::X)
+                {
+                    for(int i = 0; i < rows-1; i++)
+                    {
+                        //Entry
+                        x[i][a] ^= 1;
+                    }
+                }
+                else if (gate.op_name == OP::Y)
+                {
+                    for(int i = 0; i < rows-1; i++)
+                    {
+                        //Phase
+                        r[i] ^= 1;
+
+                        //Entry
+                        x[i][a] ^= 1;
+                        z[i][a] ^= 1;
+                    }
+                }
+                else if (gate.op_name == OP::Z)
+                {
+                    for(int i = 0; i < rows-1; i++)
+                    {
+                        //Entry
+                        z[i][a] ^= 1;
+                    }
+                }
                 else    
                 {
                     std::cout << "Non-Clifford or unrecognized gate: "

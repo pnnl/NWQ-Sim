@@ -16,7 +16,12 @@ int main(){
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
     // Add some gates to the circuit
-    //circuit->RZ(0.125, 0);
+
+    // for(int i = 0; i < n_qubits; i++)
+    // {
+    //     circuit->X(i);
+    // }
+    circuit->X(n_qubits-1);
 
     std::string backend = "CPU";
     std::string sim_method = "stab";
@@ -33,6 +38,20 @@ int main(){
         std::cout << "Result " << i << ": " << result[i] << std::endl;
     }
 
+    backend = "CPU";
+    sim_method = "sv";
+    auto state2 = BackendManager::create_state(backend, n_qubits, sim_method);
+    std::cout << "TEST" << std::endl;
+
+    state2->sim(circuit, timer);
+    shots = 5;
+
+    NWQSim::IdxType* result2 = state->measure_all(shots);
+
+    for(int i = 0; i < (1 << n_qubits); i++)
+    {
+        std::cout << "Result " << i << ": " << result2[i] << std::endl;
+    }
 
 	return 0;
 }	

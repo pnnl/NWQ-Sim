@@ -47,6 +47,7 @@ namespace NWQSim
 
         virtual ValType get_exp_z() = 0;
         virtual ValType get_exp_z(const std::vector<size_t> &in_bits) = 0;
+
         virtual ValType fidelity(std::shared_ptr<QuantumState> other)
         {
             throw std::runtime_error("Fidelity computation not implemented");
