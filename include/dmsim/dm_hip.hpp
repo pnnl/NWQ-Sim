@@ -227,7 +227,7 @@ namespace NWQSim
             {
                 printf("\n============== DM-Sim (HIP) ===============\n");
                 printf("n_qubits:%lld, n_gates:%lld, sim_gates:%lld, ngpus:%d, MatrixCore: %s, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms, mem:%.3lf MB, mem_per_gpu:%.3lf MB\n",
-                       n_qubits, origional_gates, n_gates, 1, (Config::ENABLE_TENSOR_CORE ? "Enabled" : "Disabled"), sim_time, 0.,
+                       n_qubits, origional_gates, n_gates, 1, (Config::ENABLE_MATRIX_CORE ? "Enabled" : "Disabled"), sim_time, 0.,
                        sim_time, gpu_mem / 1024 / 1024, gpu_mem / 1024 / 1024);
                 printf("=====================================\n");
             }

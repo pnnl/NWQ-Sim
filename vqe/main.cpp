@@ -4,6 +4,7 @@
 #include <string>
 #include "circuit/dynamic_ansatz.hpp"
 #include "vqe_adapt.hpp"
+#include "nwq_util.hpp"
 #include <chrono>
 
 #define UNDERLINE "\033[4m"
@@ -23,7 +24,6 @@ struct VQEParams {
 
   // Simulator options
   std::string backend = "CPU";
-  std::string config = "../default_config.json";
   uint32_t seed;
   // Optimizer settings
   NWQSim::VQE::OptimizerSettings optimizer_settings;
@@ -46,7 +46,6 @@ int show_help() {
   std::cout << "--list-backends, -l   List available backends and exit." << std::endl;
   std::cout << UNDERLINE << "OPTIONAL" << CLOSEUNDERLINE << std::endl;
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
-  std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
   std::cout << "--opt-config          Path to config file for NLOpt optimizer parameters" << std::endl;
   std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA" << std::endl;
   std::cout << "--lbound              Lower bound for classical optimizer. Defaults to -PI" << std::endl;
@@ -65,6 +64,9 @@ int show_help() {
   std::cout << "--adapt-fvaltol       Cutoff absolute tolerance for function value. Defaults to 1e-6" << std::endl;
   std::cout << "--qubit               Uses Qubit instead of Fermionic operators for ADAPT-VQE. Defaults to false" << std::endl;
   std::cout << "--adapt-pool          Sets the pool size for Qubit operators. Defaults to -1" << std::endl;
+  std::cout << UNDERLINE << "SIMULATOR OPTIONS" << CLOSEUNDERLINE << std::endl;
+  std::cout << "--num_threads         Specify the number of OMP threads. Defaults to use all hardware threads" << std::endl;
+  std::cout << "--disable_fusion      Disable gate fusion. Defaults to enabled" << std::endl;
   return 1;
 }
 
@@ -83,7 +85,6 @@ int parse_args(int argc, char** argv,
                VQEBackendManager& manager,
                VQEParams& params) {
   std::string opt_config_file = "";
-  params.config = "../default_config.json";
   std::string algorithm_name = "LN_COBYLA";
   NWQSim::VQE::OptimizerSettings& settings = params.optimizer_settings;
   params.seed = time(NULL);
@@ -115,9 +116,6 @@ int parse_args(int argc, char** argv,
       params.xacc = true;
     } else if (argname == "--ducc") {
       params.xacc = false;
-    } else 
-    if (argname == "--config") {
-      params.config = argv[++i];
     } else 
     if (argname == "--opt-config") {
       opt_config_file = argv[++i];
@@ -158,6 +156,10 @@ int parse_args(int argc, char** argv,
       settings.stop_val = std::atof(argv[++i]);
     } else if (argname == "--maxtime") {
       settings.max_time = std::atof(argv[++i]);
+    } else if (argname == "--num_threads") {
+      NWQSim::Config::OMP_NUM_THREADS = std::atoi(argv[++i]);
+    } else if (argname == "--disable_fusion") {
+      NWQSim::Config::ENABLE_FUSION = false;
     } else {
       fprintf(stderr, "\033[91mERROR:\033[0m Unrecognized option %s, type -h or --help for a list of configurable parameters\n", argv[i]);
       return show_help();
@@ -223,7 +225,6 @@ void optimize_ansatz(const VQEBackendManager& manager,
   // Set the callback function (silent is default)
   NWQSim::VQE::Callback callback = (params.adapt ? silent_callback_function : callback_function);
   std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(params.backend,
-                                                                           params.config,
                                                                            ansatz, 
                                                                            hamil, 
                                                                            params.algo, 
@@ -247,11 +248,11 @@ void optimize_ansatz(const VQEBackendManager& manager,
     adapt_instance.make_commutators(); // Start making the commutators
     auto end_commutators = std::chrono::high_resolution_clock::now();
     double commutator_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_commutators - start_time).count() / 1e9;
-    manager.safe_print("Constructed ADAPT-VQE Commutators in %.2e seconds\n", commutator_time); // Report the commutator overhead
+    NWQSim::safe_print("Constructed ADAPT-VQE Commutators in %.2e seconds\n", commutator_time); // Report the commutator overhead
     adapt_instance.optimize(x, fval, params.adapt_maxeval, params.adapt_gradtol, params.adapt_fvaltol); // MAIN OPTIMIZATION LOOP
     auto end_optimization = std::chrono::high_resolution_clock::now();
     double optimization_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_optimization - end_commutators ).count() / 1e9;
-    manager.safe_print("Completed ADAPT-VQE Optimization in %.2e seconds\n", optimization_time); // Report the total time
+    NWQSim::safe_print("Completed ADAPT-VQE Optimization in %.2e seconds\n", optimization_time); // Report the total time
   } else {
     state->initialize(); // Initialize the state (AKA allocating measurement data structures and building the measurement circuit)
     state->optimize(x, fval); // MAIN OPTIMIZATION LOOP
@@ -277,12 +278,12 @@ int main(int argc, char** argv) {
 #endif
 
   // Get the Hamiltonian from the external file
-  manager.safe_print("Reading Hamiltonian...\n");
+  NWQSim::safe_print("Reading Hamiltonian...\n");
   std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(params.hamiltonian_path, 
                                                                                                params.nparticles,
                                                                                                params.xacc);
-  manager.safe_print("Constructed %lld Pauli Observables\n", hamil->num_ops());
-  manager.safe_print("Constructing UCCSD Ansatz...\n");
+  NWQSim::safe_print("Constructed %lld Pauli Observables\n", hamil->num_ops());
+  NWQSim::safe_print("Constructing UCCSD Ansatz...\n");
   
   // Build the parameterized ansatz
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
@@ -301,17 +302,17 @@ int main(int argc, char** argv) {
   }
   ansatz->buildAnsatz();
 
-  manager.safe_print("%lld Gates with %lld parameters\n" ,ansatz->num_gates(), ansatz->numParams());
+  NWQSim::safe_print("%lld Gates with %lld parameters\n" ,ansatz->num_gates(), ansatz->numParams());
   std::vector<double> x;
   double fval;
-  manager.safe_print("Beginning VQE loop...\n");
+  NWQSim::safe_print("Beginning VQE loop...\n");
   optimize_ansatz(manager, params, ansatz,  hamil, x, fval);
   
   // Print out the Fermionic operators with their excitations
   std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters();
-  manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters:\n", fval);
+  NWQSim::safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters:\n", fval);
   for (auto& pair: param_map) {
-    manager.safe_print("%s :: %e\n", pair.first.c_str(), pair.second);
+    NWQSim::safe_print("%s :: %e\n", pair.first.c_str(), pair.second);
 
   }
 #ifdef MPI_ENABLED

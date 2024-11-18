@@ -365,6 +365,88 @@ aprun -n <NODES> -N 1 <NWQ-Sim Command> --backend MPI
 ```
 Replace `<NODES>` with the number of compute nodes
 
+## Noise Model Update API
+
+This API allows you to dynamically update the noise model in a quantum circuit using special commands within your QASM file. The API supports operations to scale, set, or reset various noise parameters for specific qubits or gates.
+
+### Syntax
+
+`MODIFY_NOISE` `<OP_TYPE>` `<NOISE_TYPE>` `<VALUE>` `<TARGET>`;
+
+
+- **`MODIFY_NOISE`**: The keyword that indicates a noise update operation.
+- **`<OP_TYPE>`**: The type of operation to perform on the noise parameter. Available operations:
+  - `SCALE`: Scale the existing noise parameter by the provided value.
+  - `SET`: Set the noise parameter to the provided value.
+  - `RESET`: Reset the noise parameter to its default value (in this case, `<VALUE>` is omitted).
+- **`<NOISE_TYPE>`**: The type of noise to update. Supported noise types:
+  - `T1`: Relaxation time for qubits.
+  - `T2`: Dephasing time for qubits.
+  - `<ACTUAL_GATE>_LEN`: Duration of a specific quantum gate operation (e.g., `CX_LEN` for a CX gate).
+  - `<ACTUAL_GATE>_ERR`: Error rate of a specific quantum gate (e.g., `CX_ERR` for a CX gate).
+  - `READOUT_LEN`: Duration of the qubit measurement process.
+  - `READOUT_M0P1`: Probability of measurement error when preparing in state `|1⟩` and measuring `|0⟩`.
+  - `READOUT_M1P0`: Probability of measurement error when preparing in state `|0⟩` and measuring `|1⟩`.
+- **`<VALUE>`**: The value to scale or set the noise parameter to. This is a floating-point number and is omitted for the `RESET` operation.
+- **`<TARGET>`**: The target qubits or gate for the operation:
+  - For single-qubit noise parameters (`T1`, `T2`, `READOUT_LEN`, etc.), you can specify multiple qubits, such as `q[0], q[1], q[3]`, or a qubit register such as `q`, to apply the operation to all associated qubits.
+  - For gate-related noise parameters (e.g., `CX_LEN`, `CX_ERR`), specify the target gate with two directional qubits (e.g., `q[0], q[1]`).
+
+### Examples
+
+#### 1. **Scaling T1 Time for Qubits 0 and 1**
+
+This command scales the T1 relaxation time of qubits 0 and 1 by a factor of 1.2:
+
+```
+MODIFY_NOISE SCALE T1 1.2 q[0], q[1];
+```
+
+#### 2. **Setting Gate Error for a CX Gate between Qubits 0 and 1**
+
+This command sets the error rate of the CX gate between qubit 0 and qubit 1 to 0.01:
+
+```
+MODIFY_NOISE SET CX_ERR 0.01 q[0], q[1];
+```
+
+#### 3. **Resetting the Readout Length for Qubit 1**
+
+This command resets the readout length (measurement time) for qubit 1 to the default value:
+
+```
+MODIFY_NOISE RESET READOUT_LEN q[1];
+```
+
+#### 4. **Scaling the CX Gate Length between Qubits 0 and 1**
+
+This command scales the CX gate duration between qubit 0 and qubit 1 by a factor of 1.1:
+
+```
+MODIFY_NOISE SCALE CX_LEN 1.1 q[0], q[1];
+```
+
+#### 5. **Setting the Readout Error (M0P1) for Qubits 0, 1, and 3**
+
+This command sets the readout error for qubits 0, 1, and 3 when preparing in state `|1⟩` and measuring `|0⟩` to 0.02:
+
+```
+MODIFY_NOISE SET READOUT_M0P1 0.02 q[0], q[1], q[3];
+```
+
+### Error Handling
+
+- **Invalid Noise Type**: If an unsupported `<NOISE_TYPE>` is specified, an error will be raised.
+- **Invalid Operation Type**: Only `SCALE`, `SET`, and `RESET` operations are supported.
+<!-- - **Missing or Extra Arguments**: Ensure the correct number of arguments is supplied for each operation. For example, `RESET` should not include a `<VALUE>`. -->
+
+### Notes
+
+- **Directional Gates**: For two-qubit gates, ensure that the qubits are specified in the correct order, as gates like `CX q[0], q[1]` and `CX q[1], q[0]` represent different operations.
+- **Precision**: The `<VALUE>` for `SCALE` and `SET` operations is treated as a floating-point number and can represent very small or large adjustments.
+- **Multiple Qubits**: You can specify multiple qubits in one operation for single-qubit noise parameters (e.g., `q[0], q[1], q[3]`). You can also use a qubit register to target all qubits associated with it.
+- **Case Insensitivity**: The API is case-insensitive, so both uppercase and lowercase commands are valid.
+- **Independent Noise Channel** In our noise model, we apply thermal relaxation error and depolarization error independently. The **thermal relaxation error** depends on the qubit's relaxation times $T_1$ and $T_2$, as well as the **gate length** (duration of the quantum operation). The **depolarization error** is determined by the specified **error rate** of the gate. By modeling these errors separately, we capture both the time-dependent decoherence effects and the gate-specific operational errors in our quantum system.
 
 ## NWQ-Sim for Chemistry Simulations
 

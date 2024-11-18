@@ -22,10 +22,9 @@ namespace NWQSim
                    std::shared_ptr<Hamiltonian> h, 
                    nlopt::algorithm optimizer_algorithm,
                    Callback _callback,
-                   const std::string& configpath,
                    IdxType seed = 0,
                    OptimizerSettings opt_settings = OptimizerSettings()): 
-                                      SV_CPU(a->num_qubits(), configpath),
+                                      SV_CPU(a->num_qubits()),
                                       VQEState(a, h, optimizer_algorithm, _callback, seed, opt_settings) {                                 
       };
       virtual void call_simulator() override {      
