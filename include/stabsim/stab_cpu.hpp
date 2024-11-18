@@ -102,7 +102,6 @@ namespace NWQSim
                 }
                 std::cout << std::endl;
             }
-            
         }
 
         //Convert a vector of 1's and 0's to an IdxType decimal number
@@ -215,7 +214,7 @@ namespace NWQSim
         }
 
         //Creates a sparse density matrix out of the Pauli strings stabilizers
-        ComplexSparseMatrix get_DM()
+        std::vector<std::vector<double>> get_density_matrix() override
         {
             std::vector<std::pair<std::string,int>> full_paulis = get_all_lines();
             std::pair<std::string,int> line;
@@ -247,32 +246,30 @@ namespace NWQSim
                             break;
                     }
                 }
-                switch(line.second)
-                {
-                    case 0:
-                        S = S * std::complex(1.0, 0.0);
-                        break;
-                    case 1:
-                        S = S * std::complex(0.0, 1.0);
-                        break;
-                    case 2:   
-                        S = S * std::complex(-1.0, 0.0);
-                        break;
-                    case 3:
-                        S = S * std::complex(0.0, -1.0);
-                        break;
-                    default:
-                        std::logic_error("Invalid phase");
-                        break;
-                }
+                
+                if(line.second == 1)
+                    S = S * -1.0;
+
                 DM = DM * .5 * (I + S);
             }
-            return DM;
+
+            std::vector<std::vector<double>> densityMatrix;
+            densityMatrix.resize(DM.rows(), std::vector<double>(DM.cols(),0));
+
+            for(int i = 0; i < DM.rows(); i++)
+            {
+                for(int j = 0; j < DM.cols(); j++)
+                {
+                    densityMatrix[i][j] = DM.coeff(i, j).real();
+                }
+            }
+
+            return densityMatrix;
         }
 
 
         //Get the stabilizers in the tableau, i.e. all of the Pauli strings that stabilize a certain circuit
-        std::vector<std::string> get_stabilizers()
+        std::vector<std::string> get_stabilizers() override
         {
             int x_val;
             int z_val;
@@ -461,23 +458,6 @@ namespace NWQSim
             }
         }
         
-        //Function to swap two rows of the tableau
-        void swapRows(int row1, int row2) {
-            std::swap(x[row1], x[row2]);
-            std::swap(z[row1], z[row2]);
-            std::swap(r[row1], r[row2]);
-        }
-
-        //Function to add row2 to row1 (mod 2)
-        void addRows(int row1, int row2) {
-            for (int i = 0; i < n; i++) {
-                x[row1][i] ^= x[row2][i];  //XOR for mod 2 addition
-                z[row1][i] ^= z[row2][i];  //XOR for mod 2 addition
-            }
-            r[row1] = (r[row1] + r[row2]) % 4;  //Phase flip
-        }
-        
-        void transpose(){};
         void transpose(std::vector<std::vector<int>>& M)
         {
             int rowSize = M.size();
@@ -499,7 +479,6 @@ namespace NWQSim
         //Algorithm to reduce the tableau to rref        
         void gaussianElimination() 
         {
-            //Perform Gaussian elimination on the destabilizers (first half of the rows)
             for (int col = 0; col < cols; col++) {
                 int pivotRow = -1;
                 for (int row = col; row < rows-1; row++) {
@@ -755,17 +734,20 @@ namespace NWQSim
         //Simulate the gates from a circuit in the tableau
         void sim(std::shared_ptr<NWQSim::Circuit> circuit, double &sim_time) override
         {
-            // IdxType origional_gates = circuit->num_gates();
             std::vector<Gate> gates = circuit->get_gates();
-            // std::vector<SVGate> gates = fuse_circuit_sv(circuit);
             IdxType n_gates = gates.size();
+
+            //Check that the circuit object matches the tableau
             assert(circuit->num_qubits() == n);
-            //double sim_time;
+
+            //Start a timer
             cpu_timer sim_timer;
             sim_timer.start_timer();
 
+            //Perform the tableau simulation
             simulation_kernel(gates);
 
+            //End timer
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
 
@@ -780,184 +762,221 @@ namespace NWQSim
             //=========================================
         }
 
-        void simulation_kernel(std::vector<Gate>& gates)
+        std::vector<std::vector<int>> get_graph_matrix() override
         {
-            //std::vector<Gate> gates = circuit->get_gates();
-            int g = gates.size();
+            std::cout << "-----Test-----" << std::endl;
 
-            //For swapping rows
-            int tempVal;
+            if (x.size() != z.size()) {
+                std::cerr << "Error: Matrices must have the same number of rows to append column-wise." << std::endl;
+            }
 
-            for (int k = 0; k < g; k++)
+            //Extract just the stabilizers w/o phase
+            std::vector<std::vector<int>> graphMatrix;
+            graphMatrix.resize(rows/2, std::vector<int>(2*cols,0));
+
+            for (int i = 0; i < rows/2; i++) {
+                for(int j = 0; j < cols; j++)
+                {
+                    graphMatrix[i][j] = x[i+rows/2][j]; //Copy the x row
+                    graphMatrix[i][j+cols] = z[i+rows/2][j];
+                }
+            }
+            std::cout << "\n-----Original-----" << std::endl;
+            print_table(graphMatrix);
+            
+            reduction(graphMatrix);
+
+            std::cout << "\n-----Reduction-----" << std::endl;
+            print_table(graphMatrix);
+
+            //convert to 'standard form'
+            int xRank = nonZeroRows(extractHalf(graphMatrix, true));
+            std::cout << "----- X rank after reduction ----- " << xRank << ", stabCounts: " << stabCounts << std::endl;
+            if(xRank != stabCounts)
             {
-                auto gate = gates[k];
-                //std::cout << "Current gate " << k << std::endl;
-                int a = gate.qubit;
+                zReduction(graphMatrix);
+                //permute qubits using the qubitIndex
 
-                if (gate.op_name == OP::H)
-                {
-                    
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Phase
-                        r[i] ^= (x[i][a] && z[i][a]);
-                        //Entry -- swap x and z bits
-                        tempVal = x[i][a];
-                        x[i][a] = z[i][a];
-                        z[i][a] = tempVal; 
-                    } 
+                //Adjust qubit index to maximize the size of the identity block in the Z part
+                std::vector<int> qubitIndex(n, 0);
+                for (int i = 0; i < xRank; i++) {
+                    qubitIndex[i] = i;
                 }
-                else if (gate.op_name == OP::S)
-                {
-                    int a = gate.qubit;
 
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Phase
-                        r[i] ^= (x[i][a] & z[i][a]);
+                std::vector<std::vector<int>> zMatrix = extractHalf(graphMatrix, false);
+            }//end if xRank/standard form
 
-                        //Entry
-                        z[i][a] ^= x[i][a];
-                    }
 
+
+            xRank = nonZeroRows(extractHalf(graphMatrix, true));
+
+            std::cout << "\n-----Standard form-----" << std::endl;
+            print_table(graphMatrix);
+
+            /*
+                Graph processing after standard form
+            */
+
+            if(nonZeroRows(graphMatrix) != n)
+                std::cout << "\n\n\nMismatch row/cols\n\n\n";
+            
+            std::vector<std::vector<int>> xStabs = extractHalf(graphMatrix, true);
+
+            //find the size of the identity
+            xRank = nonZeroRows(xStabs);
+
+            //Extract submatrices from graphMatrix
+            std::vector<std::vector<int>> I1(xRank, std::vector<int>(xRank));
+            std::vector<std::vector<int>> A(xRank, std::vector<int>(n - xRank));
+            std::vector<std::vector<int>> B(xRank, std::vector<int>(xRank));
+            std::vector<std::vector<int>> sign1(xRank, std::vector<int>(1, 0));
+
+            std::vector<std::vector<int>> D(graphMatrix.size() - xRank, std::vector<int>(xRank));
+            std::vector<std::vector<int>> I2(graphMatrix.size() - xRank, std::vector<int>(n - xRank - 1));
+            std::vector<std::vector<int>> sign2(graphMatrix.size() - xRank, std::vector<int>(1, 0));
+
+            /*
+            If the stabilizer is full rank (stabilizer count = qubit number), the stabilizer tableau can be reduced to
+            [[I A | B 0]
+             [0 0 | D I]]
+
+            If B has any nonzero diagonal elements, apply S gates to turn Y -> X
+            ==> 
+            [[I A | B' 0]
+             [0 0 | D  I]]
+            where B' has zero diagonal elements
+            */
+
+            //Apply S on B (0 on diagonal)
+            //This is equiv to z = (z + x)mod2 since the x matrix is an I 
+            for(int i = 0; i < B.size(); i++)
+            {
+                B[i][i] = 0;
+            }
+
+
+            //Fill the submatrices with data from graphMatrix
+            for (int i = 0; i < xRank; i++) {
+                for (int j = 0; j < xRank; j++) {
+                    I1[i][j] = graphMatrix[i][j];
+                    B[i][j] = graphMatrix[i][n + j];
                 }
-                else if (gate.op_name == OP::CX)
-                {  
-                    int a = gate.ctrl;
-                    int b = gate.qubit;
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Phase
-                        r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
 
-                        //Entry
-                        x[i][b] ^= x[i][a];
-                        z[i][a] ^= z[i][b];
-                    }
+                //Apply H on second block of qubits (x-z exchange) with I2
+                for (int j = 0; j < n - xRank; j++) {
+                    A[i][j] = graphMatrix[i][xRank + j];
                 }
-                else if (gate.op_name == OP::M)
-                {  
-                    int a = gate.qubit;
-                    int p = -1;
-                    for(int p_index = rows/2; p_index < rows-1; p_index++)
-                    {  
-                        //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
-                        if(x[p_index][a] != 0)
-                        {
-                            p = p_index;
-                            break;
-                        }
-                    }
-                    //A p such that x[p][a] = 1 exists
-                    if(p > -1)
-                    {
-                        std::cout << "Random measurement ";
+            }
 
-                        for(int i = 0; i < rows-1; i++)
-                        {
-                            if((i != p) && (x[i][a] == 1))
-                            {
-                                rowsum(i, p);
-                            }
-                        }
-                        x[p-(rows/2)] = x[p];
-                        z[p-(rows/2)] = z[p];
-                        //Change all the columns in row p to be 0
-                        for(int i = 0; i < n; i++)
-                        {
-                            x[p][i] = 0;
-                            z[p][i] = 0;                        
-                        }
-
-                        std::random_device rd;
-                        std::mt19937 gen(rd());  //Mersenne Twister engine
-
-                        //Define the range for random numbers
-                        std::uniform_int_distribution<> distr(0, 1);
-
-                        //Generate and display a random number
-                        int randomBit = distr(gen);
-                        
-                        if(randomBit)
-                        {
-                            //std::cout << "Random result of 1" << std::endl;
-                            r[p] = 1;
-                        }
-                        else
-                        {
-                            //std::cout << "Random result of 0" << std::endl;
-                            r[p] = 0;
-                        }
-                        z[p][a] = 1;
-
-                        outcomes[a] = r[p];
-
-                        std::cout << outcomes[a] << std::endl;                
-                    }
-                    else
-                    {
-                        std::cout << "Deterministic measurement ";
-
-                        //Set the scratch space row to be 0
-                        //i is the column indexer in this case
-                        for(int i = 0; i < n; i++)
-                        {
-                            x[rows-1][i] = 0;
-                            z[rows-1][i] = 0;
-                        }
-
-                        //Run rowsum subroutine
-                        for(int i = 0; i < rows/2; i++)
-                        {
-                            if(x[i][a] == 1)
-                            {
-                                //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
-                                rowsum(rows-1, i+(rows/2));
-                            }
-                        }
-                        //The result is the 
-                        outcomes[a] = r[rows-1];
-                        std::cout << outcomes[a] << std::endl;
-                    }
-                //std::cout << "Result at qubit " << a << " = "  << outcomes[a] << std::endl;
-                } //End M
-                else if (gate.op_name == OP::X)
-                {
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Entry
-                        x[i][a] ^= 1;
-                    }
+            for (int i = 0; i < graphMatrix.size() - xRank; i++) {
+                for (int j = 0; j < xRank; j++) {
+                    D[i][j] = graphMatrix[xRank + i][n + j];
                 }
-                else if (gate.op_name == OP::Y)
-                {
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Phase
-                        r[i] ^= 1;
+                //Apply H on second block of qubits (x-z exchange) with A
+                for (int j = 0; j < n - xRank - 1; j++) {
+                    I2[i][j] = graphMatrix[xRank + i][n + xRank + j];
+                }
+            }
 
-                        //Entry
-                        x[i][a] ^= 1;
-                        z[i][a] ^= 1;
-                    }
+            //Set diagonal elements of B to zero
+            for (int i = 0; i < B.size(); i++) {
+                if (B[i][i] != 0) {
+                    B[i][i] = 0;
                 }
-                else if (gate.op_name == OP::Z)
-                {
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Entry
-                        z[i][a] ^= 1;
-                    }
+            }
+
+            //Reconstruct the new graph matrix
+            std::vector<std::vector<int>> newGraph(graphMatrix.size(), std::vector<int>(graphMatrix[0].size(), 0));
+
+            //Fill newGraph with submatrices I1, A, B, I2, D, sign1, and sign2
+            for (int i = 0; i < xRank; i++) {
+                for (int j = 0; j < xRank; j++) {
+                    newGraph[i][j] = I1[i][j];
                 }
-                else    
-                {
-                    std::cout << "Non-Clifford or unrecognized gate: "
-                                << OP_NAMES[gate.op_name] << std::endl;
-                    std::logic_error("Invalid gate type");
-                    exit(1);
+                for (int j = 0; j < A[0].size(); j++) {
+                    newGraph[i][xRank + j] = A[i][j];
                 }
-            } //End gates for loop
-        } //End simulate
+                for (int j = 0; j < B[0].size(); j++) {
+                    newGraph[i][n + j] = B[i][j];
+                }
+                newGraph[i][graphMatrix[0].size() - 1] = sign1[i][0];
+            }
+
+            for (int i = 0; i < D.size(); i++) {
+                for (int j = 0; j < I2[0].size(); j++) {
+                    newGraph[xRank + i][n + xRank + j] = I2[i][j];
+                }
+                for (int j = 0; j < D[0].size(); j++) {
+                    newGraph[xRank + i][n + j] = D[i][j];
+                }
+                newGraph[xRank + i][graphMatrix[0].size() - 1] = sign2[i][0];
+            }
+
+
+            std::cout << "\n-----New graph-----" << std::endl;
+            print_table(newGraph);
+
+            return graphMatrix;
+        }
+
+        IdxType measure(IdxType qubit) override
+        {
+            throw std::logic_error("measure Not implemented (STAB_CPU)");
+        }
+        void set_initial(std::string fpath, std::string format) override
+        {
+            throw std::logic_error("set_initial Not implemented (STAB_CPU)");
+        }
+        void set_seed(IdxType seed) override
+        {
+            throw std::logic_error("set_seed Not implemented (STAB_CPU)");
+        }
+        void dump_res_state(std::string outfile) override
+        {
+            throw std::logic_error("dump_res_state Not implemented (STAB_CPU)");
+        }
+        ValType *get_real() const override
+        {
+            throw std::logic_error("get_real Not implemented (STAB_CPU)");
+        }
+        ValType *get_imag() const override
+        {
+            throw std::logic_error("get_imag Not implemented (STAB_CPU)");
+        }
+        ValType get_exp_z(const std::vector<size_t> &in_bits) override
+        {
+            throw std::logic_error("get_exp_z Not implemented (STAB_CPU)");
+        }
+        ValType get_exp_z() override
+        {
+            throw std::logic_error("get_exp_z Not implemented (STAB_CPU)");
+        }
+
+    protected:
+        int n;
+        int stabCounts;
+        int rows;
+        int cols;
+        std::vector<int> outcomes; //Vector of binary digits
+        std::vector<std::vector<int>> x;
+        std::vector<std::vector<int>> z;
+        std::vector<int> r;
+
+        //Function to swap two rows of the tableau
+        void swapRows(int row1, int row2) {
+            std::swap(x[row1], x[row2]);
+            std::swap(z[row1], z[row2]);
+            std::swap(r[row1], r[row2]);
+        }
+
+        //Function to add row2 to row1 (mod 2)
+        void addRows(int row1, int row2) {
+            for (int i = 0; i < n; i++) {
+                x[row1][i] ^= x[row2][i];  //XOR for mod 2 addition
+                z[row1][i] ^= z[row2][i];  //XOR for mod 2 addition
+            }
+            r[row1] = (r[row1] + r[row2]) % 4;  //Phase flip
+        }
 
         //Converts a matrix into column echelon and counts the number of pivot rows
         int countPivots(std::vector<std::vector<int>>& matrix) {
@@ -1308,205 +1327,184 @@ namespace NWQSim
             qubitReorder(graphMatrix, qubitIndex);
         }
 
-        std::vector<std::vector<int>> convert_to_graph()
+        void simulation_kernel(std::vector<Gate>& gates)
         {
-            std::cout << "-----Test-----" << std::endl;
+            int g = gates.size();
 
-            if (x.size() != z.size()) {
-                std::cerr << "Error: Matrices must have the same number of rows to append column-wise." << std::endl;
-            }
+            //For swapping rows
+            int tempVal;
 
-            //Extract just the stabilizers w/o phase
-            std::vector<std::vector<int>> graphMatrix;
-            graphMatrix.resize(rows/2, std::vector<int>(2*cols,0));
+            //Loop over every gate in the circuit and apply them
+            for (int k = 0; k < g; k++)
+            {
+                auto gate = gates[k];
+                int a = gate.qubit;
+                assert(a < n);
 
-            for (int i = 0; i < rows/2; i++) {
-                for(int j = 0; j < cols; j++)
+                if (gate.op_name == OP::H)
                 {
-                    graphMatrix[i][j] = x[i+rows/2][j]; //Copy the x row
-                    graphMatrix[i][j+cols] = z[i+rows/2][j];
+                    
+                    for(int i = 0; i < rows-1; i++)
+                    {
+                        //Phase
+                        r[i] ^= (x[i][a] && z[i][a]);
+                        //Entry -- swap x and z bits
+                        tempVal = x[i][a];
+                        x[i][a] = z[i][a];
+                        z[i][a] = tempVal; 
+                    } 
                 }
-            }
-            std::cout << "\n-----Original-----" << std::endl;
-            print_table(graphMatrix);
-            
-            reduction(graphMatrix);
+                else if (gate.op_name == OP::S)
+                {
+                    int a = gate.qubit;
 
-            std::cout << "\n-----Reduction-----" << std::endl;
-            print_table(graphMatrix);
+                    for(int i = 0; i < rows-1; i++)
+                    {
+                        //Phase
+                        r[i] ^= (x[i][a] & z[i][a]);
 
-            //convert to 'standard form'
-            int xRank = nonZeroRows(extractHalf(graphMatrix, true));
-            std::cout << "----- X rank after reduction ----- " << xRank << ", stabCounts: " << stabCounts << std::endl;
-            if(xRank != stabCounts)
-            {
-                zReduction(graphMatrix);
-                //permute qubits using the qubitIndex
+                        //Entry
+                        z[i][a] ^= x[i][a];
+                    }
 
-                //Adjust qubit index to maximize the size of the identity block in the Z part
-                std::vector<int> qubitIndex(n, 0);
-                for (int i = 0; i < xRank; i++) {
-                    qubitIndex[i] = i;
                 }
+                else if (gate.op_name == OP::CX)
+                {  
+                    int a = gate.ctrl;
+                    int b = gate.qubit;
+                    for(int i = 0; i < rows-1; i++)
+                    {
+                        //Phase
+                        r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
 
-                std::vector<std::vector<int>> zMatrix = extractHalf(graphMatrix, false);
-            }//end if xRank/standard form
-
-
-
-            xRank = nonZeroRows(extractHalf(graphMatrix, true));
-
-            std::cout << "\n-----Standard form-----" << std::endl;
-            print_table(graphMatrix);
-
-            /*
-                Graph processing after standard form
-            */
-
-            if(nonZeroRows(graphMatrix) != n)
-                std::cout << "\n\n\nMismatch row/cols\n\n\n";
-            
-            std::vector<std::vector<int>> xStabs = extractHalf(graphMatrix, true);
-
-            //find the size of the identity
-            xRank = nonZeroRows(xStabs);
-
-            //Extract submatrices from graphMatrix
-            std::vector<std::vector<int>> I1(xRank, std::vector<int>(xRank));
-            std::vector<std::vector<int>> A(xRank, std::vector<int>(n - xRank));
-            std::vector<std::vector<int>> B(xRank, std::vector<int>(xRank));
-            std::vector<std::vector<int>> sign1(xRank, std::vector<int>(1, 0));
-
-            std::vector<std::vector<int>> D(graphMatrix.size() - xRank, std::vector<int>(xRank));
-            std::vector<std::vector<int>> I2(graphMatrix.size() - xRank, std::vector<int>(n - xRank - 1));
-            std::vector<std::vector<int>> sign2(graphMatrix.size() - xRank, std::vector<int>(1, 0));
-
-            /*
-            If the stabilizer is full rank (stabilizer count = qubit number), the stabilizer tableau can be reduced to
-            [[I A | B 0]
-             [0 0 | D I]]
-
-            If B has any nonzero diagonal elements, apply S gates to turn Y -> X
-            ==> 
-            [[I A | B' 0]
-             [0 0 | D  I]]
-            where B' has zero diagonal elements
-            */
-
-            //Apply S on B (0 on diagonal)
-            //This is equiv to z = (z + x)mod2 since the x matrix is an I 
-            for(int i = 0; i < B.size(); i++)
-            {
-                B[i][i] = 0;
-            }
-
-
-            //Fill the submatrices with data from graphMatrix
-            for (int i = 0; i < xRank; i++) {
-                for (int j = 0; j < xRank; j++) {
-                    I1[i][j] = graphMatrix[i][j];
-                    B[i][j] = graphMatrix[i][n + j];
+                        //Entry
+                        x[i][b] ^= x[i][a];
+                        z[i][a] ^= z[i][b];
+                    }
                 }
+                else if (gate.op_name == OP::M)
+                {  
+                    int a = gate.qubit;
+                    int p = -1;
+                    for(int p_index = rows/2; p_index < rows-1; p_index++)
+                    {  
+                        //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
+                        if(x[p_index][a] != 0)
+                        {
+                            p = p_index;
+                            break;
+                        }
+                    }
+                    //A p such that x[p][a] = 1 exists
+                    if(p > -1)
+                    {
+                        std::cout << "Random measurement ";
 
-                //Apply H on second block of qubits (x-z exchange) with I2
-                for (int j = 0; j < n - xRank; j++) {
-                    A[i][j] = graphMatrix[i][xRank + j];
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            if((i != p) && (x[i][a] == 1))
+                            {
+                                rowsum(i, p);
+                            }
+                        }
+                        x[p-(rows/2)] = x[p];
+                        z[p-(rows/2)] = z[p];
+                        //Change all the columns in row p to be 0
+                        for(int i = 0; i < n; i++)
+                        {
+                            x[p][i] = 0;
+                            z[p][i] = 0;                        
+                        }
+
+                        std::random_device rd;
+                        std::mt19937 gen(rd());  //Mersenne Twister engine
+
+                        //Define the range for random numbers
+                        std::uniform_int_distribution<> distr(0, 1);
+
+                        //Generate and display a random number
+                        int randomBit = distr(gen);
+                        
+                        if(randomBit)
+                        {
+                            //std::cout << "Random result of 1" << std::endl;
+                            r[p] = 1;
+                        }
+                        else
+                        {
+                            //std::cout << "Random result of 0" << std::endl;
+                            r[p] = 0;
+                        }
+                        z[p][a] = 1;
+
+                        outcomes[a] = r[p];
+
+                        std::cout << outcomes[a] << std::endl;                
+                    }
+                    else
+                    {
+                        std::cout << "Deterministic measurement ";
+
+                        //Set the scratch space row to be 0
+                        //i is the column indexer in this case
+                        for(int i = 0; i < n; i++)
+                        {
+                            x[rows-1][i] = 0;
+                            z[rows-1][i] = 0;
+                        }
+
+                        //Run rowsum subroutine
+                        for(int i = 0; i < rows/2; i++)
+                        {
+                            if(x[i][a] == 1)
+                            {
+                                //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
+                                rowsum(rows-1, i+(rows/2));
+                            }
+                        }
+                        //The result is the 
+                        outcomes[a] = r[rows-1];
+                        std::cout << outcomes[a] << std::endl;
+                    }
+                //std::cout << "Result at qubit " << a << " = "  << outcomes[a] << std::endl;
+                } //End M
+                else if (gate.op_name == OP::X)
+                {
+                    for(int i = 0; i < rows-1; i++)
+                    {
+                        //Entry
+                        x[i][a] ^= 1;
+                    }
                 }
-            }
+                else if (gate.op_name == OP::Y)
+                {
+                    for(int i = 0; i < rows-1; i++)
+                    {
+                        //Phase
+                        r[i] ^= 1;
 
-            for (int i = 0; i < graphMatrix.size() - xRank; i++) {
-                for (int j = 0; j < xRank; j++) {
-                    D[i][j] = graphMatrix[xRank + i][n + j];
+                        //Entry
+                        x[i][a] ^= 1;
+                        z[i][a] ^= 1;
+                    }
                 }
-                //Apply H on second block of qubits (x-z exchange) with A
-                for (int j = 0; j < n - xRank - 1; j++) {
-                    I2[i][j] = graphMatrix[xRank + i][n + xRank + j];
+                else if (gate.op_name == OP::Z)
+                {
+                    for(int i = 0; i < rows-1; i++)
+                    {
+                        //Entry
+                        z[i][a] ^= 1;
+                    }
                 }
-            }
-
-            //Set diagonal elements of B to zero
-            for (int i = 0; i < B.size(); i++) {
-                if (B[i][i] != 0) {
-                    B[i][i] = 0;
+                else    
+                {
+                    std::cout << "Non-Clifford or unrecognized gate: "
+                                << OP_NAMES[gate.op_name] << std::endl;
+                    std::logic_error("Invalid gate type");
+                    exit(1);
                 }
-            }
-
-            //Reconstruct the new graph matrix
-            std::vector<std::vector<int>> newGraph(graphMatrix.size(), std::vector<int>(graphMatrix[0].size(), 0));
-
-            //Fill newGraph with submatrices I1, A, B, I2, D, sign1, and sign2
-            for (int i = 0; i < xRank; i++) {
-                for (int j = 0; j < xRank; j++) {
-                    newGraph[i][j] = I1[i][j];
-                }
-                for (int j = 0; j < A[0].size(); j++) {
-                    newGraph[i][xRank + j] = A[i][j];
-                }
-                for (int j = 0; j < B[0].size(); j++) {
-                    newGraph[i][n + j] = B[i][j];
-                }
-                newGraph[i][graphMatrix[0].size() - 1] = sign1[i][0];
-            }
-
-            for (int i = 0; i < D.size(); i++) {
-                for (int j = 0; j < I2[0].size(); j++) {
-                    newGraph[xRank + i][n + xRank + j] = I2[i][j];
-                }
-                for (int j = 0; j < D[0].size(); j++) {
-                    newGraph[xRank + i][n + j] = D[i][j];
-                }
-                newGraph[xRank + i][graphMatrix[0].size() - 1] = sign2[i][0];
-            }
-
-
-            std::cout << "\n-----New graph-----" << std::endl;
-            print_table(newGraph);
-
-            return graphMatrix;
-        }
-
-        IdxType measure(IdxType qubit) override
-        {
-            throw std::logic_error("measure Not implemented (STAB_CPU)");
-        }
-        void set_initial(std::string fpath, std::string format) override
-        {
-            throw std::logic_error("set_initial Not implemented (STAB_CPU)");
-        }
-        void set_seed(IdxType seed) override
-        {
-            throw std::logic_error("set_seed Not implemented (STAB_CPU)");
-        }
-        void dump_res_state(std::string outfile) override
-        {
-            throw std::logic_error("dump_res_state Not implemented (STAB_CPU)");
-        }
-        ValType *get_real() const override
-        {
-            throw std::logic_error("get_real Not implemented (STAB_CPU)");
-        }
-        ValType *get_imag() const override
-        {
-            throw std::logic_error("get_imag Not implemented (STAB_CPU)");
-        }
-        ValType get_exp_z(const std::vector<size_t> &in_bits) override
-        {
-            throw std::logic_error("get_exp_z Not implemented (STAB_CPU)");
-        }
-        ValType get_exp_z() override
-        {
-            throw std::logic_error("get_exp_z Not implemented (STAB_CPU)");
-        }
-
-    protected:
-        int n;
-        int stabCounts;
-        int rows;
-        int cols;
-        std::vector<int> outcomes; //Vector of binary digits
-        std::vector<std::vector<int>> x;
-        std::vector<std::vector<int>> z;
-        std::vector<int> r;
+            } //End gates for loop
+        } //End simulate
     }; //End tableau class
 
 } // namespace NWQSim

@@ -70,6 +70,20 @@ namespace NWQSim
             throw std::runtime_error("Clear Buffer Not implemented");
         }
 
+        virtual std::vector<std::vector<double>> get_density_matrix()
+        {
+            throw std::runtime_error("Density Matrix Return Not implemented");
+        }
+        virtual std::vector<std::vector<int>> get_graph_matrix()
+        {
+            throw std::runtime_error("Graph Matrix Return Not implemented");
+        }
+        virtual std::vector<std::string> get_stabilizers()
+        {
+            throw std::runtime_error("Get Stabilizers Not implemented");
+        }
+
+
         IdxType i_proc = 0; // process id
         ValType *buffer_state = nullptr;
         SimType sim_type;
