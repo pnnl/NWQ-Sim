@@ -82,6 +82,11 @@ namespace NWQSim
         {
             throw std::runtime_error("Get Stabilizers Not implemented");
         }
+        virtual void replace_stabilizer(std::string pauliString, int stabPos)
+        {
+            throw std::runtime_error("Replace Stabilizers Not implemented");
+        }
+
 
 
         IdxType i_proc = 0; // process id

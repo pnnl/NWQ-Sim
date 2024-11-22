@@ -831,6 +831,8 @@ map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::
 
 IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string init_path, std::string init_format, IdxType repetition)
 {
+    double timer;
+    
     if (init_path != "")
     {
         state->set_initial(init_path, init_format);
@@ -860,7 +862,7 @@ IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string in
     }
 
     circuit->MA(repetition);
-    state->sim(circuit);
+    state->sim(circuit, timer);
 
     return state->get_results();
 }
@@ -870,6 +872,7 @@ void qasm_parser::execute_gate(shared_ptr<QuantumState> state, std::shared_ptr<N
     auto gate_name = gate.name;
     auto params = gate.params;
     auto qubits = gate.qubits;
+    double timer;
 
     if (gate.name == MEASURE)
     {
@@ -877,7 +880,7 @@ void qasm_parser::execute_gate(shared_ptr<QuantumState> state, std::shared_ptr<N
         {
             if (!circuit->is_empty())
             {
-                state->sim(circuit);
+                state->sim(circuit, timer);
                 circuit->clear();
             }
 

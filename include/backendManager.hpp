@@ -64,9 +64,7 @@ public:
         NWQSim::safe_print("- AMDGPU\n");
 #endif
     }
-
-    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "SV")
-    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "SV")
+    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "STAB")
     {
         // Convert to uppercase
         std::transform(backend.begin(), backend.end(), backend.begin(),
@@ -77,7 +75,6 @@ public:
                        { return std::toupper(c); });
         if (backend == "CPU")
         {
-            if (simulator_method == "SV")
             if (simulator_method == "SV")
                 return std::make_shared<NWQSim::SV_CPU>(numQubits);
             else if(simulator_method == "STAB")
