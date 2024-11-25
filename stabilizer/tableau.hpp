@@ -1,20 +1,20 @@
-#pragma once
-
-//Eigen and pauli math
+//Custom header
 #include "pauli_math.hpp"
 
-#include "../state.hpp"
+//NWQSim header
+#include "../include/state.hpp"
 
-#include "../nwq_util.hpp"
-#include "../gate.hpp"
-#include "../circuit.hpp"
-#include "../config.hpp"
-#include "../private/exp_gate_declarations_host.hpp"
+#include "../include/nwq_util.hpp"
+#include "../include/gate.hpp"
+#include "../include/circuit.hpp"
+#include "../include/config.hpp"
+#include "../include/private/exp_gate_declarations_host.hpp"
 
-#include "../circuit_pass/fusion.hpp"
-#include "../private/macros.hpp"
-#include "../private/sim_gate.hpp"
+#include "../include/circuit_pass/fusion.hpp"
+#include "../include/private/macros.hpp"
+#include "../include/private/sim_gate.hpp"
 
+//C++ header
 #include <random>
 #include <cstring>
 #include <algorithm>
@@ -24,20 +24,24 @@
 
 namespace NWQSim
 {
-    class STAB_CPU : public QuantumState
+    class Tableau
     {
-
     public:
+
         //Default identity constructor
-        STAB_CPU(IdxType _n_qubits) : QuantumState(SimType::STAB)
+        Tableau(uint _numQubits)
         {
-            n = _n_qubits;
+            g = 0;
+            n = _numQubits;
             rows = 2*n+1;
-            cols = n;
             stabCounts = n;
-            x.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
+            cols = n;
+
+            outcomes.resize(cols);
+            outcomes.assign(outcomes.size(), 0);
+            x.resize(rows, std::vector<uint>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
                                                        //second n represents stabilizers + 1 extra row
-            z.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
+            z.resize(rows, std::vector<uint>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
             r.resize(rows, 0); //column on the right with 2n+1 rows
             //The 2n+1 th row is scratch space
 
@@ -47,36 +51,24 @@ namespace NWQSim
                 x[i][i] = 1;
                 z[i+n][i] = 1;
             }
-            
-            rng.seed(Config::RANDOM_SEED);
-            dist = std::uniform_int_distribution<int>(0,1);
-
-            SAFE_FREE_HOST(totalResults);
-            SAFE_ALOC_HOST(totalResults, sizeof(IdxType));
-            memset(totalResults, 0, sizeof(IdxType));
+            simulate();
         }
 
-        ~STAB_CPU()
+        //Constructor with a full set of gates
+        Tableau(std::vector<Gate> &_gates, uint _numQubits)
         {
-            // Release for CPU side
-            SAFE_FREE_HOST(totalResults);
-        }
-
-        //resets the tableau to a full identity
-        void reset_state() override
-        {
-            //Tableau format: 2n x n X matrix, 2n x n Z matrix and 2n x 1 phase column. All have an extra 1 x n scratch space (1x1 for phase).
-            //n is the number of qubits. First n rows represent destabilizer pauli strings, second n rows represent stabilizers
-            //columns represent qubits 
-            //Destabilizer/stabilizer rows can have more stabilizers added later ti become 2*n x m
+            gates = _gates;
+            g = gates.size();
+            n = _numQubits;
             rows = 2*n+1;
+            stabCounts = n;
             cols = n;
 
-            stabCounts = n;
-
-            x.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
+            outcomes.resize(cols);
+            outcomes.assign(outcomes.size(), 0);
+            x.resize(rows, std::vector<uint>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
                                                        //second n represents stabilizers + 1 extra row
-            z.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
+            z.resize(rows, std::vector<uint>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
             r.resize(rows, 0); //column on the right with 2n+1 rows
             //The 2n+1 th row is scratch space
 
@@ -86,15 +78,37 @@ namespace NWQSim
                 x[i][i] = 1;
                 z[i+n][i] = 1;
             }
+            simulate();
         }
 
-        void set_seed(IdxType s) override
+        //Constructor from a circuit containing gates
+        Tableau(std::shared_ptr<Circuit>& circuit)
         {
-            rng.seed(s);
-        }
+            gates = circuit->get_gates();
+            g = gates.size();
+            n = circuit->num_qubits();
+            rows = 2*n+1;
+            stabCounts = n;
+            cols = n;
 
-        //Prints the tableau including phase
-        void print_res_state() override
+            outcomes.resize(cols);
+            outcomes.assign(outcomes.size(), 0);
+            x.resize(rows, std::vector<uint>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
+                                                     //second n represents stabilizers + 1 extra row
+            z.resize(rows, std::vector<uint>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
+            r.resize(rows, 0); //column on the right with 2n+1 rows
+            //The 2n+1 th row is scratch space
+
+            //Intialize the identity tableau
+            for(int i = 0; i < n; i++)
+            {
+                x[i][i] = 1;
+                z[i+n][i] = 1;
+            }
+            simulate();
+        }  
+
+        void print_table()
         {
             for(int i = 0; i < rows; i++)
             {
@@ -111,8 +125,7 @@ namespace NWQSim
             }
         }
 
-        //Prints a 2n x m tableau matrix w/o phase bits
-        void print_table(std::vector<std::vector<int>>& M)
+        void print_table(std::vector<std::vector<uint>>& M)
         {
             for(int i = 0; i < M[0].size()+1; i++)
             {
@@ -132,14 +145,31 @@ namespace NWQSim
                 }
                 std::cout << std::endl;
             }
+            
+        }
+
+        void add_gates(std::shared_ptr<Circuit>& new_circ)
+        {
+            gates = new_circ->get_gates();
+            g = gates.size();
+            simulate();
         }
 
         //Convert a vector of 1's and 0's to an IdxType decimal number
-        IdxType *get_results() override
+        void get_outcomes(IdxType*& result)
         {
-            return totalResults;  //Return a pointer to totalResults
-        }
+            int conversion = 0;
 
+            for (int i = 0; i < outcomes.size(); i++) {
+                conversion = conversion | outcomes[i]<<i;  //Left shift and add the current bit
+            } 
+            
+            std::cout << "Conversion: " << conversion << std::endl;
+
+            result = new long long(static_cast<long long>(conversion));
+
+            //std::cout << "Result: " << result[0] << std::endl;
+        }
 
         //Get the stabilizers in the tableau, i.e. all of the Pauli strings that stabilize the circuit
         std::vector<std::string> get_destabilizers()
@@ -148,7 +178,7 @@ namespace NWQSim
             int z_val;
             std::string stabilizers;
             std::vector<std::string> pauliStrings;
-            for(int i = 0; i < (rows>>1); i++) //rows of stabilizers
+            for(int i = 0; i < rows/2; i++) //rows of stabilizers
             {
                 stabilizers.clear(); //clear the temporary stabilizers string
                 for(int j = 0; j < cols; j++) //qubits/cols
@@ -177,7 +207,7 @@ namespace NWQSim
         }
 
         //Get a pauli string stabilizer and phase bit
-        std::pair<std::string,int> get_stabilizer_line(int row)
+        std::pair<std::string,int> get_stabilizier_line(int row)
         {
             std::string stabilizers;
             for(int j = 0; j < cols; j++) //qubits/cols
@@ -206,7 +236,7 @@ namespace NWQSim
         std::vector<std::pair<std::string,int>> get_all_lines()
         {
             std::vector<std::pair<std::string,int>> full_paulis;
-            for(int row = (rows>>1); row < rows-1; row++) //rows of stabilizers
+            for(int row = rows/2; row < rows-1; row++) //rows of stabilizers
             {
                 std::string stabilizers;
                 for(int j = 0; j < cols; j++) //qubits/cols
@@ -235,7 +265,7 @@ namespace NWQSim
         }
 
         //Creates a sparse density matrix out of the Pauli strings stabilizers
-        std::vector<std::vector<double>> get_density_matrix() override
+        ComplexSparseMatrix get_DM()
         {
             std::vector<std::pair<std::string,int>> full_paulis = get_all_lines();
             std::pair<std::string,int> line;
@@ -267,36 +297,37 @@ namespace NWQSim
                             break;
                     }
                 }
-                
-                if(line.second == 1)
-                    S = S * -1.0;
-
+                switch(line.second)
+                {
+                    case 0:
+                        S = S * std::complex(1.0, 0.0);
+                        break;
+                    case 1:
+                        S = S * std::complex(0.0, 1.0);
+                        break;
+                    case 2:   
+                        S = S * std::complex(-1.0, 0.0);
+                        break;
+                    case 3:
+                        S = S * std::complex(0.0, -1.0);
+                        break;
+                    default:
+                        std::logic_error("Invalid phase");
+                        break;
+                }
                 DM = DM * .5 * (I + S);
             }
-
-            std::vector<std::vector<double>> densityMatrix;
-            densityMatrix.resize(DM.rows(), std::vector<double>(DM.cols(),0));
-
-            for(int i = 0; i < DM.rows(); i++)
-            {
-                for(int j = 0; j < DM.cols(); j++)
-                {
-                    densityMatrix[i][j] = DM.coeff(i, j).real();
-                }
-            }
-
-            return densityMatrix;
+            return DM;
         }
 
-
         //Get the stabilizers in the tableau, i.e. all of the Pauli strings that stabilize a certain circuit
-        std::vector<std::string> get_stabilizers() override
+        std::vector<std::string> get_stabilizers()
         {
             int x_val;
             int z_val;
             std::string stabilizers;
             std::vector<std::string> pauliStrings;
-            for(int i = (rows>>1); i < rows-1; i++) //rows of stabilizers
+            for(int i = rows/2; i < rows-1; i++) //rows of stabilizers
             {
                 stabilizers.clear(); //clear the temporary stabilizers string
                 for(int j = 0; j < cols; j++) //qubits/cols
@@ -376,10 +407,10 @@ namespace NWQSim
                 //Start by adding a row of destabilizers and stabilizers to T
                 stabCounts++;
                 rows+=2;
-                x.insert(x.begin() + x.size()/2, std::vector<int>(cols,0));
-                x.insert(x.end()-1, std::vector<int>(cols,0));
-                z.insert(z.begin() + z.size()/2, std::vector<int>(cols,0));
-                z.insert(z.end()-1, std::vector<int>(cols,0));
+                x.insert(x.begin() + x.size()/2, std::vector<uint>(cols,0));
+                x.insert(x.end()-1, std::vector<uint>(cols,0));
+                z.insert(z.begin() + z.size()/2, std::vector<uint>(cols,0));
+                z.insert(z.end()-1, std::vector<uint>(cols,0));
                 r.insert(r.begin() + r.size()/2, 0);
                 r.insert(r.end()-1, 0);
                 
@@ -391,29 +422,29 @@ namespace NWQSim
                         case 'I':
                             x[rows-2][i] = 0;
                             z[rows-2][i] = 0;
-                            x[(rows>>1)-1][i] = 0;
-                            z[(rows>>1)-1][i] = 0;
+                            x[rows/2-1][i] = 0;
+                            z[rows/2-1][i] = 0;
                             break;
                         case 'X':
                             x[rows-2][i] = 1;
                             z[rows-2][i] = 0;
-                            x[(rows>>1)-1][i] = 0;
-                            z[(rows>>1)-1][i] = 1;
+                            x[rows/2-1][i] = 0;
+                            z[rows/2-1][i] = 1;
                             break;
                         case 'Y':   
                             x[rows-2][i] = 1;
                             z[rows-2][i] = 1;
                             //make the destabilizer X to anticommute with Y
-                            x[(rows>>1)-1][i] = 1;
-                            z[(rows>>1)-1][i] = 0;
+                            x[rows/2-1][i] = 1;
+                            z[rows/2-1][i] = 0;
                             //add an i to the 2 bit phase representation at the stabilizer row
                             r[rows-1] = (r[rows-1] + 1) % 4;
                             break;
                         case 'Z':
                             x[rows-2][i] = 0;
                             z[rows-2][i] = 1;
-                            x[(rows>>1)-1][i] = 1;
-                            z[(rows>>1)-1][i] = 0;
+                            x[rows/2-1][i] = 1;
+                            z[rows/2-1][i] = 0;
                             break;
                         default:
                             std::logic_error("Invalid stabilizer");
@@ -429,7 +460,7 @@ namespace NWQSim
 
         //Replaces a stabilizer pauli string at some row in the Tableau. Useful for initializing a
         // new Tableau in a for loop without circuit initialization
-        void replace_stabilizer(std::string pauliString, int stabPos) override
+        void replace_stabilizer(std::string pauliString, int stabPos)
         {
             assert(pauliString.length() == n);
             //Start by adding a row of destabilizers and stabilizers to T
@@ -442,33 +473,33 @@ namespace NWQSim
                 {
                     case 'I':
                         //stab
-                        x[(rows>>1) + stabPos][i] = 0;
-                        z[(rows>>1) + stabPos][i] = 0;
+                        x[rows/2 + stabPos][i] = 0;
+                        z[rows/2 + stabPos][i] = 0;
                         //destab
                         x[stabPos][i] = 0;
                         z[stabPos][i] = 0;
                         break;
                     case 'X':
                         //stab
-                        x[(rows>>1) + stabPos][i] = 1;
-                        z[(rows>>1) + stabPos][i] = 0;
+                        x[rows/2 + stabPos][i] = 1;
+                        z[rows/2 + stabPos][i] = 0;
                         //destab
                         x[stabPos][i] = 0;
                         z[stabPos][i] = 1;
                         break;
                     case 'Y':
                         //stab
-                        x[(rows>>1) + stabPos][i] = 1;
-                        z[(rows>>1) + stabPos][i] = 1;
+                        x[rows/2 + stabPos][i] = 1;
+                        z[rows/2 + stabPos][i] = 1;
                         //make the destabilizer X to anticommute with Y
                         x[stabPos][i] = 1;
                         z[stabPos][i] = 0;
                         //add an i to the 2 bit phase representation at the stabilizer row
-                        r[(rows>>1) + stabPos] = (r[(rows>>1) + stabPos] + 1) % 4;
+                        r[rows/2 + stabPos] = (r[rows/2 + stabPos] + 1) % 4;
                         break;
                     case 'Z':
-                        x[(rows>>1) + stabPos][i] = 0;
-                        z[(rows>>1) + stabPos][i] = 1;
+                        x[rows/2 + stabPos][i] = 0;
+                        z[rows/2 + stabPos][i] = 1;
                         x[stabPos][i] = 1;
                         z[stabPos][i] = 0;
                         break;
@@ -479,11 +510,28 @@ namespace NWQSim
             }
         }
         
-        void transpose(std::vector<std::vector<int>>& M)
+        //Function to swap two rows of the tableau
+        void swapRows(int row1, int row2) {
+            std::swap(x[row1], x[row2]);
+            std::swap(z[row1], z[row2]);
+            std::swap(r[row1], r[row2]);
+        }
+
+        //Function to add row2 to row1 (mod 2)
+        void addRows(int row1, int row2) {
+            for (int i = 0; i < n; i++) {
+                x[row1][i] ^= x[row2][i];  //XOR for mod 2 addition
+                z[row1][i] ^= z[row2][i];  //XOR for mod 2 addition
+            }
+            r[row1] = (r[row1] + r[row2]) % 4;  //Phase flip
+        }
+        
+        void transpose(){};
+        void transpose(std::vector<std::vector<uint>>& M)
         {
             int rowSize = M.size();
             int colSize = M[0].size();
-            std::vector<std::vector<int>> MT = M;
+            std::vector<std::vector<uint>> MT = M;
 
 
             for(int i = 0; i < rowSize; i++)
@@ -500,6 +548,7 @@ namespace NWQSim
         //Algorithm to reduce the tableau to rref        
         void gaussianElimination() 
         {
+            //Perform Gaussian elimination on the destabilizers (first half of the rows)
             for (int col = 0; col < cols; col++) {
                 int pivotRow = -1;
                 for (int row = col; row < rows-1; row++) {
@@ -528,14 +577,14 @@ namespace NWQSim
             {
                 assert((x[i][j] == 0 || x[i][j] == 1) && (z[i][j] == 0 || z[i][j] == 1));
                 //Sum every column in the row
-                if(x[i][j])
+                if(x[i][j] == 1)
                 {
-                    if(z[i][j])
+                    if(z[i][j] == 1)
                         sum += z[h][j] - x[h][j];
                     else
                         sum += z[h][j] * (2*x[h][j]-1);
                 }
-                else if(z[i][j])
+                else if(z[i][j] == 1)
                     sum += x[h][j] * (1-2*z[h][j]);
 
                 //XOR x's and z's
@@ -550,59 +599,26 @@ namespace NWQSim
                 r[h] = 1;
         } //End rowsum
 
-        //For shot based measurement
-        void tempRowsum(int h, int i, std::vector<std::vector<int>>& temp_x, std::vector<std::vector<int>>& temp_z, std::vector<int>& temp_r)
-        {
-            int sum = 0;
-            for(int j = 0; j < n; j++)
-            {
-                //Sum every column in the row
-                if(temp_x[i][j])
-                {
-                    if(z[i][j])
-                        sum += temp_z[h][j] - temp_x[h][j];
-                    else
-                        sum += temp_z[h][j] * (2*temp_x[h][j]-1);
-                }
-                else if(temp_z[i][j])
-                    sum += temp_x[h][j] * (1-2*temp_z[h][j]);
-
-                //XOR x's and z's
-                temp_x[h][j] = temp_x[i][j] ^ temp_x[h][j];
-                temp_z[h][j] = temp_z[i][j] ^ temp_z[h][j];
-            }
-            sum = sum + 2*temp_r[h] + 2*temp_r[i];
-
-            if(sum % 4 == 0)
-                temp_r[h] = 0;
-            else
-                temp_r[h] = 1;
-        } //End rowsum
-
         //Provides a bit/shot measurement output without affecting the original tableau
-        IdxType *measure_all(IdxType shots = 2048) override
+        std::vector<int> measureShots(int shots = 2048)
         {
-            //Each index of shotResults is a possible result from a full measurement, ex. 01100101 in an 8 qubit system
-            //The integer at that position is the number of times that result occured
-            SAFE_FREE_HOST(totalResults);
-            SAFE_ALOC_HOST(totalResults, sizeof(IdxType) * shots);
-            memset(totalResults, 0, sizeof(IdxType) * shots);
+            std::vector<int> shotCounts(1<<n); // <single_outcome, # times>
+            int singleOutcome = -1;
 
-            int half_rows = rows >> 1;
-            
-            for(int i = 0; i < shots; i++)
+            for(int shot = 0; shot < shots; shot++)
             {
                 //Make a copy of the class being measured so many shots can be performed
-                std::vector<std::vector<int>> temp_x = x;
-                std::vector<std::vector<int>> temp_z = z;
-                std::vector<int> temp_r = r;
+                Tableau temp = *this;
                 for(int a = 0; a < n; a++)
                 {  
+                    //Store measurement outcomes of each bit
+                    // int single_outcome;
+
                     int p = -1;
-                    for(int p_index = half_rows; p_index < rows-1; p_index++)
+                    for(int p_index = temp.rows/2; p_index < temp.rows-1; p_index++)
                     {  
                         //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
-                        if(temp_x[p_index][a])
+                        if(temp.x[p_index][a] != 0)
                         {
                             p = p_index;
                             break;
@@ -611,316 +627,233 @@ namespace NWQSim
                     //A p such that x[p][a] = 1 exists
                     if(p > -1)
                     {
-                        for(int i = 0; i < rows-1; i++)
+                        std::cout << "Random measurement ";
+
+                        for(int i = 0; i < temp.rows-1; i++)
                         {
-                            if((x[i][a]) && (i != p))
+                            if((i != p) && (temp.x[i][a] == 1))
                             {
-                                tempRowsum(i, p, temp_x, temp_z, temp_r);
+                                temp.rowsum(i, p);
                             }
                         }
-                        temp_x[p-half_rows] = temp_x[p];
-                        temp_z[p-half_rows] = temp_z[p];
+                        temp.x[p-(temp.rows/2)] = temp.x[p];
+                        temp.z[p-(temp.rows/2)] = temp.z[p];
                         //Change all the columns in row p to be 0
-                        for(int i = 0; i < n; i++)
+                        for(int i = 0; i < temp.n; i++)
                         {
-                            temp_x[p][i] = 0;
-                            temp_z[p][i] = 0;                        
+                            temp.x[p][i] = 0;
+                            temp.z[p][i] = 0;                        
                         }
 
-                        int randomBit = dist(rng);
+                        std::random_device rd;
+                        std::mt19937 gen(rd());  //Mersenne Twister engine
+
+                        //Define the range for random numbers
+                        std::uniform_int_distribution<> distr(0, 1);
+
+                        //Generate and display a random number
+                        int randomBit = distr(gen);
                         
                         if(randomBit)
                         {
                             //std::cout << "Random result of 1" << std::endl;
-                            temp_r[p] = 1;
+                            temp.r[p] = 1;
                         }
                         else
                         {
                             //std::cout << "Random result of 0" << std::endl;
-                            temp_r[p] = 0;
+                            temp.r[p] = 0;
                         }
-                        temp_z[p][a] = 1;
+                        temp.z[p][a] = 1;
 
-                        totalResults[i] |= (temp_r[p] << a);
-                        // std::cout << "Random measurement at qubit " << a << " value: " << (temp_r[p] << a) << std::endl;
+                        temp.outcomes[a] = temp.r[p];
+
+                        std::cout << temp.outcomes[a] << std::endl;                
                     }
                     else
                     {
+                        std::cout << "Deterministic measurement ";
+
+                        //Set the scratch space row to be 0
+                        //i is the column indexer in this case
+                        for(int i = 0; i < temp.n; i++)
+                        {
+                            temp.x[temp.rows-1][i] = 0;
+                            temp.z[temp.rows-1][i] = 0;
+                        }
+
+                        //Run rowsum subroutine
+                        for(int i = 0; i < temp.rows/2; i++)
+                        {
+                            if(temp.x[i][a] == 1)
+                            {
+                                //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
+                                temp.rowsum(temp.rows-1, i+(temp.rows/2));
+                            }
+                        }
+                        temp.outcomes[a] = temp.r[rows-1];
+                        std::cout << temp.outcomes[a] << std::endl;
+                    }
+                    //Convert the bit array outcomes[] to an int singleOutcome
+                    singleOutcome += temp.outcomes[a] << a;
+                //std::cout << "Result at qubit " << a << " = "  << outcomes[a] << std::endl;
+                } //End M
+                //Increment the count when an outcome is found
+                shotCounts[singleOutcome]++;
+            }//End shots
+            return shotCounts;
+        }
+
+        //Simulate the gates from a circuit in the tableau
+        void simulate()
+        {
+            //For swapping rows
+            uint tempVal;
+
+            for (int k = 0; k < g; k++)
+            {
+                auto gate = gates[k];
+                //std::cout << "Current gate " << k << std::endl;
+                int a = gate.qubit;
+
+                if (gate.op_name == OP::H)
+                {
+                    
+                    for(int i = 0; i < rows-1; i++)
+                    {
+                        //Phase
+                        r[i] = r[i] ^ ((x[i][a] << 1) + z[i][a]);
+                        //Entry -- swap x and z bits
+                        tempVal = x[i][a];
+                        x[i][a] = z[i][a];
+                        z[i][a] = tempVal; 
+                    } 
+                }
+                else if (gate.op_name == OP::S)
+                {
+                    int a = gate.qubit;
+
+                    for(int i = 0; i < rows-1; i++)
+                    {
+                        //Phase
+                        r[i] = r[i] ^ ((x[i][a] << 1) + z[i][a]);
+
+                        //Entry
+                        z[i][a] = z[i][a] ^ x[i][a];
+                    }
+
+                }
+                else if (gate.op_name == OP::CX)
+                {  
+                    int a = gate.ctrl;
+                    int b = gate.qubit;
+                    for(int i = 0; i < rows-1; i++)
+                    {
+                        //Phase
+                        r[i] = r[i] ^ (((x[i][a] << 1) + z[i][b])*(x[i][b]^z[i][a]^1));
+
+                        //Entry
+                        x[i][b] = x[i][b] ^ x[i][a];
+                        z[i][a] = z[i][a] ^ z[i][b];
+                    }
+                }
+                else if (gate.op_name == OP::M)
+                {  
+                    int a = gate.qubit;
+                    int p = -1;
+                    for(int p_index = rows/2; p_index < rows-1; p_index++)
+                    {  
+                        //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
+                        if(x[p_index][a] != 0)
+                        {
+                            p = p_index;
+                            break;
+                        }
+                    }
+                    //A p such that x[p][a] = 1 exists
+                    if(p > -1)
+                    {
+                        std::cout << "Random measurement ";
+
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            if((i != p) && (x[i][a] == 1))
+                            {
+                                rowsum(i, p);
+                            }
+                        }
+                        x[p-(rows/2)] = x[p];
+                        z[p-(rows/2)] = z[p];
+                        //Change all the columns in row p to be 0
+                        for(int i = 0; i < n; i++)
+                        {
+                            x[p][i] = 0;
+                            z[p][i] = 0;                        
+                        }
+
+                        std::random_device rd;
+                        std::mt19937 gen(rd());  //Mersenne Twister engine
+
+                        //Define the range for random numbers
+                        std::uniform_int_distribution<> distr(0, 1);
+
+                        //Generate and display a random number
+                        int randomBit = distr(gen);
+                        
+                        if(randomBit)
+                        {
+                            //std::cout << "Random result of 1" << std::endl;
+                            r[p] = 1;
+                        }
+                        else
+                        {
+                            //std::cout << "Random result of 0" << std::endl;
+                            r[p] = 0;
+                        }
+                        z[p][a] = 1;
+
+                        outcomes[a] = r[p];
+
+                        std::cout << outcomes[a] << std::endl;                
+                    }
+                    else
+                    {
+                        std::cout << "Deterministic measurement ";
+
                         //Set the scratch space row to be 0
                         //i is the column indexer in this case
                         for(int i = 0; i < n; i++)
                         {
-                            temp_x[rows-1][i] = 0;
-                            temp_z[rows-1][i] = 0;
+                            x[rows-1][i] = 0;
+                            z[rows-1][i] = 0;
                         }
-                        temp_r[rows-1] = 0;
 
                         //Run rowsum subroutine
-                        for(int i = 0; i < half_rows; i++)
+                        for(int i = 0; i < rows/2; i++)
                         {
-                            if(temp_x[i][a] == 1)
+                            if(x[i][a] == 1)
                             {
                                 //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
-                                tempRowsum(rows-1, i+half_rows, temp_x, temp_z, temp_r);
+                                rowsum(rows-1, i+(rows/2));
                             }
                         }
-
-                        // std::cout << "Deterministc measurement at qubit " << a << " value: " << (temp_r[rows-1] << a) << std::endl;
-                        totalResults[i] |=  (temp_r[rows-1] << a);
-                    } //End if else
-                } //End single shot for all qubits
-            }//End shots
-            return totalResults;
-        }//End measure_all
-
-        //Simulate the gates from a circuit in the tableau
-        void sim(std::shared_ptr<NWQSim::Circuit> circuit, double &sim_time) override
-        {
-            std::vector<Gate> gates = circuit->get_gates();
-            IdxType n_gates = gates.size();
-
-            //Check that the circuit object matches the tableau
-            assert(circuit->num_qubits() == n);
-
-            //Start a timer
-            cpu_timer sim_timer;
-            sim_timer.start_timer();
-
-            //Perform the tableau simulation
-            simulation_kernel(gates);
-
-            //End timer
-            sim_timer.stop_timer();
-            sim_time = sim_timer.measure();
-
-            if (Config::PRINT_SIM_TRACE)
-            {
-                printf("\n============== STAB-Sim ===============\n");
-                printf("n_qubits:%lld, n_gates:%lld, ncpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms\n",
-                       n, n_gates, 1, sim_time, 0.,
-                       sim_time);
-                printf("=====================================\n");
-            }
-            //=========================================
-        }
-
-        std::vector<std::vector<int>> get_graph_matrix() override
-        {
-            std::cout << "-----Test-----" << std::endl;
-
-            if (x.size() != z.size()) {
-                std::cerr << "Error: Matrices must have the same number of rows to append column-wise." << std::endl;
-            }
-
-            //Extract just the stabilizers w/o phase
-            std::vector<std::vector<int>> graphMatrix;
-            graphMatrix.resize((rows>>1), std::vector<int>(2*cols,0));
-
-            for (int i = 0; i < (rows>>1); i++) {
-                for(int j = 0; j < cols; j++)
+                        //The result is the 
+                        outcomes[a] = r[rows-1];
+                        std::cout << outcomes[a] << std::endl;
+                    }
+                //std::cout << "Result at qubit " << a << " = "  << outcomes[a] << std::endl;
+                } //End M
+                else    
                 {
-                    graphMatrix[i][j] = x[i+(rows>>1)][j]; //Copy the x row
-                    graphMatrix[i][j+cols] = z[i+(rows>>1)][j];
+                    std::cout << "Non-Clifford or unrecognized gate: "
+                                << OP_NAMES[gate.op_name] << std::endl;
+                    std::logic_error("Invalid gate type");
                 }
-            }
-            std::cout << "\n-----Original-----" << std::endl;
-            print_table(graphMatrix);
-            
-            reduction(graphMatrix);
-
-            std::cout << "\n-----Reduction-----" << std::endl;
-            print_table(graphMatrix);
-
-            //convert to 'standard form'
-            int xRank = nonZeroRows(extractHalf(graphMatrix, true));
-            std::cout << "----- X rank after reduction ----- " << xRank << ", stabCounts: " << stabCounts << std::endl;
-            if(xRank != stabCounts)
-            {
-                zReduction(graphMatrix);
-                //permute qubits using the qubitIndex
-
-                //Adjust qubit index to maximize the size of the identity block in the Z part
-                std::vector<int> qubitIndex(n, 0);
-                for (int i = 0; i < xRank; i++) {
-                    qubitIndex[i] = i;
-                }
-
-                std::vector<std::vector<int>> zMatrix = extractHalf(graphMatrix, false);
-            }//end if xRank/standard form
-
-
-
-            xRank = nonZeroRows(extractHalf(graphMatrix, true));
-
-            std::cout << "\n-----Standard form-----" << std::endl;
-            print_table(graphMatrix);
-
-            /*
-                Graph processing after standard form
-            */
-
-            if(nonZeroRows(graphMatrix) != n)
-                std::cout << "\n\n\nMismatch row/cols\n\n\n";
-            
-            std::vector<std::vector<int>> xStabs = extractHalf(graphMatrix, true);
-
-            //find the size of the identity
-            xRank = nonZeroRows(xStabs);
-
-            //Extract submatrices from graphMatrix
-            std::vector<std::vector<int>> I1(xRank, std::vector<int>(xRank));
-            std::vector<std::vector<int>> A(xRank, std::vector<int>(n - xRank));
-            std::vector<std::vector<int>> B(xRank, std::vector<int>(xRank));
-            std::vector<std::vector<int>> sign1(xRank, std::vector<int>(1, 0));
-
-            std::vector<std::vector<int>> D(graphMatrix.size() - xRank, std::vector<int>(xRank));
-            std::vector<std::vector<int>> I2(graphMatrix.size() - xRank, std::vector<int>(n - xRank - 1));
-            std::vector<std::vector<int>> sign2(graphMatrix.size() - xRank, std::vector<int>(1, 0));
-
-            /*
-            If the stabilizer is full rank (stabilizer count = qubit number), the stabilizer tableau can be reduced to
-            [[I A | B 0]
-             [0 0 | D I]]
-
-            If B has any nonzero diagonal elements, apply S gates to turn Y -> X
-            ==> 
-            [[I A | B' 0]
-             [0 0 | D  I]]
-            where B' has zero diagonal elements
-            */
-
-            //Apply S on B (0 on diagonal)
-            //This is equiv to z = (z + x)mod2 since the x matrix is an I 
-            for(int i = 0; i < B.size(); i++)
-            {
-                B[i][i] = 0;
-            }
-
-
-            //Fill the submatrices with data from graphMatrix
-            for (int i = 0; i < xRank; i++) {
-                for (int j = 0; j < xRank; j++) {
-                    I1[i][j] = graphMatrix[i][j];
-                    B[i][j] = graphMatrix[i][n + j];
-                }
-
-                //Apply H on second block of qubits (x-z exchange) with I2
-                for (int j = 0; j < n - xRank; j++) {
-                    A[i][j] = graphMatrix[i][xRank + j];
-                }
-            }
-
-            for (int i = 0; i < graphMatrix.size() - xRank; i++) {
-                for (int j = 0; j < xRank; j++) {
-                    D[i][j] = graphMatrix[xRank + i][n + j];
-                }
-                //Apply H on second block of qubits (x-z exchange) with A
-                for (int j = 0; j < n - xRank - 1; j++) {
-                    I2[i][j] = graphMatrix[xRank + i][n + xRank + j];
-                }
-            }
-
-            //Set diagonal elements of B to zero
-            for (int i = 0; i < B.size(); i++) {
-                if (B[i][i] != 0) {
-                    B[i][i] = 0;
-                }
-            }
-
-            //Reconstruct the new graph matrix
-            std::vector<std::vector<int>> newGraph(graphMatrix.size(), std::vector<int>(graphMatrix[0].size(), 0));
-
-            //Fill newGraph with submatrices I1, A, B, I2, D, sign1, and sign2
-            for (int i = 0; i < xRank; i++) {
-                for (int j = 0; j < xRank; j++) {
-                    newGraph[i][j] = I1[i][j];
-                }
-                for (int j = 0; j < A[0].size(); j++) {
-                    newGraph[i][xRank + j] = A[i][j];
-                }
-                for (int j = 0; j < B[0].size(); j++) {
-                    newGraph[i][n + j] = B[i][j];
-                }
-                newGraph[i][graphMatrix[0].size() - 1] = sign1[i][0];
-            }
-
-            for (int i = 0; i < D.size(); i++) {
-                for (int j = 0; j < I2[0].size(); j++) {
-                    newGraph[xRank + i][n + xRank + j] = I2[i][j];
-                }
-                for (int j = 0; j < D[0].size(); j++) {
-                    newGraph[xRank + i][n + j] = D[i][j];
-                }
-                newGraph[xRank + i][graphMatrix[0].size() - 1] = sign2[i][0];
-            }
-
-
-            std::cout << "\n-----New graph-----" << std::endl;
-            print_table(newGraph);
-
-            return graphMatrix;
-        }
-
-        IdxType measure(IdxType qubit) override
-        {
-            throw std::logic_error("measure Not implemented (STAB_CPU)");
-        }
-        void set_initial(std::string fpath, std::string format) override
-        {
-            throw std::logic_error("set_initial Not implemented (STAB_CPU)");
-        }
-        void dump_res_state(std::string outfile) override
-        {
-            throw std::logic_error("dump_res_state Not implemented (STAB_CPU)");
-        }
-        ValType *get_real() const override
-        {
-            throw std::logic_error("get_real Not implemented (STAB_CPU)");
-        }
-        ValType *get_imag() const override
-        {
-            throw std::logic_error("get_imag Not implemented (STAB_CPU)");
-        }
-        ValType get_exp_z(const std::vector<size_t> &in_bits) override
-        {
-            throw std::logic_error("get_exp_z Not implemented (STAB_CPU)");
-        }
-        ValType get_exp_z() override
-        {
-            throw std::logic_error("get_exp_z Not implemented (STAB_CPU)");
-        }
-
-    protected:
-        IdxType n;
-        int stabCounts;
-        IdxType rows;
-        IdxType cols;
-        std::vector<std::vector<int>> x;
-        std::vector<std::vector<int>> z;
-        std::vector<int> r;
-        IdxType* totalResults = NULL;
-
-        std::mt19937 rng;
-        std::uniform_int_distribution<int> dist;
-
-        //Function to swap two rows of the tableau
-        void swapRows(int row1, int row2) {
-            std::swap(x[row1], x[row2]);
-            std::swap(z[row1], z[row2]);
-            std::swap(r[row1], r[row2]);
-        }
-
-        //Function to add row2 to row1 (mod 2)
-        void addRows(int row1, int row2) {
-            for (int i = 0; i < n; i++) {
-                x[row1][i] ^= x[row2][i];  //XOR for mod 2 addition
-                z[row1][i] ^= z[row2][i];  //XOR for mod 2 addition
-            }
-            r[row1] = (r[row1] + r[row2]) % 4;  //Phase flip
-        }
+            } //End gates for loop
+        } //End simulate
 
         //Converts a matrix into column echelon and counts the number of pivot rows
-        int countPivots(std::vector<std::vector<int>>& matrix) {
+        int countPivots(std::vector<std::vector<uint>>& matrix) {
             int rows = matrix.size();
             int cols = matrix[0].size();
             int leadCol = 0; //Track the leading column position
@@ -961,12 +894,12 @@ namespace NWQSim
             return pivotCount;
         }
 
-        int nonZeroRows(const std::vector<std::vector<int>>& matrix) {
+        int nonZeroRows(const std::vector<std::vector<uint>>& matrix) {
             int nonZeroRows = 0;
             for(const auto& row : matrix) 
             {
                 bool isNonZero = false;
-                for(int value : row) 
+                for(uint value : row) 
                 {
                     if (value != 0) 
                     {
@@ -983,7 +916,7 @@ namespace NWQSim
         }
 
         //Function to search for non-zero rows starting from a specified row
-        std::vector<int> searchNonZeroRows(const std::vector<std::vector<int>>& matrix, int col, int startRow = 0, int endRow = -1) {
+        std::vector<int> searchNonZeroRows(const std::vector<std::vector<uint>>& matrix, int col, int startRow = 0, int endRow = -1) {
             std::vector<int> nonZeroRows;
             if(endRow == -1) endRow = matrix.size();
 
@@ -1000,12 +933,12 @@ namespace NWQSim
             return nonZeroRows;
         }
 
-        std::vector<std::vector<int>> extractHalf(const std::vector<std::vector<int>>& matrix, bool left) {
+        std::vector<std::vector<uint>> extractHalf(const std::vector<std::vector<uint>>& matrix, bool left) {
             int numRows = matrix.size();
             int numCols = matrix[0].size();
             int halfCols = numCols / 2;
 
-            std::vector<std::vector<int>> result(numRows, std::vector<int>(halfCols));
+            std::vector<std::vector<uint>> result(numRows, std::vector<uint>(halfCols));
 
             for (int i = 0; i < numRows; i++) {
                 for (int j = 0; j < halfCols; j++) {
@@ -1015,7 +948,7 @@ namespace NWQSim
             return result;
         }
 
-        void gaussianElimination(std::vector<std::vector<int>> &matrix) {
+        void gaussianElimination(std::vector<std::vector<uint>> &matrix) {
             int rows = matrix.size();
             int cols = matrix[0].size();
 
@@ -1073,14 +1006,22 @@ namespace NWQSim
                 }
                 if(allzero)
                 {
-                    matrix = std::vector<std::vector<int>>(matrix.begin(), matrix.begin() + i);
+                    matrix = std::vector<std::vector<uint>>(matrix.begin(), matrix.begin() + i);
                     break;
                 }
             }
         }
+// 
 
+
+
+
+
+
+
+// Segmentation fault here
         //Function to perform the row addition and reduction process (reduceUp)
-        void reduceUp(std::vector<std::vector<int>>& matrix, const std::vector<int>& columnIndices) {
+        void reduceUp(std::vector<std::vector<uint>>& matrix, const std::vector<int>& columnIndices) {
             int j0 = columnIndices[columnIndices.size()-1];  //The index of the last row in columnIndices for addition
             // std::cout << columnIndices.size()-1<< std::endl;
             
@@ -1095,7 +1036,7 @@ namespace NWQSim
         }
 
         //Function to perform the row addition and reduction process (reduceDown)
-        void reduceDown(std::vector<std::vector<int>>& matrix, const std::vector<int>& columnIndices) {
+        void reduceDown(std::vector<std::vector<uint>>& matrix, const std::vector<int>& columnIndices) {
             int j0 = columnIndices[0];  //The index of the base row for addition
 
             for (int i = 1; i < columnIndices.size(); i++) {
@@ -1108,7 +1049,7 @@ namespace NWQSim
             }
         }
         //Function to perform a row insertion (row permutation) operation in the tableau
-        void rowInsert(std::vector<std::vector<int>>& matrix, int i, int j) {
+        void rowInsert(std::vector<std::vector<uint>>& matrix, int i, int j) {
             int totalRows = matrix.size();
 
             //Validate the indices
@@ -1136,14 +1077,14 @@ namespace NWQSim
             }
 
             //Permute the rows of the matrix according to indexOrder
-            std::vector<std::vector<int>> permutedMatrix(totalRows);
+            std::vector<std::vector<uint>> permutedMatrix(totalRows);
             for (int k = 0; k < totalRows; k++) {
                 permutedMatrix[k] = matrix[indexOrder[k]];
             }
             matrix = permutedMatrix;  //Update the original matrix with the permuted matrix
         }
 
-        void qubitReorder(std::vector<std::vector<int>>& matrix, std::vector<int> indices)
+        void qubitReorder(std::vector<std::vector<uint>>& matrix, std::vector<int> indices)
         {
             //Check if the length of the indices matches the number of qubits
             if (indices.size() != n) {
@@ -1159,7 +1100,7 @@ namespace NWQSim
             newIndex[2 * n] = 2 * n;
 
             //Create a new tableau with permuted columns based on the new indices
-            std::vector<std::vector<int>> permutedTableau(matrix.size(), std::vector<int>(matrix[0].size(), 0));
+            std::vector<std::vector<uint>> permutedTableau(matrix.size(), std::vector<uint>(matrix[0].size(), 0));
 
             for (int row = 0; row < matrix.size(); ++row) {
                 for (int col = 0; col < matrix[row].size(); ++col) {
@@ -1171,7 +1112,7 @@ namespace NWQSim
             matrix = permutedTableau;
         }
 
-        void reduction(std::vector<std::vector<int>>& graphMatrix) {
+        void reduction(std::vector<std::vector<uint>>& graphMatrix) {
             int xRank = nonZeroRows(extractHalf(graphMatrix, true));
 
             int rowPointer = 0;
@@ -1202,7 +1143,7 @@ namespace NWQSim
             }
         }
 
-        void zReduction(std::vector<std::vector<int>>& graphMatrix) {
+        void zReduction(std::vector<std::vector<uint>>& graphMatrix) {
             int xRank = nonZeroRows(extractHalf(graphMatrix, true));
 
             int rowPointer = xRank;
@@ -1237,15 +1178,15 @@ namespace NWQSim
                 qubitIndex[i] = i;
             }
 
-            std::vector<std::vector<int>> zMatrix = extractHalf(graphMatrix, false);
+            std::vector<std::vector<uint>> zMatrix = extractHalf(graphMatrix, false);
 
-            std::set<int> filledSet;
+            std::set<uint> filledSet;
             for(int i = 0; i < xRank; i++)
             {
                 filledSet.insert(i);
             }
             for (int j = xRank; j < stabCounts; j++) {
-                std::vector<int> col = zMatrix[j];
+                std::vector<uint> col = zMatrix[j];
                 if(col.size() == 0)
                 {
                     j--;
@@ -1268,175 +1209,235 @@ namespace NWQSim
             qubitReorder(graphMatrix, qubitIndex);
         }
 
-        void simulation_kernel(std::vector<Gate>& gates)
+        std::vector<std::vector<uint>> convert_to_graph()
         {
-            int g = gates.size();
+            std::cout << "-----Test-----" << std::endl;
 
-            //For swapping rows
-            int tempVal;
-            int half_rows = rows >> 1;
-            //Loop over every gate in the circuit and apply them
-            for (int k = 0; k < g; k++)
+            if (x.size() != z.size()) {
+                std::cerr << "Error: Matrices must have the same number of rows to append column-wise." << std::endl;
+            }
+
+            //Extract just the stabilizers w/o phase
+            std::vector<std::vector<uint>> graphMatrix;
+            graphMatrix.resize(rows/2, std::vector<uint>(2*cols,0));
+
+            for (int i = 0; i < rows/2; i++) {
+                for(int j = 0; j < cols; j++)
+                {
+                    graphMatrix[i][j] = x[i+rows/2][j]; //Copy the x row
+                    graphMatrix[i][j+cols] = z[i+rows/2][j];
+                }
+            }
+            std::cout << "\n-----Original-----" << std::endl;
+            print_table(graphMatrix);
+            
+            reduction(graphMatrix);
+
+            std::cout << "\n-----Reduction-----" << std::endl;
+            print_table(graphMatrix);
+
+            //convert to 'standard form'
+            int xRank = nonZeroRows(extractHalf(graphMatrix, true));
+            std::cout << "----- X rank after reduction ----- " << xRank << ", stabCounts: " << stabCounts << std::endl;
+            if(xRank != stabCounts)
             {
-                auto gate = gates[k];
-                int a = gate.qubit;
-                assert(a < n);
+                zReduction(graphMatrix);
+                //permute qubits using the qubitIndex
 
-                if (gate.op_name == OP::H)
+                //Adjust qubit index to maximize the size of the identity block in the Z part
+                std::vector<int> qubitIndex(n, 0);
+                for (int i = 0; i < xRank; i++) {
+                    qubitIndex[i] = i;
+                }
+
+                std::vector<std::vector<uint>> zMatrix = extractHalf(graphMatrix, false);
+            }//end if xRank/standard form
+
+
+
+            xRank = nonZeroRows(extractHalf(graphMatrix, true));
+
+            std::cout << "\n-----Standard form-----" << std::endl;
+            print_table(graphMatrix);
+
+            /*
+                Graph processing after standard form
+            */
+
+            if(nonZeroRows(graphMatrix) != n)
+                std::cout << "\n\n\nMismatch row/cols\n\n\n";
+            
+            std::vector<std::vector<uint>> xStabs = extractHalf(graphMatrix, true);
+
+            //find the size of the identity
+            xRank = nonZeroRows(xStabs);
+
+            //Extract submatrices from graphMatrix
+            std::vector<std::vector<uint>> I1(xRank, std::vector<uint>(xRank));
+            std::vector<std::vector<uint>> A(xRank, std::vector<uint>(n - xRank));
+            std::vector<std::vector<uint>> B(xRank, std::vector<uint>(xRank));
+            std::vector<std::vector<uint>> sign1(xRank, std::vector<uint>(1, 0));
+
+            std::vector<std::vector<uint>> D(graphMatrix.size() - xRank, std::vector<uint>(xRank));
+            std::vector<std::vector<uint>> I2(graphMatrix.size() - xRank, std::vector<uint>(n - xRank - 1));
+            std::vector<std::vector<uint>> sign2(graphMatrix.size() - xRank, std::vector<uint>(1, 0));
+
+            /*
+            If the stabilizer is full rank (stabilizer count = qubit number), the stabilizer tableau can be reduced to
+            [[I A | B 0]
+             [0 0 | D I]]
+
+            If B has any nonzero diagonal elements, apply S gates to turn Y -> X
+            ==> 
+            [[I A | B' 0]
+             [0 0 | D  I]]
+            where B' has zero diagonal elements
+            */
+
+            //Apply S on B (0 on diagonal)
+            //This is equiv to z = (z + x)mod2 since the x matrix is an I 
+            for(int i = 0; i < B.size(); i++)
+            {
+                B[i][i] = 0;
+            }
+
+
+            //Fill the submatrices with data from graphMatrix
+            for (int i = 0; i < xRank; i++) {
+                for (int j = 0; j < xRank; j++) {
+                    I1[i][j] = graphMatrix[i][j];
+                    B[i][j] = graphMatrix[i][n + j];
+                }
+
+                //Apply H on second block of qubits (x-z exchange) with I2
+                for (int j = 0; j < n - xRank; j++) {
+                    A[i][j] = graphMatrix[i][xRank + j];
+                }
+            }
+
+            for (int i = 0; i < graphMatrix.size() - xRank; i++) {
+                for (int j = 0; j < xRank; j++) {
+                    D[i][j] = graphMatrix[xRank + i][n + j];
+                }
+                //Apply H on second block of qubits (x-z exchange) with A
+                for (int j = 0; j < n - xRank - 1; j++) {
+                    I2[i][j] = graphMatrix[xRank + i][n + xRank + j];
+                }
+            }
+
+            //Set diagonal elements of B to zero
+            for (int i = 0; i < B.size(); i++) {
+                if (B[i][i] != 0) {
+                    B[i][i] = 0;
+                }
+            }
+
+            //Reconstruct the new graph matrix
+            std::vector<std::vector<uint>> newGraph(graphMatrix.size(), std::vector<uint>(graphMatrix[0].size(), 0));
+
+            //Fill newGraph with submatrices I1, A, B, I2, D, sign1, and sign2
+            for (int i = 0; i < xRank; i++) {
+                for (int j = 0; j < xRank; j++) {
+                    newGraph[i][j] = I1[i][j];
+                }
+                for (int j = 0; j < A[0].size(); j++) {
+                    newGraph[i][xRank + j] = A[i][j];
+                }
+                for (int j = 0; j < B[0].size(); j++) {
+                    newGraph[i][n + j] = B[i][j];
+                }
+                newGraph[i][graphMatrix[0].size() - 1] = sign1[i][0];
+            }
+
+            for (int i = 0; i < D.size(); i++) {
+                for (int j = 0; j < I2[0].size(); j++) {
+                    newGraph[xRank + i][n + xRank + j] = I2[i][j];
+                }
+                for (int j = 0; j < D[0].size(); j++) {
+                    newGraph[xRank + i][n + j] = D[i][j];
+                }
+                newGraph[xRank + i][graphMatrix[0].size() - 1] = sign2[i][0];
+            }
+
+
+            std::cout << "\n-----New graph-----" << std::endl;
+            print_table(newGraph);
+
+            return graphMatrix;
+        }
+
+/*
+        //Converts the tableau to a graph-state matrix
+        void convert_to_graph()
+        {
+
+            if (x.size() != z.size()) {
+                std::cerr << "Error: Matrices must have the same number of rows to append column-wise." << std::endl;
+            }
+
+            std::vector<std::vector<uint>> Stable(z.size());
+
+            for (int i = 0; i < z.size(); i++) {
+                Stable[i] = z[i];//Copy the z row
+                Stable[i].insert(Stable[i].end(), x[i].begin(), x[i].end());//Append the x row
+            }
+
+            transpose(Stable);
+            //graphm is now the stabilizer tableau in the form of the CZ formalism
+
+            std::vector<std::vector<uint>> graphM(z.size()) = Stable;
+
+
+            gaussianElimination(graphM);
+
+
+            //Find the pivot columns (columns where unique pauli's that can construct all other paulis are)
+            std::vector<int> pivotCols;
+            for (int row = 0; row < graphM.size(); row++) 
+            {
+                int pivotCol = -1;
+                for (int col = row; col < graphM[row].size(); col++) 
                 {
-                    
-                    for(int i = 0; i < rows-1; i++)
+                    if (x[row][col] == 1 || z[row][col] == 1) 
                     {
-                        //Phase
-                        r[i] ^= (x[i][a] & z[i][a]);
-                        //Entry -- swap x and z bits
-                        tempVal = x[i][a];
-                        x[i][a] = z[i][a];
-                        z[i][a] = tempVal; 
-                    } 
+                        pivotCols.push_back(col);
+                        break;
+                    }
                 }
-                else if (gate.op_name == OP::S)
+            }
+
+            //Sstart is now only the pivot columns of the transposed tableau
+            std::vector<std::vector<uint>> Sstart(n, pivotCols.size());
+            for(int i = 0; i < pivotCols.size(); i++)
+            {
+                for(int j = 0; j < n; j++)
                 {
-                    int a = gate.qubit;
-
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Phase
-                        r[i] ^= (x[i][a] & z[i][a]);
-
-                        //Entry
-                        z[i][a] ^= x[i][a];
-                    }
-
+                    Sstart[j][i] = Stable[j][pivotCols[i]];
                 }
-                else if (gate.op_name == OP::CX)
-                {  
-                    int a = gate.ctrl;
-                    int b = gate.qubit;
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Phase
-                        r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
+            }
+            std::vector<std::vector<uint>> SstartX(matrix.begin() + matrix.size()/2, matrix.end());
 
-                        //Entry
-                        x[i][b] ^= x[i][a];
-                        z[i][a] ^= z[i][b];
-                    }
-                }
-                else if (gate.op_name == OP::M)
-                {  
-                    
+            int pivotRows = countPivots(SstartX);
 
-                    int a = gate.qubit;
-                    int p = -1;
-                    for(int p_index = half_rows; p_index < rows-1; p_index++)
-                    {  
-                        //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
-                        if(x[p_index][a])
-                        {
-                            p = p_index;
-                            break;
-                        }
-                    }
-                    //A p such that x[p][a] = 1 exists
-                    if(p > -1)
-                    {
-                        for(int i = 0; i < rows-1; i++)
-                        {
-                            if((x[i][a]) && (i != p))
-                            {
-                                rowsum(i, p);
-                            }
-                        }
-                        x[p-half_rows] = x[p];
-                        z[p-half_rows] = z[p];
-                        //Change all the columns in row p to be 0
-                        for(int i = 0; i < n; i++)
-                        {
-                            x[p][i] = 0;
-                            z[p][i] = 0;                        
-                        }
+            //Swap the rows between z and x after the pivot rows to make the X matrix full rank
+            for(int i = Sstart.size()/2 + pivotRows; i < Sstart.size(); i++)
+            {
+                std::swap(M[i], M[i - Sstart.size()/2]);
+            }
+*/
 
-                        //Generate and display a random number
-                        int randomBit = dist(rng);
-                        
-                        if(randomBit)
-                        {
-                            //std::cout << "Random result of 1" << std::endl;
-                            r[p] = 1;
-                        }
-                        else
-                        {
-                            //std::cout << "Random result of 0" << std::endl;
-                            r[p] = 0;
-                        }
-                        z[p][a] = 1;
 
-                        totalResults[0] += r[p] << a;
-                        // std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
-                    }
-                    else
-                    {
 
-                        //Set the scratch space row to be 0
-                        //i is the column indexer in this case
-                        for(int i = 0; i < n; i++)
-                        {
-                            x[rows-1][i] = 0;
-                            z[rows-1][i] = 0;
-                        }
-                        r[rows-1] = 0;
-
-                        //Run rowsum subroutine
-                        for(int i = 0; i < half_rows; i++)
-                        {
-                            if(x[i][a] == 1)
-                            {
-                                //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
-                                rowsum(rows-1, i+half_rows);
-                            }
-                        }
-                        // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
-                        totalResults[0] += r[rows-1] << a;
-                    }
-                } //End M
-                else if (gate.op_name == OP::X)
-                {
-                    //equiv to H S S H or H Z H
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        r[i] ^= z[i][a];
-                    } 
-                }
-                else if (gate.op_name == OP::Y)
-                {   
-                    //equiv to Z X
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        r[i] = r[i] ^ x[i][a] ^ z[i][a];
-                    }
-                }
-                else if (gate.op_name == OP::Z)
-                {
-                    //equiv to S S gates
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Phase
-                        r[i] ^= x[i][a];
-                    }
-                }
-                else if (gate.op_name == OP::MA)
-                {
-                    measure_all();
-                }
-                else    
-                {
-                    std::cout << "Non-Clifford or unrecognized gate: "
-                                << OP_NAMES[gate.op_name] << std::endl;
-                    std::logic_error("Invalid gate type");
-                    exit(1);
-                }
-            } //End gates for loop
-        } //End simulate
+    protected:
+        int g;
+        int n;
+        int stabCounts;
+        int rows;
+        int cols;
+        std::vector<int> outcomes; //Basically a vector of binary numbers
+        std::vector<Gate> gates;
+        std::vector<std::vector<uint>> x;
+        std::vector<std::vector<uint>> z;
+        std::vector<uint> r;
     }; //End tableau class
-} // namespace NWQSim
+} //End namespace NWQSim

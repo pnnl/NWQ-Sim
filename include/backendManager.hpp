@@ -64,7 +64,7 @@ public:
         NWQSim::safe_print("- AMDGPU\n");
 #endif
     }
-    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "STAB")
+    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method)
     {
         // Convert to uppercase
         std::transform(backend.begin(), backend.end(), backend.begin(),
@@ -75,12 +75,12 @@ public:
                        { return std::toupper(c); });
         if (backend == "CPU")
         {
-            if (simulator_method == "SV")
-                return std::make_shared<NWQSim::SV_CPU>(numQubits);
+            if (simulator_method == "DM")
+                return std::make_shared<NWQSim::DM_CPU>(numQubits);
             else if(simulator_method == "STAB")
                 return std::make_shared<NWQSim::STAB_CPU>(numQubits);
             else
-                return std::make_shared<NWQSim::DM_CPU>(numQubits);
+                return std::make_shared<NWQSim::SV_CPU>(numQubits);
         }
 
 #ifdef OMP_ENABLED

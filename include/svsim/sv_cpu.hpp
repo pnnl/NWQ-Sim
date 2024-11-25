@@ -257,38 +257,6 @@ namespace NWQSim
                 std::cout << std::endl;
             }
         }
-
-        // virtual void clifford_simulation_kernel(std::vector<Gate> &gates)
-        // {
-        //     auto start = std::chrono::steady_clock::now();
-        //     Tableau test = Tableau(gates, n_qubits);
-        //     std::cout << "Test_kernel" << std::endl;
-
-        //     SAFE_FREE_HOST(results);
-        //     SAFE_ALOC_HOST(results, sizeof(IdxType));
-        //     memset(results, 0, sizeof(IdxType));
-
-        //     //Set results
-        //     test.get_outcomes(results);
-        //     //std::cout << "Result pointer " << results << std::endl;
-
-        //     //See stabilizers
-        //     std::cout << "\n------ stabilizers: " << std::endl;
-        //     std::vector<std::string> paulistrings = test.get_stabilizers();
-        //     for(int i = 0; i < paulistrings.size(); i++)
-        //     {
-        //         std::cout << paulistrings[i] << std::endl;
-        //     }
-        //     std::cout << "------" << std::endl; 
-
-
-
-        //     if (Config::PRINT_SIM_TRACE)
-        //     {
-        //         std::cout << std::endl;
-        //     }
-        // }
-
         
         //============== C1 Gate ================
         // Arbitrary 1-qubit gate
