@@ -1,3 +1,0 @@
-- Add shot-based output to measurement
-- Add DM output
-- Add qasm integration
