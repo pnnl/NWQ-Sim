@@ -14,6 +14,10 @@
 #include <vector>
 #include <regex>
 
+// Muqing: for modifying generate_fermionic_excitations()
+#include <set>
+#include <tuple>
+
 namespace NWQSim{
 namespace VQE {
   std::ostream& operator<<(std::ostream& out, const PauliOperator& op) {
@@ -230,7 +234,91 @@ void read_amplitudes(std::string fpath, std::vector<ValType>& params, const std:
  */
 void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
                                     const MolecularEnvironment& env) {
+    // int single_counter = 0;
+    // int double_counter = 0;
+    std::set<std::tuple< IdxType, IdxType, IdxType, IdxType >> existing_tuples; // MZ: for recording symmetry
+    // MZ: could use a better indexing iteration scheme to avoid the use of sets for efficiency
+    // but usually this is not a bottleneck
+    /*===========Single Excitations===========*/
+    for (IdxType p = 0; p < env.n_occ; p++) {
+      FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
+      FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
+      for (IdxType q = 0; q < env.n_virt; q++) {
+        // creation operator
+        FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
+        FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
+        fermion_operators.push_back({{occupied_annihilation_up, virtual_creation_up},
+                                      {occupied_annihilation_down, virtual_creation_down}});
+        // single_counter += 1;
+      }
+    }
+    /*===========Double Excitations===========*/
+    // alpha-alpha and beta-beta
+    for (IdxType i = 0; i < env.n_occ; i++) {
+        FermionOperator i_occ_ann_up (i, Occupied, Up, Annihilation, env.xacc_scheme);
+        FermionOperator i_occ_ann_dw (i, Occupied, Down, Annihilation, env.xacc_scheme);
+        for (IdxType r = 0; r < env.n_virt; r++) {
+            FermionOperator r_virt_cre_up (r, Virtual, Up, Creation, env.xacc_scheme);
+            FermionOperator r_virt_cre_dw (r, Virtual, Down, Creation, env.xacc_scheme);
+            for (IdxType j = i+1; j < env.n_occ; j++) {
+                FermionOperator j_occ_ann_up (j, Occupied, Up, Annihilation, env.xacc_scheme); 
+                FermionOperator j_occ_ann_dw (j, Occupied, Down, Annihilation, env.xacc_scheme);
+                for (IdxType s = r+1; s < env.n_virt; s++) {
+                    FermionOperator s_virt_cre_dw (s, Virtual, Down, Creation, env.xacc_scheme);
+                    FermionOperator s_virt_cre_up (s, Virtual, Up, Creation, env.xacc_scheme);
+                    fermion_operators.push_back({ 
+                      {i_occ_ann_up, j_occ_ann_up, r_virt_cre_up, s_virt_cre_up},
+                      {i_occ_ann_dw, j_occ_ann_dw, r_virt_cre_dw, s_virt_cre_dw}
+                    });
+                    // double_counter += 1;
+                }
+            }
+        }
+    }
+    // alpha-beta
+    for (IdxType i = 0; i < env.n_occ; i++) {
+        FermionOperator i_occ_ann_up (i, Occupied, Up, Annihilation, env.xacc_scheme);
+        FermionOperator i_occ_ann_dw (i, Occupied, Down, Annihilation, env.xacc_scheme);
+        for (IdxType r = 0; r < env.n_virt; r++) {
+            FermionOperator r_virt_cre_up (r, Virtual, Up, Creation, env.xacc_scheme);
+            FermionOperator r_virt_cre_dw (r, Virtual, Down, Creation, env.xacc_scheme);
+            for (IdxType j = 0; j < env.n_occ; j++) {
+                FermionOperator j_occ_ann_dw (j, Occupied, Down, Annihilation, env.xacc_scheme);
+                FermionOperator j_occ_ann_up (j, Occupied, Up, Annihilation, env.xacc_scheme);
+                for (IdxType s = 0; s < env.n_virt; s++) {
+                    FermionOperator s_virt_cre_dw (s, Virtual, Down, Creation, env.xacc_scheme);
+                    FermionOperator s_virt_cre_up (s, Virtual, Up, Creation, env.xacc_scheme);
+                    if (i == j && r == s) {
+                      fermion_operators.push_back({{i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw}});
+                      // double_counter += 1;
+                    } else {
+                      std::tuple<IdxType, IdxType, IdxType, IdxType> new_tuple = {i,j,r,s};
+                      if (existing_tuples.find(new_tuple) != existing_tuples.end()) {
+                        // The tuple exist in the set, so we skip the term and erase the tuple
+                        existing_tuples.erase(new_tuple);
+                      } else {
+                        // The tuple does not exist in the set, so we add the term
+                        fermion_operators.push_back({
+                          {i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw},
+                          {j_occ_ann_up, i_occ_ann_dw, s_virt_cre_up, r_virt_cre_dw}
+                        });
+                        existing_tuples.insert({j, i, s, r});
+                        // double_counter += 1;
+                      }
+                    }
+                }
+            }
+        }
+    }
+    // std::cout << ">>>> DEBUG: Operator Stats " << single_counter << " and " << double_counter << "<<<<"<< std::endl;
+};
+
+/* ---------------------------------------------------------------------------------------------------------------------------------- */
+// MZ: The problems in the following code is on the error on the symmetry.
+void generate_fermionic_excitations_old(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
+                                    const MolecularEnvironment& env) {
   // Single excitation
+      int single_counter = 0;
       for (IdxType p = 0; p < env.n_occ; p++) {
         FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
         FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
@@ -242,6 +330,7 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
         }
       }
       // Double excitation
+    int double_counter = 0;
     for (IdxType i = 0; i < env.n_occ; i++) {
       FermionOperator occ_down_1 (i, Occupied, Down, Annihilation, env.xacc_scheme);
       FermionOperator occ_up_1 (i, Occupied, Up, Annihilation, env.xacc_scheme);
@@ -330,6 +419,7 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
         }
       }
 };
+/* ---------------------------------------------------------------------------------------------------------------------------------- */
 
 /**
  * @brief  Generate Pauli Operator Pool

@@ -141,46 +141,89 @@ namespace NWQSim {
         excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params-1;
     }
 
+    void add_single_excitation(FermionOperator p, FermionOperator q,  const std::vector<std::pair<IdxType, double>>& symm_expr, bool param) {
+
+        // use this index as the unique parameter to create the symmetry
+        symmetries[fermion_operators.size()] = symm_expr;
+        fermion_operators.push_back({p,q});
+        // record the string::parameter mapping
+        if (param) {
+          fermion_ops_to_params[fermion_operators.size()-1] = unique_params++;
+          excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params-1;
+        }
+    }
+
+    void add_single_excitation(FermionOperator p, FermionOperator q) {
+        // use this index as the unique parameter to create the symmetry
+        symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
+        fermion_operators.push_back({p,q});
+        // record the string::parameter mapping
+        fermion_ops_to_params[fermion_operators.size()-1] = unique_params++;
+        excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params-1;
+    }
+
    /**
     * @brief  Generate Fermionic operators for UCCSD
     * @note   Symmetry-linked operators (e.g. by anticommutation, spin reversal) share parameters
     * @retval None
     */
     void  getFermionOps() {
-      // Alpha Single Excitations
+      
       for (IdxType p = 0; p < env.n_occ; p++) {
         FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
+        FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
         for (IdxType q = 0; q < env.n_virt; q++) {
           // creation operator
           FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
-          // use this index as the unique parameter to create the symmetry
-          symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
-          fermion_ops_to_params[fermion_operators.size()] = unique_params++;
-          fermion_operators.push_back({occupied_annihilation_up, virtual_creation_up});
-          // record the string::parameter mapping
-          excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params-1;
-        }
-      }
-      // Beta Single Excitations
-      // In a closed shell system, the beta single excitations has the same parameters as the alpha single excitations
-      for (IdxType p = 0; p < env.n_occ; p++) {
-        FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
-        for (IdxType q = 0; q < env.n_virt; q++) {
           FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
           if (symm_level >= 1) {
-            // Add a pointer to the corresponding Up spin term to share parameters
-            symmetries[fermion_operators.size()] = {{fermion_operators.size() - env.n_occ * env.n_virt, 1.0}};
-            fermion_operators.push_back({occupied_annihilation_down, virtual_creation_down});
-            excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = fermion_operators.size() - env.n_occ * env.n_virt - 1;
+            IdxType term_single = fermion_operators.size();
+            // Alpha Single Excitations
+            add_single_excitation(occupied_annihilation_up, virtual_creation_up, {{term_single, 1.0}}, true);
+            // Beta Single Excitations
+            // In a closed shell system, the beta single excitations has the same parameters as the alpha single excitations
+            add_single_excitation(occupied_annihilation_down, virtual_creation_down, {{term_single, 1.0}}, false);
           } else {
-            symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
-            fermion_ops_to_params[fermion_operators.size()] = unique_params++;
-            fermion_operators.push_back({occupied_annihilation_down, virtual_creation_down});
-            excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params-1;
-            // record the string::parameter mapping
+            add_single_excitation(occupied_annihilation_up, virtual_creation_up);
+            add_single_excitation(occupied_annihilation_down, virtual_creation_down);
           }
         }
       }
+
+      // // Alpha Single Excitations
+      // for (IdxType p = 0; p < env.n_occ; p++) {
+      //   FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
+      //   for (IdxType q = 0; q < env.n_virt; q++) {
+      //     // creation operator
+      //     FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
+      //     // use this index as the unique parameter to create the symmetry
+      //     symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
+      //     fermion_ops_to_params[fermion_operators.size()] = unique_params++;
+      //     fermion_operators.push_back({occupied_annihilation_up, virtual_creation_up});
+      //     // record the string::parameter mapping
+      //     excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params-1;
+      //   }
+      // }
+      // // Beta Single Excitations
+      // // In a closed shell system, the beta single excitations has the same parameters as the alpha single excitations
+      // for (IdxType p = 0; p < env.n_occ; p++) {
+      //   FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
+      //   for (IdxType q = 0; q < env.n_virt; q++) {
+      //     FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
+      //     if (symm_level >= 1) {
+      //       // Add a pointer to the corresponding Up spin term to share parameters
+      //       symmetries[fermion_operators.size()] = {{fermion_operators.size() - env.n_occ * env.n_virt, 1.0}};
+      //       fermion_operators.push_back({occupied_annihilation_down, virtual_creation_down});
+      //       excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = fermion_operators.size() - env.n_occ * env.n_virt - 1;
+      //     } else {
+      //       symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
+      //       fermion_ops_to_params[fermion_operators.size()] = unique_params++;
+      //       fermion_operators.push_back({occupied_annihilation_down, virtual_creation_down});
+      //       excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params-1;
+      //       // record the string::parameter mapping
+      //     }
+      //   }
+      // }
     /*===========Double Excitations===========*/
     // MZ: re-write the original code, my python head cannot get it
     // alpha-alpha and beta-beta
