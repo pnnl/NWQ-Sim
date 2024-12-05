@@ -9,6 +9,7 @@
 
 #ifdef OMP_ENABLED
 #include "svsim/sv_omp.hpp"
+#include "stabsim/stab_omp.hpp"
 #endif
 
 #ifdef MPI_ENABLED
@@ -86,7 +87,10 @@ public:
 #ifdef OMP_ENABLED
         else if (backend == "OPENMP")
         {
-            return std::make_shared<NWQSim::SV_OMP>(numQubits);
+            if (simulator_method == "STAB")
+                return std::make_shared<NWQSim::STAB_OMP>(numQubits);
+            else 
+                return std::make_shared<NWQSim::SV_OMP>(numQubits);
         }
 #endif
 
@@ -102,6 +106,8 @@ public:
         {
             if (simulator_method == "SV")
                 return std::make_shared<NWQSim::SV_CUDA>(numQubits);
+            else if (simulator_method == "STAB")
+                return std::make_shared<NWQSim::STAB_CUDA>(numQubits);
             else
                 return std::make_shared<NWQSim::DM_CUDA>(numQubits);
         }

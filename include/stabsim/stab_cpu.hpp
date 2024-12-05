@@ -1,5 +1,8 @@
 #pragma once
 
+// #ifndef tableau_addons
+// #define tableau_addons
+
 //Eigen and pauli math
 #include "pauli_math.hpp"
 
@@ -51,7 +54,6 @@ namespace NWQSim
             rng.seed(Config::RANDOM_SEED);
             dist = std::uniform_int_distribution<int>(0,1);
 
-            SAFE_FREE_HOST(totalResults);
             SAFE_ALOC_HOST(totalResults, sizeof(IdxType));
             memset(totalResults, 0, sizeof(IdxType));
         }
@@ -232,6 +234,33 @@ namespace NWQSim
                 full_paulis.push_back(std::make_pair(stabilizers, r[row]));
             }
             return full_paulis;
+        }
+
+        std::pair<std::shared_ptr<NWQSim::Circuit>, std::shared_ptr<NWQSim::Circuit>> T_passthrough(std::shared_ptr<NWQSim::Circuit>& circuit)
+        {
+            IdxType n_circ = circuit.n_qubits;
+            auto clifford = std::make_shared<NWQSim::Circuit>(n_circ);
+            auto T_layer = = std::make_shared<NWQSim::Circuit>(n_circ);
+
+            std::vector<Gate> gates = circuit->get_gates();
+            IdxType num_gates = gates.size();
+
+            int a; //qubit
+            int b; //control
+            for(int i = numgates - 1; i >= 0; i--)
+            {
+                auto gate = gates[i];
+               
+
+                if(gate.op_name == "T")
+                {
+                    a = gate.qubit;
+                    b = gate.ctrl;
+                    T_layer->T(a);
+                }
+                else
+            }
+
         }
 
         //Creates a sparse density matrix out of the Pauli strings stabilizers
@@ -1440,3 +1469,5 @@ namespace NWQSim
         } //End simulate
     }; //End tableau class
 } // namespace NWQSim
+
+// #endif
