@@ -14,7 +14,7 @@
 namespace NWQSim {
   namespace VQE {
 
-    class UCCSDQis: public Ansatz {
+    class UCCSDMin: public Ansatz {
       protected:
         const MolecularEnvironment& env;
         IdxType n_singles;
@@ -34,7 +34,7 @@ namespace NWQSim {
         // std::map<std::tuple<IdxType, IdxType, IdxType, IdxType>, std::vector<std::pair<IdxType, double>>> existing_terms; // MZ: for recording symmetry
 
       public:
-        UCCSDQis(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1, IdxType _symm_level = 3): 
+        UCCSDMin(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1, IdxType _symm_level = 3): 
                                   env(_env),
                                   trotter_n(_trotter_n),
                                   symm_level(_symm_level),
@@ -61,6 +61,7 @@ namespace NWQSim {
           unique_params = 0;
           existing_tuples = {};
           // existing_terms = {};
+          ansatz_name = "UCCSD Minimal";
         };
  
         virtual std::vector<std::string> getFermionicOperatorStrings() const override {
@@ -81,7 +82,6 @@ namespace NWQSim {
           }
           return result;
         };
-        
 
         virtual std::vector<std::pair<std::string, ValType> > getFermionicOperatorParameters() const override {
           std::vector<std::pair<std::string, ValType> > result;
@@ -95,21 +95,21 @@ namespace NWQSim {
             }
             std::string opstring = "";
             bool first = true;
-            bool is_distinct = true;
-            bool is_mixed = true;
-            std::vector<IdxType> indices_seen(env.n_spatial, 0);
+            // bool is_distinct = true; // MZ: don't need this
+            // bool is_mixed = true; // MZ: don't need this
+            // std::vector<IdxType> indices_seen(env.n_spatial, 0); // MZ: don't need this
             for (auto& op: oplist) {
               if (!first) {
                 opstring = " " + opstring;
               } else {
                 first = false;
-                is_mixed = op.getSpin() != oplist[1].getSpin();
+                // is_mixed = op.getSpin() != oplist[1].getSpin();
               }
-              if (indices_seen[op.getOrbitalIndex(env)]) {
-                is_distinct = false;
-              }
-              indices_seen[op.getOrbitalIndex(env)] += 1;
-              opstring = op.toString(env.n_occ, env.n_virt) + opstring;
+              // if (indices_seen[op.getOrbitalIndex(env)]) {
+                // is_distinct = false; // MZ: don't need this
+              // }
+              // indices_seen[op.getOrbitalIndex(env)] += 1;
+              opstring = op.toString(env.n_occ, env.n_virt) + opstring; // MZ: Seems like delibrately inverted the operator
             }
             result.push_back(std::make_pair(opstring, param));
           }
@@ -165,6 +165,11 @@ namespace NWQSim {
    /**
     * @brief  Generate Fermionic operators for UCCSD
     * @note   Symmetry-linked operators (e.g. by anticommutation, spin reversal) share parameters
+    *         MZ: please follow "Annihilation Creation" or "Ann Ann Cre Cre" order as Matt did in his own code
+    *             This provides correct printout order in getFermionicOperatorParameters() 
+    *             (due to opstring = op.toString(env.n_occ, env.n_virt) + opstring instead of opstring += op.toString(env.n_occ, env.n_virt))
+    *             Also provide the correct signs of optimized parameter values
+    *             (Verified through H4 1.5 Angstrom example with the UCCSD ansatz in Qiskit)
     * @retval None
     */
     void  getFermionOps() {
@@ -189,41 +194,6 @@ namespace NWQSim {
           }
         }
       }
-
-      // // Alpha Single Excitations
-      // for (IdxType p = 0; p < env.n_occ; p++) {
-      //   FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
-      //   for (IdxType q = 0; q < env.n_virt; q++) {
-      //     // creation operator
-      //     FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
-      //     // use this index as the unique parameter to create the symmetry
-      //     symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
-      //     fermion_ops_to_params[fermion_operators.size()] = unique_params++;
-      //     fermion_operators.push_back({occupied_annihilation_up, virtual_creation_up});
-      //     // record the string::parameter mapping
-      //     excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params-1;
-      //   }
-      // }
-      // // Beta Single Excitations
-      // // In a closed shell system, the beta single excitations has the same parameters as the alpha single excitations
-      // for (IdxType p = 0; p < env.n_occ; p++) {
-      //   FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
-      //   for (IdxType q = 0; q < env.n_virt; q++) {
-      //     FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
-      //     if (symm_level >= 1) {
-      //       // Add a pointer to the corresponding Up spin term to share parameters
-      //       symmetries[fermion_operators.size()] = {{fermion_operators.size() - env.n_occ * env.n_virt, 1.0}};
-      //       fermion_operators.push_back({occupied_annihilation_down, virtual_creation_down});
-      //       excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = fermion_operators.size() - env.n_occ * env.n_virt - 1;
-      //     } else {
-      //       symmetries[fermion_operators.size()] = {{fermion_operators.size(), 1.0}};
-      //       fermion_ops_to_params[fermion_operators.size()] = unique_params++;
-      //       fermion_operators.push_back({occupied_annihilation_down, virtual_creation_down});
-      //       excitation_index_map[to_fermionic_string(fermion_operators.back(), env)] = unique_params-1;
-      //       // record the string::parameter mapping
-      //     }
-      //   }
-      // }
     /*===========Double Excitations===========*/
     // MZ: re-write the original code, my python head cannot get it
     // alpha-alpha and beta-beta
@@ -410,7 +380,7 @@ namespace NWQSim {
     }
 
 
-    }; // class UCCSDQis
+    }; // class UCCSDMin
   
   
   };// namespace vqe

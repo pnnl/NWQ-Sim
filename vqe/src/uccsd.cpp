@@ -145,6 +145,11 @@ namespace NWQSim {
    /**
     * @brief  Generate Fermionic operators for UCCSD
     * @note   Symmetry-linked operators (e.g. by anticommutation, spin reversal) share parameters
+     *        MZ: please follow "Annihilation Creation" or "Ann Ann Cre Cre" order as Matt did in his own code below
+    *             This provides correct printout order in getFermionicOperatorParameters() 
+    *             (due to opstring = op.toString(env.n_occ, env.n_virt) + opstring instead of opstring += op.toString(env.n_occ, env.n_virt))
+    *             Also provide the correct signs of optimized parameter values
+    *             (Verified through H4 1.5 Angstrom example with the UCCSD ansatz in Qiskit)
     * @retval None
     */
     void UCCSD::getFermionOps()

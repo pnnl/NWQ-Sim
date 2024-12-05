@@ -4,7 +4,8 @@
 #include <string>
 #include "circuit/dynamic_ansatz.hpp"
 #include "vqe_adapt.hpp"
-#include "src/uccsdqis.cpp"
+#include "src/uccsdmin.cpp"
+#include "src/singletgsd.cpp"
 #include <chrono>
 
 #define UNDERLINE "\033[4m"
@@ -38,6 +39,10 @@ struct VQEParams {
   ValType adapt_fvaltol = 1e-6;
   ValType adapt_gradtol = 1e-3;
   IdxType adapt_pool_size = -1;
+
+  // Ansatz options
+  bool gsd_pool = false;
+  bool origin_pool = false;
 };
 int show_help() {
   std::cout << "NWQ-VQE Options" << std::endl;
@@ -51,7 +56,7 @@ int show_help() {
   std::cout << "--symm                Symmetry level (0->none, 1->single, 2->double non-mixed+single, 3->all). Defaults to 0." << std::endl;
   std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
   std::cout << "--opt-config          Path to config file for NLOpt optimizer parameters" << std::endl;
-  std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA" << std::endl;
+  std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA. Examples are LN_NEWUOA, LD_LBFGS" << std::endl;
   std::cout << "--lbound              Lower bound for classical optimizer. Defaults to -PI" << std::endl;
   std::cout << "--ubound              Upper bound for classical optimizer. Defaults to PI" << std::endl;
   std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
@@ -60,7 +65,8 @@ int show_help() {
   std::cout << "--maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)" << std::endl;
   std::cout << "--stopval             Cutoff function value for optimizer. Defaults to -MAXFLOAT (off)" << std::endl;
   std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme. (Deprecated, true by default)" << std::endl;
-  std::cout << "--ducc                Use DUCC indexing scheme, otherwise uses XACC scheme. (Defaults to true)" << std::endl;
+  std::cout << "--ducc                Use DUCC indexing scheme, otherwise uses XACC scheme. (Defaults to false)" << std::endl;
+  std::cout << "--origin              Use old implementatin of UCCSD for VQE or ADAPT-VQE. Have duplicated operators and potential symmetry problem. Default to false." << std::endl;
   std::cout << UNDERLINE << "ADAPT-VQE OPTIONS" << CLOSEUNDERLINE << std::endl;
   std::cout << "--adapt               Use ADAPT-VQE for dynamic ansatz construction. Defaults to false" << std::endl;
   std::cout << "--adapt-maxeval       Set a maximum iteration count for ADAPT-VQE. Defaults to 100" << std::endl;
@@ -68,6 +74,7 @@ int show_help() {
   std::cout << "--adapt-fvaltol       Cutoff absolute tolerance for function value. Defaults to 1e-6" << std::endl;
   std::cout << "--qubit               Uses Qubit instead of Fermionic operators for ADAPT-VQE. Defaults to false" << std::endl;
   std::cout << "--adapt-pool          Sets the pool size for Qubit operators. Defaults to -1" << std::endl;
+  std::cout << "--gsd                 Use singlet GSD ansatz for ADAPT-VQE. Default to false." << std::endl;
   return 1;
 }
 
@@ -90,6 +97,8 @@ int parse_args(int argc, char** argv,
   std::string algorithm_name = "LN_COBYLA";
   NWQSim::VQE::OptimizerSettings& settings = params.optimizer_settings;
   params.seed = time(NULL);
+  settings.lbound = -2; // MZ: changed from -PI to -2
+  settings.ubound = 2; // MZ: changed from PI to 2
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
     if (argname == "-h" || argname == "--help") {
@@ -165,6 +174,10 @@ int parse_args(int argc, char** argv,
       settings.stop_val = std::atof(argv[++i]);
     } else if (argname == "--maxtime") {
       settings.max_time = std::atof(argv[++i]);
+    } else if (argname == "--gsd") {
+      params.gsd_pool = true;
+    } else if (argname == "--origin") {
+      params.origin_pool = true;
     } else {
       fprintf(stderr, "\033[91mERROR:\033[0m Unrecognized option %s, type -h or --help for a list of configurable parameters\n", argv[i]);
       return show_help();
@@ -354,21 +367,44 @@ int main(int argc, char** argv) {
   if (params.adapt)
   {
     // Iteratively build an ADAPT-VQE ansatz (starts from HF state)
-    NWQSim::VQE::PoolType pool = params.qubit ? NWQSim::VQE::PoolType::Pauli : NWQSim::VQE::PoolType::Fermionic;
+    NWQSim::VQE::PoolType pool;
+    if (params.qubit) {
+      // Qubit ADAPT-VQE ansatz
+      pool = NWQSim::VQE::PoolType::Pauli;
+    } else if (params.gsd_pool) {
+      // Singlet GSD ADAPT-VQE ansatz
+      pool = NWQSim::VQE::PoolType::SingletGSD;
+    } else if (params.origin_pool) {
+      // Fermionic ADAPT-VQE ansatz (Original implementation)
+      pool = NWQSim::VQE::PoolType::FermionicOrigin;
+    } else {
+      // Fermionic ADAPT-VQE ansatz
+      pool = NWQSim::VQE::PoolType::Fermionic;
+    }
     ansatz = std::make_shared<NWQSim::VQE::DynamicAnsatz>(hamil->getEnv(), pool);
   } else {
     // Static UCCSD ansatz
-    ansatz  = std::make_shared<NWQSim::VQE::UCCSD>(
-      hamil->getEnv(),
-      NWQSim::VQE::getJordanWignerTransform,
-      1,
-      params.symm_level
-    );
-    //   ansatz  = std::make_shared<NWQSim::VQE::UCCSDQis>(
-    //   hamil->getEnv(),
-    //   NWQSim::VQE::getJordanWignerTransform,
-    //   1
-    // );
+    if (params.origin_pool) {
+        ansatz  = std::make_shared<NWQSim::VQE::UCCSD>(
+        hamil->getEnv(),
+        NWQSim::VQE::getJordanWignerTransform,
+        1,
+        params.symm_level
+      );
+    } else if (params.gsd_pool) {
+        ansatz  = std::make_shared<NWQSim::VQE::SingletGSD>(
+        hamil->getEnv(),
+        NWQSim::VQE::getJordanWignerTransform,
+        1
+      );
+    } else {
+      ansatz  = std::make_shared<NWQSim::VQE::UCCSDMin>(
+        hamil->getEnv(),
+        NWQSim::VQE::getJordanWignerTransform,
+        1,
+        params.symm_level
+      );
+    }
   }
   ansatz->buildAnsatz();
 
@@ -384,39 +420,35 @@ int main(int argc, char** argv) {
   //   manager.safe_print("%s :: %e\n", pair.first.c_str(), pair.second);                                // MZ: comment out for better printing
   // }                                                                                                   // MZ: comment out for better printing
 
-  try { // MZ: catch exception
-      std::shared_ptr<NWQSim::VQE::VQEState> opt_info = optimize_ansatz(manager, params, ansatz,  hamil, x, fval); // MZ: add opt_result
 
-      double total_seconds = opt_info -> get_duration();
-      // Calculate hours, minutes, and seconds
-      int hours = static_cast<int>(total_seconds) / 3600;
-      int minutes = (static_cast<int>(total_seconds) % 3600) / 60;
-      double seconds = total_seconds - (hours * 3600 + minutes * 60);
+  std::shared_ptr<NWQSim::VQE::VQEState> opt_info = optimize_ansatz(manager, params, ansatz,  hamil, x, fval); // MZ: add opt_result
 
-      // Print out the Fermionic operators with their excitations                                        
-      std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters(); 
-      // MZ: A better summary at the end so I don't scroll all the way up, especially with gradient-free optimizater    
-      manager.safe_print("\n----- Result Summary -----\n");
-      if (params.adapt) {
-        manager.safe_print("Method                  : ADAPT-VQE\n");
-      } else {
-        manager.safe_print("Method                  : VQE\n");
-      }
-      manager.safe_print("Ansatz                  : UCCSD\n");  // MZ: don't want to scroll all the way up to see this
-      manager.safe_print("No. of Pauli Observables: %lld \n", hamil->num_ops()); // MZ: don't want to scroll all the way up to see this
-      manager.safe_print("Circuit Stats           : %lld Gates with %lld parameters and %lld operators\n" ,ansatz->num_gates(), ansatz->numParams(), ansatz->numOps()); // MZ: don't want to scroll all the way up to see this
-      std::string ter_rea = "Optimization terminated : "+get_termination_reason(opt_info->get_optresult())+"\n";
-      manager.safe_print(ter_rea.c_str());
-      manager.safe_print("No. of function eval.   : %d\n", opt_info->get_numevals());
-      manager.safe_print("Evaluation Time         : %d hrs %d mins %.4f secs\n", hours, minutes, seconds);
-      manager.safe_print("Final objective value   : %.16f\nFinal parameters:\n", fval); 
-      for (auto& pair: param_map) {                                                                       
-        manager.safe_print("  %s :: %.16f\n", pair.first.c_str(), pair.second);  
-      }                                                                                            
-    } 
-    catch(std::exception &e) {
-        std::cout << "Optimization failed: " << e.what() << std::endl;
-    } // MZ: catch exception
+  double total_seconds = opt_info -> get_duration();
+  // Calculate hours, minutes, and seconds
+  int hours = static_cast<int>(total_seconds) / 3600;
+  int minutes = (static_cast<int>(total_seconds) % 3600) / 60;
+  double seconds = total_seconds - (hours * 3600 + minutes * 60);
+
+  // Print out the Fermionic operators with their excitations                                        
+  std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters(); 
+  // MZ: A better summary at the end so I don't scroll all the way up, especially with gradient-free optimizater    
+  manager.safe_print("\n----- Result Summary -----\n");
+  if (params.adapt) {
+    manager.safe_print("Method                  : ADAPT-VQE\n");
+  } else {
+    manager.safe_print("Method                  : VQE\n");
+  }
+  manager.safe_print("Ansatz                  : %s\n", ansatz->getAnsatzName().c_str());  // MZ: don't want to scroll all the way up to see this
+  manager.safe_print("No. of Pauli Observables: %lld \n", hamil->num_ops()); // MZ: don't want to scroll all the way up to see this
+  manager.safe_print("Circuit Stats           : %lld Gates with %lld parameters and %lld operators\n" ,ansatz->num_gates(), ansatz->numParams(), ansatz->numOps()); // MZ: don't want to scroll all the way up to see this
+  std::string ter_rea = "Optimization terminated : "+get_termination_reason(opt_info->get_optresult())+"\n";
+  manager.safe_print(ter_rea.c_str());
+  manager.safe_print("No. of function eval.   : %d\n", opt_info->get_numevals());
+  manager.safe_print("Evaluation Time         : %d hrs %d mins %.4f secs\n", hours, minutes, seconds);
+  manager.safe_print("Final objective value   : %.16f\nFinal parameters:\n", fval); 
+  for (auto& pair: param_map) {                                                                       
+    manager.safe_print("  %s :: %.16f\n", pair.first.c_str(), pair.second);  
+  }                                                                                            
 
 #ifdef MPI_ENABLED
   if (params.backend == "MPI" || params.backend == "NVGPU_MPI")

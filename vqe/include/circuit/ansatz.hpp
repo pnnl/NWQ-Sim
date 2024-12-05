@@ -25,6 +25,7 @@ namespace NWQSim {
         std::shared_ptr<std::vector<std::vector<std::pair<IdxType, ValType> > > > gate_parameter_pointers; // Gate parameter indices
         std::shared_ptr<std::vector<ValType> > gate_coefficients; // Gate coefficients
         std::unordered_map<std::string, IdxType> excitation_index_map;
+        std::string ansatz_name;
       public:
         Ansatz(IdxType n_qubits): Circuit(n_qubits) {
           theta = std::make_shared<std::vector<ValType> >();
@@ -150,6 +151,7 @@ namespace NWQSim {
         // const/Non-const access
         std::shared_ptr<std::vector<ValType> > getParams() const {return theta;}
         std::vector<ValType>* getParams() {return theta.get();}
+        std::string getAnsatzName() const {return ansatz_name;}
         const std::vector<ValType>& getParamRef() const {return *theta.get();}
 
         void OneParamGate(enum OP _op_name,
@@ -292,6 +294,7 @@ namespace NWQSim {
           fermion_ops_to_params.resize(n_doubles + n_singles);
           std::fill(fermion_ops_to_params.begin(), fermion_ops_to_params.end(), -1);
           unique_params = 0;
+          ansatz_name = "UCCSD Original";
           
         };
         virtual void buildAnsatz() override;

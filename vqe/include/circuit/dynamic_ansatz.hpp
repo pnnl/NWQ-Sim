@@ -7,8 +7,10 @@ namespace NWQSim {
     using SymmetryGroup = std::vector<FermionOplist>; // for now, just assume we're preserving spin-conjugated symmetries
     enum class PoolType {
       Fermionic,
+      SingletGSD,
       Pauli,
-      MinimalPauli
+      MinimalPauli,
+      FermionicOrigin
     };
     class DynamicAnsatz: public Ansatz {
       protected:
@@ -22,11 +24,23 @@ namespace NWQSim {
         PoolType pool_type;
 
       public:
-        DynamicAnsatz(const MolecularEnvironment& _env, PoolType _pool_type = PoolType::Fermionic): env(_env), Ansatz(_env.n_spatial * 2), pool_type(_pool_type) {}
+        DynamicAnsatz(const MolecularEnvironment& _env, PoolType _pool_type = PoolType::Fermionic): env(_env), Ansatz(_env.n_spatial * 2), pool_type(_pool_type) {
+          ansatz_name = "Dynamic Ansatz"; // MZ: placeholder, will specify the type of ansatz in the make_op_pool()
+        }
         virtual void buildAnsatz() override;
         void make_op_pool(Transformer tf, IdxType seed, IdxType pool_size) {
-          if (pool_type == PoolType::Fermionic) {
-            generate_fermionic_excitations(fermi_op_pool, env);
+          if ((pool_type == PoolType::Fermionic) || (pool_type == PoolType::SingletGSD) || (pool_type == PoolType::FermionicOrigin)) {
+            if (pool_type == PoolType::Fermionic) {
+              generate_fermionic_excitations(fermi_op_pool, env);
+              ansatz_name = "UCCSD Minimal (Dynamic)";
+            } else if (pool_type == PoolType::SingletGSD) {
+              generate_singletGSD_excitations(fermi_op_pool, env);
+              ansatz_name = "Singlet GSD (Dynamic)";
+            } else if (pool_type == PoolType::FermionicOrigin) {
+              generate_fermionic_excitations_origin(fermi_op_pool, env);
+              ansatz_name = "UCCSD Original (Dynamic)";
+            }
+            std::cout << "DEBUG: Pool Size " << fermi_op_pool.size() << std::endl;
             pauli_op_pool.resize(fermi_op_pool.size());
             for (size_t i = 0; i < fermi_op_pool.size(); i++) {
               std::vector<std::vector<PauliOperator> > temp_pool;
@@ -37,10 +51,26 @@ namespace NWQSim {
                 }
               }
             } 
+          // } else if (pool_type == PoolType::SingletGSD) {
+          //   generate_singletGSD_excitations(fermi_op_pool, env);
+          //   pauli_op_pool.resize(fermi_op_pool.size());
+          //   for (size_t i = 0; i < fermi_op_pool.size(); i++) {
+          //     std::vector<std::vector<PauliOperator> > temp_pool;
+          //     tf(env, fermi_op_pool[i], temp_pool, true);
+          //     for (auto oplist: temp_pool) {
+          //       for (auto op: oplist) {
+          //         pauli_op_pool[i].push_back(op);
+          //       }
+          //     }
+          //   }
           } else if (pool_type == PoolType::Pauli) {
             generate_pauli_excitations(pauli_op_pool, env, pool_size, seed);
+            ansatz_name = "UCCSD Qubit (Dynamic)";
           } else if (pool_type == PoolType::MinimalPauli) {
             generate_minimal_pauli_excitations(pauli_op_pool, env);
+            ansatz_name = "UCCSD Qubit (Minimal Pauli, Dynamic)";
+          } else {
+            throw std::runtime_error("Invalid pool type");
           }
           
         }

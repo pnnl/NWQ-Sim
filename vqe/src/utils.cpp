@@ -232,6 +232,8 @@ void read_amplitudes(std::string fpath, std::vector<ValType>& params, const std:
  * @param  env: Struct containing molecular information
  * @retval None
  */
+// void generate_singletGSD_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
+//                                     const MolecularEnvironment& env) {
 void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
                                     const MolecularEnvironment& env) {
     // int single_counter = 0;
@@ -313,9 +315,186 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
     // std::cout << ">>>> DEBUG: Operator Stats " << single_counter << " and " << double_counter << "<<<<"<< std::endl;
 };
 
-/* ---------------------------------------------------------------------------------------------------------------------------------- */
-// MZ: The problems in the following code is on the error on the symmetry.
-void generate_fermionic_excitations_old(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
+
+/**
+ * @brief  Generate a set of singlet single/double Fermionic excitations
+ * @note   Same set of operators evolved in a singlet GSD Ansatz
+ * @param  fermion_operators: Output vector to store Fermionic operator products
+ * @param  env: Struct containing molecular information
+ * @retval None
+ */
+// void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
+//                                     const MolecularEnvironment& env) {
+void generate_singletGSD_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
+                                    const MolecularEnvironment& env) {
+    std::cout << ">>>> Select SingletGSD Ansatz <<<<\n" << std::endl;
+    int single_counter = 0;
+    int double_counter = 0;
+    int doublt_term1_counter = 0;
+    int doublt_term2_counter = 0;
+    int doublt_term4_counter = 0;
+    int doublt_term6_counter = 0;
+    std::set<std::tuple< IdxType, IdxType, IdxType, IdxType >> existing_tuples; // MZ: for recording symmetry
+    // MZ: could use a better indexing iteration scheme to avoid the use of sets for efficiency
+    // but usually this is not a bottleneck
+    //===========Single Excitations===========
+    for (IdxType p = 0; p < env.n_spatial; p++) {
+      FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
+      FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
+      for (IdxType q = p+1; q < env.n_spatial; q++) {
+        // creation operator
+        FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
+        FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
+        fermion_operators.push_back({{occupied_annihilation_up, virtual_creation_up},
+                                      {occupied_annihilation_down, virtual_creation_down}});
+        single_counter += 1;
+      }
+    }
+    //===========Double Excitations===========
+    // Singlets and Triplets
+    int rs = -1;
+    for (IdxType r = 0; r < env.n_spatial; r++) {
+      FermionOperator ra (r, Occupied, Up, Annihilation, env.xacc_scheme);
+      FermionOperator rb (r, Occupied, Down, Annihilation, env.xacc_scheme);
+      for (IdxType s = r; s < env.n_spatial; s++) {
+        FermionOperator sa (s, Occupied, Up, Annihilation, env.xacc_scheme);
+        FermionOperator sb (s, Occupied, Down, Annihilation, env.xacc_scheme);
+        rs += 1;
+        int pq = -1;
+        for (IdxType p = 0; p < env.n_spatial; p++) {
+          FermionOperator pa (p, Virtual, Up, Creation, env.xacc_scheme);
+          FermionOperator pb (p, Virtual, Down, Creation, env.xacc_scheme);
+          for (IdxType q = p; q < env.n_spatial; q++) {
+            FermionOperator qa (q, Virtual, Up, Creation, env.xacc_scheme);
+            FermionOperator qb (q, Virtual, Down, Creation, env.xacc_scheme);
+            pq += 1;
+            if (rs > pq) {
+              continue; 
+            }
+            if ( (p == r) && (q == s) ) {
+              continue;
+            }
+            if (p!=q) {
+              if (r == s) { // only singlet with two terms, not sure Group 3 or Group 4 cases
+                fermion_operators.push_back({
+                  {0.5*rb, ra,qb, pa},
+                  {-0.5*rb, ra,qa, pb}
+                });
+                double_counter += 1;
+                doublt_term2_counter += 1;
+                continue;
+              }
+              if ( ((r!=s)&&(q!=r)) || ((p==r)&&(q!=s)&(r!=s)) || ((p==s)&&(q!=r)&(r!=s)) || ((q==s)&&(p!=r)) || ((q==r)&&(p!=s))) {
+                // Trtiplet
+                fermion_operators.push_back({
+                  {2.0/sqrt(24.0)*sa,ra,qa,pa},
+                  {1.0/sqrt(24.0)*sb,ra,qb,pa},
+                  {1.0/sqrt(24.0)*sa,rb,qb,pa,},
+                  {1.0/sqrt(24.0)*qa,pb,sb,ra,},
+                  {1.0/sqrt(24.0)*qa,pb,sa,rb,},
+                  {2.0/sqrt(24.0)*sb,rb,qb,pb}
+                });
+                double_counter += 1;
+                doublt_term6_counter += 1;
+                continue;
+              }
+            }
+            // Group 3 to 5
+            if (p == q) {
+              // Group 3
+              if ((q != r)&&(r!=s)) {
+                // only singlet
+                fermion_operators.push_back({
+                  {0.5*sb,ra,pb,pa},
+                  {0.5*sa,rb,pb,pa}
+                });
+                double_counter += 1;
+                doublt_term2_counter += 1;
+                // std::cout << "Singlet2t1: " << p << q << r << s << std::endl;
+                // std::cout << p*2 << p*2+1 << r*2 << s*2+1 << "+" << p*2 << p*2+1 << r*2+1 << s*2  << "\n" << std::endl;
+                continue;
+              }
+              // Group 4
+              if ((q == r)&&(r!=s)) {
+                // only singlet
+                fermion_operators.push_back({
+                  {0.5*sb,pa,pa,pb},
+                  {0.5*sa,pb,pb,pa}
+                });
+                double_counter += 1;
+                doublt_term2_counter += 1;
+                // std::cout << "Singlet2t2: " << p << q << r << s<< std::endl;
+                // std::cout << p*2+1 << p*2 << p*2 << s*2+1 << "+" << p*2 << p*2+1 << p*2+1 << s*2  << "\n" << std::endl;
+                continue;
+              }
+              // Group 5
+              if ((q != r)&&(r==s)) {
+                // only singlet
+                fermion_operators.push_back({
+                  {1.0/sqrt(2.0)*rb,ra,pb,pa}
+                });
+                double_counter += 1;
+                doublt_term1_counter += 1;
+                // std::cout << "Singlet1t: " << p << q << r << s << std::endl;
+                // std::cout << p*2 << p*2+1 << r*2 << r*2+1  << "\n" << std::endl;
+                continue;
+              }
+            } // p == q
+
+          } // q
+        } // p
+      } // s
+    } // r
+
+    int rs_t = -1;
+    for (IdxType r = 0; r < env.n_spatial; r++) {
+      FermionOperator ra (r, Occupied, Up, Annihilation, env.xacc_scheme);
+      FermionOperator rb (r, Occupied, Down, Annihilation, env.xacc_scheme);
+      for (IdxType s = r; s < env.n_spatial; s++) {
+        FermionOperator sa (s, Occupied, Up, Annihilation, env.xacc_scheme);
+        FermionOperator sb (s, Occupied, Down, Annihilation, env.xacc_scheme);
+        rs_t += 1;
+        int pq_t = -1;
+        for (IdxType p = 0; p < env.n_spatial; p++) {
+          FermionOperator pa (p, Virtual, Up, Creation, env.xacc_scheme);
+          FermionOperator pb (p, Virtual, Down, Creation, env.xacc_scheme);
+          for (IdxType q = p; q < env.n_spatial; q++) {
+            FermionOperator qa (q, Virtual, Up, Creation, env.xacc_scheme);
+            FermionOperator qb (q, Virtual, Down, Creation, env.xacc_scheme);
+            pq_t += 1;
+            if (rs_t > pq_t) {
+              continue; 
+            }
+            if ( (p == r) && (q == s) ) {
+              continue;
+            }
+            if ((p == q) || (r==s)) {
+              continue;
+            } // singlet cases
+
+            if ( ((r!=s)&&(q!=r)) || ((p==r)&&(q!=s)&(r!=s)) || ((p==s)&&(q!=r)&(r!=s)) || ((q==s)&&(p!=r)) || ((q==r)&&(p!=s))) {
+                fermion_operators.push_back({
+                  {0.5/sqrt(2.0)*sb,ra,qb,pa},
+                  {-0.5/sqrt(2.0)*sa,rb,qb,pa},
+                  {-0.5/sqrt(2.0)*sb,ra,qa,pb},
+                  {0.5/sqrt(2.0)*sa,rb,qa,pb}
+                });
+              double_counter += 1;
+              doublt_term4_counter += 1;
+              // std::cout << "Triplet&Singlets: " << p << q << r << s << "\n" << std::endl;
+              continue;
+            }
+
+          } // q
+        } // p
+      } // s
+    } // r
+    std::cout << ">>>> DEBUG: Operator Stats " << single_counter << " and " << double_counter << "<<<<"<< std::endl;
+    std::cout << ">>>> DEBUG: Singlet 1t " << doublt_term1_counter << " 2t " << doublt_term2_counter << " 4t " << doublt_term4_counter << " 6t " << doublt_term6_counter << "<<<<"<< std::endl;
+};
+
+// MZ: The problems in the following code is the error on the symmetry.
+void generate_fermionic_excitations_origin(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
                                     const MolecularEnvironment& env) {
   // Single excitation
       int single_counter = 0;
@@ -419,7 +598,6 @@ void generate_fermionic_excitations_old(std::vector<std::vector<std::vector<Ferm
         }
       }
 };
-/* ---------------------------------------------------------------------------------------------------------------------------------- */
 
 /**
  * @brief  Generate Pauli Operator Pool

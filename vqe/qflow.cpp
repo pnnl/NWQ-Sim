@@ -3,12 +3,13 @@
 #include "utils.hpp"
 #include "vqe_state.hpp"
 #include <unordered_map>
-#include "src/uccsdqis.cpp"
+#include "src/uccsdmin.cpp"
 #include <sstream>
 #include <chrono>
 #define UNDERLINE "\033[4m"
 
 #define CLOSEUNDERLINE "\033[0m"
+
 
 int show_help() {
   std::cout << "NWQ-VQE QFlow Options" << std::endl;
@@ -19,12 +20,13 @@ int show_help() {
   std::cout << "--backend, -b         Simulation backend. Defaults to CPU" << std::endl;
   std::cout << "--list-backends, -l   List available backends and exit." << std::endl;
   std::cout << "--amplitudes          List of initial amplitudes." << std::endl;
-  std::cout << "--xass                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl; // MZ: it was --ducc, but the code only detects -- ducc
+  std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl; // MZ: it was --ducc, but the code only detects -- ducc
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
   std::cout << "--verbose             Print optimizer information on each iteration. Defaults to false" << std::endl;
   std::cout << "--symm                Symmetry level (0->none, 1->single, 2->double non-mixed+single, 3->all). Defaults to 0." << std::endl;
+  std::cout << "--origin              Use old implementatin of UCCSD for VQE or ADAPT-VQE. Have duplicated operators and potential symmetry problem. Default to false." << std::endl;
   std::cout << UNDERLINE << "OPTIONAL (Global Minimizer)" << CLOSEUNDERLINE << std::endl;
-  std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA" << std::endl;
+  std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA. Suggests to use LN_NEWUOA" << std::endl;
   std::cout << "--optimizer-config    Path to config file for NLOpt optimizer parameters" << std::endl;
   std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--lbound              Optimizer lower bound. Defaults to -2" << std::endl;
@@ -38,7 +40,6 @@ int show_help() {
   std::cout << "-g,--grad-samples     SPSA gradient samples." << std::endl;
   std::cout << "--delta               Perturbation magnitude for SPSA" << std::endl;
   std::cout << "--eta                 Gradient descent step size." << std::endl;
-  std::cout << "--qis                 Use Qiskit-like Ansatz (0->False, 1->True). Default to 0." << std::endl;
   return 1;
 }
 
@@ -60,7 +61,7 @@ int parse_args(int argc, char** argv,
                 unsigned& seed,
                 double& delta,
                 double& eta,
-                int& use_qis) {
+                bool& origin_uccsd) {
   std::string config_file = "";
   std::string algorithm_name = "LN_COBYLA";
   hamilfile = "";
@@ -77,7 +78,7 @@ int parse_args(int argc, char** argv,
   symm_level = 0;
   settings.lbound = -2;
   settings.ubound = 2;
-  use_qis = 0;
+  origin_uccsd = false;
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
     if (argname == "-h" || argname == "--help") {
@@ -150,8 +151,8 @@ int parse_args(int argc, char** argv,
       settings.stop_val = std::atof(argv[++i]);
     } else if (argname == "--maxtime") {
       settings.max_time = std::atof(argv[++i]);
-    } else if (argname == "--qis") {
-      use_qis = std::atoi(argv[++i]);
+    } else if (argname == "--origin") {
+      origin_uccsd = true;
     } else {
       fprintf(stderr, "\033[91mERROR:\033[0m Unrecognized option %s, type -h or --help for a list of configurable parameters\n", argv[i]);
       return show_help();
@@ -312,7 +313,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
       std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters(); 
       manager.safe_print("\n----- Result Summary -----\n"); 
       manager.safe_print("Method                  : QFlow\n");
-      manager.safe_print("Ansatz                  : UCCSD\n"); 
+      manager.safe_print("Ansatz                  : %s\n", ansatz->getAnsatzName().c_str());  // MZ: don't want to scroll all the way up to see this
       manager.safe_print("No. of Pauli Observables: %lld \n", hamil->num_ops());
       manager.safe_print("Circuit Stats           : %lld Gates with %lld parameters and %lld operators\n" ,ansatz->num_gates(), ansatz->numParams(), ansatz->numOps() ); // MZ: don't want to scroll all the way up to see this
       std::string ter_rea = "Optimization terminated : "+get_termination_reason(state->get_optresult())+"\n";
@@ -344,10 +345,11 @@ int main(int argc, char** argv) {
   uint64_t symm_level;
   bool use_xacc, local, verbose;
   int n_trials;
-  int use_qis;
+  bool origin_uccsd;
+
   if (parse_args(argc, argv, manager, hamil_path, backend, config, amplitudes,  n_part, algo, settings, 
                  n_trials, use_xacc, local, verbose, symm_level, 
-                  seed, delta, eta, use_qis)) {
+                  seed, delta, eta, origin_uccsd)) {
     return 1;
   }
 #ifdef MPI_ENABLED
@@ -363,15 +365,15 @@ int main(int argc, char** argv) {
   manager.safe_print("Constructing UCCSD Ansatz...\n");
 
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
-  if (not use_qis) {
-    ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
+  if (not origin_uccsd) {
+    ansatz = std::make_shared<NWQSim::VQE::UCCSDMin>(
       hamil->getEnv(),
       NWQSim::VQE::getJordanWignerTransform,
       1,
       symm_level
     );
   } else {
-    ansatz = std::make_shared<NWQSim::VQE::UCCSDQis>(
+    ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
       hamil->getEnv(),
       NWQSim::VQE::getJordanWignerTransform,
       1,

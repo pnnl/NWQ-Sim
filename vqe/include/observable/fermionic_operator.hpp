@@ -69,7 +69,6 @@ namespace NWQSim {
           _index += env.n_occ;
         }
         return _index;
-
       }
       FermionOperator spinReversed() const {
         Spin other = spin == Spin::Up ? Spin::Down : Spin::Up;
@@ -83,10 +82,13 @@ namespace NWQSim {
         ss  << qubitIndex(n_occ, n_virt) << ((type==Creation) ? "^": "");
         return ss.str();
       };
-      FermionOperator operator*(std::complex<ValType> scalar) {
+      FermionOperator operator*(const std::complex<ValType>& scalar) const {
         FermionOperator result(*this);
         result.coeff *= scalar;
         return result;
+      }
+      friend FermionOperator operator*(const std::complex<ValType>& scalar, const FermionOperator& obj) {
+        return obj*scalar;
       }
     };
     void generate_fermionic_excitations(std::vector<std::vector< std::vector<FermionOperator> > >& _fermion_operators,
@@ -97,6 +99,10 @@ namespace NWQSim {
                                     IdxType seed = 0);
     // Construct the minimal operator pool G from Tang et al. 2021 ("Qubit-ADAPT VQE")
     void generate_minimal_pauli_excitations(std::vector<std::vector<PauliOperator > >& _pauli_operators,
+                                    const MolecularEnvironment& _env);
+    void generate_singletGSD_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
+                                        const MolecularEnvironment& env);
+    void generate_fermionic_excitations_origin(std::vector<std::vector< std::vector<FermionOperator> > >& _fermion_operators,
                                     const MolecularEnvironment& _env);
   };// namespace vqe
 };// namespace nwqsim
