@@ -381,13 +381,13 @@ int main(int argc, char** argv) {
       symm_level
     );
   } else if (gsd) {
-      ansatz  = std::make_shared<NWQSim::VQE::SingletGSD>(
+      ansatz  = std::make_shared<NWQSim::VQE::Singlet_GSD>(
       hamil->getEnv(),
       NWQSim::VQE::getJordanWignerTransform,
       1
     );
   } else {
-    ansatz = std::make_shared<NWQSim::VQE::UCCSDMin>(
+    ansatz = std::make_shared<NWQSim::VQE::UCCSDmin>(
       hamil->getEnv(),
       NWQSim::VQE::getJordanWignerTransform,
       1,

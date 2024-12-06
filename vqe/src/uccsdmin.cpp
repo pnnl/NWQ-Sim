@@ -14,7 +14,7 @@
 namespace NWQSim {
   namespace VQE {
 
-    class UCCSDMin: public Ansatz {
+    class UCCSDmin: public Ansatz {
       protected:
         const MolecularEnvironment& env;
         IdxType n_singles;
@@ -34,7 +34,7 @@ namespace NWQSim {
         // std::map<std::tuple<IdxType, IdxType, IdxType, IdxType>, std::vector<std::pair<IdxType, double>>> existing_terms; // MZ: for recording symmetry
 
       public:
-        UCCSDMin(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1, IdxType _symm_level = 3): 
+        UCCSDmin(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1, IdxType _symm_level = 3): 
                                   env(_env),
                                   trotter_n(_trotter_n),
                                   symm_level(_symm_level),

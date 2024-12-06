@@ -380,10 +380,10 @@ int main(int argc, char** argv) {
       pool = NWQSim::VQE::PoolType::Pauli;
     } else if (params.gsd_pool) {
       // Singlet GSD ADAPT-VQE ansatz
-      pool = NWQSim::VQE::PoolType::SingletGSD;
+      pool = NWQSim::VQE::PoolType::Singlet_GSD;
     } else if (params.origin_pool) {
-      // Fermionic ADAPT-VQE ansatz (Original implementation)
-      pool = NWQSim::VQE::PoolType::FermionicOrigin;
+      // Fermionic ADAPT-VQE ansatz (Original implementation from Matt, has symmetry problem)
+      pool = NWQSim::VQE::PoolType::Fermionic_Origin;
     } else {
       // Fermionic ADAPT-VQE ansatz
       pool = NWQSim::VQE::PoolType::Fermionic;
@@ -399,13 +399,13 @@ int main(int argc, char** argv) {
         params.symm_level
       );
     } else if (params.gsd_pool) {
-        ansatz  = std::make_shared<NWQSim::VQE::SingletGSD>(
+        ansatz  = std::make_shared<NWQSim::VQE::Singlet_GSD>(
         hamil->getEnv(),
         NWQSim::VQE::getJordanWignerTransform,
         1
       );
     } else {
-      ansatz  = std::make_shared<NWQSim::VQE::UCCSDMin>(
+      ansatz  = std::make_shared<NWQSim::VQE::UCCSDmin>(
         hamil->getEnv(),
         NWQSim::VQE::getJordanWignerTransform,
         1,

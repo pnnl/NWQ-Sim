@@ -14,7 +14,7 @@
 namespace NWQSim {
   namespace VQE {
 
-    class SingletGSD: public Ansatz {
+    class Singlet_GSD: public Ansatz {
       protected:
         const MolecularEnvironment& env;
         IdxType n_singles;
@@ -94,7 +94,7 @@ namespace NWQSim {
         }
 
       public:
-        SingletGSD(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1, IdxType _symm_level = 3): 
+        Singlet_GSD(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1, IdxType _symm_level = 3): 
                                   env(_env),
                                   trotter_n(_trotter_n),
                                   symm_level(_symm_level),
@@ -245,21 +245,21 @@ namespace NWQSim {
         add_double_excitation(r6,s6,i6,j6, {{term, 2.0/sqrt(24.0)}}, false);
     }
     //------------------------------------------------------------------
-    // MZ: Show this orbital should be Occupied or Virtual based on the spatial index
-    auto OccVir(IdxType sp, IdxType n_occ) {
-      if (sp < n_occ) { // assume first n_occ # of orbitals are occupied
-        return Occupied;
-      }
-      return Virtual; 
-    }
+    // // MZ: Show this orbital should be Occupied or Virtual based on the spatial index
+    // auto occ_or_vir(IdxType sp, IdxType n_occ) {
+    //   if (sp < n_occ) { // assume first n_occ # of orbitals are occupied
+    //     return Occupied;
+    //   }
+    //   return Virtual; 
+    // }
 
-    // MZ: From spatial index to the index used for FermionicOperator
-    IdxType InCo(IdxType sp, IdxType n_occ) {
-      if (sp < n_occ) { // assume first n_occ # of orbitals are occupied
-        return sp;
-      }
-      return sp - n_occ;
-    }
+    // // MZ: From spatial index to the index used for FermionicOperator
+    // IdxType spind_to_ind(IdxType sp, IdxType n_occ) {
+    //   if (sp < n_occ) { // assume first n_occ # of orbitals are occupied
+    //     return sp;
+    //   }
+    //   return sp - n_occ;
+    // }
 
    /**
     * @brief  Generate Fermionic operators for UCCSD
@@ -275,13 +275,13 @@ namespace NWQSim {
       int doublt_term6_counter = 0;
       /*===========Single Excitations===========*/
       for (IdxType p = 0; p < env.n_spatial; p++) {
-        IdxType pi = InCo(p, env.n_occ);
-        auto pov = OccVir(p, env.n_occ);
+        IdxType pi = spind_to_ind(p, env.n_occ);
+        auto pov = occ_or_vir(p, env.n_occ);
         FermionOperator virtual_creation_up (pi, pov, Up, Creation, env.xacc_scheme);
         FermionOperator virtual_creation_down (pi, pov, Down, Creation, env.xacc_scheme);
         for (IdxType q = p+1; q < env.n_spatial; q++) {
-          IdxType qi = InCo(q, env.n_occ);
-          auto qov = OccVir(q, env.n_occ);
+          IdxType qi = spind_to_ind(q, env.n_occ);
+          auto qov = occ_or_vir(q, env.n_occ);
           // creation operator
           FermionOperator occupied_annihilation_up (qi, qov, Up, Annihilation, env.xacc_scheme);
           FermionOperator occupied_annihilation_down (qi, qov, Down, Annihilation, env.xacc_scheme);
@@ -295,25 +295,25 @@ namespace NWQSim {
       // Singlets and Triplets
       int rs = -1;
       for (IdxType r = 0; r < env.n_spatial; r++) {
-        IdxType ri = InCo(r, env.n_occ);
-        auto rov = OccVir(r, env.n_occ);
+        IdxType ri = spind_to_ind(r, env.n_occ);
+        auto rov = occ_or_vir(r, env.n_occ);
         FermionOperator ra (ri, rov, Up, Annihilation, env.xacc_scheme);
         FermionOperator rb (ri, rov, Down, Annihilation, env.xacc_scheme);
         for (IdxType s = r; s < env.n_spatial; s++) {
-          IdxType si = InCo(s, env.n_occ);
-          auto sov = OccVir(s, env.n_occ);
+          IdxType si = spind_to_ind(s, env.n_occ);
+          auto sov = occ_or_vir(s, env.n_occ);
           FermionOperator sa (si, sov, Up, Annihilation, env.xacc_scheme);
           FermionOperator sb (si, sov, Down, Annihilation, env.xacc_scheme);
           rs += 1;
           int pq = -1;
           for (IdxType p = 0; p < env.n_spatial; p++) {
-            IdxType pi = InCo(p, env.n_occ);
-            auto pov = OccVir(p, env.n_occ);
+            IdxType pi = spind_to_ind(p, env.n_occ);
+            auto pov = occ_or_vir(p, env.n_occ);
             FermionOperator pa (pi, pov, Up, Creation, env.xacc_scheme);
             FermionOperator pb (pi, pov, Down, Creation, env.xacc_scheme);
             for (IdxType q = p; q < env.n_spatial; q++) {
-              IdxType qi = InCo(q, env.n_occ);
-              auto qov = OccVir(q, env.n_occ);
+              IdxType qi = spind_to_ind(q, env.n_occ);
+              auto qov = occ_or_vir(q, env.n_occ);
               FermionOperator qa (qi, qov, Up, Creation, env.xacc_scheme);
               FermionOperator qb (qi, qov, Down, Creation, env.xacc_scheme);
               pq += 1;
@@ -384,25 +384,25 @@ namespace NWQSim {
 
       int rs_t = -1;
       for (IdxType r = 0; r < env.n_spatial; r++) {
-        IdxType ri = InCo(r, env.n_occ);
-        auto rov = OccVir(r, env.n_occ);
+        IdxType ri = spind_to_ind(r, env.n_occ);
+        auto rov = occ_or_vir(r, env.n_occ);
         FermionOperator ra (ri, rov, Up, Annihilation, env.xacc_scheme);
         FermionOperator rb (ri, rov, Down, Annihilation, env.xacc_scheme);
         for (IdxType s = r; s < env.n_spatial; s++) {
-          IdxType si = InCo(s, env.n_occ);
-          auto sov = OccVir(s, env.n_occ);
+          IdxType si = spind_to_ind(s, env.n_occ);
+          auto sov = occ_or_vir(s, env.n_occ);
           FermionOperator sa (si, sov, Up, Annihilation, env.xacc_scheme);
           FermionOperator sb (si, sov, Down, Annihilation, env.xacc_scheme);
           rs_t += 1;
           int pq_t = -1;
           for (IdxType p = 0; p < env.n_spatial; p++) {
-            IdxType pi = InCo(p, env.n_occ);
-            auto pov = OccVir(p, env.n_occ);
+            IdxType pi = spind_to_ind(p, env.n_occ);
+            auto pov = occ_or_vir(p, env.n_occ);
             FermionOperator pa (pi, pov, Up, Creation, env.xacc_scheme);
             FermionOperator pb (pi, pov, Down, Creation, env.xacc_scheme);
             for (IdxType q = p; q < env.n_spatial; q++) {
-              IdxType qi = InCo(q, env.n_occ);
-              auto qov = OccVir(q, env.n_occ);
+              IdxType qi = spind_to_ind(q, env.n_occ);
+              auto qov = occ_or_vir(q, env.n_occ);
               FermionOperator qa (qi, qov, Up, Creation, env.xacc_scheme);
               FermionOperator qb (qi, qov, Down, Creation, env.xacc_scheme);
               pq_t += 1;

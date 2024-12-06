@@ -3,7 +3,7 @@
 This is a guide for things you need to change when you want to add new things, such as ansatzes.
 
 ## Important Points
-1. In `NWQSim/vqe/include/environment.hpp`, structure `MolecularEnvironment` assumes the the number of occupied orbitals `n_occ` equal number of alpha- and beta-spin electron `n_part` by setting
+1. In `vqe/include/environment.hpp`, structure `MolecularEnvironment` assumes the the number of occupied orbitals `n_occ` equal number of alpha- and beta-spin electron `n_part` by setting
 ```c++
 n_occ = n_part / 2
 n_virt = n_spatial - n_occ
@@ -17,9 +17,9 @@ n_virt = n_spatial - n_occ
 
 ## Adding new ansatz for VQE and QFLOW
 
-This is for the ansatz associate with `main.cpp` and `qflow.cpp`. You need to create a new class that inherits the `Ansatz` class in `NWQSim/vqe/include/circuit/ansatz.hpp`. You can 
-1. Similar to the `UCCSD` class: create a new class inherited from `Ansatz` inside the `ansatz.hpp`, then create a `.cpp` file (or copy-paste `uccsd.cpp`) in `NWQSim/vqe/src/` to fill excitation generation functions
-2. Similar to the `UCCSDMin` class: create a new class in the `.cpp` file (or copy-paste `uccsdmin.cpp`) only in `NWQSim/vqe/src/`, and include the file in both `main.cpp` and `qflow.cpp`.
+This is for the ansatz associate with `main.cpp` and `qflow.cpp`. You need to create a new class that inherits the `Ansatz` class in `vqe/include/circuit/ansatz.hpp`. You can 
+1. Similar to the `UCCSD` class: create a new class inherited from `Ansatz` inside the `ansatz.hpp`, then create a `.cpp` file (or copy-paste `uccsd.cpp`) in `vqe/src/` to fill excitation generation functions
+2. Similar to the `UCCSDMin` class: create a new class in the `.cpp` file (or copy-paste `uccsdmin.cpp`) only in `vqe/src/`, and include the file in both `main.cpp` and `qflow.cpp`.
 
 A few points to note
 1. Compute the number of single and double excitations, pre-allocate enough space for `fermion_operators`.
@@ -30,7 +30,7 @@ A few points to note
         * This order is also verified through comparing the optimized parameter values with those from the Qiskit's UCCSD on a H4 example.
     2. The class `FermionOperator` accept 
     ```c++
-    FermionOperator iop (i,  // NOT SPARTIAL orbital index, index i among Occupied or Virtual orbital set
+    FermionOperator iop (i,  // This is the (i-1)^th OCCUPIED or VIRTUAL orbital
                     Occupied,  // orbital type: Occupied or Virtual
                     Up,   // spin: Up or Down
                     Annihilation, // Fermion operator type: Creation or Annihilation
@@ -49,7 +49,7 @@ A few points to note
         }
     }
     ```
-    since it is assumed that first `n_occ` number of orbitals are occupied. An example is shown in `NWQSim/vqe/src/singletgsd.cpp`.
+    since it is assumed that first `n_occ` number of orbitals are occupied. An example is shown in `vqe/src/singletgsd.cpp`.
 4. Remeber to modify `pauli_oplist.reserve(4 * n_singles + 16 * n_doubles);` in `buildAnsatz()` if you are using more complicated excitation operators.
 5. Remeber to change `main.cpp` and `qflow.cpp` so your new ansatz can be enabled in the command line.
 
@@ -57,16 +57,18 @@ A few points to note
 ## Adding new ansatz for ADAPT-VQE
 
 You need to 
-1. in the file `NWQSim/vqe/include/observable/fermionic_operator.hpp`
+1. in the file `vqe/include/observable/fermionic_operator.hpp`
     1. append the function that generate new dynamic ansatz
-2. in the file `NWQSim/vqe/include/circuit/dynamic_ansatz.hpp`
+2. in the file `vqe/include/circuit/dynamic_ansatz.hpp`
     1. modify the function `make_op_pool()` under class `DynamicAnsatz` 
     2. Enlarge class `PoolType`
     3. Assign `ansatz_name`
     4. See the important points about using class `FermionOperator` in the above section
-3. in the file `NWQSim/vqe/src/utils.cpp`
+3. in the file `vqe/src/utils.cpp`
     1. elabrate your actual function that generate new dynamic ansatz
-4. Remeber to change `main.cpp` so your new ansatz can be enabled in the command line.
+5. Remeber to new `PoolType` into the following place
+    1. `vqe/include/circuit/dynamic_ansatz.hpp`: `get_operator_string()`, `add_operator()`, and `getFermionicOperatorParameters()`
+4. Remeber to change `show_help()` and `parse_args()` in `main.cpp` so your new ansatz can be enabled in the command line.
 
-Use `generate_fermionic_excitations()` in `NWQSim/vqe/src/utils.cpp` as an example.
+Use `generate_fermionic_excitations()` in `vqe/src/utils.cpp` as an example.
 

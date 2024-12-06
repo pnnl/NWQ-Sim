@@ -5,6 +5,7 @@
 #include "environment.hpp"
 #include "utils.hpp"
 #include "environment.hpp"
+
 namespace NWQSim {
   /* Basic data type for indices */
   using IdxType = long long int;
@@ -23,10 +24,27 @@ namespace NWQSim {
       Occupied,
       Virtual
     };
+
+    // MZ: Show this orbital should be Occupied or Virtual based on the spatial index
+    inline OrbitalType occ_or_vir(IdxType sp, IdxType n_occ) {
+      if (sp < n_occ) { // assume first n_occ # of orbitals are occupied
+        return  Occupied;
+      }
+      return  Virtual;
+    }
+
+    // MZ: From spatial index to the index used for FermionicOperator
+    inline IdxType spind_to_ind(IdxType sp, IdxType n_occ) {
+      if (sp < n_occ) { // assume first n_occ # of orbitals are occupied
+        return sp;
+      }
+      return sp - n_occ;
+    }
+
     class FermionOperator {
       // Basic IR before transformation operations (JW, BK, etc.)
       protected:
-        IdxType orbital_index; // MZ: NOTE this is the index within occupied spartial orbital set OR virtual spatial orbital set
+        IdxType orbital_index; // MZ: NOTE this is the (i-1)^th OCCUPIED or VIRTUAL orbital
         OrbitalType orb_type;
         Spin spin;
         FermionOpType type;
@@ -100,7 +118,8 @@ namespace NWQSim {
     // Construct the minimal operator pool G from Tang et al. 2021 ("Qubit-ADAPT VQE")
     void generate_minimal_pauli_excitations(std::vector<std::vector<PauliOperator > >& _pauli_operators,
                                     const MolecularEnvironment& _env);
-    void generate_singletGSD_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
+    //
+    void generate_singlet_gsd_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
                                         const MolecularEnvironment& env);
     void generate_fermionic_excitations_origin(std::vector<std::vector< std::vector<FermionOperator> > >& _fermion_operators,
                                     const MolecularEnvironment& _env);
