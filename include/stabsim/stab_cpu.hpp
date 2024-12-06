@@ -247,10 +247,9 @@ namespace NWQSim
 
             int a; //qubit
             int b; //control
-            for(int i = numgates - 1; i >= 0; i--)
+            for(int i = 0; i < num_gates; i++)
             {
                 auto gate = gates[i];
-               
 
                 if(gate.op_name == "T")
                 {
