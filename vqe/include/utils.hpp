@@ -121,7 +121,7 @@ namespace NWQSim{
       index = (orbital_index) \
           + (orb_type * spin * n_virt + (!orb_type) * spin * n_occ) \
           + orb_type * 2 * n_occ;  // MZ: not for PySCF, temporarily commented out
-      index = 2*(orbital_index+ (orb_type * n_occ)) + spin; // MZ: DEBUG: for PySCF and original ADAPT-VQE code, TODO: keep it or recover it
+      // index = 2*(orbital_index+ (orb_type * n_occ)) + spin; // MZ: DEBUG: for PySCF and original ADAPT-VQE code, TODO: keep it or recover it
     } else {
       // Qiskit/XACC scheme
       index = (orbital_index) \

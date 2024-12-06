@@ -315,6 +315,21 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
     // std::cout << ">>>> DEBUG: Operator Stats " << single_counter << " and " << double_counter << "<<<<"<< std::endl;
 };
 
+// MZ: Show this orbital should be Occupied or Virtual based on the spatial index
+auto OccVir(IdxType sp, IdxType n_occ) {
+  if (sp < n_occ) { // assume first n_occ # of orbitals are occupied
+    return Occupied;
+  }
+  return Virtual; 
+}
+
+// MZ: From spatial index to the index used for FermionicOperator
+IdxType InCo(IdxType sp, IdxType n_occ) {
+  if (sp < n_occ) { // assume first n_occ # of orbitals are occupied
+    return sp;
+  }
+  return sp - n_occ;
+}
 
 /**
  * @brief  Generate a set of singlet single/double Fermionic excitations
@@ -338,15 +353,19 @@ void generate_singletGSD_excitations(std::vector<std::vector<std::vector<Fermion
     // MZ: could use a better indexing iteration scheme to avoid the use of sets for efficiency
     // but usually this is not a bottleneck
     //===========Single Excitations===========
-    for (IdxType p = 0; p < env.n_spatial; p++) {
-      FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
-      FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
+     for (IdxType p = 0; p < env.n_spatial; p++) {
+      IdxType pi = InCo(p, env.n_occ);
+      auto pov = OccVir(p, env.n_occ);
+      FermionOperator virtual_creation_up (pi, pov, Up, Creation, env.xacc_scheme);
+      FermionOperator virtual_creation_down (pi, pov, Down, Creation, env.xacc_scheme);
       for (IdxType q = p+1; q < env.n_spatial; q++) {
+        IdxType qi = InCo(q, env.n_occ);
+        auto qov = OccVir(q, env.n_occ);
         // creation operator
-        FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
-        FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
+        FermionOperator occupied_annihilation_up (qi, qov, Up, Annihilation, env.xacc_scheme);
+        FermionOperator occupied_annihilation_down (qi, qov, Down, Annihilation, env.xacc_scheme);
         fermion_operators.push_back({{occupied_annihilation_up, virtual_creation_up},
-                                      {occupied_annihilation_down, virtual_creation_down}});
+                                    {occupied_annihilation_down, virtual_creation_down}});
         single_counter += 1;
       }
     }
@@ -354,19 +373,27 @@ void generate_singletGSD_excitations(std::vector<std::vector<std::vector<Fermion
     // Singlets and Triplets
     int rs = -1;
     for (IdxType r = 0; r < env.n_spatial; r++) {
-      FermionOperator ra (r, Occupied, Up, Annihilation, env.xacc_scheme);
-      FermionOperator rb (r, Occupied, Down, Annihilation, env.xacc_scheme);
+      IdxType ri = InCo(r, env.n_occ);
+      auto rov = OccVir(r, env.n_occ);
+      FermionOperator ra (ri, rov, Up, Annihilation, env.xacc_scheme);
+      FermionOperator rb (ri, rov, Down, Annihilation, env.xacc_scheme);
       for (IdxType s = r; s < env.n_spatial; s++) {
-        FermionOperator sa (s, Occupied, Up, Annihilation, env.xacc_scheme);
-        FermionOperator sb (s, Occupied, Down, Annihilation, env.xacc_scheme);
+        IdxType si = InCo(s, env.n_occ);
+        auto sov = OccVir(s, env.n_occ);
+        FermionOperator sa (si, sov, Up, Annihilation, env.xacc_scheme);
+        FermionOperator sb (si, sov, Down, Annihilation, env.xacc_scheme);
         rs += 1;
         int pq = -1;
         for (IdxType p = 0; p < env.n_spatial; p++) {
-          FermionOperator pa (p, Virtual, Up, Creation, env.xacc_scheme);
-          FermionOperator pb (p, Virtual, Down, Creation, env.xacc_scheme);
+          IdxType pi = InCo(p, env.n_occ);
+          auto pov = OccVir(p, env.n_occ);
+          FermionOperator pa (pi, pov, Up, Creation, env.xacc_scheme);
+          FermionOperator pb (pi, pov, Down, Creation, env.xacc_scheme);
           for (IdxType q = p; q < env.n_spatial; q++) {
-            FermionOperator qa (q, Virtual, Up, Creation, env.xacc_scheme);
-            FermionOperator qb (q, Virtual, Down, Creation, env.xacc_scheme);
+            IdxType qi = InCo(q, env.n_occ);
+            auto qov = OccVir(q, env.n_occ);
+            FermionOperator qa (qi, qov, Up, Creation, env.xacc_scheme);
+            FermionOperator qb (qi, qov, Down, Creation, env.xacc_scheme);
             pq += 1;
             if (rs > pq) {
               continue; 
@@ -418,8 +445,8 @@ void generate_singletGSD_excitations(std::vector<std::vector<std::vector<Fermion
               if ((q == r)&&(r!=s)) {
                 // only singlet
                 fermion_operators.push_back({
-                  {0.5*sb,pa,pa,pb},
-                  {0.5*sa,pb,pb,pa}
+                  {0.5*sb,ra,pa,pb},
+                  {0.5*sa,rb,pb,pa}
                 });
                 double_counter += 1;
                 doublt_term2_counter += 1;
@@ -448,19 +475,27 @@ void generate_singletGSD_excitations(std::vector<std::vector<std::vector<Fermion
 
     int rs_t = -1;
     for (IdxType r = 0; r < env.n_spatial; r++) {
-      FermionOperator ra (r, Occupied, Up, Annihilation, env.xacc_scheme);
-      FermionOperator rb (r, Occupied, Down, Annihilation, env.xacc_scheme);
+      IdxType ri = InCo(r, env.n_occ);
+      auto rov = OccVir(r, env.n_occ);
+      FermionOperator ra (ri, rov, Up, Annihilation, env.xacc_scheme);
+      FermionOperator rb (ri, rov, Down, Annihilation, env.xacc_scheme);
       for (IdxType s = r; s < env.n_spatial; s++) {
-        FermionOperator sa (s, Occupied, Up, Annihilation, env.xacc_scheme);
-        FermionOperator sb (s, Occupied, Down, Annihilation, env.xacc_scheme);
+        IdxType si = InCo(s, env.n_occ);
+        auto sov = OccVir(s, env.n_occ);
+        FermionOperator sa (si, sov, Up, Annihilation, env.xacc_scheme);
+        FermionOperator sb (si, sov, Down, Annihilation, env.xacc_scheme);
         rs_t += 1;
         int pq_t = -1;
         for (IdxType p = 0; p < env.n_spatial; p++) {
-          FermionOperator pa (p, Virtual, Up, Creation, env.xacc_scheme);
-          FermionOperator pb (p, Virtual, Down, Creation, env.xacc_scheme);
+          IdxType pi = InCo(p, env.n_occ);
+          auto pov = OccVir(p, env.n_occ);
+          FermionOperator pa (pi, pov, Up, Creation, env.xacc_scheme);
+          FermionOperator pb (pi, pov, Down, Creation, env.xacc_scheme);
           for (IdxType q = p; q < env.n_spatial; q++) {
-            FermionOperator qa (q, Virtual, Up, Creation, env.xacc_scheme);
-            FermionOperator qb (q, Virtual, Down, Creation, env.xacc_scheme);
+            IdxType qi = InCo(q, env.n_occ);
+            auto qov = OccVir(q, env.n_occ);
+            FermionOperator qa (qi, qov, Up, Creation, env.xacc_scheme);
+            FermionOperator qb (qi, qov, Down, Creation, env.xacc_scheme);
             pq_t += 1;
             if (rs_t > pq_t) {
               continue; 

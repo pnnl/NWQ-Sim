@@ -245,21 +245,20 @@ namespace NWQSim {
         add_double_excitation(r6,s6,i6,j6, {{term, 2.0/sqrt(24.0)}}, false);
     }
     //------------------------------------------------------------------
-
-    auto OccVir(IdxType p) {
-      if (p < env.n_occ) { // assume first n_occ # of orbitals are occupied
+    // MZ: Show this orbital should be Occupied or Virtual based on the spatial index
+    auto OccVir(IdxType sp, IdxType n_occ) {
+      if (sp < n_occ) { // assume first n_occ # of orbitals are occupied
         return Occupied;
-      } else {
-        return Virtual;
       }
+      return Virtual; 
     }
 
-    auto InCo(IdxType p) {
-      if (p < env.n_occ) { // assume first n_occ # of orbitals are occupied
-        return p;
-      } else {
-        return p - env.n_occ;
+    // MZ: From spatial index to the index used for FermionicOperator
+    IdxType InCo(IdxType sp, IdxType n_occ) {
+      if (sp < n_occ) { // assume first n_occ # of orbitals are occupied
+        return sp;
       }
+      return sp - n_occ;
     }
 
    /**
@@ -276,13 +275,13 @@ namespace NWQSim {
       int doublt_term6_counter = 0;
       /*===========Single Excitations===========*/
       for (IdxType p = 0; p < env.n_spatial; p++) {
-        IdxType pi = InCo(p);
-        auto pov = OccVir(p);
+        IdxType pi = InCo(p, env.n_occ);
+        auto pov = OccVir(p, env.n_occ);
         FermionOperator virtual_creation_up (pi, pov, Up, Creation, env.xacc_scheme);
         FermionOperator virtual_creation_down (pi, pov, Down, Creation, env.xacc_scheme);
         for (IdxType q = p+1; q < env.n_spatial; q++) {
-          IdxType qi = InCo(q);
-          auto qov = OccVir(q);
+          IdxType qi = InCo(q, env.n_occ);
+          auto qov = OccVir(q, env.n_occ);
           // creation operator
           FermionOperator occupied_annihilation_up (qi, qov, Up, Annihilation, env.xacc_scheme);
           FermionOperator occupied_annihilation_down (qi, qov, Down, Annihilation, env.xacc_scheme);
@@ -296,25 +295,25 @@ namespace NWQSim {
       // Singlets and Triplets
       int rs = -1;
       for (IdxType r = 0; r < env.n_spatial; r++) {
-        IdxType ri = InCo(r);
-        auto rov = OccVir(r);
+        IdxType ri = InCo(r, env.n_occ);
+        auto rov = OccVir(r, env.n_occ);
         FermionOperator ra (ri, rov, Up, Annihilation, env.xacc_scheme);
         FermionOperator rb (ri, rov, Down, Annihilation, env.xacc_scheme);
         for (IdxType s = r; s < env.n_spatial; s++) {
-          IdxType si = InCo(s);
-          auto sov = OccVir(s);
+          IdxType si = InCo(s, env.n_occ);
+          auto sov = OccVir(s, env.n_occ);
           FermionOperator sa (si, sov, Up, Annihilation, env.xacc_scheme);
           FermionOperator sb (si, sov, Down, Annihilation, env.xacc_scheme);
           rs += 1;
           int pq = -1;
           for (IdxType p = 0; p < env.n_spatial; p++) {
-            IdxType pi = InCo(p);
-            auto pov = OccVir(p);
+            IdxType pi = InCo(p, env.n_occ);
+            auto pov = OccVir(p, env.n_occ);
             FermionOperator pa (pi, pov, Up, Creation, env.xacc_scheme);
             FermionOperator pb (pi, pov, Down, Creation, env.xacc_scheme);
             for (IdxType q = p; q < env.n_spatial; q++) {
-              IdxType qi = InCo(q);
-              auto qov = OccVir(q);
+              IdxType qi = InCo(q, env.n_occ);
+              auto qov = OccVir(q, env.n_occ);
               FermionOperator qa (qi, qov, Up, Creation, env.xacc_scheme);
               FermionOperator qb (qi, qov, Down, Creation, env.xacc_scheme);
               pq += 1;
@@ -385,25 +384,25 @@ namespace NWQSim {
 
       int rs_t = -1;
       for (IdxType r = 0; r < env.n_spatial; r++) {
-        IdxType ri = InCo(r);
-        auto rov = OccVir(r);
+        IdxType ri = InCo(r, env.n_occ);
+        auto rov = OccVir(r, env.n_occ);
         FermionOperator ra (ri, rov, Up, Annihilation, env.xacc_scheme);
         FermionOperator rb (ri, rov, Down, Annihilation, env.xacc_scheme);
         for (IdxType s = r; s < env.n_spatial; s++) {
-          IdxType si = InCo(s);
-          auto sov = OccVir(s);
+          IdxType si = InCo(s, env.n_occ);
+          auto sov = OccVir(s, env.n_occ);
           FermionOperator sa (si, sov, Up, Annihilation, env.xacc_scheme);
           FermionOperator sb (si, sov, Down, Annihilation, env.xacc_scheme);
           rs_t += 1;
           int pq_t = -1;
           for (IdxType p = 0; p < env.n_spatial; p++) {
-            IdxType pi = InCo(p);
-            auto pov = OccVir(p);
+            IdxType pi = InCo(p, env.n_occ);
+            auto pov = OccVir(p, env.n_occ);
             FermionOperator pa (pi, pov, Up, Creation, env.xacc_scheme);
             FermionOperator pb (pi, pov, Down, Creation, env.xacc_scheme);
             for (IdxType q = p; q < env.n_spatial; q++) {
-              IdxType qi = InCo(q);
-              auto qov = OccVir(q);
+              IdxType qi = InCo(q, env.n_occ);
+              auto qov = OccVir(q, env.n_occ);
               FermionOperator qa (qi, qov, Up, Creation, env.xacc_scheme);
               FermionOperator qb (qi, qov, Down, Creation, env.xacc_scheme);
               pq_t += 1;
