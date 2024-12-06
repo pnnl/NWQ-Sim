@@ -6,13 +6,15 @@ These documents describe the structure and functionality of the NWQ-VQE simulato
 - [Operators](components/operators.md): Utilities for creating and manipulating Hamiltonians, Pauli operators, and Fermionic operators. Covers:
   - vqe/include/hamiltonian.hpp
   - vqe/include/pauli_operator.hpp
-  - fermionic_operator.hpp
+  - vqe/include/observable/fermionic_operator.hpp
   - vqe/include/environment.hpp
 - [Fermion to Qubit Transformers](components/transformers.md): Transformer function prototype and the Jordan-Wigner mapper
   - vqe/include/transform/transform.cpp
 - [Ansatzë](components/circuits.md): Ansatz base and UCCSD classes
   - vqe/include/ansatz.hpp
   - vqe/src/uccsd.cpp
+  - vqe/src/uccsdmin.cpp
+  - vqe/src/singletgsd.cpp
 - [VQE States](components/vqe_states.md): Covers the base VQEState interface as well as the backend-specific implementations
   - vqe/include/vqe_state.hpp
   - vqe/include/svsim_vqe/sv_cpu_vqe.hpp

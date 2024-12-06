@@ -7,18 +7,18 @@ typedef void (*Transformer) (const MolecularEnvironment&, const std::vector<std:
 ```
 
 That is, a Transformer takes as input a `MolecularEnvironment` (for qubit indexing), a vector of `FermionicOperator` products, and a flag to indicate that the mapped operators should be Hermitian:
-$$
+```math
 \tau^{ij}_{rs}-\tau^{ij,\dagger}_{rs}
-$$
+```
 where $\tau^{ij}_{rs}$ is an arbitrary Fermionic operator. This flag also adds an imaginary coefficient to the operators for time evolution in the later `Ansatz` object. The output is a vector of QWC-commuting `PauliOperator` groups.
 ## Jordan-Wigner Mapper
 The JW mapper `getJordanWignerTransform` iterates over each Fermionic term and performs the JW expansion:
-$$
+```math
 a^\dagger_{j}=\frac{X_j-iY_j}{2}\bigotimes_{k=1}^{j-1}Z_k
-$$
-$$
+```
+```math
 a_{j}=\frac{X_j+iY_j}{2}\bigotimes_{k=1}^{j-1}Z_k
-$$
+```
 
 The function `jwFermionToPauliSingle` implements the JW transformation for a single Fermionic operator.
 

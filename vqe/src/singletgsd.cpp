@@ -109,6 +109,7 @@ namespace NWQSim {
           unique_params = 0;
           existing_tuples = {};
           // existing_terms = {};
+          ansatz_name = "Singlet GSD";
         };
  
         virtual std::vector<std::string> getFermionicOperatorStrings() const override {
@@ -245,13 +246,21 @@ namespace NWQSim {
     }
     //------------------------------------------------------------------
 
-  auto returnOccVir(IdxType p) {
-    if (p < env.n_occ) { // assume first n_occ # of orbitals are occupied
-      return Occupied;
-    } else {
-      return Virtual;
+    auto OccVir(IdxType p) {
+      if (p < env.n_occ) { // assume first n_occ # of orbitals are occupied
+        return Occupied;
+      } else {
+        return Virtual;
+      }
     }
-  }
+
+    auto InCo(IdxType p) {
+      if (p < env.n_occ) { // assume first n_occ # of orbitals are occupied
+        return p;
+      } else {
+        return p - env.n_occ;
+      }
+    }
 
    /**
     * @brief  Generate Fermionic operators for UCCSD
@@ -266,40 +275,48 @@ namespace NWQSim {
       int doublt_term4_counter = 0;
       int doublt_term6_counter = 0;
       /*===========Single Excitations===========*/
-      std::cout << ">>>DEBUG: USING SINGLET GSD ANSATZ<<<<\n" << std::endl; // MZ: debug
       for (IdxType p = 0; p < env.n_spatial; p++) {
-        FermionOperator virtual_creation_up (p, Virtual, Up, Creation, env.xacc_scheme);
-        FermionOperator virtual_creation_down (p, Virtual, Down, Creation, env.xacc_scheme);
+        IdxType pi = InCo(p);
+        auto pov = OccVir(p);
+        FermionOperator virtual_creation_up (pi, pov, Up, Creation, env.xacc_scheme);
+        FermionOperator virtual_creation_down (pi, pov, Down, Creation, env.xacc_scheme);
         for (IdxType q = p+1; q < env.n_spatial; q++) {
+          IdxType qi = InCo(q);
+          auto qov = OccVir(q);
           // creation operator
-          FermionOperator occupied_annihilation_up (q, Occupied, Up, Annihilation, env.xacc_scheme);
-          FermionOperator occupied_annihilation_down (q, Occupied, Down, Annihilation, env.xacc_scheme);
+          FermionOperator occupied_annihilation_up (qi, qov, Up, Annihilation, env.xacc_scheme);
+          FermionOperator occupied_annihilation_down (qi, qov, Down, Annihilation, env.xacc_scheme);
           // Alpha+beta
           IdxType term_single = fermion_operators.size();
           add_single_comb(virtual_creation_up, occupied_annihilation_up, virtual_creation_down, occupied_annihilation_down, term_single);
           single_counter += 1;
-          // std::cout << "(" << 2*p << "," << 2*q << "," << 2*p+1 << "," << 2*q+1  << ")\n"  << std::endl; // MZ: debug
-          // std::cout << virtual_creation_down.qubitIndex(2,2) << " " << occupied_annihilation_down.qubitIndex(2,2) << "\n" << std::endl; // MZ: debug
         }
       }
-      std::cout << ">>>DEBUG: SINGLE EXCITATION OVER<<<<\n" << std::endl; // MZ: debug
       /*===========Double Excitations===========*/
       // Singlets and Triplets
       int rs = -1;
       for (IdxType r = 0; r < env.n_spatial; r++) {
-        FermionOperator ra (r-returnOccVir(r)*env.n_occ, returnOccVir(r), Up, Annihilation, env.xacc_scheme);
-        FermionOperator rb (r-returnOccVir(r)*env.n_occ, returnOccVir(r), Down, Annihilation, env.xacc_scheme);
+        IdxType ri = InCo(r);
+        auto rov = OccVir(r);
+        FermionOperator ra (ri, rov, Up, Annihilation, env.xacc_scheme);
+        FermionOperator rb (ri, rov, Down, Annihilation, env.xacc_scheme);
         for (IdxType s = r; s < env.n_spatial; s++) {
-          FermionOperator sa (s-returnOccVir(s)*env.n_occ, returnOccVir(s), Up, Annihilation, env.xacc_scheme);
-          FermionOperator sb (s-returnOccVir(s)*env.n_occ, returnOccVir(s), Down, Annihilation, env.xacc_scheme);
+          IdxType si = InCo(s);
+          auto sov = OccVir(s);
+          FermionOperator sa (si, sov, Up, Annihilation, env.xacc_scheme);
+          FermionOperator sb (si, sov, Down, Annihilation, env.xacc_scheme);
           rs += 1;
           int pq = -1;
           for (IdxType p = 0; p < env.n_spatial; p++) {
-            FermionOperator pa (p-returnOccVir(p)*env.n_occ, returnOccVir(p), Up, Creation, env.xacc_scheme);
-            FermionOperator pb (p-returnOccVir(p)*env.n_occ, returnOccVir(p), Down, Creation, env.xacc_scheme);
+            IdxType pi = InCo(p);
+            auto pov = OccVir(p);
+            FermionOperator pa (pi, pov, Up, Creation, env.xacc_scheme);
+            FermionOperator pb (pi, pov, Down, Creation, env.xacc_scheme);
             for (IdxType q = p; q < env.n_spatial; q++) {
-              FermionOperator qa (q-returnOccVir(q)*env.n_occ, returnOccVir(q), Up, Creation, env.xacc_scheme);
-              FermionOperator qb (q-returnOccVir(q)*env.n_occ, returnOccVir(q), Down, Creation, env.xacc_scheme);
+              IdxType qi = InCo(q);
+              auto qov = OccVir(q);
+              FermionOperator qa (qi, qov, Up, Creation, env.xacc_scheme);
+              FermionOperator qb (qi, qov, Down, Creation, env.xacc_scheme);
               pq += 1;
               if (rs > pq) {
                 continue; 
@@ -313,8 +330,6 @@ namespace NWQSim {
                   add_double_singlet2tm(qb, pa, rb, ra, qa, pb, rb, ra,  term1);
                   double_counter += 1;
                   doublt_term2_counter += 1;
-                  // std::cout << "Singlet2tm: " << p << q << r << s << std::endl;
-                  // std::cout << q*2+1 << p*2 << r*2+1 << r*2 << "-" << q*2 << p*2+1 << r*2+1 << r*2   << "\n" << std::endl;
                   continue;
                 }
                 if ( ((r!=s)&&(q!=r)) || ((p==r)&&(q!=s)&(r!=s)) || ((p==s)&&(q!=r)&(r!=s)) || ((q==s)&&(p!=r)) || ((q==r)&&(p!=s))) {
@@ -341,19 +356,15 @@ namespace NWQSim {
                   add_double_singlet2t(pb,pa,sb,ra,   pb,pa,sa,rb, term1);
                   double_counter += 1;
                   doublt_term2_counter += 1;
-                  std::cout << "Singlet2t1: " << p << q << r << s << std::endl;
-                  std::cout << p*2 << p*2+1 << r*2 << s*2+1 << "+" << p*2 << p*2+1 << r*2+1 << s*2  << "\n" << std::endl;
                   continue;
                 }
                 // Group 4
                 if ((q == r)&&(r!=s)) {
                   // only singlet
                   IdxType term1 = fermion_operators.size();
-                  add_double_singlet2t(pa,pb,sb,pa,   pb,pa,sa,pb, term1);
+                  add_double_singlet2t(pa,pb,sb,ra,   pb,pa,sa,rb, term1);
                   double_counter += 1;
                   doublt_term2_counter += 1;
-                  // std::cout << "Singlet2t2: " << p << q << r << s<< std::endl;
-                  // std::cout << p*2+1 << p*2 << p*2 << s*2+1 << "+" << p*2 << p*2+1 << p*2+1 << s*2  << "\n" << std::endl;
                   continue;
                 }
                 // Group 5
@@ -363,8 +374,6 @@ namespace NWQSim {
                   add_double_singlet1t(pb,pa,rb,ra, term1);
                   double_counter += 1;
                   doublt_term1_counter += 1;
-                  // std::cout << "Singlet1t: " << p << q << r << s << std::endl;
-                  // std::cout << p*2 << p*2+1 << r*2 << r*2+1  << "\n" << std::endl;
                   continue;
                 }
               } // p == q
@@ -376,23 +385,27 @@ namespace NWQSim {
 
       int rs_t = -1;
       for (IdxType r = 0; r < env.n_spatial; r++) {
-        FermionOperator ra (r-returnOccVir(r)*env.n_occ, returnOccVir(r), Up, Annihilation, env.xacc_scheme);
-        FermionOperator rb (r-returnOccVir(r)*env.n_occ, returnOccVir(r), Down, Annihilation, env.xacc_scheme);
+        IdxType ri = InCo(r);
+        auto rov = OccVir(r);
+        FermionOperator ra (ri, rov, Up, Annihilation, env.xacc_scheme);
+        FermionOperator rb (ri, rov, Down, Annihilation, env.xacc_scheme);
         for (IdxType s = r; s < env.n_spatial; s++) {
-          FermionOperator sa (s-returnOccVir(s)*env.n_occ, returnOccVir(s), Up, Annihilation, env.xacc_scheme);
-          FermionOperator sb (s-returnOccVir(s)*env.n_occ, returnOccVir(s), Down, Annihilation, env.xacc_scheme);
+          IdxType si = InCo(s);
+          auto sov = OccVir(s);
+          FermionOperator sa (si, sov, Up, Annihilation, env.xacc_scheme);
+          FermionOperator sb (si, sov, Down, Annihilation, env.xacc_scheme);
           rs_t += 1;
           int pq_t = -1;
           for (IdxType p = 0; p < env.n_spatial; p++) {
-            FermionOperator pa (p-returnOccVir(p)*env.n_occ, returnOccVir(p), Up, Creation, env.xacc_scheme);
-            FermionOperator pb (p-returnOccVir(p)*env.n_occ, returnOccVir(p), Down, Creation, env.xacc_scheme);
+            IdxType pi = InCo(p);
+            auto pov = OccVir(p);
+            FermionOperator pa (pi, pov, Up, Creation, env.xacc_scheme);
+            FermionOperator pb (pi, pov, Down, Creation, env.xacc_scheme);
             for (IdxType q = p; q < env.n_spatial; q++) {
-              FermionOperator qa (q-returnOccVir(q)*env.n_occ, returnOccVir(q), Up, Creation, env.xacc_scheme);
-              FermionOperator qb (q-returnOccVir(q)*env.n_occ, returnOccVir(q), Down, Creation, env.xacc_scheme);
-              if (q == s) {
-                qa = 1.0*sa;
-                qb = 1.0*sb;
-              }
+              IdxType qi = InCo(q);
+              auto qov = OccVir(q);
+              FermionOperator qa (qi, qov, Up, Creation, env.xacc_scheme);
+              FermionOperator qb (qi, qov, Down, Creation, env.xacc_scheme);
               pq_t += 1;
               if (rs_t > pq_t) {
                 continue; 
@@ -411,7 +424,6 @@ namespace NWQSim {
                                       qa,pb,sb,ra,
                                       qa,pb,sa,rb,
                                       term2);
-
                 double_counter += 1;
                 doublt_term4_counter += 1;
                 // std::cout << "Triplet&Singlets: " << p << q << r << s << "\n" << std::endl;
@@ -456,10 +468,9 @@ namespace NWQSim {
 
 
     void  buildAnsatz()  override {
-      // std::cout << ">>>> DEBUGING getQubitIndex() in include/transform/utils.cpp is using PySCF not DUCC indexing, remeber to change back after debugging<<<<" << std::endl;
       getFermionOps();
       // assert((n_doubles + n_singles) == fermion_operators.size());
-      std::cout << n_singles << " " << n_doubles << std::endl;
+      std::cout << "Number of single excitations: " << n_singles << ", number of double excitations: " << n_doubles << std::endl;
       std::cout << "Generated " << fermion_operators.size() << " operators." << std::endl;
       theta->resize(unique_params * trotter_n);
       // exit(0);

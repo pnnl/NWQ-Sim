@@ -26,7 +26,7 @@ namespace NWQSim {
     class FermionOperator {
       // Basic IR before transformation operations (JW, BK, etc.)
       protected:
-        IdxType orbital_index;
+        IdxType orbital_index; // MZ: NOTE this is the index within occupied spartial orbital set OR virtual spatial orbital set
         OrbitalType orb_type;
         Spin spin;
         FermionOpType type;

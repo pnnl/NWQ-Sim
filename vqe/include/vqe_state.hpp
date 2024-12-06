@@ -244,9 +244,15 @@ namespace NWQSim
       std::shared_ptr<Hamiltonian> get_hamiltonian() const { return hamil; }
       IdxType get_iteration() const {return iteration;};
       nlopt::result get_optresult() const {return opt_result;}; // MZ
-      unsigned int get_numevals() const { return num_evals;}; // MZ
+      int get_numevals() const { return num_evals;}; // MZ
       double get_duration() const { return opt_duration;}; // MZ
       void set_duration(double value) { opt_duration = value; }; //MZ
+      double get_comm_duration() const { return comm_duration;}; // MZ, for adapt-vqe
+      void set_comm_duration(double value) { comm_duration = value; }; //MZ, for adapt-vqe
+      size_t get_numpauli() const { return num_pauli_terms_total;}; // MZ, for adapt-vqe
+      void set_numpauli(size_t value) { num_pauli_terms_total = value; }; //MZ, for adapt-vqe
+      size_t  get_numcomm() const { return num_comm_cliques;}; // MZ, for adapt-vqe
+      void set_numcomm(size_t value) { num_comm_cliques = value; }; //MZ, for adapt-vqe
       protected:
         std::shared_ptr<Ansatz> ansatz;                    // state preparation circuit
         std::shared_ptr<Ansatz> measurement;               // circuit to measure expectation values
@@ -263,8 +269,11 @@ namespace NWQSim
         double expectation_value;                          // last computed expectation value
         nlopt::algorithm optimizer_algorithm;              // NLOpt optimization algorithm for circuit updates 
         nlopt::result opt_result;                          //MZ: optimzation success or fail and the reason
-        unsigned int num_evals;                            //MZ: total number of evaluations
+        int num_evals;                                     //MZ: total number of evaluations
         double opt_duration;                               //MZ: time the optimization
+        double comm_duration;                              //MZ: time construction of ADAPT-VQE Commutators
+        size_t num_pauli_terms_total;                      // MZ: Total number of Pauli terms in the commutator, for ADAPT-VQE 
+        size_t num_comm_cliques;                           // MZ: Total number of commuting cliques, for ADAPT-VQE 
 
       
 

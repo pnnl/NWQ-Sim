@@ -4,6 +4,7 @@
 #include "vqe_state.hpp"
 #include <unordered_map>
 #include "src/uccsdmin.cpp"
+#include "src/singletgsd.cpp"
 #include <sstream>
 #include <chrono>
 #define UNDERLINE "\033[4m"
@@ -23,7 +24,9 @@ int show_help() {
   std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl; // MZ: it was --ducc, but the code only detects -- ducc
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
   std::cout << "--verbose             Print optimizer information on each iteration. Defaults to false" << std::endl;
-  std::cout << "--symm                Symmetry level (0->none, 1->single, 2->double non-mixed+single, 3->all). Defaults to 0." << std::endl;
+  // std::cout << "--symm                Symmetry level (0->none, 1->single, 2->double non-mixed+single, 3->all). Defaults to 0." << std::endl;
+  std::cout << "--symm                Symmetry level (0->none, 1->spin symmetry, 2->also orbital symmetry). Defaults to 0." << std::endl; // MZ: is this call orbital symmetry?
+  std::cout << "--gsd                 Use singlet GSD ansatz for ADAPT-VQE. Default to false." << std::endl;
   std::cout << "--origin              Use old implementatin of UCCSD for VQE or ADAPT-VQE. Have duplicated operators and potential symmetry problem. Default to false." << std::endl;
   std::cout << UNDERLINE << "OPTIONAL (Global Minimizer)" << CLOSEUNDERLINE << std::endl;
   std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA. Suggests to use LN_NEWUOA" << std::endl;
@@ -61,7 +64,8 @@ int parse_args(int argc, char** argv,
                 unsigned& seed,
                 double& delta,
                 double& eta,
-                bool& origin_uccsd) {
+                bool& origin_uccsd,
+                bool& gsd) {
   std::string config_file = "";
   std::string algorithm_name = "LN_COBYLA";
   hamilfile = "";
@@ -79,6 +83,7 @@ int parse_args(int argc, char** argv,
   settings.lbound = -2;
   settings.ubound = 2;
   origin_uccsd = false;
+  gsd = false;
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
     if (argname == "-h" || argname == "--help") {
@@ -153,6 +158,8 @@ int parse_args(int argc, char** argv,
       settings.max_time = std::atof(argv[++i]);
     } else if (argname == "--origin") {
       origin_uccsd = true;
+    } else if (argname == "--gsd") {
+      gsd = true;
     } else {
       fprintf(stderr, "\033[91mERROR:\033[0m Unrecognized option %s, type -h or --help for a list of configurable parameters\n", argv[i]);
       return show_help();
@@ -196,10 +203,10 @@ void silent_callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::Val
 void print_header() {
     std::cout << "\n----- Iteration Summary -----\n" << std::left
               << std::setw(8) << " Iter."
-              << std::setw(22) << "Objective Value"
+              << std::setw(19) << "Objective Value"
               << std::setw(55) << "Parameters (first 5)"
               << std::endl;
-    std::cout << std::string(83, '-') << std::endl;
+    std::cout << std::string(80, '-') << std::endl;
 }
 
 // Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
@@ -209,7 +216,7 @@ void callback_function_simple(const std::vector<NWQSim::ValType>& x, NWQSim::Val
   }
   std::cout << std::left << " "
             << std::setw(7) << iteration
-            << std::setw(22) << std::fixed << std::setprecision(15) << fval;
+            << std::setw(19) << std::fixed << std::setprecision(12) << fval;
   
   std::cout << std::fixed << std::setprecision(6);
   for (size_t i = 0; i < std::min(x.size(), size_t(5)); ++i) {
@@ -311,17 +318,17 @@ void optimize_ansatz(const VQEBackendManager& manager,
 
       // Print out the Fermionic operators with their excitations                                        
       std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters(); 
-      manager.safe_print("\n----- Result Summary -----\n"); 
-      manager.safe_print("Method                  : QFlow\n");
-      manager.safe_print("Ansatz                  : %s\n", ansatz->getAnsatzName().c_str());  // MZ: don't want to scroll all the way up to see this
-      manager.safe_print("No. of Pauli Observables: %lld \n", hamil->num_ops());
-      manager.safe_print("Circuit Stats           : %lld Gates with %lld parameters and %lld operators\n" ,ansatz->num_gates(), ansatz->numParams(), ansatz->numOps() ); // MZ: don't want to scroll all the way up to see this
-      std::string ter_rea = "Optimization terminated : "+get_termination_reason(state->get_optresult())+"\n";
+      manager.safe_print("\n--------- Result Summary ---------\n"); 
+      manager.safe_print("Method                 : QFlow\n");
+      manager.safe_print("Ansatz                 : %s\n", ansatz->getAnsatzName().c_str());  // MZ: don't want to scroll all the way up to see this
+      manager.safe_print("# Ham. Pauli Strings   : %lld \n", hamil->num_ops());
+      manager.safe_print("Circuit Stats          : %lld operators, %lld parameters, and %lld Gates\n" , ansatz->numOps(), ansatz->numParams(), ansatz->num_gates()); // MZ: don't want to scroll all the way up to see this
+      std::string ter_rea = "Optimization terminated: "+get_termination_reason(state->get_optresult())+"\n";
       manager.safe_print(ter_rea.c_str());
-      manager.safe_print("No. of iterations       : %d\n", num_iterations);
-      manager.safe_print("Evaluation Time         : %d hrs %d mins %.4f secs\n", hours, minutes, seconds);
-      manager.safe_print("Initial objective value : %.16f\n", initial_ene); 
-      manager.safe_print("Final objective value   : %.16f\nFinal parameters:\n", final_ene); 
+      manager.safe_print("# iterations           : %d\n", num_iterations);
+      manager.safe_print("Evaluation Time        : %d hrs %d mins %.4f secs\n", hours, minutes, seconds);
+      manager.safe_print("Initial objective value: %.16f\n", initial_ene); 
+      manager.safe_print("Final objective value  : %.16f\nFinal parameters:\n", final_ene); 
       for (auto& i: param_tuple) {
         strstream << i.first << ": " << i.second << std::endl;
       }
@@ -346,10 +353,11 @@ int main(int argc, char** argv) {
   bool use_xacc, local, verbose;
   int n_trials;
   bool origin_uccsd;
+  bool gsd;
 
   if (parse_args(argc, argv, manager, hamil_path, backend, config, amplitudes,  n_part, algo, settings, 
                  n_trials, use_xacc, local, verbose, symm_level, 
-                  seed, delta, eta, origin_uccsd)) {
+                  seed, delta, eta, origin_uccsd, gsd)) {
     return 1;
   }
 #ifdef MPI_ENABLED
@@ -365,15 +373,21 @@ int main(int argc, char** argv) {
   manager.safe_print("Constructing UCCSD Ansatz...\n");
 
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
-  if (not origin_uccsd) {
-    ansatz = std::make_shared<NWQSim::VQE::UCCSDMin>(
+  if (origin_uccsd) {
+    ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
       hamil->getEnv(),
       NWQSim::VQE::getJordanWignerTransform,
       1,
       symm_level
     );
+  } else if (gsd) {
+      ansatz  = std::make_shared<NWQSim::VQE::SingletGSD>(
+      hamil->getEnv(),
+      NWQSim::VQE::getJordanWignerTransform,
+      1
+    );
   } else {
-    ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
+    ansatz = std::make_shared<NWQSim::VQE::UCCSDMin>(
       hamil->getEnv(),
       NWQSim::VQE::getJordanWignerTransform,
       1,

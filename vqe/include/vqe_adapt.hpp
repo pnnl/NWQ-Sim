@@ -24,7 +24,13 @@ namespace NWQSim {
         std::vector<std::vector<std::vector<IdxType> > > commutator_zmasks; // Zmasks for commutator operators
         std::vector<ObservableList*> gradient_observables; // Vector of structure pointers for measurement circuit
         std::vector<IdxType> observable_sizes; // Stores the number of commuting cliques for each commutator  
+        size_t num_pauli_terms_total; // MZ: Total number of Pauli terms in the commutator
+        size_t num_comm_cliques; // MZ: Total number of commuting cliques
     public:
+        size_t get_numpauli() const { return num_pauli_terms_total;}; // MZ
+        void set_numpauli(size_t value) { num_pauli_terms_total = value; }; //MZ
+        size_t  get_numcomm() const { return num_comm_cliques;}; // MZ
+        void set_numcomm(size_t value) { num_comm_cliques = value; }; //MZ
 
       //Ctor
       AdaptVQE(std::shared_ptr<DynamicAnsatz> _ans, std::shared_ptr<VQEState> backend, std::shared_ptr<Hamiltonian> _hamil): 
@@ -90,7 +96,8 @@ namespace NWQSim {
         gradient_magnitudes.resize(poolsize);
         gradient_observables.resize(poolsize);
         observable_sizes.resize(poolsize);
-        size_t num_pauli_terms_total = 0;
+        // size_t num_pauli_terms_total = 0; // MZ: want to pass this value out
+        num_pauli_terms_total = 0; // MZ: Initialize the total number of Pauli terms in the commutator
         for (size_t i = 0; i < poolsize; i++) {
           // Get all of the ungrouped Pauli strings for this commutator 
           std::unordered_map<PauliOperator,  std::complex<double>, PauliHash> pmap;
@@ -143,9 +150,11 @@ namespace NWQSim {
             cliqueiter++;  
           }
         }
+        num_comm_cliques = pauli_op_pool.size(); // MZ: Total number of commuting cliques
         // Report commutator stats
-        if (state->get_process_rank() == 0)
+        if (state->get_process_rank() == 0) {
           std::cout << "Generated " << pauli_op_pool.size() << " commutators with " << num_pauli_terms_total << " (possibly degenerate) Individual Pauli Strings" << std::endl;
+        }
       }
 
 
@@ -199,9 +208,24 @@ namespace NWQSim {
           state->optimize(parameters, ene);
           // Print update
           if (state->get_process_rank() == 0) {
-            std::cout << "ADAPT Iteration " << iter << ", Fval = " << ene << std::endl;
-            std::cout << "\tSelected Operator: " << ansatz->get_operator_string(max_ind) << ", Current gradient norm = " << grad_norm << std::endl;
+            // std::cout << "ADAPT Iteration " << iter << ", Fval = " << ene << std::endl; // MZ: need more concise
+            // std::cout << "\tSelected Operator: " << ansatz->get_operator_string(max_ind) << ", Current gradient norm = " << grad_norm << std::endl; MZ: need more concise
+            if (iter == 0) {
+              std::cout << "\n----------- Iteration Summary -----------\n" << std::left
+                        << std::setw(8) << " Iter."
+                        << std::setw(19) << "Objective Value"
+                        << std::setw(19) << "Gradient Norm"
+                        << std::setw(55) << "Selected Operator"
+                        << std::endl;
+              std::cout << std::string(104, '-') << std::endl;
+            }
+            std::cout << std::left << " "
+                      << std::setw(7) << iter
+                      << std::setw(19) << std::fixed << std::setprecision(12) << ene
+                      << std::setw(19) << std::fixed << std::setprecision(12) << grad_norm;
+            std::cout << ansatz->get_operator_string(max_ind) << std::endl;
           }
+
           // If the function value converged, then break
           if (abs((ene - prev_ene)) < fvaltol) {
             break;

@@ -112,21 +112,25 @@ symmetries[1] = {{0, 1.0}};
 fermion_ops_to_params[0] = 0;
 ```
 
+A symmetry is further used to reduce the number of parameters required for both single and double excitations, in general there are two cases:
+1. When two operators only differ in the spin but not spin-orbital index: $t_{I(\alpha)}^{A(\alpha)} = t_{I(\beta)}^{A(\beta)}$ and $t_{I(\alpha)J(\alpha)}^{A(\alpha)B(\alpha)} = t_{I(\beta)J(\beta)}^{A(\beta)B(\beta)}$
+2. For double exicitations, when the order of indices flipped for creation and annihilation operators: $t_{I(\alpha)J(\beta)}^{A(\alpha)B(\beta)} = t_{J(\alpha)I(\beta)}^{B(\alpha)A(\beta)}$
 
+<!---
 However, the number of double excitations requires a bit more combinatorics. We can delineate *mixed terms* (where all spatial orbitals are unique) from *degenerate terms* (where either the annihilation or creation operators share a spatial orbital). These two groups have different symmetry expressions:
 
 Using bars to denote spin orientation ($\alpha_i$ for a spin up annihilation, $\beta_i$ for spin down), we can express the symmetries for mixed excitations as follows:
 
-$$
+```math
 \alpha_i^\dagger\alpha_j^\dagger\alpha_r\alpha_s=\beta_i^\dagger\beta_j^\dagger\beta_r\beta_s=\alpha_i^\dagger\beta_j^\dagger\beta_r\alpha_s+\alpha_i^\dagger\beta_j^\dagger\alpha_r\beta_s=\beta_i^\dagger\alpha_j^\dagger\alpha_r\beta_s+\beta_i^\dagger\alpha_j^\dagger\beta_r\alpha_s
-$$
+```
 
 whereas degenerate excitations have the symmetry:
-$$
+```math
 \beta_i^\dagger\alpha_j^\dagger\alpha_r\beta_r=\beta_j^\dagger\alpha_i^\dagger\alpha_r\beta_r
-$$
-with a similar form for degenerate virtual orbitals.
-
+```
+with a similar form for degenerate virtual orbitals.)
+-->
 
 
 ### Construction
