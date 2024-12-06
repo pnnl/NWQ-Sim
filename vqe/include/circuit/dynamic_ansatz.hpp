@@ -5,13 +5,13 @@ namespace NWQSim {
   namespace VQE {
     using FermionOplist = std::vector<FermionOperator>;
     using SymmetryGroup = std::vector<FermionOplist>; // for now, just assume we're preserving spin-conjugated symmetries
-    enum class PoolType {
-      Fermionic,
-      Pauli,
-      MinimalPauli,
-      Singlet_GSD,
-      Fermionic_Origin
-    };
+    // enum class PoolType {
+    //   Fermionic,
+    //   Pauli,
+    //   MinimalPauli,
+    //   Singlet_GSD,
+    //   Fermionic_Origin
+    // }; // MZ: moved to ansatz.hpp, want to make it a more unified switch to switch pools for ADAPT-VQE or VQE  
     class DynamicAnsatz: public Ansatz {
       protected:
         const MolecularEnvironment& env;

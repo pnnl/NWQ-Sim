@@ -6,6 +6,7 @@
 #include "vqe_adapt.hpp"
 #include "src/uccsdmin.cpp"
 #include "src/singletgsd.cpp"
+#include "src/ansatz_pool.cpp" // MZ: move the ansatz pool generation out of the src/utils.cpp
 #include <chrono>
 
 #define UNDERLINE "\033[4m"
@@ -41,8 +42,7 @@ struct VQEParams {
   IdxType adapt_pool_size = -1;
 
   // Ansatz options
-  bool gsd_pool = false;
-  bool origin_pool = false;
+  NWQSim::VQE::PoolType pool = NWQSim::VQE::PoolType::Fermionic;
 };
 int show_help() {
   std::cout << "NWQ-VQE Options" << std::endl;
@@ -57,23 +57,23 @@ int show_help() {
   std::cout << "--symm                Symmetry level (0->none, 1->spin symmetry, 2->also orbital symmetry). Defaults to 0." << std::endl; // MZ: is this call orbital symmetry?
   std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
   std::cout << "--opt-config          Path to config file for NLOpt optimizer parameters" << std::endl;
-  std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA. Examples are LN_NEWUOA, LD_LBFGS" << std::endl;
+  std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA. Other examples are LN_NEWUOA and LD_LBFGS" << std::endl;
   std::cout << "--lbound              Lower bound for classical optimizer. Defaults to -PI" << std::endl;
   std::cout << "--ubound              Upper bound for classical optimizer. Defaults to PI" << std::endl;
   std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--abstol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
-  std::cout << "--maxeval             Maximum number of function evaluations for optimizer. Defaults to 200" << std::endl;
+  std::cout << "--maxeval             Maximum number of function evaluations for optimizer (only for VQE). Defaults to 100" << std::endl;
   std::cout << "--maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)" << std::endl;
   std::cout << "--stopval             Cutoff function value for optimizer. Defaults to -MAXFLOAT (off)" << std::endl;
-  std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme. (Deprecated, true by default)" << std::endl;
   std::cout << "--ducc                Use DUCC indexing scheme, otherwise uses XACC scheme. (Defaults to false)" << std::endl;
   std::cout << "--gsd                 Use singlet GSD ansatz for ADAPT-VQE. Default to false." << std::endl;
   std::cout << "--origin              Use old implementatin of UCCSD for VQE or ADAPT-VQE. Have duplicated operators and potential symmetry problem. Default to false." << std::endl;
+  std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme. (Deprecated, true by default)" << std::endl;
   std::cout << UNDERLINE << "ADAPT-VQE OPTIONS" << CLOSEUNDERLINE << std::endl;
   std::cout << "--adapt               Use ADAPT-VQE for dynamic ansatz construction. Defaults to false" << std::endl;
-  std::cout << "--adapt-maxeval       Set a maximum iteration count for ADAPT-VQE. Defaults to 100" << std::endl;
   std::cout << "--adapt-gradtol       Cutoff absolute tolerance for operator gradient norm. Defaults to 1e-3" << std::endl;
   std::cout << "--adapt-fvaltol       Cutoff absolute tolerance for function value. Defaults to 1e-6" << std::endl;
+  std::cout << "--adapt-maxeval       Set a maximum iteration count for ADAPT-VQE. Defaults to 100" << std::endl;
   std::cout << "--qubit               Uses Qubit instead of Fermionic operators for ADAPT-VQE. Defaults to false" << std::endl;
   std::cout << "--adapt-pool          Sets the pool size for Qubit operators. Defaults to -1" << std::endl;
   return 1;
@@ -167,7 +167,8 @@ int parse_args(int argc, char** argv,
       params.adapt = true;
     }  else 
     if (argname == "--qubit") {
-      params.qubit = true;
+      // params.qubit = true;
+      params.pool = NWQSim::VQE::PoolType::Pauli;
     } else 
     if (argname == "--maxeval") {
       settings.max_evals = std::atoll(argv[++i]);
@@ -176,9 +177,9 @@ int parse_args(int argc, char** argv,
     } else if (argname == "--maxtime") {
       settings.max_time = std::atof(argv[++i]);
     } else if (argname == "--gsd") {
-      params.gsd_pool = true;
+      params.pool = NWQSim::VQE::PoolType::Singlet_GSD;
     } else if (argname == "--origin") {
-      params.origin_pool = true;
+      params.pool = NWQSim::VQE::PoolType::Fermionic_Origin;
     } else {
       fprintf(stderr, "\033[91mERROR:\033[0m Unrecognized option %s, type -h or --help for a list of configurable parameters\n", argv[i]);
       return show_help();
@@ -374,31 +375,31 @@ int main(int argc, char** argv) {
   if (params.adapt)
   {
     // Iteratively build an ADAPT-VQE ansatz (starts from HF state)
-    NWQSim::VQE::PoolType pool;
-    if (params.qubit) {
-      // Qubit ADAPT-VQE ansatz
-      pool = NWQSim::VQE::PoolType::Pauli;
-    } else if (params.gsd_pool) {
-      // Singlet GSD ADAPT-VQE ansatz
-      pool = NWQSim::VQE::PoolType::Singlet_GSD;
-    } else if (params.origin_pool) {
-      // Fermionic ADAPT-VQE ansatz (Original implementation from Matt, has symmetry problem)
-      pool = NWQSim::VQE::PoolType::Fermionic_Origin;
-    } else {
-      // Fermionic ADAPT-VQE ansatz
-      pool = NWQSim::VQE::PoolType::Fermionic;
-    }
-    ansatz = std::make_shared<NWQSim::VQE::DynamicAnsatz>(hamil->getEnv(), pool);
+    // NWQSim::VQE::PoolType pool;
+    // if (params.qubit) {
+    //   // Qubit ADAPT-VQE ansatz
+    //   pool = NWQSim::VQE::PoolType::Pauli;
+    // } else if (params.gsd_pool) {
+    //   // Singlet GSD ADAPT-VQE ansatz
+    //   pool = NWQSim::VQE::PoolType::Singlet_GSD;
+    // } else if (params.origin_pool) {
+    //   // Fermionic ADAPT-VQE ansatz (Original implementation from Matt, has symmetry problem)
+    //   pool = NWQSim::VQE::PoolType::Fermionic_Origin;
+    // } else {
+    //   // Fermionic ADAPT-VQE ansatz
+    //   pool = NWQSim::VQE::PoolType::Fermionic;
+    // }
+    ansatz = std::make_shared<NWQSim::VQE::DynamicAnsatz>(hamil->getEnv(), params.pool);
   } else {
     // Static ansatz
-    if (params.origin_pool) {
+    if (params.pool == NWQSim::VQE::PoolType::Fermionic_Origin) {
         ansatz  = std::make_shared<NWQSim::VQE::UCCSD>(
         hamil->getEnv(),
         NWQSim::VQE::getJordanWignerTransform,
         1,
         params.symm_level
       );
-    } else if (params.gsd_pool) {
+    } else if (params.pool == NWQSim::VQE::PoolType::Singlet_GSD) {
         ansatz  = std::make_shared<NWQSim::VQE::Singlet_GSD>(
         hamil->getEnv(),
         NWQSim::VQE::getJordanWignerTransform,

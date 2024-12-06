@@ -34,5 +34,5 @@ These documents describe the structure and functionality of the NWQ-VQE simulato
   - Related code in vqe/include/vqe_state.hpp
 - [adapt.md](components/adapt.md): Fermionic-ADAPT and Qubit-ADAPT optimizers. Covers:
   - [vqe_adapt.hpp](../vqe/include/vqe_adapt.hpp)
-  - related functions in [utils.cpp](../vqe/src/utils.cpp)
+  - related functions in [ansatz_pool.cpp](../vqe/src/ansatz_pool.cpp) ~~[utils.cpp](../vqe/src/utils.cpp)~~
 - [Utilities](components/utils.md): General utilities defined in [utils.cpp](../vqe/src/utils.cpp) and [utils.hpp](../vqe/include/utils.hpp)

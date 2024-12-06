@@ -18,6 +18,16 @@
 
 namespace NWQSim {
   namespace VQE {
+    
+    // // MZ: moved from dynamic_ansatz.hpp, want to make it a more unified switch to switch pools for ADAPT-VQE or VQE  
+    enum class PoolType {
+      Fermionic,
+      Pauli,
+      MinimalPauli,
+      Singlet_GSD,
+      Fermionic_Origin
+    };
+
     class Ansatz: public Circuit {
       protected:
         std::shared_ptr<std::vector<ValType> > theta;

@@ -19,14 +19,14 @@ n_virt = n_spatial - n_occ
 
 This is for the ansatz associate with `main.cpp` and `qflow.cpp`. You need to create a new class that inherits the `Ansatz` class in `vqe/include/circuit/ansatz.hpp`. You can 
 1. Similar to the `UCCSD` class: create a new class inherited from `Ansatz` inside the `ansatz.hpp`, then create a `.cpp` file (or copy-paste `uccsd.cpp`) in `vqe/src/` to fill excitation generation functions
-2. Similar to the `UCCSDMin` class: create a new class in the `.cpp` file (or copy-paste `uccsdmin.cpp`) only in `vqe/src/`, and include the file in both `main.cpp` and `qflow.cpp`.
+2. Similar to the `UCCSDmin` class: create a new class in the `.cpp` file (or copy-paste `uccsdmin.cpp`) only in `vqe/src/`, and include the file in both `main.cpp` and `qflow.cpp`.
 
 A few points to note
 1. Compute the number of single and double excitations, pre-allocate enough space for `fermion_operators`.
 2. Assign value for `ansatz_name`
 3. Override/Create function `getFermionOps()` to fill excitation operators to `fermion_operators`. Use class `FermionOperator` for each creation and annihilation operator, i.e., $a^\dagger$ and $a$
     1. If copy-paste the file, use `add_single_excitation()` and `add_double_excitation()` to push back two or four creation and annihilation operators as one excitation operator. NOTE: using "Annihilation Creation" or "Ann Ann Cre Cre" order.
-        * Note that the each excitation operator is printed through `getFermionicOperatorParameters()` function, and it uses `opstring = op.toString(env.n_occ, env.n_virt) + opstring` so  "Ann Ann Cre Cre" is the correct order
+        * Note that the each excitation operator is printed through `getFermionicOperatorParameters()` function, and it uses `opstring = op.toString(env.n_occ, env.n_virt) + opstring` so  "Ann Ann Cre Cre" is the correct order, see `Singlet_GSD` class for more clarity.
         * This order is also verified through comparing the optimized parameter values with those from the Qiskit's UCCSD on a H4 example.
     2. The class `FermionOperator` accept 
     ```c++
@@ -39,17 +39,17 @@ A few points to note
     0.5* iop; // a complex or double multiply a FermionOperator modifiy the coefficient
     iop * 0.5; //
     ```
-    NOTE, as it is popular to use spartial orbital indeice to generate excitation operators, you can do the same here, but need to detect if the index is an occupied or virtual orbital:
+    NOTE, as it is popular to use spartial orbital indeice to generate excitation operators in other packages, when you do the same thing here, you need to detect if the index is an occupied or virtual orbital as following
     ```c++
     for (IdxType p = 0; p < env.n_spatial; p++) {
-        if (p < env.n_occ) {
+        if (p < env.n_occ) { // assume that first `n_occ` number of orbitals are occupied.
             std::cout << "Orbital " << p << "is Occupied" << std::endl;
         } else {
             std::cout << "Orbital " << p << "is Virtual" << std::endl;
         }
     }
     ```
-    since it is assumed that first `n_occ` number of orbitals are occupied. An example is shown in `vqe/src/singletgsd.cpp`.
+    The functions `occ_or_vir()` and `spind_to_ind()` in `vqe/observable/fermionic_operator.hpp` will be helpful to determine this and do re-index. An example is shown in `vqe/src/singletgsd.cpp`.
 4. Remeber to modify `pauli_oplist.reserve(4 * n_singles + 16 * n_doubles);` in `buildAnsatz()` if you are using more complicated excitation operators.
 5. Remeber to change `main.cpp` and `qflow.cpp` so your new ansatz can be enabled in the command line.
 
@@ -64,11 +64,11 @@ You need to
     2. Enlarge class `PoolType`
     3. Assign `ansatz_name`
     4. See the important points about using class `FermionOperator` in the above section
-3. in the file `vqe/src/utils.cpp`
+3. in the file `vqe/src/ansatz_pool.cpp` ~~`vqe/src/utils.cpp`~~
     1. elabrate your actual function that generate new dynamic ansatz
-5. Remeber to new `PoolType` into the following place
+5. Remeber to add the new pool type into the following place
     1. `vqe/include/circuit/dynamic_ansatz.hpp`: `get_operator_string()`, `add_operator()`, and `getFermionicOperatorParameters()`
 4. Remeber to change `show_help()` and `parse_args()` in `main.cpp` so your new ansatz can be enabled in the command line.
 
-Use `generate_fermionic_excitations()` in `vqe/src/utils.cpp` as an example.
+Use `generate_fermionic_excitations()` in `vqe/src/ansatz_pool.cpp` ~~`vqe/src/utils.cpp`~~ as an example.
 

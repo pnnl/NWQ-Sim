@@ -8,9 +8,15 @@ VQE simulation based on the NWQ-Sim platform
   git submodule update
   cd vqe/nlopt
   mkdir build;cd build
-  cmake .. -DCMAKE_CXX_COMPILER=/usr/bin/g++ -DCMAKE_C_COMPILER=/usr/bin/gcc 
+  cmake ..
   make
 ```
+
+Some user may need to define C and C++ complier for CMake
+```shell
+  cmake .. -DCMAKE_CXX_COMPILER=/usr/bin/g++ -DCMAKE_C_COMPILER=/usr/bin/gcc
+```
+
 On OLCF Frontier, you may need to load the cray-python module before using cmake for NLOpt.
 
 The specific CXX/C compiler paths can be altered as needed, the main emphasis is to ensure that the optimization code has access to C++ STD libraries.
@@ -30,7 +36,7 @@ Running `make` from the `build` directory will compile the binary `build/vqe/nwq
 
 
 ## Command Line Usage
-NWQ-VQE can be used from the command line via the `nwq_vqe` executable. The executable supports a number of arguments to configure runtime parameters.
+NWQ-VQE can be used from the command line via the `nwq_vqe` executable. The executable supports a number of arguments to configure runtime parameters. Note, the default orbital indexing scheme for `nwq_vqe` is XACC/Qiskit but DUCC for `nwq_qflow`.
 
 Only two arguments are required, the path to the XACC-formatted Hamiltonian (see [example_hamiltonians](example_hamiltonians) for examples) and the number of electrons:
 ```shell
@@ -38,6 +44,11 @@ NWQ-VQE Options
 REQUIRED
 --hamiltonian, -f     Path to the input Hamiltonian file (formatted as a sum of Fermionic operators, see examples)
 --nparticles, -n      Number of electrons in molecule
+```
+
+The default ansatz is UCCSD, but an optional singlet and triplet ansatz can be used by enabling
+``` shell
+--gsd                 Use singlet GSD ansatz for ADAPT-VQE. Default to false.
 ```
 
 The first class of optional arguments are used for configuring the simulator: selecting the backend, setting random seeds, and passing NWQ-Sim configuration JSON files
@@ -52,12 +63,12 @@ OPTIONAL
 NWQ-VQE uses the [NLOpt](https://nlopt.readthedocs.io/en/latest/) library for optimization algorithm implementations. To configure the NLOpt object, we support setting termination criteria, upper/lower bounds, and optimizer algorithms via command line. Algorithm-specific options can be set via a JSON file, see [mma_config.json](mma_config.json) for an example. The `--xacc` and `--ducc` flags set the orbital indexing scheme to either XACC or canonical orderings respectively. XACC is the default, and the flag is included for compatibility. To get a full list of valid NLOpt optimizer strings, refer to the [NLOpt documentation](https://nlopt.readthedocs.io/en/latest/NLopt_Algorithms/). An example of a correctly formatted string is `--optimizer LN_COBYLA`.
 ```shell
 --opt-config          Path to config file for NLOpt optimizer parameters
---optimizer           NLOpt optimizer name. Defaults to LN_COBYLA
+--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA. Other examples are LN_NEWUOA and LD_LBFGS
 --lbound              Lower bound for classical optimizer. Defaults to -PI
 --ubound              Upper bound for classical optimizer. Defaults to PI
 --reltol              Relative tolerance termination criterion. Defaults to -1 (off)
 --abstol              Relative tolerance termination criterion. Defaults to -1 (off)
---maxeval             Maximum number of function evaluations for optimizer. Defaults to 200
+--maxeval             Maximum number of function evaluations for optimizer (only for VQE). Defaults to 100
 --maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)
 --stopval             Cutoff function value for optimizer. Defaults to -MAXFLOAT (off)
 --xacc                Use XACC indexing scheme, otherwise uses DUCC scheme. (Deprecated, true by default)
@@ -74,12 +85,23 @@ where we have now increased the evaluation limit to 1000.
 
 ### ADAPT-VQE Usage
 NWQ-Sim also supports ADAPT-VQE simulations, using both Fermionic operators ([Ref](https://www.nature.com/articles/s41467-019-10988-2)) and single Pauli strings ([Ref](https://journals.aps.org/prxquantum/abstract/10.1103/PRXQuantum.2.020310)). The executable supports the following ADAPT-specific options. `--adapt-maxeval`, `--adapt-gradtol`, and `--adapt-fvaltol` set termination criteria for the ADAPT loop, while the `--adapt` and `--qubit` flags enable ADAPT and Qubit-ADAPT respectively. To enable Qubit-ADAPT, you must pass both the `--adapt` and `--qubit` flags. Qubit-ADAPT also supports randomized operator pool subsampling, with the size set by the `--adapt-pool` flag (-1 indicates the full pool). 
-```
+```shell
 ADAPT-VQE OPTIONS
 --adapt               Use ADAPT-VQE for dynamic ansatz construction. Defaults to false
---adapt-maxeval       Set a maximum iteration count for ADAPT-VQE. Defaults to 100
 --adapt-gradtol       Cutoff absolute tolerance for operator gradient norm. Defaults to 1e-3
 --adapt-fvaltol       Cutoff absolute tolerance for function value. Defaults to 1e-6
+--adapt-maxeval       Set a maximum iteration count for ADAPT-VQE. Defaults to 100
+```
+
+Again, The default ansatz pool is generated from UCCSD ansatz, but an optional singlet and triplet ansatz pool can be used by enabling
+``` shell
+--gsd                 Use singlet GSD ansatz for ADAPT-VQE. Default to false.
+```
+This flag is the same as the one in VQE part.
+
+The the number of paramers in the UCCSD ansatz can be reduced by setting symmetry level
+```shell
+--symm                Symmetry level (0->none, 1->spin symmetry, 2->also orbital symmetry). Defaults to 0.
 ```
 
 
@@ -113,7 +135,7 @@ Qubit-ADAPT also supports custom configuration options:
 --adapt-pool          Sets the pool size for Qubit operators. Defaults to -1
 ``` 
 
-The `--qubit` flag enables a Pauli string operator pool rather than using Fermionic operators e.g.:
+The `--qubit` flag enables a Pauli string operator pool (based on UCCSD ansatz) rather than using Fermionic operators e.g.:
 ```shell
 ./vqe/nwq_vqe -f ../vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -n 4 --maxeval 200 --adapt --qubit --adapt-maxeval 400 --adapt-fvaltol 1e-3 --qubit
 ```
@@ -250,7 +272,7 @@ where we have added the `NVGPU_MPI` backend option to utilize NVSHMEM-linked NVI
 
 
 # QFlow
-In the QFlow algorithm, we repeatedly perform single-direction gradient descent over downfolded Hamiltonians. 
+In the QFlow algorithm, we repeatedly perform single-direction gradient descent over downfolded Hamiltonians. The default orbital indexing scheme is DUCC for `nwq_qflow`.
 
 
 To perform a QFlow gradient descent for an effective Hamiltonian, NWQ-VQE provides two interfaces.
@@ -268,6 +290,9 @@ OPTIONAL
 --xacc                Use XACC indexing scheme, otherwise uses DUCC scheme.
 --delta               Magnitude of SPSA perturbation. Defaults to 1e-4
 --eta                 Gradient descent step size. Defaults to 1e-3
+--verbose             Print optimizer information on each iteration. Defaults to false
+--symm                Symmetry level (0->none, 1->spin symmetry, 2->also orbital symmetry). Defaults to 0.
+--gsd                 Use singlet GSD ansatz for ADAPT-VQE. Default to false.
 ```
 
 `--delta` and `--eta` are QFlow-specific parameters which control the gradient descent procedure (TODO: implement adaptive stepsize line search). `--delta` is used to perturb parameter vectors to compute the empirical gradient using SPSA, whereas `--eta` controls the descent stepsize. The algorithm descends the gradient from the (random) initial point until it finds a minimum, then returns.

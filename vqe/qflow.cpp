@@ -21,21 +21,21 @@ int show_help() {
   std::cout << "--backend, -b         Simulation backend. Defaults to CPU" << std::endl;
   std::cout << "--list-backends, -l   List available backends and exit." << std::endl;
   std::cout << "--amplitudes          List of initial amplitudes." << std::endl;
-  std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl; // MZ: it was --ducc, but the code only detects -- ducc
+  std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl; // MZ: it was --ducc, but the code only detects --xacc
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
   std::cout << "--verbose             Print optimizer information on each iteration. Defaults to false" << std::endl;
   // std::cout << "--symm                Symmetry level (0->none, 1->single, 2->double non-mixed+single, 3->all). Defaults to 0." << std::endl;
   std::cout << "--symm                Symmetry level (0->none, 1->spin symmetry, 2->also orbital symmetry). Defaults to 0." << std::endl; // MZ: is this call orbital symmetry?
   std::cout << "--gsd                 Use singlet GSD ansatz for ADAPT-VQE. Default to false." << std::endl;
-  std::cout << "--origin              Use old implementatin of UCCSD for VQE or ADAPT-VQE. Have duplicated operators and potential symmetry problem. Default to false." << std::endl;
+  std::cout << "--origin              Use old implementatin of UCCSD for VQE (more parameters) or ADAPT-VQE (also incorrect symmetries). Default to false." << std::endl;
   std::cout << UNDERLINE << "OPTIONAL (Global Minimizer)" << CLOSEUNDERLINE << std::endl;
-  std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA. Suggests to use LN_NEWUOA" << std::endl;
+  std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA. Other examples are LN_NEWUOA and LD_LBFGS" << std::endl;
   std::cout << "--optimizer-config    Path to config file for NLOpt optimizer parameters" << std::endl;
   std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--lbound              Optimizer lower bound. Defaults to -2" << std::endl;
   std::cout << "--ubound              Optimizer upper bound. Defaults to 2" << std::endl;
   std::cout << "--abstol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
-  std::cout << "--maxeval             Maximum number of function evaluations for optimizer. Defaults to 200" << std::endl;
+  std::cout << "--maxeval             Maximum number of function evaluations for optimizer. Defaults to 100" << std::endl;
   std::cout << "--maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)" << std::endl;
   std::cout << "--stopval             Cutoff function value for optimizer. Defaults to -MAXFLOAT (off)" << std::endl;
   std::cout << UNDERLINE << "OPTIONAL (Local Gradient Follower)" << CLOSEUNDERLINE << std::endl;
@@ -64,15 +64,14 @@ int parse_args(int argc, char** argv,
                 unsigned& seed,
                 double& delta,
                 double& eta,
-                bool& origin_uccsd,
-                bool& gsd) {
+                NWQSim::VQE::PoolType& pool) {
   std::string config_file = "";
-  std::string algorithm_name = "LN_COBYLA";
+  std::string algorithm_name = "LN_COBYLA"; // may use "LN_NEWUOA"
   hamilfile = "";
   backend = "CPU";
   n_particles = -1;
   n_trials = 1;
-  settings.max_evals = 200;
+  settings.max_evals = 100;
   seed = time(0);
   delta = 1e-4;
   eta = 1e-3;
@@ -82,8 +81,7 @@ int parse_args(int argc, char** argv,
   symm_level = 0;
   settings.lbound = -2;
   settings.ubound = 2;
-  origin_uccsd = false;
-  gsd = false;
+  pool = NWQSim::VQE::PoolType::Fermionic;
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
     if (argname == "-h" || argname == "--help") {
@@ -156,10 +154,10 @@ int parse_args(int argc, char** argv,
       settings.stop_val = std::atof(argv[++i]);
     } else if (argname == "--maxtime") {
       settings.max_time = std::atof(argv[++i]);
-    } else if (argname == "--origin") {
-      origin_uccsd = true;
     } else if (argname == "--gsd") {
-      gsd = true;
+      pool = NWQSim::VQE::PoolType::Singlet_GSD;
+    } else if (argname == "--origin") {
+      pool = NWQSim::VQE::PoolType::Fermionic_Origin;
     } else {
       fprintf(stderr, "\033[91mERROR:\033[0m Unrecognized option %s, type -h or --help for a list of configurable parameters\n", argv[i]);
       return show_help();
@@ -352,12 +350,11 @@ int main(int argc, char** argv) {
   uint64_t symm_level;
   bool use_xacc, local, verbose;
   int n_trials;
-  bool origin_uccsd;
-  bool gsd;
+  NWQSim::VQE::PoolType pool;
 
   if (parse_args(argc, argv, manager, hamil_path, backend, config, amplitudes,  n_part, algo, settings, 
                  n_trials, use_xacc, local, verbose, symm_level, 
-                  seed, delta, eta, origin_uccsd, gsd)) {
+                  seed, delta, eta, pool)) {
     return 1;
   }
 #ifdef MPI_ENABLED
@@ -373,14 +370,14 @@ int main(int argc, char** argv) {
   manager.safe_print("Constructing UCCSD Ansatz...\n");
 
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
-  if (origin_uccsd) {
+  if (pool == NWQSim::VQE::PoolType::Fermionic_Origin) {
     ansatz = std::make_shared<NWQSim::VQE::UCCSD>(
       hamil->getEnv(),
       NWQSim::VQE::getJordanWignerTransform,
       1,
       symm_level
     );
-  } else if (gsd) {
+  } else if (pool == NWQSim::VQE::PoolType::Singlet_GSD) {
       ansatz  = std::make_shared<NWQSim::VQE::Singlet_GSD>(
       hamil->getEnv(),
       NWQSim::VQE::getJordanWignerTransform,
