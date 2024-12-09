@@ -245,24 +245,9 @@ namespace NWQSim {
         add_double_excitation(r6,s6,i6,j6, {{term, 2.0/sqrt(24.0)}}, false);
     }
     //------------------------------------------------------------------
-    // // MZ: Show this orbital should be Occupied or Virtual based on the spatial index
-    // auto occ_or_vir(IdxType sp, IdxType n_occ) {
-    //   if (sp < n_occ) { // assume first n_occ # of orbitals are occupied
-    //     return Occupied;
-    //   }
-    //   return Virtual; 
-    // }
-
-    // // MZ: From spatial index to the index used for FermionicOperator
-    // IdxType spind_to_ind(IdxType sp, IdxType n_occ) {
-    //   if (sp < n_occ) { // assume first n_occ # of orbitals are occupied
-    //     return sp;
-    //   }
-    //   return sp - n_occ;
-    // }
 
    /**
-    * @brief  Generate Fermionic operators for UCCSD
+    * @brief  Generate Fermionic operators for Singlet GSD Ansatz
     * @note   Symmetry-linked operators (e.g. by anticommutation, spin reversal) share parameters
     * @retval None
     */

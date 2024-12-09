@@ -268,13 +268,13 @@ void optimize_ansatz(const VQEBackendManager& manager,
   }
   std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, config, ansatz, hamil, algo, callback, seed, settings); 
   params.resize(ansatz->numParams());
-  std::cout << ansatz->numParams() << std::endl;
+  std::cout << "Number of parameters: " << ansatz->numParams() << std::endl;
     std::fill(params.begin(), params.end(), 0);
   if (amplitudes != "") {
     std::cout << "Reading amplitudes from " << amplitudes << std::endl;
     NWQSim::VQE::read_amplitudes(amplitudes, params, ansatz->get_excitation_map());
   }
-  std::cout << params << std::endl;
+  std::cout << "Initial parameters: " << params << std::endl;
   double initial_ene, final_ene;
   long long num_iterations = 0;
   std::vector<std::pair<std::string, double> > param_tuple;
@@ -367,7 +367,7 @@ int main(int argc, char** argv) {
 #endif
   manager.safe_print("Reading Hamiltonian...\n");
   std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(hamil_path, n_part, use_xacc);
-  manager.safe_print("Constructing UCCSD Ansatz...\n");
+  manager.safe_print("Constructing the ansatz...\n");
 
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
   if (pool == NWQSim::VQE::PoolType::Fermionic_Origin) {

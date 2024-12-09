@@ -37,7 +37,8 @@ struct VQEParams {
   bool adapt = false;
   bool qubit = false;
   IdxType adapt_maxeval = 100;
-  ValType adapt_fvaltol = 1e-6;
+  ValType adapt_fvaltol = -1; // MZ: original ADAPT-VQE paper only used the gradient norm as the convergence criteria, 
+                              // which is more reasonable as since fvaltol may give false convergence when the same operator is picked conservatively
   ValType adapt_gradtol = 1e-3;
   IdxType adapt_pool_size = -1;
 
@@ -72,7 +73,7 @@ int show_help() {
   std::cout << UNDERLINE << "ADAPT-VQE OPTIONS" << CLOSEUNDERLINE << std::endl;
   std::cout << "--adapt               Use ADAPT-VQE for dynamic ansatz construction. Defaults to false" << std::endl;
   std::cout << "--adapt-gradtol       Cutoff absolute tolerance for operator gradient norm. Defaults to 1e-3" << std::endl;
-  std::cout << "--adapt-fvaltol       Cutoff absolute tolerance for function value. Defaults to 1e-6" << std::endl;
+  std::cout << "--adapt-fvaltol       Cutoff absolute tolerance for function value. Defaults to -1 (off)" << std::endl;
   std::cout << "--adapt-maxeval       Set a maximum iteration count for ADAPT-VQE. Defaults to 100" << std::endl;
   std::cout << "--qubit               Uses Qubit instead of Fermionic operators for ADAPT-VQE. Defaults to false" << std::endl;
   std::cout << "--adapt-pool          Sets the pool size for Qubit operators. Defaults to -1" << std::endl;
@@ -118,7 +119,6 @@ int parse_args(int argc, char** argv,
     } else 
     if (argname == "-n" || argname == "--nparticles") {
       params.nparticles = std::atoll(argv[++i]);
-      std::cout << params.nparticles << std::endl;
     } else 
     if (argname == "--seed") {
       params.seed = (unsigned)std::atoi(argv[++i]);
@@ -367,28 +367,13 @@ int main(int argc, char** argv) {
   std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(params.hamiltonian_path, 
                                                                                                params.nparticles,
                                                                                                params.xacc);
-  manager.safe_print("Constructed %lld Pauli Observables\n", hamil->num_ops());
-  manager.safe_print("Constructing Ansatz...\n");
+  manager.safe_print("Constructed %lld Pauli observables\n", hamil->num_ops());
+  manager.safe_print("Constructing the ansatz...\n");
   
   // Build the parameterized ansatz
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
   if (params.adapt)
   {
-    // Iteratively build an ADAPT-VQE ansatz (starts from HF state)
-    // NWQSim::VQE::PoolType pool;
-    // if (params.qubit) {
-    //   // Qubit ADAPT-VQE ansatz
-    //   pool = NWQSim::VQE::PoolType::Pauli;
-    // } else if (params.gsd_pool) {
-    //   // Singlet GSD ADAPT-VQE ansatz
-    //   pool = NWQSim::VQE::PoolType::Singlet_GSD;
-    // } else if (params.origin_pool) {
-    //   // Fermionic ADAPT-VQE ansatz (Original implementation from Matt, has symmetry problem)
-    //   pool = NWQSim::VQE::PoolType::Fermionic_Origin;
-    // } else {
-    //   // Fermionic ADAPT-VQE ansatz
-    //   pool = NWQSim::VQE::PoolType::Fermionic;
-    // }
     ansatz = std::make_shared<NWQSim::VQE::DynamicAnsatz>(hamil->getEnv(), params.pool);
   } else {
     // Static ansatz
