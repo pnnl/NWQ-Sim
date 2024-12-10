@@ -185,6 +185,72 @@ IdxType count_ones(IdxType val) {
     }
   }
 
+
+/**
+  * @brief MZ: Counting the number of double excitations for singlet GSD
+  * @note MZ: yeah, I know it's stupid
+  * @param n_spatial 
+  * @return int 
+  */
+  inline
+  int counting_doubles(int n_spatial) {
+    int doublt_term1_counter = 0;
+    int doublt_term2_counter = 0;
+    int doublt_term4_counter = 0;
+    int doublt_term6_counter = 0;
+
+    // Singlets and Triplets
+    int rs = -1;
+    for (IdxType r = 0; r < n_spatial; r++) {
+      for (IdxType s = r; s < n_spatial; s++) {
+        int pq = -1;
+        for (IdxType p = 0; p < n_spatial; p++) {
+          for (IdxType q = p; q < n_spatial; q++) {
+            pq += 1;
+            if (rs > pq) continue;
+            if ( (p == r) && (q == s) ) continue;
+            if (p!=q) {
+              if (r == s) { // only singlet with two terms, not sure Group 3 or Group 4 cases
+                doublt_term2_counter += 1;
+                continue;
+              }
+              if ( ((r!=s)&&(q!=r)) || ((p==r)&&(q!=s)&(r!=s)) || ((p==s)&&(q!=r)&(r!=s)) || ((q==s)&&(p!=r)) || ((q==r)&&(p!=s))) {
+                doublt_term4_counter += 1;
+                doublt_term6_counter += 1;
+              }
+            }
+            // Group 3 to 5
+            if (p == q) {
+              // Group 3
+              if ((q != r)&&(r!=s)) {
+                // only singlet
+                doublt_term2_counter += 1;
+                continue;
+              }
+              // Group 4
+              if ((q == r)&&(r!=s)) {
+                // only singlet
+                doublt_term2_counter += 1;
+                continue;
+              }
+              // Group 5
+              if ((q != r)&&(r==s)) {
+                // only singlet
+                doublt_term1_counter += 1;
+                continue;
+              }
+            } // p == q
+          } // q
+        } // p
+      } // s
+    } // r
+    return doublt_term1_counter+2*doublt_term2_counter+4*doublt_term4_counter+6*doublt_term6_counter;
+  }
+
+
+
+
+
   // Forward declaration for PauliOperator class
   class PauliOperator;
 

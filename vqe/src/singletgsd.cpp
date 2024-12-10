@@ -4,8 +4,8 @@
 #include "utils.hpp"
 
 
-#include <set>
-#include <tuple>
+// #include <set>
+// #include <tuple>
 // #include <map>
 
 
@@ -30,68 +30,6 @@ namespace NWQSim {
         std::vector<std::vector<std::pair<IdxType, ValType> > > symmetries;
         std::vector<IdxType> fermion_ops_to_params; // map from fermion operators to parameters (used in update)
         std::vector<std::vector<FermionOperator> > fermion_operators;
-        std::set<std::tuple< IdxType, IdxType, IdxType, IdxType >> existing_tuples; // MZ: for recording symmetry
-        // std::map<std::tuple<IdxType, IdxType, IdxType, IdxType>, std::vector<std::pair<IdxType, double>>> existing_terms; // MZ: for recording symmetry
-        
-        int counting_doubles (int n_spatial) {
-          int doublt_term1_counter = 0;
-          int doublt_term2_counter = 0;
-          int doublt_term4_counter = 0;
-          int doublt_term6_counter = 0;
-
-          /*===========Double Excitations===========*/
-          // Singlets and Triplets
-          int rs = -1;
-          for (IdxType r = 0; r < env.n_spatial; r++) {
-            for (IdxType s = r; s < env.n_spatial; s++) {
-              int pq = -1;
-              for (IdxType p = 0; p < env.n_spatial; p++) {
-                for (IdxType q = p; q < env.n_spatial; q++) {
-                  pq += 1;
-                  if (rs > pq) {
-                    continue; 
-                  }
-                  if ( (p == r) && (q == s) ) {
-                    continue;
-                  }
-                  if (p!=q) {
-                    if (r == s) { // only singlet with two terms, not sure Group 3 or Group 4 cases
-                      doublt_term2_counter += 1;
-                      continue;
-                    }
-                    if ( ((r!=s)&&(q!=r)) || ((p==r)&&(q!=s)&(r!=s)) || ((p==s)&&(q!=r)&(r!=s)) || ((q==s)&&(p!=r)) || ((q==r)&&(p!=s))) {
-                      doublt_term4_counter += 1;
-                      doublt_term6_counter += 1;
-                    }
-                  }
-                  // Group 3 to 5
-                  if (p == q) {
-                    // Group 3
-                    if ((q != r)&&(r!=s)) {
-                      // only singlet
-                      doublt_term2_counter += 1;
-                      continue;
-                    }
-                    // Group 4
-                    if ((q == r)&&(r!=s)) {
-                      // only singlet
-                      doublt_term2_counter += 1;
-                      continue;
-                    }
-                    // Group 5
-                    if ((q != r)&&(r==s)) {
-                      // only singlet
-                      doublt_term1_counter += 1;
-                      continue;
-                    }
-                  } // p == q
-                } // q
-              } // p
-            } // s
-          } // r
-          return doublt_term1_counter+2*doublt_term2_counter+4*doublt_term4_counter+6*doublt_term6_counter;
-          // return doublt_term1_counter+doublt_term2_counter+doublt_term4_counter+doublt_term6_counter;
-        }
 
       public:
         Singlet_GSD(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1, IdxType _symm_level = 3): 
@@ -100,15 +38,13 @@ namespace NWQSim {
                                   symm_level(_symm_level),
                                   qubit_transform(_qubit_transform),
                                   Ansatz(2 * _env.n_spatial) {
-          n_singles = 2*choose2(env.n_spatial); // MZ: multiply by 2 for alpha and beta
-          n_doubles = counting_doubles(env.n_spatial); // MZ: stupid way for the counting
+          n_singles = (env.n_spatial * (env.n_spatial - 1));  // Number of spatial orbital pairs (p,q) where p < q
+          n_doubles = counting_doubles(env.n_spatial);
           fermion_operators.reserve(n_singles + n_doubles);
           symmetries = std::vector<std::vector<std::pair<IdxType, ValType> > >((n_singles + n_doubles));
           fermion_ops_to_params.resize(n_doubles + n_singles);
           std::fill(fermion_ops_to_params.begin(), fermion_ops_to_params.end(), -1);
           unique_params = 0;
-          existing_tuples = {};
-          // existing_terms = {};
           ansatz_name = "Singlet GSD";
         };
  
@@ -196,26 +132,26 @@ namespace NWQSim {
 
     //---------------------------------MZ: New functions for adding excitation terms---------------------------------
     void add_single_comb(FermionOperator pa, FermionOperator qa, FermionOperator pb, FermionOperator qb, IdxType& term) {
-        add_single_excitation(qa,pa,   {{term, 0.5}}, true);
-        add_single_excitation(qb,pb,  {{term, 0.5}}, false);
+        add_single_excitation(qa,pa,   {{term, 1.0}}, true);
+        add_single_excitation(qb,pb,  {{term, 1.0}}, false);
     }
 
     void add_double_singlet1t(FermionOperator i, FermionOperator j, FermionOperator r, FermionOperator s, IdxType& term) {
-        add_double_excitation(r,s, i,j,{{term, 1.0/sqrt(2.0)}}, true);
+        add_double_excitation(r,s, i,j,{{term, 1.0}}, true);
     }
 
     void add_double_singlet2tm(FermionOperator i1, FermionOperator j1, FermionOperator r1, FermionOperator s1,
                               FermionOperator i2, FermionOperator j2, FermionOperator r2, FermionOperator s2,
                               IdxType& term) {
-        add_double_excitation(r1,s1,i1,j1, {{term, 0.5}}, true);
-        add_double_excitation(r2,s2,i2,j2, {{term, -0.5}}, false);
+        add_double_excitation(r1,s1,i1,j1, {{term, 1.0}}, true);
+        add_double_excitation(r2,s2,i2,j2, {{term, -1.0}}, false);
     }
 
     void add_double_singlet2t(FermionOperator i1, FermionOperator j1, FermionOperator r1, FermionOperator s1,
                               FermionOperator i2, FermionOperator j2, FermionOperator r2, FermionOperator s2,
                               IdxType& term) {
-        add_double_excitation(r1,s1,i1,j1, {{term, 0.5}}, true);
-        add_double_excitation(r2,s2,i2,j2,{{term, 0.5}}, false);
+        add_double_excitation(r1,s1,i1,j1, {{term, 1.0}}, true);
+        add_double_excitation(r2,s2,i2,j2,{{term, 1.0}}, false);
     }
 
     void add_double_singlet4t(FermionOperator i1, FermionOperator j1, FermionOperator r1, FermionOperator s1,
@@ -223,10 +159,10 @@ namespace NWQSim {
                               FermionOperator i3, FermionOperator j3, FermionOperator r3, FermionOperator s3,
                               FermionOperator i4, FermionOperator j4, FermionOperator r4, FermionOperator s4,
                               IdxType& term) {
-        add_double_excitation(r1,s1,i1,j1, {{term, 0.5/sqrt(2.0)}}, true);
-        add_double_excitation(r2,s2,i2,j2, {{term, -0.5/sqrt(2.0)}}, false);
-        add_double_excitation(r3,s3,i3,j3, {{term, -0.5/sqrt(2.0)}}, false);
-        add_double_excitation(r4,s4,i4,j4, {{term, 0.5/sqrt(2.0)}}, false);
+        add_double_excitation(r1,s1,i1,j1, {{term, 1.0}}, true);
+        add_double_excitation(r2,s2,i2,j2, {{term, -1.0}}, false);
+        add_double_excitation(r3,s3,i3,j3, {{term, -1.0}}, false);
+        add_double_excitation(r4,s4,i4,j4, {{term, 1.0}}, false);
 
     }
 
@@ -237,12 +173,12 @@ namespace NWQSim {
                               FermionOperator i5, FermionOperator j5, FermionOperator r5, FermionOperator s5,
                               FermionOperator i6, FermionOperator j6, FermionOperator r6, FermionOperator s6,
                               IdxType& term) {
-        add_double_excitation(r1,s1,i1,j1, {{term, 2.0/sqrt(24.0)}}, true);
-        add_double_excitation(r2,s2,i2,j2, {{term, 1.0/sqrt(24.0)}}, false);
-        add_double_excitation(r3,s3,i3,j3, {{term, 1.0/sqrt(24.0)}}, false);
-        add_double_excitation(r4,s4,i4,j4, {{term, 1.0/sqrt(24.0)}}, false);
-        add_double_excitation(r5,s5,i5,j5, {{term, 1.0/sqrt(24.0)}}, false);
-        add_double_excitation(r6,s6,i6,j6, {{term, 2.0/sqrt(24.0)}}, false);
+        add_double_excitation(r1,s1,i1,j1, {{term, 2.0}}, true);
+        add_double_excitation(r2,s2,i2,j2, {{term, 1.0}}, false);
+        add_double_excitation(r3,s3,i3,j3, {{term, 1.0}}, false);
+        add_double_excitation(r4,s4,i4,j4, {{term, 1.0}}, false);
+        add_double_excitation(r5,s5,i5,j5, {{term, 1.0}}, false);
+        add_double_excitation(r6,s6,i6,j6, {{term, 2.0}}, false);
     }
     //------------------------------------------------------------------
 
@@ -302,12 +238,8 @@ namespace NWQSim {
               FermionOperator qa (qi, qov, Up, Creation, env.xacc_scheme);
               FermionOperator qb (qi, qov, Down, Creation, env.xacc_scheme);
               pq += 1;
-              if (rs > pq) {
-                continue; 
-              }
-              if ( (p == r) && (q == s) ) {
-                continue;
-              }
+              if (rs > pq) continue;
+              if ( (p == r) && (q == s) ) continue;
               if (p!=q) {
                 if (r == s) { // only singlet with two terms, not sure Group 3 or Group 4 cases
                   IdxType term1 = fermion_operators.size(); // May need +1
@@ -391,16 +323,9 @@ namespace NWQSim {
               FermionOperator qa (qi, qov, Up, Creation, env.xacc_scheme);
               FermionOperator qb (qi, qov, Down, Creation, env.xacc_scheme);
               pq_t += 1;
-              if (rs_t > pq_t) {
-                continue; 
-              }
-              if ( (p == r) && (q == s) ) {
-                continue;
-              }
-              if ((p == q) || (r==s)) {
-                continue;
-              } // singlet cases
-
+              if (rs_t > pq_t) continue;
+              if ( (p == r) && (q == s) ) continue;
+              if ((p == q) || (r==s)) continue;
               if ( ((r!=s)&&(q!=r)) || ((p==r)&&(q!=s)&(r!=s)) || ((p==s)&&(q!=r)&(r!=s)) || ((q==s)&&(p!=r)) || ((q==r)&&(p!=s))) {
                 IdxType term2 = fermion_operators.size();
                 add_double_singlet4t(qb,pa,sb,ra,
@@ -418,7 +343,6 @@ namespace NWQSim {
           } // p
         } // s
       } // r
-
 
       #ifndef NDEBUG
         std::cout << "Operator Stats" << std::endl;

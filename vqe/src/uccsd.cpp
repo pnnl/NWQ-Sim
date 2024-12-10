@@ -50,12 +50,10 @@ namespace NWQSim {
           add_double_excitation(i_beta, j_alpha, r_alpha, s_beta, {{term1, 1.0}}, false);
           add_double_excitation(j_beta, i_alpha, s_alpha, r_beta, {{term1, 1.0}}, false);
         } else {
-
-            add_double_excitation(i_alpha, j_beta, r_beta, s_alpha);
-            add_double_excitation(j_alpha, i_beta, s_beta, r_alpha);
-            add_double_excitation(i_beta, j_alpha, r_alpha, s_beta);
-            add_double_excitation(j_beta, i_alpha, s_alpha, r_beta);
-         
+          add_double_excitation(i_alpha, j_beta, r_beta, s_alpha);
+          add_double_excitation(j_alpha, i_beta, s_beta, r_alpha);
+          add_double_excitation(i_beta, j_alpha, r_alpha, s_beta);
+          add_double_excitation(j_beta, i_alpha, s_alpha, r_beta);
         }
 
         return;
@@ -71,59 +69,37 @@ namespace NWQSim {
           add_double_excitation(i_beta, j_alpha, r_alpha, s_beta);
         }
         return;
-
       }
       // use the mixed excitation terms as the free variables (alpha_r beta_s beta_j alpha_i - alpha_s beta_r beta_i alpha_j)
-      IdxType mixed_term1 = fermion_operators.size();
-      IdxType mixed_term2 = fermion_operators.size() + 1;
-
-      IdxType aa_term1 = fermion_operators.size() + 2;
-      IdxType aa_term2 = fermion_operators.size() + 3;
-      IdxType aa_term3 = fermion_operators.size() + 4;
-      IdxType aa_term4 = fermion_operators.size() + 5;
       if (symm_level >= 4) {
+        IdxType mixed_term1 = fermion_operators.size();
         // s _r _j i
         add_double_excitation(i_alpha, j_beta, r_beta, s_alpha, {{mixed_term1, 1.0}}, true);
-        // s _r _i j
-        add_double_excitation(j_alpha, i_beta, r_beta, s_alpha, {{mixed_term2, 1.0}}, true);
-        // now add the pure alpha/beta terms
-        add_double_excitation(j_alpha, i_alpha, r_alpha, s_alpha, {{aa_term1, 1.0}}, true);
-        add_double_excitation(j_alpha, i_alpha, s_alpha, r_alpha, {{aa_term2, 1.0}}, true);
-        add_double_excitation(i_alpha, j_alpha, r_alpha, s_alpha, {{aa_term3, 1.0}}, true);
-        add_double_excitation(i_alpha, j_alpha, s_alpha, r_alpha, {{aa_term4, 1.0}}, true);
-        add_double_excitation(j_beta, i_beta, r_beta, s_beta, {{aa_term1, 1.0}}, false);
-        add_double_excitation(j_beta, i_beta, s_beta, r_beta, {{aa_term2, 1.0}}, false);
-        add_double_excitation(i_beta, j_beta, r_beta, s_beta, {{aa_term3, 1.0}}, false);
-        add_double_excitation(i_beta, j_beta, s_beta, r_beta, {{aa_term4, 1.0}}, false);
-
-        // now for the mixed shenanigans
-        // _s r j _i
-        add_double_excitation(i_beta, j_alpha, r_alpha, s_beta, {{mixed_term1, 1.0}}, false);
-        // _s r i _j
-        add_double_excitation(j_beta, i_alpha, r_alpha, s_beta, {{mixed_term2, 1.0}}, false);
-        // r _s _j i
-        add_double_excitation(i_alpha, j_beta, s_beta, r_alpha, {{mixed_term2, 1.0}}, false);
-        // _r s j _i = s _r _i j
-        add_double_excitation(i_beta, j_alpha, s_alpha, r_beta, {{mixed_term2, 1.0}}, false);
-        // r _s _i j = s _r _j i
-        add_double_excitation(j_alpha, i_beta, s_beta, r_alpha, {{mixed_term1, 1.0}}, false);
         // _r s i _j = s _r _j i
         add_double_excitation(j_beta, i_alpha, s_alpha, r_beta, {{mixed_term1, 1.0}}, false);
+
+        IdxType mixed_term2 = fermion_operators.size();
+        // s _r _i j
+        add_double_excitation(j_alpha, i_beta, r_beta, s_alpha, {{mixed_term2, 1.0}}, true);
+        // _r s j _i = s _r _i j
+        add_double_excitation(i_beta, j_alpha, s_alpha, r_beta, {{mixed_term2, 1.0}}, false);
+
+        IdxType mixed_term3 = fermion_operators.size();
+        // _s r j _i
+        add_double_excitation(i_beta, j_alpha, r_alpha, s_beta, {{mixed_term3, 1.0}}, true);
+        // r _s _i j = s _r _j i
+        add_double_excitation(j_alpha, i_beta, s_beta, r_alpha, {{mixed_term3, 1.0}}, false);
+
+        IdxType mixed_term4 = fermion_operators.size();
+        // _s r i _j
+        add_double_excitation(j_beta, i_alpha, r_alpha, s_beta, {{mixed_term4, 1.0}}, true);
+        // r _s _j i = _s r i _j
+        add_double_excitation(i_alpha, j_beta, s_beta, r_alpha, {{mixed_term4, 1.0}}, false);
       } else {
         // s _r _j i
         add_double_excitation(i_alpha, j_beta, r_beta, s_alpha);
         // s _r _i j
         add_double_excitation(j_alpha, i_beta, r_beta, s_alpha);
-        // now add the pure alpha/beta terms
-        add_double_excitation(j_alpha, i_alpha, r_alpha, s_alpha);
-        add_double_excitation(j_alpha, i_alpha, s_alpha, r_alpha);
-        add_double_excitation(i_alpha, j_alpha, r_alpha, s_alpha);
-        add_double_excitation(i_alpha, j_alpha, s_alpha, r_alpha);
-        add_double_excitation(j_beta, i_beta, r_beta, s_beta);
-        add_double_excitation(j_beta, i_beta, s_beta, r_beta);
-        add_double_excitation(i_beta, j_beta, r_beta, s_beta);
-        add_double_excitation(i_beta, j_beta, s_beta, r_beta);
-
         // now for the mixed shenanigans
         // _s r j _i
         add_double_excitation(i_beta, j_alpha, r_alpha, s_beta);
@@ -137,6 +113,33 @@ namespace NWQSim {
         add_double_excitation(j_alpha, i_beta, s_beta, r_alpha);
         // _r s i _j
         add_double_excitation(j_beta, i_alpha, s_alpha, r_beta);
+      }
+
+      // MZ: for the alpha/beta terms
+      if (symm_level >= 4) {
+        IdxType aa_term1 = fermion_operators.size();
+        // now add the pure alpha/beta terms
+        add_double_excitation(j_alpha, i_alpha, r_alpha, s_alpha, {{aa_term1, 1.0}}, true);
+        add_double_excitation(j_beta, i_beta, r_beta, s_beta, {{aa_term1, 1.0}}, false);
+
+        add_double_excitation(j_alpha, i_alpha, s_alpha, r_alpha, {{aa_term1, -1.0}}, false);
+        add_double_excitation(j_beta, i_beta, s_beta, r_beta, {{aa_term1, -1.0}}, false);
+
+        add_double_excitation(i_alpha, j_alpha, r_alpha, s_alpha, {{aa_term1, -1.0}}, false);
+        add_double_excitation(i_beta, j_beta, r_beta, s_beta, {{aa_term1, -1.0}}, false);
+
+        add_double_excitation(i_alpha, j_alpha, s_alpha, r_alpha, {{aa_term1, 1.0}}, false);
+        add_double_excitation(i_beta, j_beta, s_beta, r_beta, {{aa_term1, 1.0}}, false);
+      } else {
+        // now add the pure alpha/beta terms
+        add_double_excitation(j_alpha, i_alpha, r_alpha, s_alpha);
+        add_double_excitation(j_alpha, i_alpha, s_alpha, r_alpha);
+        add_double_excitation(i_alpha, j_alpha, r_alpha, s_alpha);
+        add_double_excitation(i_alpha, j_alpha, s_alpha, r_alpha);
+        add_double_excitation(j_beta, i_beta, r_beta, s_beta);
+        add_double_excitation(j_beta, i_beta, s_beta, r_beta);
+        add_double_excitation(i_beta, j_beta, r_beta, s_beta);
+        add_double_excitation(i_beta, j_beta, s_beta, r_beta);
       }
       
 

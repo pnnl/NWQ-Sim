@@ -3,14 +3,6 @@
 #include "observable/fermionic_operator.hpp"
 #include "utils.hpp"
 
-
-#include <set>
-#include <tuple>
-// #include <map>
-
-
-
-
 namespace NWQSim {
   namespace VQE {
 
@@ -30,8 +22,6 @@ namespace NWQSim {
         std::vector<std::vector<std::pair<IdxType, ValType> > > symmetries;
         std::vector<IdxType> fermion_ops_to_params; // map from fermion operators to parameters (used in update)
         std::vector<std::vector<FermionOperator> > fermion_operators;
-        std::set<std::tuple< IdxType, IdxType, IdxType, IdxType >> existing_tuples; // MZ: for recording symmetry
-        // std::map<std::tuple<IdxType, IdxType, IdxType, IdxType>, std::vector<std::pair<IdxType, double>>> existing_terms; // MZ: for recording symmetry
 
       public:
         UCCSDmin(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1, IdxType _symm_level = 3): 
@@ -59,8 +49,6 @@ namespace NWQSim {
           fermion_ops_to_params.resize(n_doubles + n_singles);
           std::fill(fermion_ops_to_params.begin(), fermion_ops_to_params.end(), -1);
           unique_params = 0;
-          existing_tuples = {};
-          // existing_terms = {};
           ansatz_name = "UCCSD Minimal";
         };
  
@@ -103,12 +91,7 @@ namespace NWQSim {
                 opstring = " " + opstring;
               } else {
                 first = false;
-                // is_mixed = op.getSpin() != oplist[1].getSpin();
               }
-              // if (indices_seen[op.getOrbitalIndex(env)]) {
-                // is_distinct = false; // MZ: don't need this
-              // }
-              // indices_seen[op.getOrbitalIndex(env)] += 1;
               opstring = op.toString(env.n_occ, env.n_virt) + opstring; // MZ: Seems like delibrately inverted the operator
             }
             result.push_back(std::make_pair(opstring, param));
@@ -172,150 +155,107 @@ namespace NWQSim {
     *             (Verified through H4 1.5 Angstrom example with the UCCSD ansatz in Qiskit)
     * @retval None
     */
-    void  getFermionOps() {
-      
-      for (IdxType p = 0; p < env.n_occ; p++) {
-        FermionOperator occupied_annihilation_up (p, Occupied, Up, Annihilation, env.xacc_scheme);
-        FermionOperator occupied_annihilation_down (p, Occupied, Down, Annihilation, env.xacc_scheme);
-        for (IdxType q = 0; q < env.n_virt; q++) {
-          // creation operator
-          FermionOperator virtual_creation_up (q, Virtual, Up, Creation, env.xacc_scheme);
-          FermionOperator virtual_creation_down (q, Virtual, Down, Creation, env.xacc_scheme);
-          if (symm_level >= 1) {
-            IdxType term_single = fermion_operators.size();
-            // Alpha Single Excitations
-            add_single_excitation(occupied_annihilation_up, virtual_creation_up, {{term_single, 1.0}}, true);
-            // Beta Single Excitations
-            // In a closed shell system, the beta single excitations has the same parameters as the alpha single excitations
-            add_single_excitation(occupied_annihilation_down, virtual_creation_down, {{term_single, 1.0}}, false);
-          } else {
-            add_single_excitation(occupied_annihilation_up, virtual_creation_up);
-            add_single_excitation(occupied_annihilation_down, virtual_creation_down);
-          }
-        }
-      }
-    /*===========Double Excitations===========*/
-    // MZ: re-write the original code, my python head cannot get it
-    // alpha-alpha and beta-beta
+    void getFermionOps() {
+        fermion_operators.reserve(n_singles + n_doubles);
+        generateSingleExcitations();
+        generateSameSpinDoubleExcitations();
+        generateMixedSpinDoubleExcitations();
+        #ifndef NDEBUG
+        printDebugInfo();
+        #endif
+    }
 
-    for (IdxType i = 0; i < env.n_occ; i++) {
-        FermionOperator i_occ_ann_up (i, Occupied, Up, Annihilation, env.xacc_scheme);
-        FermionOperator i_occ_ann_dw (i, Occupied, Down, Annihilation, env.xacc_scheme);
-        for (IdxType r = 0; r < env.n_virt; r++) {
-            FermionOperator r_virt_cre_up (r, Virtual, Up, Creation, env.xacc_scheme);
-            FermionOperator r_virt_cre_dw (r, Virtual, Down, Creation, env.xacc_scheme);
-            for (IdxType j = i+1; j < env.n_occ; j++) {
-                FermionOperator j_occ_ann_up (j, Occupied, Up, Annihilation, env.xacc_scheme); 
-                FermionOperator j_occ_ann_dw (j, Occupied, Down, Annihilation, env.xacc_scheme);
-                for (IdxType s = r+1; s < env.n_virt; s++) {
-                    FermionOperator s_virt_cre_dw (s, Virtual, Down, Creation, env.xacc_scheme);
-                    FermionOperator s_virt_cre_up (s, Virtual, Up, Creation, env.xacc_scheme);
-                    if (symm_level >= 1) {
-                        IdxType term1 = fermion_operators.size();
-                        add_double_excitation(i_occ_ann_up, j_occ_ann_up, r_virt_cre_up, s_virt_cre_up, {{term1, 1.0}}, true); // MZ: alpha-alpha
-                        add_double_excitation(i_occ_ann_dw, j_occ_ann_dw, r_virt_cre_dw, s_virt_cre_dw, {{term1, 1.0}}, false); // MZ: beta-beta
-                    } else {
-                        add_double_excitation(i_occ_ann_up, j_occ_ann_up, r_virt_cre_up, s_virt_cre_up); // MZ: alpha-alpha
-                        add_double_excitation(i_occ_ann_dw, j_occ_ann_dw, r_virt_cre_dw, s_virt_cre_dw); // MZ: beta-beta
+    private:
+    void generateSingleExcitations() {
+        for (IdxType p = 0; p < env.n_occ; p++) {
+            FermionOperator occ_ann_up(p, Occupied, Up, Annihilation, env.xacc_scheme);
+            FermionOperator occ_ann_down(p, Occupied, Down, Annihilation, env.xacc_scheme);
+            for (IdxType q = 0; q < env.n_virt; q++) {
+                FermionOperator virt_cre_up(q, Virtual, Up, Creation, env.xacc_scheme);
+                FermionOperator virt_cre_down(q, Virtual, Down, Creation, env.xacc_scheme);
+                if (symm_level >= 1) {
+                    IdxType term_single = fermion_operators.size();
+                    add_single_excitation(occ_ann_up, virt_cre_up, {{term_single, 1.0}}, true);
+                    add_single_excitation(occ_ann_down, virt_cre_down, {{term_single, 1.0}}, false);
+                } else {
+                    add_single_excitation(occ_ann_up, virt_cre_up);
+                    add_single_excitation(occ_ann_down, virt_cre_down);
+                }
+            }
+        }
+    }
+    void generateSameSpinDoubleExcitations() {
+        for (IdxType i = 0; i < env.n_occ; i++) {
+            FermionOperator i_occ_ann_up(i, Occupied, Up, Annihilation, env.xacc_scheme);
+            FermionOperator i_occ_ann_dw(i, Occupied, Down, Annihilation, env.xacc_scheme);
+            for (IdxType r = 0; r < env.n_virt; r++) {
+                FermionOperator r_virt_cre_up(r, Virtual, Up, Creation, env.xacc_scheme);
+                FermionOperator r_virt_cre_dw(r, Virtual, Down, Creation, env.xacc_scheme);
+                for (IdxType j = i + 1; j < env.n_occ; j++) {
+                    FermionOperator j_occ_ann_up(j, Occupied, Up, Annihilation, env.xacc_scheme);
+                    FermionOperator j_occ_ann_dw(j, Occupied, Down, Annihilation, env.xacc_scheme);
+                    for (IdxType s = r + 1; s < env.n_virt; s++) {
+                        FermionOperator s_virt_cre_up(s, Virtual, Up, Creation, env.xacc_scheme);
+                        FermionOperator s_virt_cre_dw(s, Virtual, Down, Creation, env.xacc_scheme);
+                        if (symm_level >= 1) {
+                            IdxType term = fermion_operators.size();
+                            add_double_excitation(i_occ_ann_up, j_occ_ann_up, r_virt_cre_up, s_virt_cre_up, {{term, 1.0}}, true);
+                            add_double_excitation(i_occ_ann_dw, j_occ_ann_dw, r_virt_cre_dw, s_virt_cre_dw, {{term, 1.0}}, false);
+                        } else {
+                            add_double_excitation(i_occ_ann_up, j_occ_ann_up, r_virt_cre_up, s_virt_cre_up);
+                            add_double_excitation(i_occ_ann_dw, j_occ_ann_dw, r_virt_cre_dw, s_virt_cre_dw);
+                        }
                     }
                 }
             }
         }
     }
 
-    // // mixed
-    // For some reason, accuracy is even worse at Symm 3
-    // for (IdxType i = 0; i < env.n_occ; i++) {
-    //     FermionOperator i_occ_ann_up (i, Occupied, Up, Annihilation, env.xacc_scheme);
-    //     FermionOperator i_occ_ann_dw (i, Occupied, Down, Annihilation, env.xacc_scheme);
-    //     for (IdxType r = 0; r < env.n_virt; r++) {
-    //         FermionOperator r_virt_cre_up (r, Virtual, Up, Creation, env.xacc_scheme);
-    //         FermionOperator r_virt_cre_dw (r, Virtual, Down, Creation, env.xacc_scheme);
-    //         for (IdxType j = 0; j < env.n_occ; j++) {
-    //             FermionOperator j_occ_ann_dw (j, Occupied, Down, Annihilation, env.xacc_scheme);
-    //             FermionOperator j_occ_ann_up (j, Occupied, Up, Annihilation, env.xacc_scheme);
-    //             for (IdxType s = 0; s < env.n_virt; s++) {
-    //                 FermionOperator s_virt_cre_dw (s, Virtual, Down, Creation, env.xacc_scheme);
-    //                 FermionOperator s_virt_cre_up (s, Virtual, Up, Creation, env.xacc_scheme);
-    //                 if ( (symm_level < 2) || (i == j && r == s) ) {
-    //                   add_double_excitation(i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw); // MZ: alpha-beta, not need for beta-alpha
-    //                 } else {
-    //                   std::tuple<IdxType, IdxType, IdxType, IdxType> new_tuple = {i,j,r,s};
-    //                   if (existing_tuples.find(new_tuple) != existing_tuples.end()) {
-    //                     // The tuple exist in the set
-    //                     add_double_excitation(j_occ_ann_up, i_occ_ann_dw, s_virt_cre_up, r_virt_cre_dw, existing_terms.at(new_tuple), false);
-    //                     existing_tuples.erase(new_tuple);
-    //                     existing_terms.erase(new_tuple);
-    //                   } else {
-    //                     // The tuple does not exist in the set
-    //                     IdxType term2 = fermion_operators.size();
-    //                     std::vector<std::pair<IdxType, double>> sym_term= {{term2, 1.0}};
-    //                     add_double_excitation(i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw, sym_term, true); // MZ: alpha-beta, not need for beta-alpha
-    //                     existing_tuples.insert({j, i, s, r});
-    //                     existing_terms.insert({ {j, i, s, r}, sym_term });
-    //                   }
-    //                 }
-
-    //             }
-    //         }
-    //     }
-    // }
-
-
-    // It seems like the trottertor error is larger (extra 1e-3 hartree) at Symm 3
-    for (IdxType i = 0; i < env.n_occ; i++) {
-        FermionOperator i_occ_ann_up (i, Occupied, Up, Annihilation, env.xacc_scheme);
-        FermionOperator i_occ_ann_dw (i, Occupied, Down, Annihilation, env.xacc_scheme);
-        for (IdxType r = 0; r < env.n_virt; r++) {
-            FermionOperator r_virt_cre_up (r, Virtual, Up, Creation, env.xacc_scheme);
-            FermionOperator r_virt_cre_dw (r, Virtual, Down, Creation, env.xacc_scheme);
-            for (IdxType j = 0; j < env.n_occ; j++) {
-                FermionOperator j_occ_ann_dw (j, Occupied, Down, Annihilation, env.xacc_scheme);
-                FermionOperator j_occ_ann_up (j, Occupied, Up, Annihilation, env.xacc_scheme);
-                for (IdxType s = 0; s < env.n_virt; s++) {
-                    FermionOperator s_virt_cre_dw (s, Virtual, Down, Creation, env.xacc_scheme);
-                    FermionOperator s_virt_cre_up (s, Virtual, Up, Creation, env.xacc_scheme);
-                    if ( (symm_level < 2) || (i == j && r == s) ) {
-                      add_double_excitation(i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw); // MZ: alpha-beta, not need for beta-alpha
-                    } else {
-                      std::tuple<IdxType, IdxType, IdxType, IdxType> new_tuple = {i,j,r,s};
-                      if (existing_tuples.find(new_tuple) != existing_tuples.end()) {
-                        // The tuple exist in the set, so we skip the term and erase the tuple
-                        existing_tuples.erase(new_tuple);
-                      } else {
-                        // The tuple does not exist in the set, so we add the term
-                        IdxType term2 = fermion_operators.size();
-                        add_double_excitation(i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw, {{term2, 1.0}}, true); // MZ: alpha-beta, not need for beta-alpha
-                        add_double_excitation(j_occ_ann_up, i_occ_ann_dw, s_virt_cre_up, r_virt_cre_dw, {{term2, 1.0}}, false);
-                        existing_tuples.insert({j, i, s, r});
-                      }
+    void generateMixedSpinDoubleExcitations() {
+        for (IdxType i = 0; i < env.n_occ; i++) {
+            FermionOperator i_occ_ann_up(i, Occupied, Up, Annihilation, env.xacc_scheme);
+            for (IdxType r = 0; r < env.n_virt; r++) {
+                FermionOperator r_virt_cre_up(r, Virtual, Up, Creation, env.xacc_scheme);
+                for (IdxType j = 0; j < env.n_occ; j++) {
+                    if (!((symm_level < 2) || (i == j) || (i < j))) {
+                        continue;
                     }
-
+                    FermionOperator j_occ_ann_dw(j, Occupied, Down, Annihilation, env.xacc_scheme);
+                    for (IdxType s = 0; s < env.n_virt; s++) {
+                        if (!((symm_level < 2) || (i == j && r == s) || (i == j && r < s) || (i < j))) continue;
+                        FermionOperator s_virt_cre_dw(s, Virtual, Down, Creation, env.xacc_scheme);
+                        if (symm_level < 2 || (i == j && r == s)) {
+                            add_double_excitation(i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw);
+                        } else {
+                            IdxType term = fermion_operators.size();
+                            add_double_excitation(i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw, {{term, 1.0}}, true);
+                            
+                            FermionOperator j_occ_ann_up(j, Occupied, Up, Annihilation, env.xacc_scheme);
+                            FermionOperator i_occ_ann_dw(i, Occupied, Down, Annihilation, env.xacc_scheme);
+                            FermionOperator s_virt_cre_up(s, Virtual, Up, Creation, env.xacc_scheme);
+                            FermionOperator r_virt_cre_dw(r, Virtual, Down, Creation, env.xacc_scheme);
+                            add_double_excitation(j_occ_ann_up, i_occ_ann_dw, s_virt_cre_up, r_virt_cre_dw, {{term, 1.0}}, false);
+                        }
+                    }
                 }
             }
         }
     }
-      
-    #ifndef NDEBUG
-      // Print out the generated Fermionic operators
-      for (size_t i = 0; i < fermion_operators.size(); i++) {
-        std::string fermi_op = "";
-        for (auto i: fermion_operators[i]) {
-          fermi_op += i.toString(env.n_occ, env.n_virt) + " ";
-        }
-        std::cout << i << ": " << fermi_op << " || [";
-        for (auto sym: symmetries[i]) {
-          std::cout << "{" <<sym.first << ", " << fermion_ops_to_params[sym.first] << ", " << sym.second << "}" << ", ";
-        }
-        std::cout << "]  " << fermion_ops_to_params[i] << std::endl;
-        // if (symmetries[i].size())
-        // std::cout  << std::endl;
-      }
-      std::cout << fermion_operators.size() << " " << unique_params << std::endl;
-    #endif
 
-    } // getFermionOps
-
+    void printDebugInfo() {
+        for (size_t i = 0; i < fermion_operators.size(); i++) {
+            std::string fermi_op = "";
+            for (const auto& op : fermion_operators[i]) {
+                fermi_op += op.toString(env.n_occ, env.n_virt) + " ";
+            }
+            std::cout << i << ": " << fermi_op << " || [";
+            for (const auto& sym : symmetries[i]) {
+                std::cout << "{" << sym.first << ", " << fermion_ops_to_params[sym.first] << ", " << sym.second << "}, ";
+            }
+            std::cout << "]  " << fermion_ops_to_params[i] << std::endl;
+        }
+        std::cout << fermion_operators.size() << " " << unique_params << std::endl;
+    }
 
     void  buildAnsatz()  override {
       getFermionOps();
