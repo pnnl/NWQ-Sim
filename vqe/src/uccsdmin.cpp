@@ -83,9 +83,6 @@ namespace NWQSim {
             }
             std::string opstring = "";
             bool first = true;
-            // bool is_distinct = true; // MZ: don't need this
-            // bool is_mixed = true; // MZ: don't need this
-            // std::vector<IdxType> indices_seen(env.n_spatial, 0); // MZ: don't need this
             for (auto& op: oplist) {
               if (!first) {
                 opstring = " " + opstring;

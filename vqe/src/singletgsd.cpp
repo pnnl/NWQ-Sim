@@ -249,7 +249,7 @@ namespace NWQSim {
                   continue;
                 }
                 if ( ((r!=s)&&(q!=r)) || ((p==r)&&(q!=s)&(r!=s)) || ((p==s)&&(q!=r)&(r!=s)) || ((q==s)&&(p!=r)) || ((q==r)&&(p!=s))) {
-                  // Singlet
+                  // Triplet
                   IdxType term1 = fermion_operators.size();
                   add_double_triplet(qa,pa,sa,ra,
                                      qb,pa,sb,ra,
@@ -258,6 +258,15 @@ namespace NWQSim {
                                      qa,pb,sa,rb,
                                      qb,pb,sb,rb,
                                      term1);
+                  // Singlet
+                  IdxType term2 = fermion_operators.size();
+                  add_double_singlet4t(qb,pa,sb,ra,
+                                        qb,pa,sa,rb,
+                                        qa,pb,sb,ra,
+                                        qa,pb,sa,rb,
+                                        term2);
+                  double_counter += 1;
+                  doublt_term4_counter += 1;
                   double_counter += 1;
                   doublt_term6_counter += 1;
                   continue;
@@ -299,50 +308,50 @@ namespace NWQSim {
         } // s
       } // r
 
-      int rs_t = -1;
-      for (IdxType r = 0; r < env.n_spatial; r++) {
-        IdxType ri = spind_to_ind(r, env.n_occ);
-        auto rov = occ_or_vir(r, env.n_occ);
-        FermionOperator ra (ri, rov, Up, Annihilation, env.xacc_scheme);
-        FermionOperator rb (ri, rov, Down, Annihilation, env.xacc_scheme);
-        for (IdxType s = r; s < env.n_spatial; s++) {
-          IdxType si = spind_to_ind(s, env.n_occ);
-          auto sov = occ_or_vir(s, env.n_occ);
-          FermionOperator sa (si, sov, Up, Annihilation, env.xacc_scheme);
-          FermionOperator sb (si, sov, Down, Annihilation, env.xacc_scheme);
-          rs_t += 1;
-          int pq_t = -1;
-          for (IdxType p = 0; p < env.n_spatial; p++) {
-            IdxType pi = spind_to_ind(p, env.n_occ);
-            auto pov = occ_or_vir(p, env.n_occ);
-            FermionOperator pa (pi, pov, Up, Creation, env.xacc_scheme);
-            FermionOperator pb (pi, pov, Down, Creation, env.xacc_scheme);
-            for (IdxType q = p; q < env.n_spatial; q++) {
-              IdxType qi = spind_to_ind(q, env.n_occ);
-              auto qov = occ_or_vir(q, env.n_occ);
-              FermionOperator qa (qi, qov, Up, Creation, env.xacc_scheme);
-              FermionOperator qb (qi, qov, Down, Creation, env.xacc_scheme);
-              pq_t += 1;
-              if (rs_t > pq_t) continue;
-              if ( (p == r) && (q == s) ) continue;
-              if ((p == q) || (r==s)) continue;
-              if ( ((r!=s)&&(q!=r)) || ((p==r)&&(q!=s)&(r!=s)) || ((p==s)&&(q!=r)&(r!=s)) || ((q==s)&&(p!=r)) || ((q==r)&&(p!=s))) {
-                IdxType term2 = fermion_operators.size();
-                add_double_singlet4t(qb,pa,sb,ra,
-                                      qb,pa,sa,rb,
-                                      qa,pb,sb,ra,
-                                      qa,pb,sa,rb,
-                                      term2);
-                double_counter += 1;
-                doublt_term4_counter += 1;
-                // std::cout << "Triplet&Singlets: " << p << q << r << s << "\n" << std::endl;
-                continue;
-              }
+      // int rs_t = -1;
+      // for (IdxType r = 0; r < env.n_spatial; r++) {
+      //   IdxType ri = spind_to_ind(r, env.n_occ);
+      //   auto rov = occ_or_vir(r, env.n_occ);
+      //   FermionOperator ra (ri, rov, Up, Annihilation, env.xacc_scheme);
+      //   FermionOperator rb (ri, rov, Down, Annihilation, env.xacc_scheme);
+      //   for (IdxType s = r; s < env.n_spatial; s++) {
+      //     IdxType si = spind_to_ind(s, env.n_occ);
+      //     auto sov = occ_or_vir(s, env.n_occ);
+      //     FermionOperator sa (si, sov, Up, Annihilation, env.xacc_scheme);
+      //     FermionOperator sb (si, sov, Down, Annihilation, env.xacc_scheme);
+      //     rs_t += 1;
+      //     int pq_t = -1;
+      //     for (IdxType p = 0; p < env.n_spatial; p++) {
+      //       IdxType pi = spind_to_ind(p, env.n_occ);
+      //       auto pov = occ_or_vir(p, env.n_occ);
+      //       FermionOperator pa (pi, pov, Up, Creation, env.xacc_scheme);
+      //       FermionOperator pb (pi, pov, Down, Creation, env.xacc_scheme);
+      //       for (IdxType q = p; q < env.n_spatial; q++) {
+      //         IdxType qi = spind_to_ind(q, env.n_occ);
+      //         auto qov = occ_or_vir(q, env.n_occ);
+      //         FermionOperator qa (qi, qov, Up, Creation, env.xacc_scheme);
+      //         FermionOperator qb (qi, qov, Down, Creation, env.xacc_scheme);
+      //         pq_t += 1;
+      //         if (rs_t > pq_t) continue;
+      //         if ( (p == r) && (q == s) ) continue;
+      //         if ((p == q) || (r==s)) continue;
+      //         if ( ((r!=s)&&(q!=r)) || ((p==r)&&(q!=s)&(r!=s)) || ((p==s)&&(q!=r)&(r!=s)) || ((q==s)&&(p!=r)) || ((q==r)&&(p!=s))) {
+      //           IdxType term2 = fermion_operators.size();
+      //           add_double_singlet4t(qb,pa,sb,ra,
+      //                                 qb,pa,sa,rb,
+      //                                 qa,pb,sb,ra,
+      //                                 qa,pb,sa,rb,
+      //                                 term2);
+      //           double_counter += 1;
+      //           doublt_term4_counter += 1;
+      //           // std::cout << "Triplet&Singlets: " << p << q << r << s << "\n" << std::endl;
+      //           continue;
+      //         }
 
-            } // q
-          } // p
-        } // s
-      } // r
+      //       } // q
+      //     } // p
+      //   } // s
+      // } // r
 
       #ifndef NDEBUG
         std::cout << "Operator Stats" << std::endl;

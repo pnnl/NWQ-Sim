@@ -183,7 +183,7 @@ namespace NWQSim
           // set the objective function
           optimizer.set_min_objective(nl_opt_function, (void*)this);
           std::vector<double> lower_bounds(ansatz->numParams(), optimizer_settings.lbound);
-          std::vector<double> upper_bounds(ansatz->numParams(), optimizer_settings.ubound);  
+          std::vector<double> upper_bounds(ansatz->numParams(), optimizer_settings.ubound); 
           optimizer.set_lower_bounds(lower_bounds);
           optimizer.set_upper_bounds(upper_bounds);
           // Set the termination criteria

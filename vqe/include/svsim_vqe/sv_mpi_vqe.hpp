@@ -168,8 +168,10 @@ namespace NWQSim
           BARR_MPI;
           nlopt::opt optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
           optimizer.set_min_objective(nl_opt_function, (void*)this);
-          std::vector<double> lower_bounds(ansatz->numParams(), -2 * PI);
-          std::vector<double> upper_bounds(ansatz->numParams(), 2 * PI);
+          // std::vector<double> lower_bounds(ansatz->numParams(), -2 * PI); // MZ: Why?
+          // std::vector<double> upper_bounds(ansatz->numParams(), 2 * PI); // MZ: Why?
+          std::vector<double> lower_bounds(ansatz->numParams(), optimizer_settings.lbound); //MZ: my fix
+          std::vector<double> upper_bounds(ansatz->numParams(), optimizer_settings.ubound);  //MZ: my fix
           optimizer.set_lower_bounds(lower_bounds);
           optimizer.set_upper_bounds(upper_bounds);
           // Set the termination criteria

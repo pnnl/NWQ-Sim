@@ -16,17 +16,17 @@ namespace VQE {
 void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
                                     const MolecularEnvironment& env) {
     // Pre-calculate expected sizes to avoid reallocations
-    const size_t n_singles = env.n_occ * env.n_virt * 2;  // single excitations (alpha and beta)
+    const size_t n_singles = env.n_occ * env.n_virt;  // single excitations (alpha and beta)
     const size_t n_same_spin = env.n_occ * (env.n_occ - 1) * env.n_virt * (env.n_virt - 1) / 4;  // same-spin doubles
-    const size_t n_mixed_spin = env.n_occ * env.n_occ * env.n_virt * env.n_virt / 2;  // mixed-spin doubles
+    const size_t n_mixed_spin = env.n_occ * env.n_occ * env.n_virt * env.n_virt;  // mixed-spin doubles
     const size_t expected_size = n_singles + n_same_spin + n_mixed_spin;
     
     fermion_operators.clear();
     fermion_operators.reserve(expected_size);
 
-    std::vector<std::vector<FermionOperator>> single_excitation(2);
-    single_excitation[0].reserve(2);
-    single_excitation[1].reserve(2);
+    int single_counter = 0;
+    int double_counter_same = 0;
+    int double_counter_mixed = 0;
     
     // Generate single excitations
     for (IdxType p = 0; p < env.n_occ; p++) {
@@ -39,12 +39,9 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
                 {occ_ann_up, virt_cre_up},
                 {occ_ann_down, virt_cre_down}
             });
+            single_counter += 1;
         }
     }
-
-    std::vector<std::vector<FermionOperator>> double_excitation(2);
-    double_excitation[0].reserve(4);
-    double_excitation[1].reserve(4);
 
     // Generate same-spin double excitations
     for (IdxType i = 0; i < env.n_occ; i++) {
@@ -63,6 +60,8 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
                         {i_occ_ann_up, j_occ_ann_up, r_virt_cre_up, s_virt_cre_up},
                         {i_occ_ann_dw, j_occ_ann_dw, r_virt_cre_dw, s_virt_cre_dw}
                     });
+
+                    double_counter_same  += 1;
                 }
             }
         }
@@ -83,6 +82,7 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
                         fermion_operators.push_back({
                             {i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw}
                         });
+                        double_counter_mixed += 1;
                     } else {
                         fermion_operators.push_back({
                             {i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw},
@@ -91,6 +91,7 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
                              FermionOperator(s, Virtual, Up, Creation, env.xacc_scheme),
                              FermionOperator(r, Virtual, Down, Creation, env.xacc_scheme)}
                         });
+                        double_counter_mixed += 1;
                     }
                 }
             }
@@ -114,102 +115,135 @@ void generate_singlet_gsd_excitations(std::vector<std::vector<std::vector<Fermio
     fermion_operators.clear();
     fermion_operators.reserve(total_size);
 
-    std::vector<std::vector<FermionOperator>> single_excitation(2);
-    single_excitation[0].reserve(2);
-    single_excitation[1].reserve(2);
-    
+    int single_counter = 0;
+    int double_counter = 0;
+    int doublt_term1_counter = 0;
+    int doublt_term2_counter = 0;
+    int doublt_term4_counter = 0;
+    int doublt_term6_counter = 0;
     //===========Single Excitations===========
-    for (IdxType p = 0; p < env.n_spatial; p++) {
-        for (IdxType q = p+1; q < env.n_spatial; q++) {
-            const IdxType pi = spind_to_ind(p, env.n_occ);
-            const IdxType qi = spind_to_ind(q, env.n_occ);
-            const auto pov = occ_or_vir(p, env.n_occ);
-            const auto qov = occ_or_vir(q, env.n_occ);
-            
-            const FermionOperator virtual_creation_up(pi, pov, Up, Creation, env.xacc_scheme);
-            const FermionOperator virtual_creation_down(pi, pov, Down, Creation, env.xacc_scheme);
-            const FermionOperator occupied_annihilation_up(qi, qov, Up, Annihilation, env.xacc_scheme);
-            const FermionOperator occupied_annihilation_down(qi, qov, Down, Annihilation, env.xacc_scheme);
-            
-            fermion_operators.push_back({
-                {occupied_annihilation_up, virtual_creation_up},
-                {occupied_annihilation_down, virtual_creation_down}
-            });
-        }
+     for (IdxType p = 0; p < env.n_spatial; p++) {
+      IdxType pi = spind_to_ind(p, env.n_occ);
+      auto pov = occ_or_vir(p, env.n_occ);
+      FermionOperator virtual_creation_up (pi, pov, Up, Creation, env.xacc_scheme);
+      FermionOperator virtual_creation_down (pi, pov, Down, Creation, env.xacc_scheme);
+      for (IdxType q = p+1; q < env.n_spatial; q++) {
+        IdxType qi = spind_to_ind(q, env.n_occ);
+        auto qov = occ_or_vir(q, env.n_occ);
+        // creation operator
+        FermionOperator occupied_annihilation_up (qi, qov, Up, Annihilation, env.xacc_scheme);
+        FermionOperator occupied_annihilation_down (qi, qov, Down, Annihilation, env.xacc_scheme);
+        fermion_operators.push_back({{occupied_annihilation_up, virtual_creation_up},
+                                    {occupied_annihilation_down, virtual_creation_down}});
+        single_counter += 1;
+      }
     }
-
     //===========Double Excitations===========
-    std::vector<std::vector<FermionOperator>> double_excitation(6);  // Max size needed for triplet case
-    for (auto& vec : double_excitation) {
-        vec.reserve(4);
-    }
-
+    // Singlets and Triplets
+    int rs = -1;
     for (IdxType r = 0; r < env.n_spatial; r++) {
-        for (IdxType s = r; s < env.n_spatial; s++) {
-            const IdxType ri = spind_to_ind(r, env.n_occ);
-            const IdxType si = spind_to_ind(s, env.n_occ);
-            const auto rov = occ_or_vir(r, env.n_occ);
-            const auto sov = occ_or_vir(s, env.n_occ);
-            const FermionOperator ra(ri, rov, Up, Annihilation, env.xacc_scheme);
-            const FermionOperator rb(ri, rov, Down, Annihilation, env.xacc_scheme);
-            const FermionOperator sa(si, sov, Up, Annihilation, env.xacc_scheme);
-            const FermionOperator sb(si, sov, Down, Annihilation, env.xacc_scheme);
-            for (IdxType p = 0; p < env.n_spatial; p++) {
-                const IdxType pi = spind_to_ind(p, env.n_occ);
-                const auto pov = occ_or_vir(p, env.n_occ);
-                const FermionOperator pa(pi, pov, Up, Creation, env.xacc_scheme);
-                const FermionOperator pb(pi, pov, Down, Creation, env.xacc_scheme);
-                for (IdxType q = p; q < env.n_spatial; q++) {
-                    // Skip invalid combinations early
-                    if ((p == r) && (q == s)) continue;
-                    const IdxType qi = spind_to_ind(q, env.n_occ);
-                    const auto qov = occ_or_vir(q, env.n_occ);
-                    const FermionOperator qa(qi, qov, Up, Creation, env.xacc_scheme);
-                    const FermionOperator qb(qi, qov, Down, Creation, env.xacc_scheme);
-                    if (p != q) {
-                        if (r == s) {
-                            // Only singlet with two terms
-                            fermion_operators.push_back({
-                                {rb, ra, qb, pa},
-                                {-1.0 * rb, ra, qa, pb}
-                            });
-                        } else if (((r != s) && (q != r)) || ((p == r) && (q != s) && (r != s)) || 
-                                 ((p == s) && (q != r) && (r != s)) || ((q == s) && (p != r)) || 
-                                 ((q == r) && (p != s))) {
-                            // Triplet case
-                            fermion_operators.push_back({
-                                {2.0 * sa, ra, qa, pa},
-                                {sb, ra, qb, pa},
-                                {sa, rb, qb, pa},
-                                {qa, pb, sb, ra},
-                                {qa, pb, sa, rb},
-                                {2.0 * sb, rb, qb, pb}
-                            });
-                        }
-                    } else {  // p == q
-                        if ((q != r) && (r != s)) {
-                            // Group 3 - only singlet
-                            fermion_operators.push_back({
-                                {sb, ra, pb, pa},
-                                {sa, rb, pb, pa}
-                            });
-                        } else if ((q == r) && (r != s)) {
-                            // Group 4 - only singlet
-                            fermion_operators.push_back({
-                                {sb, ra, pa, pb},
-                                {sa, rb, pb, pa}
-                            });
-                        } else if ((q != r) && (r == s)) {
-                            // Group 5 - only singlet
-                            fermion_operators.push_back({
-                                {rb, ra, pb, pa}
-                            });
-                        }
-                    }
-                }
+      IdxType ri = spind_to_ind(r, env.n_occ);
+      auto rov = occ_or_vir(r, env.n_occ);
+      FermionOperator ra (ri, rov, Up, Annihilation, env.xacc_scheme);
+      FermionOperator rb (ri, rov, Down, Annihilation, env.xacc_scheme);
+      for (IdxType s = r; s < env.n_spatial; s++) {
+        IdxType si = spind_to_ind(s, env.n_occ);
+        auto sov = occ_or_vir(s, env.n_occ);
+        FermionOperator sa (si, sov, Up, Annihilation, env.xacc_scheme);
+        FermionOperator sb (si, sov, Down, Annihilation, env.xacc_scheme);
+        rs += 1;
+        int pq = -1;
+        for (IdxType p = 0; p < env.n_spatial; p++) {
+          IdxType pi = spind_to_ind(p, env.n_occ);
+          auto pov = occ_or_vir(p, env.n_occ);
+          FermionOperator pa (pi, pov, Up, Creation, env.xacc_scheme);
+          FermionOperator pb (pi, pov, Down, Creation, env.xacc_scheme);
+          for (IdxType q = p; q < env.n_spatial; q++) {
+            IdxType qi = spind_to_ind(q, env.n_occ);
+            auto qov = occ_or_vir(q, env.n_occ);
+            FermionOperator qa (qi, qov, Up, Creation, env.xacc_scheme);
+            FermionOperator qb (qi, qov, Down, Creation, env.xacc_scheme);
+            pq += 1;
+            if (rs > pq) {
+              continue; 
             }
-        }
-    }
+            if ( (p == r) && (q == s) ) {
+              continue;
+            }
+            if (p!=q) {
+              if (r == s) { // only singlet with two terms, not sure Group 3 or Group 4 cases
+                fermion_operators.push_back({
+                  {0.5*rb, ra,qb, pa},
+                  {-0.5*rb, ra,qa, pb}
+                });
+                double_counter += 1;
+                doublt_term2_counter += 1;
+                continue;
+              }
+              if ( ((r!=s)&&(q!=r)) || ((p==r)&&(q!=s)&(r!=s)) || ((p==s)&&(q!=r)&(r!=s)) || ((q==s)&&(p!=r)) || ((q==r)&&(p!=s))) {
+                // Trtiplet
+                fermion_operators.push_back({
+                  {2.0*sa,ra,qa,pa},
+                  {sb,ra,qb,pa},
+                  {sa,rb,qb,pa,},
+                  {qa,pb,sb,ra,},
+                  {qa,pb,sa,rb,},
+                  {2.0*sb,rb,qb,pb}
+                });
+                // Singlet
+                fermion_operators.push_back({
+                  {sb,ra,qb,pa},
+                  {-1.0*sa,rb,qb,pa},
+                  {-1.0*sb,ra,qa,pb},
+                  {sa,rb,qa,pb}
+                });
+                double_counter += 1;
+                doublt_term4_counter += 1;
+                double_counter += 1;
+                doublt_term6_counter += 1;
+                continue;
+              }
+            }
+            // Group 3 to 5
+            if (p == q) {
+              // Group 3
+              if ((q != r)&&(r!=s)) {
+                // only singlet
+                fermion_operators.push_back({
+                  {sb,ra,pb,pa},
+                  {sa,rb,pb,pa}
+                });
+                double_counter += 1;
+                doublt_term2_counter += 1;
+                continue;
+              }
+              // Group 4
+              if ((q == r)&&(r!=s)) {
+                // only singlet
+                fermion_operators.push_back({
+                  {sb,ra,pa,pb},
+                  {sa,rb,pb,pa}
+                });
+                double_counter += 1;
+                doublt_term2_counter += 1;
+                continue;
+              }
+              // Group 5
+              if ((q != r)&&(r==s)) {
+                // only singlet
+                fermion_operators.push_back({
+                  {rb,ra,pb,pa}
+                });
+                double_counter += 1;
+                doublt_term1_counter += 1;
+                continue;
+              }
+            } // p == q
+
+          } // q
+        } // p
+      } // s
+    } // r
 };
 
 

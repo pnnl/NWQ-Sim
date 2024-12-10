@@ -214,7 +214,7 @@ namespace NWQSim {
               std::cout << "\n----------- Iteration Summary -----------\n" << std::left
                         << std::setw(8) << " Iter."
                         << std::setw(17) << "Objective Value"
-                        << std::setw(11) << "Grad. Norm"
+                        << std::setw(12) << "Grad. Norm"
                         << std::setw(55) << "Selected Operator"
                         << std::endl;
               std::cout << std::string(95, '-') << std::endl;
@@ -222,7 +222,7 @@ namespace NWQSim {
             std::cout << std::left << " "
                       << std::setw(7) << iter
                       << std::setw(17) << std::fixed << std::setprecision(12) << ene
-                      << std::setw(11) << std::fixed << std::setprecision(6) << grad_norm;
+                      << std::setw(12) << std::fixed << std::setprecision(8) << grad_norm;
             std::cout << ansatz->get_operator_string(max_ind) << std::endl;
           }
 
