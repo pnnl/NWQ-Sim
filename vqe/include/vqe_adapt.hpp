@@ -171,6 +171,7 @@ namespace NWQSim {
       void optimize(std::vector<double>& parameters, ValType& ene, IdxType maxiter, ValType abstol = 1e-5, ValType fvaltol = 1e-7) {
         ene = hamil->getEnv().constant;
         state->initialize();
+        state->set_adaptresult(9); // MZ: initialize convergence flag to "Other"
         ValType constant = ene;
         IdxType iter = 0;
         ValType prev_ene = 1 + ene;
@@ -193,6 +194,7 @@ namespace NWQSim {
           }));
           // if the gradient converged, break
           if (grad_norm < abstol) {
+            state->set_adaptresult(0); // MZ: converged flag
             break;
           }
           // else find the index of the gradient element with the largest magnitude
@@ -208,8 +210,6 @@ namespace NWQSim {
           state->optimize(parameters, ene);
           // Print update
           if (state->get_process_rank() == 0) {
-            // std::cout << "ADAPT Iteration " << iter << ", Fval = " << ene << std::endl; // MZ: need more concise
-            // std::cout << "\tSelected Operator: " << ansatz->get_operator_string(max_ind) << ", Current gradient norm = " << grad_norm << std::endl; MZ: need more concise
             if (iter == 0) {
               std::cout << "\n----------- Iteration Summary -----------\n" << std::left
                         << std::setw(8) << " Iter."
@@ -228,11 +228,15 @@ namespace NWQSim {
 
           // If the function value converged, then break
           if (abs((ene - prev_ene)) < fvaltol) {
+            state->set_adaptresult(1); // MZ: converged flag
             break;
           }
           iter++;
         }
-        
+        state->set_adaptrounds(iter); // MZ: record numebr of ADAPT rounds
+        if (iter >= maxiter) {
+          state->set_adaptresult(2); // MZ: converged flag
+        }
       }
 
     };

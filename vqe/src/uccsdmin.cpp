@@ -3,6 +3,9 @@
 #include "observable/fermionic_operator.hpp"
 #include "utils.hpp"
 
+// #include <set>
+// #include <tuple>
+
 namespace NWQSim {
   namespace VQE {
 
@@ -22,6 +25,7 @@ namespace NWQSim {
         std::vector<std::vector<std::pair<IdxType, ValType> > > symmetries;
         std::vector<IdxType> fermion_ops_to_params; // map from fermion operators to parameters (used in update)
         std::vector<std::vector<FermionOperator> > fermion_operators;
+        // std::set<std::tuple< IdxType, IdxType, IdxType, IdxType >> existing_tuples; // MZ: for recording symmetry
 
       public:
         UCCSDmin(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1, IdxType _symm_level = 3): 
@@ -237,6 +241,41 @@ namespace NWQSim {
                 }
             }
         }
+
+      // MZ: the old implementation
+      // for (IdxType i = 0; i < env.n_occ; i++) {
+      //     FermionOperator i_occ_ann_up (i, Occupied, Up, Annihilation, env.xacc_scheme);
+      //     FermionOperator i_occ_ann_dw (i, Occupied, Down, Annihilation, env.xacc_scheme);
+      //     for (IdxType r = 0; r < env.n_virt; r++) {
+      //         FermionOperator r_virt_cre_up (r, Virtual, Up, Creation, env.xacc_scheme);
+      //         FermionOperator r_virt_cre_dw (r, Virtual, Down, Creation, env.xacc_scheme);
+      //         for (IdxType j = 0; j < env.n_occ; j++) {
+      //             FermionOperator j_occ_ann_dw (j, Occupied, Down, Annihilation, env.xacc_scheme);
+      //             FermionOperator j_occ_ann_up (j, Occupied, Up, Annihilation, env.xacc_scheme);
+      //             for (IdxType s = 0; s < env.n_virt; s++) {
+      //                 FermionOperator s_virt_cre_dw (s, Virtual, Down, Creation, env.xacc_scheme);
+      //                 FermionOperator s_virt_cre_up (s, Virtual, Up, Creation, env.xacc_scheme);
+      //                 if ( (symm_level < 2) || (i == j && r == s) ) {
+      //                   add_double_excitation(i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw); // MZ: alpha-beta, not need for beta-alpha
+      //                 } else {
+      //                   std::tuple<IdxType, IdxType, IdxType, IdxType> new_tuple = {i,j,r,s};
+      //                   if (existing_tuples.find(new_tuple) != existing_tuples.end()) {
+      //                     // The tuple exist in the set, so we skip the term and erase the tuple
+      //                     existing_tuples.erase(new_tuple);
+      //                   } else {
+      //                     // The tuple does not exist in the set, so we add the term
+      //                     IdxType term2 = fermion_operators.size();
+      //                     add_double_excitation(i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw, {{term2, 1.0}}, true); // MZ: alpha-beta, not need for beta-alpha
+      //                     add_double_excitation(j_occ_ann_up, i_occ_ann_dw, s_virt_cre_up, r_virt_cre_dw, {{term2, 1.0}}, false);
+      //                     existing_tuples.insert({j, i, s, r});
+      //                   }
+      //                 }
+
+      //             }
+      //         }
+      //     }
+      // }
+
     }
 
     void printDebugInfo() {

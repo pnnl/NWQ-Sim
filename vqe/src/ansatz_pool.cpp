@@ -23,10 +23,6 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
     
     fermion_operators.clear();
     fermion_operators.reserve(expected_size);
-
-    int single_counter = 0;
-    int double_counter_same = 0;
-    int double_counter_mixed = 0;
     
     // Generate single excitations
     for (IdxType p = 0; p < env.n_occ; p++) {
@@ -39,7 +35,6 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
                 {occ_ann_up, virt_cre_up},
                 {occ_ann_down, virt_cre_down}
             });
-            single_counter += 1;
         }
     }
 
@@ -60,8 +55,6 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
                         {i_occ_ann_up, j_occ_ann_up, r_virt_cre_up, s_virt_cre_up},
                         {i_occ_ann_dw, j_occ_ann_dw, r_virt_cre_dw, s_virt_cre_dw}
                     });
-
-                    double_counter_same  += 1;
                 }
             }
         }
@@ -82,7 +75,6 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
                         fermion_operators.push_back({
                             {i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw}
                         });
-                        double_counter_mixed += 1;
                     } else {
                         fermion_operators.push_back({
                             {i_occ_ann_up, j_occ_ann_dw, r_virt_cre_up, s_virt_cre_dw},
@@ -91,7 +83,6 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
                              FermionOperator(s, Virtual, Up, Creation, env.xacc_scheme),
                              FermionOperator(r, Virtual, Down, Creation, env.xacc_scheme)}
                         });
-                        double_counter_mixed += 1;
                     }
                 }
             }
@@ -108,6 +99,8 @@ void generate_fermionic_excitations(std::vector<std::vector<std::vector<FermionO
  */
 void generate_singlet_gsd_excitations(std::vector<std::vector<std::vector<FermionOperator> > >& fermion_operators,
                                     const MolecularEnvironment& env) {
+
+    bool normalization = false; // MZ: it seems like without normalization, LiH 3.4 Ang with ADAPT-VQE+COBYLA gives 10 times smaller error
     const int n_singles = (env.n_spatial * (env.n_spatial - 1));
     const int n_doubles = counting_doubles(env.n_spatial);
     const size_t total_size = n_singles + n_doubles;
@@ -164,44 +157,64 @@ void generate_singlet_gsd_excitations(std::vector<std::vector<std::vector<Fermio
             FermionOperator qa (qi, qov, Up, Creation, env.xacc_scheme);
             FermionOperator qb (qi, qov, Down, Creation, env.xacc_scheme);
             pq += 1;
-            if (rs > pq) {
-              continue; 
-            }
-            if ( (p == r) && (q == s) ) {
-              continue;
-            }
+            if (rs > pq) continue;
+            if ( (p == r) && (q == s) ) continue;
             if (p!=q) {
-              if (r == s) { // only singlet with two terms, not sure Group 3 or Group 4 cases
-                fermion_operators.push_back({
-                  {0.5*rb, ra,qb, pa},
-                  {-0.5*rb, ra,qa, pb}
-                });
+              if (r == s) {
+                if (normalization) {
+                  fermion_operators.push_back({
+                    {0.5*rb, ra,qb, pa},
+                    {-0.5*rb, ra,qa, pb}
+                  });
+                } else {
+                  fermion_operators.push_back({
+                    {rb, ra,qb, pa},
+                    {-1.0*rb, ra,qa, pb}
+                  });
+                }
                 double_counter += 1;
                 doublt_term2_counter += 1;
-                continue;
               }
               if ( ((r!=s)&&(q!=r)) || ((p==r)&&(q!=s)&(r!=s)) || ((p==s)&&(q!=r)&(r!=s)) || ((q==s)&&(p!=r)) || ((q==r)&&(p!=s))) {
-                // Trtiplet
-                fermion_operators.push_back({
-                  {2.0*sa,ra,qa,pa},
-                  {sb,ra,qb,pa},
-                  {sa,rb,qb,pa,},
-                  {qa,pb,sb,ra,},
-                  {qa,pb,sa,rb,},
-                  {2.0*sb,rb,qb,pb}
-                });
-                // Singlet
-                fermion_operators.push_back({
-                  {sb,ra,qb,pa},
-                  {-1.0*sa,rb,qb,pa},
-                  {-1.0*sb,ra,qa,pb},
-                  {sa,rb,qa,pb}
-                });
-                double_counter += 1;
-                doublt_term4_counter += 1;
-                double_counter += 1;
+                if (normalization) {
+                  // Trtiplet
+                  fermion_operators.push_back({
+                    {2.0/sqrt(24.0)*sa,ra,qa,pa},
+                    {1.0/sqrt(24.0)*sb,ra,qb,pa},
+                    {1.0/sqrt(24.0)*sa,rb,qb,pa,},
+                    {1.0/sqrt(24.0)*qa,pb,sb,ra,},
+                    {1.0/sqrt(24.0)*qa,pb,sa,rb,},
+                    {2.0/sqrt(24.0)*sb,rb,qb,pb}
+                  });
+                  // Singlet
+                  fermion_operators.push_back({
+                    {0.5/sqrt(2.0)*sb,ra,qb,pa},
+                    {-0.5/sqrt(2.0)*sa,rb,qb,pa},
+                    {-0.5/sqrt(2.0)*sb,ra,qa,pb},
+                    {0.5/sqrt(2.0)*sa,rb,qa,pb}
+                  });
+                } else {
+                  // Trtiplet
+                  fermion_operators.push_back({
+                    {2.0*sa,ra,qa,pa},
+                    {sb,ra,qb,pa},
+                    {sa,rb,qb,pa,},
+                    {qa,pb,sb,ra,},
+                    {qa,pb,sa,rb,},
+                    {2.0*sb,rb,qb,pb}
+                  });
+                  // Singlet
+                  fermion_operators.push_back({
+                    {sb,ra,qb,pa},
+                    {-1.0*sa,rb,qb,pa},
+                    {-1.0*sb,ra,qa,pb},
+                    {sa,rb,qa,pb}
+                  });
+                }
+
+                double_counter += 2;
                 doublt_term6_counter += 1;
-                continue;
+                doublt_term4_counter += 1;
               }
             }
             // Group 3 to 5
@@ -209,34 +222,52 @@ void generate_singlet_gsd_excitations(std::vector<std::vector<std::vector<Fermio
               // Group 3
               if ((q != r)&&(r!=s)) {
                 // only singlet
-                fermion_operators.push_back({
-                  {sb,ra,pb,pa},
-                  {sa,rb,pb,pa}
-                });
+                if (normalization) {
+                  fermion_operators.push_back({
+                    {0.5*sb,ra,pb,pa},
+                    {0.5*sa,rb,pb,pa}
+                  });
+                } else {
+                  fermion_operators.push_back({
+                    {sb,ra,pb,pa},
+                    {sa,rb,pb,pa}
+                  });
+                }
                 double_counter += 1;
                 doublt_term2_counter += 1;
-                continue;
               }
               // Group 4
               if ((q == r)&&(r!=s)) {
                 // only singlet
-                fermion_operators.push_back({
-                  {sb,ra,pa,pb},
-                  {sa,rb,pb,pa}
-                });
+                if (normalization) {
+                  fermion_operators.push_back({
+                    {0.5*sb,ra,pa,pb},
+                    {0.5*sa,rb,pb,pa}
+                  });
+                } else {
+                  fermion_operators.push_back({
+                    {sb,ra,pa,pb},
+                    {sa,rb,pb,pa}
+                  });
+                }
+
                 double_counter += 1;
                 doublt_term2_counter += 1;
-                continue;
               }
               // Group 5
               if ((q != r)&&(r==s)) {
                 // only singlet
-                fermion_operators.push_back({
-                  {rb,ra,pb,pa}
-                });
+                if (normalization) {
+                  fermion_operators.push_back({
+                    {1.0/sqrt(2.0)*rb,ra,pb,pa}
+                  });
+                } else {
+                  fermion_operators.push_back({
+                    {rb,ra,pb,pa}
+                  });
+                }
                 double_counter += 1;
                 doublt_term1_counter += 1;
-                continue;
               }
             } // p == q
 
@@ -244,6 +275,16 @@ void generate_singlet_gsd_excitations(std::vector<std::vector<std::vector<Fermio
         } // p
       } // s
     } // r
+
+    #ifndef NDEBUG
+      std::cout << "Operator Stats" << std::endl;
+      std::cout << "Single Excitations: " << single_counter << std::endl;
+      std::cout << "Double Excitations: " << double_counter << std::endl;
+      std::cout << "  -Term 1: " << doublt_term1_counter << std::endl;
+      std::cout << "  -Term 2: " << doublt_term2_counter << std::endl;
+      std::cout << "  -Term 4: " << doublt_term4_counter << std::endl;
+      std::cout << "  -Term 6: " << doublt_term6_counter << std::endl;
+    #endif
 };
 
 

@@ -14,35 +14,42 @@
 
 int show_help() {
   std::cout << "NWQ-VQE QFlow Options" << std::endl;
+  std::cout << UNDERLINE << "INFORMATIONAL" << CLOSEUNDERLINE << std::endl;
+  std::cout << "-h, --help            Show help menu." << std::endl;
+  std::cout << "-l, --list-backends   List available backends and exit." << std::endl;
   std::cout << UNDERLINE << "REQUIRED" << CLOSEUNDERLINE << std::endl;
-  std::cout << "--hamiltonian, -f     Path to the input Hamiltonian file (formatted as a sum of Fermionic operators, see examples)" << std::endl;
-  std::cout << "--nparticles, -n      Number of electrons in molecule" << std::endl;
-  std::cout << UNDERLINE << "OPTIONAL" << CLOSEUNDERLINE << std::endl;
-  std::cout << "--backend, -b         Simulation backend. Defaults to CPU" << std::endl;
-  std::cout << "--list-backends, -l   List available backends and exit." << std::endl;
-  std::cout << "--amplitudes          List of initial amplitudes." << std::endl;
-  std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme." << std::endl; // MZ: it was --ducc, but the code only detects --xacc
-  std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
-  std::cout << "--verbose             Print optimizer information on each iteration. Defaults to false" << std::endl;
-  // std::cout << "--symm                Symmetry level (0->none, 1->single, 2->double non-mixed+single, 3->all). Defaults to 0." << std::endl;
-  std::cout << "--symm                Symmetry level (0->none, 1->spin symmetry, 2->also orbital symmetry). Defaults to 0." << std::endl; // MZ: is this call orbital symmetry?
+  std::cout << "-f, --hamiltonian     Path to the input Hamiltonian file (formatted as a sum of Fermionic operators, see examples)." << std::endl;
+  std::cout << "-p, --nparticles      Number of electrons in molecule." << std::endl;
+  std::cout << UNDERLINE << "OPTIONAL (Hamiltonian, Ansatz and Backend)" << CLOSEUNDERLINE << std::endl;
+  std::cout << "--ducc                Use DUCC indexing scheme. Defaults to false (defaults to use XACC/Qiskit scheme)." << std::endl;
+    // std::cout << "--symm                Symmetry level (0->none, 1->single, 2->double non-mixed+single, 3->all). Defaults to 0." << std::endl;
+  std::cout << "--sym, --symm         UCCSD Symmetry level (0->none, 1->spin symmetry, 2->also orbital symmetry). Defaults to 0." << std::endl; // MZ: is this call orbital symmetry?
   std::cout << "--gsd                 Use singlet GSD ansatz for ADAPT-VQE. Default to false." << std::endl;
-  std::cout << "--origin              Use old implementatin of UCCSD for VQE (more parameters) or ADAPT-VQE (also incorrect symmetries). Default to false." << std::endl;
+  std::cout << "-b, --backend,        Simulation backend. Defaults to CPU." << std::endl;
+  std::cout << "--amplitudes          List of initial amplitudes." << std::endl;
+  std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
+  std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
   std::cout << UNDERLINE << "OPTIONAL (Global Minimizer)" << CLOSEUNDERLINE << std::endl;
-  std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA. Other examples are LN_NEWUOA and LD_LBFGS" << std::endl;
-  std::cout << "--optimizer-config    Path to config file for NLOpt optimizer parameters" << std::endl;
+  std::cout << "-v, --verbose         Print optimization callback on each iteration. Defaults to false." << std::endl;
+  std::cout << "-o, --optimizer       NLOpt optimizer name. Defaults to LN_COBYLA. Other examples are LN_NEWUOA and LD_LBFGS" << std::endl;
+  std::cout << "--opt-config          Path to config file for NLOpt optimizer parameters" << std::endl;
+  std::cout << "-lb, --lbound         Optimizer lower bound. Defaults to -2Pi" << std::endl;
+  std::cout << "-ub, --ubound         Optimizer upper bound. Defaults to 2Pi" << std::endl;
   std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
-  std::cout << "--lbound              Optimizer lower bound. Defaults to -2" << std::endl;
-  std::cout << "--ubound              Optimizer upper bound. Defaults to 2" << std::endl;
   std::cout << "--abstol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--maxeval             Maximum number of function evaluations for optimizer. Defaults to 100" << std::endl;
   std::cout << "--maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)" << std::endl;
   std::cout << "--stopval             Cutoff function value for optimizer. Defaults to -MAXFLOAT (off)" << std::endl;
   std::cout << UNDERLINE << "OPTIONAL (Local Gradient Follower)" << CLOSEUNDERLINE << std::endl;
   std::cout << "--local               Use local gradient follower pipeline." << std::endl;
-  std::cout << "-g,--grad-samples     SPSA gradient samples." << std::endl;
-  std::cout << "--delta               Perturbation magnitude for SPSA" << std::endl;
-  std::cout << "--eta                 Gradient descent step size." << std::endl;
+  std::cout << "-g, --grad-samples    SPSA gradient samples." << std::endl;
+  std::cout << "--delta               Perturbation magnitude for SPSA. Defaults to 1e-4." << std::endl;
+  std::cout << "--eta                 Gradient descent step size. Defaults to 1e-3." << std::endl;
+  std::cout << UNDERLINE << "LEGACY" << CLOSEUNDERLINE << std::endl;
+  std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme. (Deprecated, true by default)" << std::endl;
+  std::cout << "--optimizer-config    (Same as --opt-config) Path to config file for NLOpt optimizer parameters" << std::endl; // MZ: not sure why this is different from main.cpp. I keep the one in the main.cpp as it is shorter.
+  std::cout << "--origin              Use old implementatin of UCCSD for VQE (more parameters) or ADAPT-VQE (also incorrect symmetries). Default to false." << std::endl;
+  std::cout << "-n,                   (Same as -p or --nparticles) Number of electrons in molecule" << std::endl; // MZ: this could be confusing as people usually use n for number of qubits (2*number of spartial orbitals)
   return 1;
 }
 
@@ -75,12 +82,12 @@ int parse_args(int argc, char** argv,
   seed = time(0);
   delta = 1e-4;
   eta = 1e-3;
-  use_xacc = false;
+  use_xacc = true;
   local = false;
   verbose = false;
   symm_level = 0;
-  settings.lbound = -2;
-  settings.ubound = 2;
+  settings.lbound = -2*PI;
+  settings.ubound = 2*PI;
   pool = NWQSim::VQE::PoolType::Fermionic;
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
@@ -102,7 +109,7 @@ int parse_args(int argc, char** argv,
       config_file = argv[++i];
       continue;
     }  else 
-    if (argname == "-n" || argname == "--nparticles") {
+    if (argname == "-p" || argname == "-n" || argname == "--nparticles") {
       n_particles = std::atoll(argv[++i]);
     } else 
     if (argname == "--local") {
@@ -114,8 +121,11 @@ int parse_args(int argc, char** argv,
     if (argname == "--seed") {
       seed = (unsigned)std::atoi(argv[++i]);
     } else
-    if (argname == "--symm") {
+    if (argname == "--sym" || argname == "--symm") {
       symm_level = (unsigned)std::atoi(argv[++i]);;
+    } else
+    if (argname == "--ducc") {
+      use_xacc = false;
     } else
     if (argname == "--xacc") {
       use_xacc = true;
@@ -123,17 +133,17 @@ int parse_args(int argc, char** argv,
     if (argname == "--amplitudes") {
       amplitudes = argv[++i];
     } else
-    if (argname == "--verbose") {
+    if (argname == "-v" || argname == "--verbose") {
       verbose = true;
     } else if (argname == "--delta") {
       delta = std::atof(argv[++i]);
     } else if (argname == "--eta") {
       eta = std::atof(argv[++i]);
     } else 
-    if (argname == "--optimizer-config") {
+    if (argname == "--opt-config" || argname == "--optimizer-config") {
       config_file = argv[++i];
     } else 
-    if (argname == "--optimizer") {
+    if (argname == "-o" ||argname == "--optimizer") {
       algorithm_name = argv[++i];
     } else 
     if (argname == "--reltol") {
@@ -142,10 +152,10 @@ int parse_args(int argc, char** argv,
     if (argname == "--abstol") {
       settings.abs_tol = std::atof(argv[++i]);
     } else 
-    if (argname == "--ubound") {
+    if (argname == "-ub" || argname == "--ubound") {
       settings.ubound = std::atof(argv[++i]);
     } else 
-    if (argname == "--lbound") {
+    if (argname == "-lb" || argname == "--lbound") {
       settings.lbound = std::atof(argv[++i]);
     } else 
     if (argname == "--maxeval") {
@@ -245,6 +255,19 @@ std::string get_termination_reason(nlopt::result result) {
     }
 }
 
+std::string get_termination_reason_local(int result) {
+    static const std::map<int, std::string> reason_map_adapt = {
+        {0, "Local gradient minimum is reached"},
+        {9, "Local Gradient Follower is not run"}
+    };
+    auto it = reason_map_adapt.find(result);
+    if (it != reason_map_adapt.end()) {
+        return it->second;
+    } else {
+        return "Unknown reason, code: " + std::to_string(result);
+    }
+}
+
 void optimize_ansatz(const VQEBackendManager& manager,
                      const std::string& backend,
                      const std::string& config,
@@ -263,9 +286,6 @@ void optimize_ansatz(const VQEBackendManager& manager,
   double fval;
   // NWQSim::VQE::Callback callback = verbose ? carriage_return_callback_function: silent_callback_function;
   NWQSim::VQE::Callback callback = verbose ? callback_function_simple: silent_callback_function;
-  if (!verbose) {
-    NWQSim::Config::PRINT_SIM_TRACE = false;
-  }
   std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, config, ansatz, hamil, algo, callback, seed, settings); 
   params.resize(ansatz->numParams());
   std::cout << "Number of parameters: " << ansatz->numParams() << std::endl;
@@ -288,7 +308,8 @@ void optimize_ansatz(const VQEBackendManager& manager,
                                               num_iterations, 
                                               delta, 
                                               eta, 
-                                              num_trials);
+                                              num_trials,
+                                              verbose);
 
   } else {
     ansatz->setParams(params);
@@ -317,11 +338,20 @@ void optimize_ansatz(const VQEBackendManager& manager,
       // Print out the Fermionic operators with their excitations                                        
       std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters(); 
       manager.safe_print("\n--------- Result Summary ---------\n"); 
-      manager.safe_print("Method                 : QFlow\n");
+      if (local) {
+        manager.safe_print("Method                 : QFlow + Local Gradient Follower\n");
+      } else {
+        manager.safe_print("Method                 : QFlow + Global minimizer\n");
+      }
       manager.safe_print("Ansatz                 : %s\n", ansatz->getAnsatzName().c_str());  // MZ: don't want to scroll all the way up to see this
       manager.safe_print("# Ham. Pauli Strings   : %lld \n", hamil->num_ops());
       manager.safe_print("Circuit Stats          : %lld operators, %lld parameters, and %lld Gates\n" , ansatz->numOps(), ansatz->numParams(), ansatz->num_gates()); // MZ: don't want to scroll all the way up to see this
-      std::string ter_rea = "Optimization terminated: "+get_termination_reason(state->get_optresult())+"\n";
+      std::string ter_rea;
+      if (local) {
+        ter_rea = "Optimization terminated: "+get_termination_reason_local(state->get_optresult())+"\n";
+      } else {
+        ter_rea = "Optimization terminated: "+get_termination_reason(state->get_optresult())+"\n";
+      }
       manager.safe_print(ter_rea.c_str());
       manager.safe_print("# iterations           : %d\n", num_iterations);
       manager.safe_print("Evaluation Time        : %d hrs %d mins %.4f secs\n", hours, minutes, seconds);
@@ -394,7 +424,7 @@ int main(int argc, char** argv) {
 
   ansatz->buildAnsatz();
   std::vector<double> params;
-  manager.safe_print("Beginning VQE loop...\n");
+  manager.safe_print("Beginning QFlow loop...\n");
   optimize_ansatz(manager, backend, config, amplitudes, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta);
 #ifdef MPI_ENABLED
   if (backend == "MPI" || backend == "NVGPU_MPI")

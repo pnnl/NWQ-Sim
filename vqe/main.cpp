@@ -33,6 +33,8 @@ struct VQEParams {
   nlopt::algorithm algo;
   IdxType symm_level = 0;
 
+  bool verbose = false; // MZ: if show optimization results in each iteration
+
   // ADAPT-VQE options
   bool adapt = false;
   bool qubit = false;
@@ -47,36 +49,41 @@ struct VQEParams {
 };
 int show_help() {
   std::cout << "NWQ-VQE Options" << std::endl;
+  std::cout << UNDERLINE << "INFORMATIONAL" << CLOSEUNDERLINE << std::endl;
+  std::cout << "-h, --help            Show help menu." << std::endl;
+  std::cout << "-l, --list-backends   List available backends and exit." << std::endl;
   std::cout << UNDERLINE << "REQUIRED" << CLOSEUNDERLINE << std::endl;
-  std::cout << "--hamiltonian, -f     Path to the input Hamiltonian file (formatted as a sum of Fermionic operators, see examples)" << std::endl;
-  std::cout << "--nparticles, -n      Number of electrons in molecule" << std::endl;
-  std::cout << "--backend, -b         Simulation backend. Defaults to CPU" << std::endl;
-  std::cout << "--list-backends, -l   List available backends and exit." << std::endl;
-  std::cout << UNDERLINE << "OPTIONAL" << CLOSEUNDERLINE << std::endl;
-  std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
+  std::cout << "-f, --hamiltonian     Path to the input Hamiltonian file (formatted as a sum of Fermionic operators, see examples)" << std::endl;
+  std::cout << "-p, --nparticles      Number of electrons in molecule" << std::endl;
+  std::cout << UNDERLINE << "OPTIONAL (Hamiltonian, Ansatz and Backend)" << CLOSEUNDERLINE << std::endl;
+  std::cout << "--ducc                Use DUCC indexing scheme. Defaults to false (defaults to use XACC/Qiskit scheme)." << std::endl;
   // std::cout << "--symm                Symmetry level (0->none, 1->single, 2->double non-mixed+single, 3->all). Defaults to 0." << std::endl;
-  std::cout << "--symm                Symmetry level (0->none, 1->spin symmetry, 2->also orbital symmetry). Defaults to 0." << std::endl; // MZ: is this call orbital symmetry?
+  std::cout << "--sym, --symm         UCCSD Symmetry level (0->none, 1->spin symmetry, 2->also orbital symmetry). Defaults to 0." << std::endl; // MZ: is this call orbital symmetry?
+  std::cout << "--gsd                 Use singlet GSD ansatz for ADAPT-VQE. Default to false." << std::endl;
+  std::cout << "-b, --backend         Simulation backend. Defaults to CPU" << std::endl;
+  std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
   std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
+  std::cout << UNDERLINE << "OPTIONAL (Global Minimizer)" << CLOSEUNDERLINE << std::endl;
+  std::cout << "-v, --verbose         Print optimization callback on each VQE iteration. Defaults to false" << std::endl;
+  std::cout << "-o, --optimizer       NLOpt optimizer name. Defaults to LN_COBYLA. Other examples are LN_NEWUOA and LD_LBFGS" << std::endl;
   std::cout << "--opt-config          Path to config file for NLOpt optimizer parameters" << std::endl;
-  std::cout << "--optimizer           NLOpt optimizer name. Defaults to LN_COBYLA. Other examples are LN_NEWUOA and LD_LBFGS" << std::endl;
-  std::cout << "--lbound              Lower bound for classical optimizer. Defaults to -PI" << std::endl;
-  std::cout << "--ubound              Upper bound for classical optimizer. Defaults to PI" << std::endl;
-  std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
+  std::cout << "-lb, --lbound         Optimizer lower bound. Defaults to -2Pi" << std::endl;
+  std::cout << "-ub, --ubound         Optimizer upper bound. Defaults to 2Pi" << std::endl;  std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--abstol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--maxeval             Maximum number of function evaluations for optimizer (only for VQE). Defaults to 100" << std::endl;
   std::cout << "--maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)" << std::endl;
   std::cout << "--stopval             Cutoff function value for optimizer. Defaults to -MAXFLOAT (off)" << std::endl;
-  std::cout << "--ducc                Use DUCC indexing scheme, otherwise uses XACC scheme. (Defaults to false)" << std::endl;
-  std::cout << "--gsd                 Use singlet GSD ansatz for ADAPT-VQE. Default to false." << std::endl;
-  std::cout << "--origin              Use old implementatin of UCCSD for VQE or ADAPT-VQE. Have duplicated operators and potential symmetry problem. Default to false." << std::endl;
-  std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme. (Deprecated, true by default)" << std::endl;
   std::cout << UNDERLINE << "ADAPT-VQE OPTIONS" << CLOSEUNDERLINE << std::endl;
   std::cout << "--adapt               Use ADAPT-VQE for dynamic ansatz construction. Defaults to false" << std::endl;
-  std::cout << "--adapt-gradtol       Cutoff absolute tolerance for operator gradient norm. Defaults to 1e-3" << std::endl;
-  std::cout << "--adapt-fvaltol       Cutoff absolute tolerance for function value. Defaults to -1 (off)" << std::endl;
-  std::cout << "--adapt-maxeval       Set a maximum iteration count for ADAPT-VQE. Defaults to 100" << std::endl;
+  std::cout << "-ag, --adapt-gradtol  Cutoff absolute tolerance for operator gradient norm. Defaults to 1e-3" << std::endl;
+  std::cout << "-af, --adapt-fvaltol  Cutoff absolute tolerance for function value. Defaults to -1 (off)" << std::endl;
+  std::cout << "-am, --adapt-maxeval  Set a maximum iteration count for ADAPT-VQE. Defaults to 100" << std::endl;
   std::cout << "--qubit               Uses Qubit instead of Fermionic operators for ADAPT-VQE. Defaults to false" << std::endl;
   std::cout << "--adapt-pool          Sets the pool size for Qubit operators. Defaults to -1" << std::endl;
+  std::cout << UNDERLINE << "LEGACY" << CLOSEUNDERLINE << std::endl;
+  std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme. (Deprecated, true by default)" << std::endl;
+  std::cout << "--origin              Use old implementatin of UCCSD for VQE or ADAPT-VQE. Have duplicated operators and potential symmetry problem. Default to false." << std::endl;
+  std::cout << "-n                    (Same as -p or --nparticules) Number of electrons in molecule" << std::endl; // MZ: this could be confusing as people usually use n for number of qubits (2*number of spartial orbitals)
   return 1;
 }
 
@@ -99,8 +106,8 @@ int parse_args(int argc, char** argv,
   std::string algorithm_name = "LN_COBYLA";
   NWQSim::VQE::OptimizerSettings& settings = params.optimizer_settings;
   params.seed = time(NULL);
-  settings.lbound = -2; // MZ: changed from -PI to -2
-  settings.ubound = 2; // MZ: changed from PI to 2
+  settings.lbound = -2*PI; //
+  settings.ubound = 2*PI; //
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
     if (argname == "-h" || argname == "--help") {
@@ -117,9 +124,12 @@ int parse_args(int argc, char** argv,
       params.hamiltonian_path = argv[++i];
       continue;
     } else 
-    if (argname == "-n" || argname == "--nparticles") {
+    if (argname == "-p" || argname == "-n" || argname == "--nparticles") {
       params.nparticles = std::atoll(argv[++i]);
     } else 
+    if (argname == "-v" || argname == "--verbose") {
+      params.verbose = true;
+    } else
     if (argname == "--seed") {
       params.seed = (unsigned)std::atoi(argv[++i]);
     }  else 
@@ -136,7 +146,7 @@ int parse_args(int argc, char** argv,
     if (argname == "--opt-config") {
       opt_config_file = argv[++i];
     } else  
-    if (argname == "--optimizer") {
+    if (argname == "-o" || argname == "--optimizer") {
       algorithm_name = argv[++i];
     } else 
     if (argname == "--reltol") {
@@ -145,22 +155,22 @@ int parse_args(int argc, char** argv,
     if (argname == "--abstol") {
       settings.abs_tol = std::atof(argv[++i]);
     }  else 
-    if (argname == "--symm") {
+    if (argname == "--sym" || argname == "--symm") {
       params.symm_level = (unsigned)std::atoi(argv[++i]);;
     } else
-    if (argname == "--ubound") {
+    if (argname == "-ub" || argname == "--ubound") {
       settings.ubound = std::atof(argv[++i]);
     }  else 
-    if (argname == "--lbound") {
+    if (argname == "-lb" || argname == "--lbound") {
       settings.lbound = std::atof(argv[++i]);
     } else 
-    if (argname == "--adapt-fvaltol") {
+    if (argname == "-af" || argname == "--adapt-fvaltol") {
       params.adapt_fvaltol = std::atof(argv[++i]);
     } else 
-    if (argname == "--adapt-gradtol") {
+    if (argname == "-ag" || argname == "--adapt-gradtol") {
       params.adapt_gradtol = std::atof(argv[++i]);
     }  else 
-    if (argname == "--adapt-maxeval") {
+    if (argname == "-am" || argname == "--adapt-maxeval") {
       params.adapt_maxeval = std::atoll(argv[++i]);
     } else 
     if (argname == "--adapt") {
@@ -272,6 +282,21 @@ std::string get_termination_reason(nlopt::result result) {
         return "Unknown reason, code: " + std::to_string(result);
     }
 }
+
+std::string get_termination_reason_adapt(int result) {
+    static const std::map<int, std::string> reason_map_adapt = {
+        {0, "Abs. tol. for operator gradient norm is reached"},
+        {1, "Abs. tol. for function value change is reached"},
+        {2, "Max. number of iterations for ADAPT-VQE is reached"},
+        {9, "ADAPT iteration is not run"}
+    };
+    auto it = reason_map_adapt.find(result);
+    if (it != reason_map_adapt.end()) {
+        return it->second;
+    } else {
+        return "Unknown reason, code: " + std::to_string(result);
+    }
+}
 //-------------------------------------------------------------------------------------------------
 
 
@@ -294,7 +319,14 @@ std::shared_ptr<NWQSim::VQE::VQEState> optimize_ansatz(const VQEBackendManager& 
                      double& fval) {
   // Set the callback function (silent is default)
   // NWQSim::VQE::Callback callback = (params.adapt ? silent_callback_function : callback_function); // MZ: sorry, original callback function is too much
-  NWQSim::VQE::Callback callback = (params.adapt ? silent_callback_function : callback_function_simple); // MZ: sorry, original callback function is too much
+  // NWQSim::VQE::Callback callback = (params.adapt ? silent_callback_function : callback_function_simple); 
+  NWQSim::VQE::Callback callback;
+  if ( (params.adapt) || (!params.verbose) ) {
+    callback = silent_callback_function;
+  } else {
+    callback = callback_function_simple;
+  }
+  
   std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(params.backend,
                                                                            params.config,
                                                                            ansatz, 
@@ -353,14 +385,14 @@ int main(int argc, char** argv) {
   if (parse_args(argc, argv, manager, params)) {
     return 1;
   }
-#ifdef MPI_ENABLED
-  int i_proc;
-  if (params.backend == "MPI" || params.backend == "NVGPU_MPI")
-  {
-    MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &i_proc);
-}
-#endif
+  #ifdef MPI_ENABLED
+    int i_proc;
+    if (params.backend == "MPI" || params.backend == "NVGPU_MPI")
+    {
+      MPI_Init(&argc, &argv);
+      MPI_Comm_rank(MPI_COMM_WORLD, &i_proc);
+  }
+  #endif
 
   // Get the Hamiltonian from the external file
   manager.safe_print("Reading Hamiltonian...\n");
@@ -404,7 +436,12 @@ int main(int argc, char** argv) {
   manager.safe_print("%lld Gates with %lld parameters\n" ,ansatz->num_gates(), ansatz->numParams());
   std::vector<double> x;
   double fval;
-  manager.safe_print("Beginning VQE loop...\n");
+  if (params.adapt) {
+    manager.safe_print("Beginning ADAPT-VQE loop...\n");
+  } else {
+    manager.safe_print("Beginning VQE loop...\n");
+  }
+  
 
   // Print out the Fermionic operators with their excitations                                        
   // std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters();  // MZ: comment out for better printing
@@ -442,9 +479,18 @@ int main(int argc, char** argv) {
     manager.safe_print("Commutator Time (ADAPT): %d hrs %d mins %.4f secs\n", comm_hours, comm_minutes, comm_seconds);
   }
     manager.safe_print("Circuit Stats          : %lld operators, %lld parameters, and %lld Gates\n" , ansatz->numOps(), ansatz->numParams(), ansatz->num_gates()); // MZ: don't want to scroll all the way up to see this
-    std::string ter_rea = "Optimization terminated: "+get_termination_reason(opt_info->get_optresult())+"\n";
+    std::string ter_rea;
+    if (params.adapt) {
+      ter_rea = "Optimization terminated: "+get_termination_reason_adapt(opt_info->get_adaptresult())+"\n";
+    } else {
+      ter_rea = "Optimization terminated: "+get_termination_reason(opt_info->get_optresult())+"\n";
+    }
     manager.safe_print(ter_rea.c_str());
-    manager.safe_print("# function eval.       : %d\n", opt_info->get_numevals());
+    if (params.adapt) {
+      manager.safe_print("# ADAPT rounds         : %d\n", opt_info->get_adaptrounds()); //MZ: ADAPT round
+    } else {
+      manager.safe_print("# function eval.       : %d\n", opt_info->get_numevals());
+    }
     manager.safe_print("Evaluation Time        : %d hrs %d mins %.4f secs\n", hours, minutes, seconds);
     manager.safe_print("Final objective value  : %.16f\nFinal parameters:\n", fval); 
     for (auto& pair: param_map) {                                                                       

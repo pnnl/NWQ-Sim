@@ -164,10 +164,14 @@ virtual void fill_obslist(IdxType index) override {
       virtual void optimize(std::vector<ValType>& parameters, ValType& final_ene) override {
           nlopt::opt optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
           optimizer.set_min_objective(nl_opt_function, (void*)this);
-          std::vector<double> lower_bounds(ansatz->numParams(), -2 * PI);
-          std::vector<double> upper_bounds(ansatz->numParams(), 2 * PI);
-          optimizer.set_lower_bounds(lower_bounds);
-          optimizer.set_upper_bounds(upper_bounds);
+          // std::vector<double> lower_bounds(ansatz->numParams(), -2 * PI); // MZ: this is 100% error
+          // std::vector<double> upper_bounds(ansatz->numParams(), 2 * PI); // MZ: this is 100% error
+          // std::vector<double> lower_bounds(ansatz->numParams(), optimizer_settings.lbound); // MZ: need someone test it
+          // std::vector<double> upper_bounds(ansatz->numParams(), optimizer_settings.ubound); // MZ: need someone test it
+          // optimizer.set_lower_bounds(lower_bounds);
+          // optimizer.set_upper_bounds(upper_bounds);
+          optimizer.set_lower_bounds(optimizer_settings.lbound); // MZ: use the overload since bounds for all parameters are the same (https://nlopt.readthedocs.io/en/latest/NLopt_C-plus-plus_Reference/#bound-constraints)
+          optimizer.set_upper_bounds(optimizer_settings.ubound); // MZ: same as above
           // Set the termination criteria
           optimizer.set_maxeval(optimizer_settings.max_evals);
           optimizer.set_maxtime(optimizer_settings.max_time);

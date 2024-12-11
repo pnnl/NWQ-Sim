@@ -72,3 +72,10 @@ You need to
 
 Use `generate_fermionic_excitations()` in `vqe/src/ansatz_pool.cpp` ~~`vqe/src/utils.cpp`~~ as an example.
 
+
+## Change things related to NLOPT optimizer
+
+Note that three are three `optimize()` functions:
+    1. `vqe/include/vqe_state.hpp`
+    2. `vqe/include/svsim_vqe/sv_mpi_vqe.hpp`
+    3. `vqe/include/svsim_vqe/sv_cuda_mpi_vqe.cuh`
