@@ -20,8 +20,6 @@ namespace NWQSim
       return (real * real + imag * imag);
     }
 
-    
-
     // callback function for printing updates to terminal
     typedef std::function<void(const std::vector<ValType>& x, ValType ene, IdxType iter)> Callback;
 

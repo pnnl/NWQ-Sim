@@ -86,6 +86,11 @@ NWQ-VQE uses the [NLOpt](https://nlopt.readthedocs.io/en/latest/) library for op
 --stopval             Cutoff function value for optimizer. Defaults to -MAXFLOAT (off)
 ```
 
+Following are the options to set circuit simulation backend related parameters:
+```shell
+--num_threads         Specify the number of OMP threads. Defaults to use all hardware threads.
+--disable_fusion      Disable gate fusion. Defaults to enabled.
+```
 
 To run the $\mathrm{H_4}$ example using command line, run:
 ```shell

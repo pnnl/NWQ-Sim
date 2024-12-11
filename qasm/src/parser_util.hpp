@@ -63,6 +63,7 @@ const string GATE("GATE");
 const string IF("IF");
 const string MEASURE("MEASURE");
 const string BARRIER("BARRIER");
+const string MODIFY_NOISE("MODIFY_NOISE");
 
 struct qasm_gate
 {
@@ -82,6 +83,11 @@ struct qasm_gate
     IdxType if_offset;
     IdxType if_creg_val;
     vector<qasm_gate> *conditional_inst;
+
+    // Fields used for modify noise operations
+    string mod_type = "";
+    string noise_name = "";
+    ValType noise_value = 0;
 };
 
 struct defined_gate
@@ -333,8 +339,8 @@ int get_index(vector<string> vec, string target);
  */
 void print_counts(map<string, IdxType> *counts, IdxType repetition);
 
-char *getCmdOption(char **begin, char **end, const std::string &option);
-bool cmdOptionExists(char **begin, char **end, const std::string &option);
+// char *getCmdOption(char **begin, char **end, const std::string &option);
+// bool cmdOptionExists(char **begin, char **end, const std::string &option);
 
 /************************** IMPLEMENTATION OF UTILITY FUNCTIONS **************************/
 
@@ -374,17 +380,17 @@ void print_counts(map<string, IdxType> *counts, IdxType repetition)
     }
 }
 
-char *getCmdOption(char **begin, char **end, const string &option)
-{
-    char **itr = find(begin, end, option);
-    if (itr != end && ++itr != end)
-    {
-        return *itr;
-    }
-    return 0;
-}
+// char *getCmdOption(char **begin, char **end, const string &option)
+// {
+//     char **itr = find(begin, end, option);
+//     if (itr != end && ++itr != end)
+//     {
+//         return *itr;
+//     }
+//     return 0;
+// }
 
-bool cmdOptionExists(char **begin, char **end, const string &option)
-{
-    return find(begin, end, option) != end;
-}
+// bool cmdOptionExists(char **begin, char **end, const string &option)
+// {
+//     return find(begin, end, option) != end;
+// }

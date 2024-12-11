@@ -19,13 +19,13 @@
 #include <cstring>
 #include <algorithm>
 
-#include "../private/config.hpp"
+#include "../config.hpp"
 #include "../circuit.hpp"
 #include "../nwq_util.hpp"
 
 #include "../private/sim_gate.hpp"
-#include "../private/gate_factory/sv_gates.hpp"
-#include "../private/gate_factory/dm_gates.hpp"
+#include "../private/gate_factory/sv_gate.hpp"
+#include "../private/gate_factory/dm_gate.hpp"
 
 #define vec_dim_1q(sim_type) (sim_type == SimType::SV ? 2 : 4)
 #define vec_dim_2q(sim_type) (sim_type == SimType::SV ? 4 : 16)

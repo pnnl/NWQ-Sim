@@ -7,6 +7,7 @@
 #include "src/uccsdmin.cpp"
 #include "src/singletgsd.cpp"
 #include "src/ansatz_pool.cpp" // MZ: move the ansatz pool generation out of the src/utils.cpp
+#include "nwq_util.hpp"
 #include <chrono>
 
 #define UNDERLINE "\033[4m"
@@ -26,7 +27,6 @@ struct VQEParams {
 
   // Simulator options
   std::string backend = "CPU";
-  std::string config = "../default_config.json";
   uint32_t seed;
   // Optimizer settings
   NWQSim::VQE::OptimizerSettings optimizer_settings;
@@ -84,6 +84,9 @@ int show_help() {
   std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme. (Deprecated, true by default)" << std::endl;
   std::cout << "--origin              Use old implementatin of UCCSD for VQE or ADAPT-VQE. Have duplicated operators and potential symmetry problem. Default to false." << std::endl;
   std::cout << "-n                    (Same as -p or --nparticules) Number of electrons in molecule" << std::endl; // MZ: this could be confusing as people usually use n for number of qubits (2*number of spartial orbitals)
+  std::cout << UNDERLINE << "SIMULATOR OPTIONS" << CLOSEUNDERLINE << std::endl;
+  std::cout << "--num_threads         Specify the number of OMP threads. Defaults to use all hardware threads" << std::endl;
+  std::cout << "--disable_fusion      Disable gate fusion. Defaults to enabled" << std::endl;
   return 1;
 }
 
@@ -102,7 +105,6 @@ int parse_args(int argc, char** argv,
                VQEBackendManager& manager,
                VQEParams& params) {
   std::string opt_config_file = "";
-  params.config = "../default_config.json";
   std::string algorithm_name = "LN_COBYLA";
   NWQSim::VQE::OptimizerSettings& settings = params.optimizer_settings;
   params.seed = time(NULL);
@@ -139,9 +141,6 @@ int parse_args(int argc, char** argv,
       params.xacc = true;
     } else if (argname == "--ducc") {
       params.xacc = false;
-    } else 
-    if (argname == "--config") {
-      params.config = argv[++i];
     } else 
     if (argname == "--opt-config") {
       opt_config_file = argv[++i];
@@ -190,6 +189,10 @@ int parse_args(int argc, char** argv,
       params.pool = NWQSim::VQE::PoolType::Singlet_GSD;
     } else if (argname == "--origin") {
       params.pool = NWQSim::VQE::PoolType::Fermionic_Origin;
+    } else if (argname == "--num_threads") {
+      NWQSim::Config::OMP_NUM_THREADS = std::atoi(argv[++i]);
+    } else if (argname == "--disable_fusion") {
+      NWQSim::Config::ENABLE_FUSION = false;
     } else {
       fprintf(stderr, "\033[91mERROR:\033[0m Unrecognized option %s, type -h or --help for a list of configurable parameters\n", argv[i]);
       return show_help();
@@ -328,7 +331,6 @@ std::shared_ptr<NWQSim::VQE::VQEState> optimize_ansatz(const VQEBackendManager& 
   }
   
   std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(params.backend,
-                                                                           params.config,
                                                                            ansatz, 
                                                                            hamil, 
                                                                            params.algo, 
@@ -364,7 +366,12 @@ std::shared_ptr<NWQSim::VQE::VQEState> optimize_ansatz(const VQEBackendManager& 
     state -> set_duration(optimization_time); // MZ: time the optimization
     state -> set_numpauli(adapt_instance.get_numpauli()); // MZ: get the number of Pauli terms
     state -> set_numcomm(adapt_instance.get_numcomm()); // MZ: get the number of commuting cliques
-    
+//     double commutator_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_commutators - start_time).count() / 1e9;
+//     NWQSim::safe_print("Constructed ADAPT-VQE Commutators in %.2e seconds\n", commutator_time); // Report the commutator overhead
+//     adapt_instance.optimize(x, fval, params.adapt_maxeval, params.adapt_gradtol, params.adapt_fvaltol); // MAIN OPTIMIZATION LOOP
+//     auto end_optimization = std::chrono::high_resolution_clock::now();
+//     double optimization_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_optimization - end_commutators ).count() / 1e9;
+//     NWQSim::safe_print("Completed ADAPT-VQE Optimization in %.2e seconds\n", optimization_time); // Report the total time
   } else {
     state->initialize(); // Initialize the state (AKA allocating measurement data structures and building the measurement circuit)
 
@@ -395,7 +402,7 @@ int main(int argc, char** argv) {
   #endif
 
   // Get the Hamiltonian from the external file
-  manager.safe_print("Reading Hamiltonian...\n");
+  NWQSim::safe_print("Reading Hamiltonian...\n");
   std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(params.hamiltonian_path, 
                                                                                                params.nparticles,
                                                                                                params.xacc);
@@ -433,7 +440,7 @@ int main(int argc, char** argv) {
   }
   ansatz->buildAnsatz();
 
-  manager.safe_print("%lld Gates with %lld parameters\n" ,ansatz->num_gates(), ansatz->numParams());
+  NWQSim::safe_print("%lld Gates with %lld parameters\n" ,ansatz->num_gates(), ansatz->numParams());
   std::vector<double> x;
   double fval;
   if (params.adapt) {
@@ -441,7 +448,12 @@ int main(int argc, char** argv) {
   } else {
     manager.safe_print("Beginning VQE loop...\n");
   }
-  
+
+//   // Print out the Fermionic operators with their excitations
+//   std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters();
+//   NWQSim::safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters:\n", fval);
+//   for (auto& pair: param_map) {
+//     NWQSim::safe_print("%s :: %e\n", pair.first.c_str(), pair.second);
 
   // Print out the Fermionic operators with their excitations                                        
   // std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters();  // MZ: comment out for better printing

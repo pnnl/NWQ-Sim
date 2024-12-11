@@ -40,7 +40,7 @@ follow these steps:
 
 .. code:: bash
 
-   git clone https://github.com/pnnl/NWQ-Sim.git
+   git clone --recursive https://github.com/pnnl/NWQ-Sim.git
    cd NWQ-Sim
 
 2. Create a build directory and navigate into it:
@@ -54,7 +54,7 @@ follow these steps:
 
 .. code:: bash
 
-   cmake ..
+   cmake .. -DCMAKE_BUILD_TYPE=Release
    make -j4
 
 Build on HPC Systems
@@ -98,7 +98,7 @@ Follow these steps to build NWQ-Sim on the OLCF Frontier HPC:
 
 .. code:: bash
 
-   cmake ..
+   cmake .. -DCMAKE_BUILD_TYPE=Release
 
 4. (ISSUE) Default clang++ compiler on Frontier HPC produces
    slow-running code. hipcc improves performance but can’t be set
@@ -138,7 +138,8 @@ Follow these steps to build NWQ-Sim on the OLCF Summit HPC:
 
    tar -xf nvshmem_src_2.9.0-2.tar.xz
 
--  Replace the mem.cpp file in nvshmem_src
+-  For NVSHMEM version older than 2.10, replace the mem.cpp file in
+   nvshmem_src
 
 .. code:: bash
 
@@ -152,6 +153,8 @@ Follow these steps to build NWQ-Sim on the OLCF Summit HPC:
    cp ~/NWQ-Sim/nvshmem_util/scripts/build_nvshmem_summit.sh ~/nvshmem_src_2.9.0-2/
    cd ~/nvshmem_src_2.9.0-2
    ./build_nvshmem_summit.sh
+
+Note, the current bootstrape of nvshmem on Summit requires gcc 9 or 10.
 
 Finally, build NWQ-Sim using the steps in `Build from
 Source <#build_base>`__
@@ -171,27 +174,46 @@ Follow these steps to build NWQ-Sim on the NERSC Perlmutter HPC:
 
 -  Download and extract the NVSHMEM txz archive from
    `here <https://developer.download.nvidia.com/compute/redist/nvshmem/>`__.
-   For example, to download and extract NVSHMEM 2.9.0:
+   For example, to download and extract NVSHMEM 2.11.0:
 
 .. code:: bash
 
-   wget https://developer.download.nvidia.com/compute/redist/nvshmem/2.9.0/source/nvshmem_src_2.9.0-2.tar.xz
+   wget https://developer.download.nvidia.com/compute/redist/nvshmem/2.11.0/source/nvshmem_src_2.11.0-5.txz
 
-   tar -xf nvshmem_src_2.9.0-2.tar.xz
+   tar -xf nvshmem_src_2.11.0-5.txz
 
--  Replace the mem.cpp file in nvshmem_src
-
-.. code:: bash
-
-   cp ~/NWQ-Sim/nvshmem_util/mem.cpp ~/nvshmem_src_2.9.0-2/src/mem/mem.cpp
-
--  Copy the provided NVSHMEM build script to nvshmem_src folder and then
-   build it
+-  Find the mem.cpp file in nvshmem_src in
 
 .. code:: bash
 
-   cp ~/NWQ-Sim/nvshmem_util/scripts/build_nvshmem_perlmutter.sh ~/nvshmem_src_2.9.0-2/
-   cd ~/nvshmem_src_2.9.0-2
+   nvshmem_src_2.11.0-5/src/host/mem/mem.cpp
+
+Comment out the line (line 41)
+
+.. code:: c
+
+   #include "common/nvshmem_common_ibgda.h"
+
+-  Copy the provided NVSHMEM build script to nvshmem_src folder
+
+.. code:: bash
+
+   cp ~/NWQ-Sim/nvshmem_util/scripts/build_nvshmem_perlmutter.sh ~/nvshmem_src_2.11.0-5/
+   cd ~/nvshmem_src_2.11.0-5
+
+add the following configurations into the build file
+“build_nvshmem_perlmutter.sh” before the cmake command.
+
+.. code:: bash
+
+   export NVSHMEM_IBGDA_SUPPORT=0
+   export NVSHMEM_IBRC_SUPPORT=0
+   export NVSHMEM_IBDEVX_SUPPORT=0
+
+-  Compile and build NVSHMEM
+
+.. code:: bash
+
    ./build_nvshmem_perlmutter.sh
 
 Finally, build NWQ-Sim using the steps in `Build from
@@ -221,19 +243,31 @@ program runtime.
 **Location:** Navigate to the ``build`` directory in your local project
 workspace.
 
-**Execution:** Run the executable program with the desired command-line
-arguments to adjust program behaviors as needed. Here is a comprehensive
-list of the command-line arguments:
+**Execution:**
 
--  ``-q``: Executes a simulation with the given QASM file.
+Run the executable program with the desired command-line arguments to
+adjust program behaviors as needed. Below is a comprehensive list of the
+command-line arguments:
 
--  ``-t <index>``: Runs the testing benchmarks for the specific index
-   provided.
+-  ``-q, --qasm_file <FILE_PATH>``: Executes a simulation using the
+   provided QASM file.
 
--  ``-a``: Runs all testing benchmarks.
+-  ``--qasm_string <STR>``: Executes a simulation using the provided
+   QASM string.
 
--  ``-backend list``: Lists all the available backends. The list of
-   available backends are:
+-  ``-j, --json_file <FILE_PATH>``: Executes simulation using the
+   provided JSON file (Qiskit Qobj format).
+
+-  ``--json_string <STR>``: Executes simulation using the provided JSON
+   string (Qiskit Qobj format).
+
+-  ``-t, --test <INT>``: Runs the testing benchmarks for the specific
+   index provided.
+
+-  ``-a, --all_tests``: Runs all available testing benchmarks.
+
+-  ``--backend_list``: Lists the available backends on the current
+   platform. The complete list of available backends are:
 
    -  CPU
    -  OpenMP
@@ -242,37 +276,133 @@ list of the command-line arguments:
    -  NVGPU_MPI
    -  AMDGPU
 
--  ``-backend <name>``: Sets the backend for your program to the
+-  ``-b, --backend <BACKEND>``: Sets the backend for your program to the
    specified one. The backend name string is case-insensitive.
 
--  ``-shots <value>``: Configures the total number of shots.
+-  ``-s, --shots <SHOTS>``: Configures the total number of shots.
 
--  ``-basis``: Activates the program to run benchmark circuits using
+-  ``--disable_fusion``: Disables gate fusion during simulation.
+
+-  ``--basis``: Activates the program to run benchmark circuits using
    only basis gates.
 
--  ``-sim <method>``: Sets the simulation method. There are two
-   available options:
+-  ``--sim <METHOD>``: Sets the simulation method. Available options:
 
-   -  ``sv``: Stochastic Vector simulation.
-   -  ``dm``: Density Matrix simulation. Please note, when running with
-      ``dm``, the given circuit can only contain IBM basis gates and
-      2-qubit gates that are included in the device configuration file
-      specified in the default_configuration.json file.
+   -  ``sv``: Statevector simulation.
+   -  ``dm``: Density Matrix simulation. When using ``dm``, the given
+      circuit must contain only IBM basis gates and 2-qubit gates that
+      are included in the device configuration file specified passed
+      with ``--device``.
+
+-  ``--random_seed <INT>``: Sets the random seed for the simulation.
+
+-  ``-v, --verbose``: Enables verbose simulation trace.
+
+-  ``--device <FILE_PATH>``: Sets the path to a device configuration
+   JSON file for density matrix simulation. This automatically selects
+   the Density Matrix simulator.
+
+-  ``--layout <FILE_PATH>``: Specifies the path to a JSON file mapping
+   logical qubits to physical qubits.
+
+-  ``--layout_str <STR>``: Specifies a string format mapping logical
+   qubits to physical qubits.
+
+-  ``-h, --help``: Prints the help message.
+
+-  ``-f, --fidelity``: Calculates the fidelity resulting from quantum
+   noise channels. **Notes**:
+
+   -  This runs **both** the Statevector and Density Matrix simulators,
+      so the given circuit must contain only IBM basis gates and 2-qubit
+      gates that are passed with ``--device``.
+   -  Make sure a device noise profile is provided with ``--device``,
+      otherwise, the fidelity will always be 1 (useful for debugging).
+   -  If running with ``-backend NVGPU_MPI``, the Statevector simulator
+      will only run on the root node, while the Density Matrix simulator
+      will run on all nodes.
+
+-  ``--metrics``: Prints the metrics of the executed circuit.
+
+-  ``--init_file <FILE_PATH>``: Specifies the path to the initial state
+   file.
+
+-  ``--init_format <FILE_PATH>``: Specifies the format of the initial
+   state - Statevector or Density Matrix.
+
+-  ``--dump_file <FILE_PATH>``: Specifies the path to dump the binary
+   statevector or density matrix result.
+
+-  ``--hw_tensorcore``: Enables the use of Tensor Cores on Nvidia GPUs.
+
+-  ``--hw_matrixcore``: Enables the use of MatrixCore hardware on AMD
+   GPUs.
+
+-  ``--hw_threads <INT>``: Specifies the number of OpenMP threads to
+   use.
+
+-  ``--hw_avx512``: Enables the use of AVX512 hardware instructions.
 
 **Example Usage:** To run the qasm frontend from the ``build`` directory
 with a specific backend, a total number of shots, and a simulation
 method, use the following command:
 
-::
+.. code:: bash
 
-   ./qasm/nwq_sim -backend <name> -shots <value> -sim <method> -q <path/to/qasm>
+   ./qasm/nwq_qasm --backend <name> --shots <value> --sim <method> -q <path/to/qasm>
 
 Replace ``<name>``, ``<value>``, ``<method>``, and ``<path/to/qasm>``
 with your desired backend name, number of shots, and simulation method
 respectively.
 
-Please ensure that you replace ``/qasm/nwq_sim`` with the actual name of
-your compiled executable file if not using the qasm frontend.
+Please ensure that you replace ``/qasm/nwq_qasm`` with the actual name
+of your compiled executable file if not using the qasm frontend.
+
+To compute the fidelity, add the ``-fidelity`` flag (with an optional
+device JSON path):
+
+.. code:: bash
+
+   ./qasm/nwq_qasm --backend <name> --shots <value> --sim <method> -q <path/to/qasm> --fidelity --device <path/to/device_json>
+
+**Legacy Flag Options**
+
+The following options were part of earlier versions of NWQ-Sim and are
+still supported for backward compatibility. The primary changes include
+switching from single dashes (``-``) to double dashes (``--``) for long
+flags, and some argument names have been updated for better clarity. It
+is recommended to use the updated flags where applicable, but these
+legacy options will continue to function:
+
+-  ``-qs``: Equivalent to ``--qasm_string``.
+
+-  ``-js``: Equivalent to ``--json_string``.
+
+-  ``-metrics``: Equivalent to ``--metrics``.
+
+-  ``-initial``: Equivalent to ``--init_file``.
+
+-  ``-initial-format``: Equivalent to ``--init_format``.
+
+-  ``-dump``: Equivalent to ``--dump_file``.
+
+-  ``-layout``: Equivalent to ``--layout``.
+
+-  ``-layout-string``: Equivalent to ``--layout_str``.
+
+-  ``-device``: Equivalent to ``--device``.
+
+-  ``-backend``: Equivalent to ``--backend`` or ``-b``.
+
+-  ``-backend_list``: Equivalent to ``--backend_list``.
+
+-  ``-shots``: Equivalent to ``--shots`` or ``-s``.
+
+-  ``-sim``: Equivalent to ``--sim``.
+
+-  ``-basis``: Equivalent to ``--basis``.
+
+-  ``-fidelity``: Equivalent to ``--fidelity`` or ``-f``.
 
 Running on Frontier HPC
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -288,7 +418,13 @@ Launch multi-CPU execution for regular or interactive jobs:
 
 .. code:: bash
 
-   srun -N<nodes> -n<CPUS> ./qasm/nwq_sim <NWQ-Sim Command> -backend MPI
+   srun -N <nodes> -n <CPUS> ./qasm/nwq_qasm <NWQ-Sim Command> --backend MPI
+
+For example:
+
+.. code:: bash
+
+   srun -N 4 -n 32 ./qasm/nwq_qasm --backend MPI -q ../data/openqasm/adder_n28.qasm
 
 Running on Summit HPC
 ~~~~~~~~~~~~~~~~~~~~~
@@ -304,7 +440,15 @@ Launch multi-GPU execution for regular or interactive jobs:
 
 .. code:: bash
 
-   jsrun -n<GPUS> -a1 -g1 -c1 -brs <NWQ-Sim Command> -backend NVGPU_MPI
+   jsrun -n<GPUS> -a1 -g1 -c1 -brs <NWQ-Sim Command> --backend NVGPU_MPI
+
+When using multi-nodes, nvshmem requires the same number of PEs for all
+nodes. Since each Summit node has 6 GPUs, we need to specify 4 per
+nodes. An example is given in the following:
+
+.. code:: bash
+
+   jsrun -n 64 -a1 -g1 -c1 -r4 ./qasm/nwq_qasm -q ../data/openqasm/bv_n14.qasm --backend NVGPU_MPI
 
 Replace with the total number of GPUs, and with the NWQ-Sim execution
 command.
@@ -312,7 +456,7 @@ command.
 Running on Perlmutter HPC
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To run NWQ-Sim on the Perlmutter Supercomputer, initilize the
+To run NWQ-Sim on the Perlmutter Supercomputer, initialize the
 environment first
 
 .. code:: bash
@@ -323,7 +467,7 @@ Launch multi-GPU execution for regular or interactive jobs:
 
 .. code:: bash
 
-   srun -C gpu -N <NODES> -n <GPUS> -c 1 --gpus-per-task=1 --gpu-bind=single:1 <NWQ-Sim Command> -backend NVGPU_MPI
+   srun -C gpu -N <NODES> -n <GPUS> -c 1 --gpus-per-task=1 --gpu-bind=single:1 <NWQ-Sim Command> --backend NVGPU_MPI
 
 Replace ``<NODES>`` with the number of compute nodes, ``<GPUS>`` with
 the total number of GPUs, and ``<NWQ-Sim Command>`` with the NWQ-Sim
@@ -344,9 +488,139 @@ execute:
 
 .. code:: bash
 
-   aprun -n <NODES> -N 1 <NWQ-Sim Command> -backend MPI
+   aprun -n <NODES> -N 1 <NWQ-Sim Command> --backend MPI
 
 Replace ``<NODES>`` with the number of compute nodes
+
+Noise Model Update API
+----------------------
+
+This API allows you to dynamically update the noise model in a quantum
+circuit using special commands within your QASM file. The API supports
+operations to scale, set, or reset various noise parameters for specific
+qubits or gates.
+
+Syntax
+~~~~~~
+
+``MODIFY_NOISE`` ``<OP_TYPE>`` ``<NOISE_TYPE>`` ``<VALUE>``
+``<TARGET>``;
+
+-  **``MODIFY_NOISE``**: The keyword that indicates a noise update
+   operation.
+-  **``<OP_TYPE>``**: The type of operation to perform on the noise
+   parameter. Available operations:
+
+   -  ``SCALE``: Scale the existing noise parameter by the provided
+      value.
+   -  ``SET``: Set the noise parameter to the provided value.
+   -  ``RESET``: Reset the noise parameter to its default value (in this
+      case, ``<VALUE>`` is omitted).
+
+-  **``<NOISE_TYPE>``**: The type of noise to update. Supported noise
+   types:
+
+   -  ``T1``: Relaxation time for qubits.
+   -  ``T2``: Dephasing time for qubits.
+   -  ``<ACTUAL_GATE>_LEN``: Duration of a specific quantum gate
+      operation (e.g., ``CX_LEN`` for a CX gate).
+   -  ``<ACTUAL_GATE>_ERR``: Error rate of a specific quantum gate
+      (e.g., ``CX_ERR`` for a CX gate).
+   -  ``READOUT_LEN``: Duration of the qubit measurement process.
+   -  ``READOUT_M0P1``: Probability of measurement error when preparing
+      in state ``|1⟩`` and measuring ``|0⟩``.
+   -  ``READOUT_M1P0``: Probability of measurement error when preparing
+      in state ``|0⟩`` and measuring ``|1⟩``.
+
+-  **``<VALUE>``**: The value to scale or set the noise parameter to.
+   This is a floating-point number and is omitted for the ``RESET``
+   operation.
+-  **``<TARGET>``**: The target qubits or gate for the operation:
+
+   -  For single-qubit noise parameters (``T1``, ``T2``,
+      ``READOUT_LEN``, etc.), you can specify multiple qubits, such as
+      ``q[0], q[1], q[3]``, or a qubit register such as ``q``, to apply
+      the operation to all associated qubits.
+   -  For gate-related noise parameters (e.g., ``CX_LEN``, ``CX_ERR``),
+      specify the target gate with two directional qubits (e.g.,
+      ``q[0], q[1]``).
+
+Examples
+~~~~~~~~
+
+1. **Scaling T1 Time for Qubits 0 and 1**
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This command scales the T1 relaxation time of qubits 0 and 1 by a factor
+of 1.2:
+
+::
+
+   MODIFY_NOISE SCALE T1 1.2 q[0], q[1];
+
+2. **Setting Gate Error for a CX Gate between Qubits 0 and 1**
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This command sets the error rate of the CX gate between qubit 0 and
+qubit 1 to 0.01:
+
+::
+
+   MODIFY_NOISE SET CX_ERR 0.01 q[0], q[1];
+
+3. **Resetting the Readout Length for Qubit 1**
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This command resets the readout length (measurement time) for qubit 1 to
+the default value:
+
+::
+
+   MODIFY_NOISE RESET READOUT_LEN q[1];
+
+4. **Scaling the CX Gate Length between Qubits 0 and 1**
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This command scales the CX gate duration between qubit 0 and qubit 1 by
+a factor of 1.1:
+
+::
+
+   MODIFY_NOISE SCALE CX_LEN 1.1 q[0], q[1];
+
+5. **Setting the Readout Error (M0P1) for Qubits 0, 1, and 3**
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This command sets the readout error for qubits 0, 1, and 3 when
+preparing in state ``|1⟩`` and measuring ``|0⟩`` to 0.02:
+
+::
+
+   MODIFY_NOISE SET READOUT_M0P1 0.02 q[0], q[1], q[3];
+
+Error Handling
+~~~~~~~~~~~~~~
+
+-  **Invalid Noise Type**: If an unsupported ``<NOISE_TYPE>`` is
+   specified, an error will be raised.
+-  **Invalid Operation Type**: Only ``SCALE``, ``SET``, and ``RESET``
+   operations are supported.
+
+Notes
+~~~~~
+
+-  **Directional Gates**: For two-qubit gates, ensure that the qubits
+   are specified in the correct order, as gates like ``CX q[0], q[1]``
+   and ``CX q[1], q[0]`` represent different operations.
+-  **Precision**: The ``<VALUE>`` for ``SCALE`` and ``SET`` operations
+   is treated as a floating-point number and can represent very small or
+   large adjustments.
+-  **Multiple Qubits**: You can specify multiple qubits in one operation
+   for single-qubit noise parameters (e.g., ``q[0], q[1], q[3]``). You
+   can also use a qubit register to target all qubits associated with
+   it.
+-  **Case Insensitivity**: The API is case-insensitive, so both
+   uppercase and lowercase commands are valid.
 
 NWQ-Sim for Chemistry Simulations
 ---------------------------------
@@ -466,3 +740,69 @@ effectiveness of the approach.
 Please note, this is an example; actual results may vary based on the
 specific quantum chemistry problem and the precision of your
 Hamiltonian.
+
+C++ Tutorial
+------------
+
+1. Essential Libraries
+~~~~~~~~~~~~~~~~~~~~~~
+
+Include the necessary libraries at the beginning of your program.
+
+.. code:: cpp
+
+   #include "include/backendManager.hpp"
+   #include "include/state.hpp"
+   #include "include/circuit.hpp"
+   #include "include/nwq_util.hpp"
+
+2. Building the Quantum Circuit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Construct your quantum circuit with the provided functions. The gate
+
+.. code:: cpp
+
+   // Create a circuit with 2 qubits
+   int n_qubits = 2;
+   auto circuit = std::make_shared<Circuit>(n_qubits);
+
+   // Add some gates to the circuit
+   circuit->H(0);
+   circuit->CX(0, 1);
+   circuit->RZ(0.125, 0);
+
+3. Preparing the Quantum State
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Set up the quantum state simulation backend.
+
+.. code:: cpp
+
+   std::string backend = "CPU";
+   std::string sim_method = "sv";
+   auto state = BackendManager::create_state(backend, n_qubits, sim_method);
+
+4. Running The Simulation and Gathering Results
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Finally, you can run your quantum circuit with your prepared state and
+gather the results. The measurement operation can be added in circuit or
+can be directly called from state.
+
+.. code:: cpp
+
+   // Add measurement operation to circuit then simulate
+   int shots = 1024;
+   circuit->MA(shots);
+   state->sim(circuit);
+   long long int *result = state->get_results();
+
+or
+
+.. code:: cpp
+
+   // Simulate and then directly sample from state
+   int shots = 1024;
+   state->sim(circuit);
+   long long int *result = state->measure_all(shots);

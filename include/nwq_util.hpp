@@ -6,7 +6,12 @@
 #include <vector>
 #include <chrono>
 #include <iomanip>
+#include <cstdarg>
+#include <cstdio>
 
+#ifdef MPI_ENABLED
+#include <mpi.h>
+#endif
 /***********************************************
  * Constant configuration:
  ***********************************************/
@@ -73,21 +78,21 @@ namespace NWQSim
                   << " Remaining: " << formatDuration(std::chrono::seconds(remaining)) << "\033[0m  \r";
         std::cout.flush();
     }
-    inline 
-    uint64_t swapBits (uint64_t n, uint64_t p1, uint64_t p2) {
+    inline uint64_t swapBits(uint64_t n, uint64_t p1, uint64_t p2)
+    {
 
         /* Move p1'th to rightmost side */
-        uint64_t bit1 =  (n >> p1) & 1;
-    
+        uint64_t bit1 = (n >> p1) & 1;
+
         /* Move p2'th to rightmost side */
-        uint64_t bit2 =  (n >> p2) & 1;
-    
+        uint64_t bit2 = (n >> p2) & 1;
+
         /* XOR the two bits */
         uint64_t x = (bit1 ^ bit2);
-    
+
         /* Put the xor bit back to their original positions */
         x = (x << p1) | (x << p2);
-    
+
         /* XOR 'x' with the original number so that the
         two sets are swapped */
         uint64_t result = n ^ x;
@@ -183,5 +188,29 @@ namespace NWQSim
     inline ValType randomval()
     {
         return (ValType)std::rand() / (ValType)RAND_MAX;
+    }
+
+    static void safe_print(const char *format, ...)
+    {
+        va_list args;
+        va_start(args, format);
+
+#ifdef MPI_ENABLED
+        int flag;
+        MPI_Initialized(&flag);
+        if (flag)
+        {
+            int rank;
+            MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+            if (rank == 0)
+                vprintf(format, args);
+        }
+        else
+            vprintf(format, args);
+
+#else
+        vprintf(format, args);
+#endif
+        va_end(args);
     }
 } // namespace NWQSim
