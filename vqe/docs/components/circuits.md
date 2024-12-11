@@ -1,4 +1,4 @@
-# Ansatzë
+# Ansätze
 Here we describe the `Ansatz` base class and its core data structures, as well as the `UCCSD` subclass.
 
 ## Ansatz Base Class
@@ -14,9 +14,9 @@ class Ansatz: public Circuit {
     std::unordered_map<std::string, IdxType> excitation_index_map;
 ```
 
-The Ansatz constructor only requires the number of qubits: `Ansatz(IdxType n_qubits)`. However, after construction the Ansatz requires a call to `buildAnsatz`. For example:
+The Ansatz constructor only requires the number of qubits: `Ansatz(IdxType n_qubits)`. However, after construction, the Ansatz requires a call to `buildAnsatz`. For example:
 ```c++
-UCCSD test_ansatz(10); // 10 qubit UCCSD
+UCCSD test_ansatz(10);  // 10 qubit UCCSD
 test_ansatz.buildAnsatz();
 ```
 The separate call is used by some Ansatz subclasses (namely `DynamicAnsatz`) to build the circuit after some initial step, such as setting the operator pool. 
@@ -39,9 +39,9 @@ This is how symmetry groups are explicitly implemented, explained in the UCCSD s
 5. `std::unordered_map<std::string, IdxType> excitation_index_map`: Used to map between Fermionic operator strings and parameter indices. Used for explicit parameter inputs for `QFlow`.
 
 ### Functions
-The `Ansatz` class implements the following functions. 
+The `Ansatz` class implements the following functions:
 
-The first two implement parameterized circuit modification: 
+The first two implement parameterized circuit modification:
 1. `void assignGateParam(IdxType gate_index, ValType param)`: Assign a single gate angle
 2. `virtual void setParams(const std::vector<ValType>& params)`: Update the parameter vector and all gate angles
 
@@ -51,15 +51,11 @@ The next two are general circuit utilities found to be useful
 3. `std::string toQASM3()` (Work in Progress): Return the parameterized circuit as a OpenQASM3 formatted string. QASM3 is required for unbound parameters, otherwise the circuit would need to fix the gate angles.
 4. `void compose(const Circuit& other, std::vector<IdxType>& qubit_mapping)`: Compose the Ansatz with another circuit (e.g. for measurement). Also just a generally useful utility for circuit construction
 
-The following two are used for ansatz construction using Pauli operators
-
-
-5. `void OneParamGate(enum OP _op_name...)`: Construct a single parameterized gate and update the associated data structures. Called by ExponentialGate, by default assumed to be an `RZ` gate. NOTE: To use with DMSim this would have to be modified to support the gate type as an input to match arbitrary bases.
+The following two are used for ansatz construction using Pauli operators:
+5. `void OneParamGate(enum OP _op_name...)`: Construct a single parameterized gate and update the associated data structures. Called by ExponentialGate, by default assumed to be an `RZ` gate. NOTE: To use with DMSim, this would have to be modified to support the gate type as an input to match arbitrary bases
 6. `void ExponentialGate(const PauliOperator& pauli_op...)`: Construct an operator evolving $e^{pauli_op}$. Here we assume `pauli_op` already has the appropriate phase/coefficients. The circuit constructs a basic CNOT ladder terminating at the first non-identity qubit. NOTE: Room for optimization via Paulihedral or Tetris for 2-qubit gate cancellation
 
-The following three functions are non implemented in the base class, and require overloading:
-
-
+The following three functions are not implemented in the base class and require overloading:
 7. `std::vector<std::string> getFermionicOperatorStrings()`: Return the string representations of the operators used to construct the Ansatz. Despite the name, these may also be Pauli operators in the case of Qubit-ADAPT
 8. `std::vector<std::pair<std::string, ValType> > getFermionicOperatorParameters()`: Return the string representations of the Fermionic operators used to construct the Ansatz along with their associated excitations. Note that there are more strings returned than parameters, as we print all members of a symmetry group and their spin-reversed forms.
 
@@ -116,7 +112,7 @@ A symmetry is further used to reduce the number of parameters required for both 
 1. When two operators only differ in the spin but not spin-orbital index: $t_{I(\alpha)}^{A(\alpha)} = t_{I(\beta)}^{A(\beta)}$ and $t_{I(\alpha)J(\alpha)}^{A(\alpha)B(\alpha)} = t_{I(\beta)J(\beta)}^{A(\beta)B(\beta)}$
 2. For double exicitations, when the order of indices flipped for creation and annihilation operators: $t_{I(\alpha)J(\beta)}^{A(\alpha)B(\beta)} = t_{J(\alpha)I(\beta)}^{B(\alpha)A(\beta)}$
 
-<!---
+<--
 However, the number of double excitations requires a bit more combinatorics. We can delineate *mixed terms* (where all spatial orbitals are unique) from *degenerate terms* (where either the annihilation or creation operators share a spatial orbital). These two groups have different symmetry expressions:
 
 Using bars to denote spin orientation ($\alpha_i$ for a spin up annihilation, $\beta_i$ for spin down), we can express the symmetries for mixed excitations as follows:
@@ -179,6 +175,3 @@ for (auto& fermionic_group: pauli_oplist) {
 }
 ```
 The same step is repeated if multiple Trotter steps are requested. The UCCSD Ansatz is now ready for simulation.
-
-
-

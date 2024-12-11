@@ -1,19 +1,19 @@
 # VQE States
 The `VQEState` class defined in vqe/include/vqe_state.hpp implements the VQE iteration loop. It takes the problem, ansatz, and assorted parameters as input and returns an optimized circuit (though probably not globally optimal). 
 
-The base `VQEState` class is a general API, however it requires subclasses to implement specific backends. Backend architectures currently supported are:
+The base `VQEState` class is a general API; however, it requires subclasses to implement specific backends. Backend architectures currently supported are:
 1. CPU (vqe/include/svsim_vqe/sv_cpu_vqe.hpp)
 2. NVIDIA GPU (vqe/include/svsim_vqe/sv_cuda_vqe.hpp)
 3. CPU MPI (vqe/include/svsim_vqe/sv_mpi_vqe.hpp)
 4. NVIDIA GPU MPI (via NVSHMEM) (vqe/include/svsim_vqe/sv_cuda_mpi_vqe.hpp)
 
-Each of these has backend-specific quirks, which we address in turn  
+Each of these has backend-specific quirks, which we address in turn.
 
 ## Base API
 We start with the base API, then move into the backend-specific implementations.
 
 ### Properties and Data Structures
-The following are `protected` properties inherited by subclasses, and are used for general VQE functions.
+The following are `protected` properties inherited by subclasses and are used for general VQE functions.
 
 The `ansatz` circuit is the general state preparation circuit, described in circuits.md. `measurement` is a composition of measurement circuits and EXPECT gates (see measurement.md and expectation_values.md) to compute the expectation values for the target Hamiltonian `hamil`.
 ```c++
@@ -29,11 +29,12 @@ std::vector<std::vector<IdxType> > zmasks;         // vector of diagonalized ope
 std::vector<std::vector<ValType> > coeffs;         // vector of diagonalized operator coefficients
 ``` 
 
-Gradient-based optimization is handled by an SPSA estimator (see optimization.md), with the `compute_gradient` flag used to indicate whether the chosen optimizer was gradient-based (e.g. LD_MMA) or gradient-free (e.g. LN_COBYLA).
+Gradient-based optimization is handled by an SPSA estimator (see optimization.md), with the `compute_gradient` flag used to indicate whether the chosen optimizer is gradient-based (e.g., LD_MMA) or gradient-free (e.g., LN_COBYLA).
 ```c++
 SPSA g_est;                                        // stochastic gradient estimator
 bool compute_gradient;                             // flag to compute gradient (depends on optimizer selected)
 ```
+
 `process_rank` is used to ensure that only the root node prints messages in MPI settings. Non-MPI subclasses initialize `process_rank=0`. `callback` is a function to print optimization status messages back to the user, with the prototype:
 
 `typedef std::function<void(const std::vector<ValType>& x, ValType ene, IdxType iter)> Callback;` 
@@ -42,21 +43,20 @@ IdxType process_rank;                              // process rank (used by MPI/
 Callback callback;                                 // callback function for terminal updates
 ```
 
-The remaining properties are used for optimization. 
+The remaining properties are used for optimization:
 ```c++
-OptimizerSettings optimizer_settings;              // NLOpt optimizer settings (bounds, termination critera)
+OptimizerSettings optimizer_settings;              // NLOpt optimizer settings (bounds, termination criteria)
 IdxType iteration;                                 // current iteration counter
-
 double expectation_value;                          // last computed expectation value
 nlopt::algorithm optimizer_algorithm;              // NLOpt optimization algorithm for circuit updates 
 ```
 
-The `OptimizerSettings` struct (defined in vqe/include/utils.hpp) contains criteria for optimizer operation and termination, shown below. The `parameter_map` data structure holds algorithm-specific options, see `vqe/mma_config.json` for an example pertaining to the LD_MMA optimizer.
+The `OptimizerSettings` struct (defined in vqe/include/utils.hpp) contains criteria for optimizer operation and termination, shown below. The `parameter_map` data structure holds algorithm-specific options; see `vqe/mma_config.json` for an example pertaining to the LD_MMA optimizer.
 ```c++
 struct OptimizerSettings {
   /**
-  * @brief  Data structure for NLOpt optimizer settings
-  */
+   * @brief  Data structure for NLOpt optimizer settings
+   */
   ValType rel_tol; // relative tolerance cutoff
   ValType abs_tol; // absolute tolerance cutoff
   ValType stop_val; //
@@ -67,20 +67,21 @@ struct OptimizerSettings {
   std::unordered_map<std::string, ValType> parameter_map; // map for setting optimizer-specific parameters
   // Defaults (disables all of the settings, except for the max_eval ceiling)
   OptimizerSettings(): rel_tol(-1), 
-                        abs_tol(-1),
-                        stop_val(-MAXFLOAT),
-                        max_evals(50),
-                        max_time(-1),
-                        lbound(-PI),
-                        ubound(PI) {}
+                      abs_tol(-1),
+                      stop_val(-MAXFLOAT),
+                      max_evals(50),
+                      max_time(-1),
+                      lbound(-PI),
+                      ubound(PI) {}
 };
 ```
+
 ### Constructor
 The `VQEState` constructor is defined as follows:
 ```c++
-VQEState( std::shared_ptr<Ansatz> a, 
-                  std::shared_ptr<Hamiltonian> h, 
-                  nlopt::algorithm _optimizer_algorithm,
+VQEState(std::shared_ptr<Ansatz> a, 
+         std::shared_ptr<Hamiltonian> h, 
+         nlopt::algorithm _optimizer_algorithm,
                   Callback _callback,
                   IdxType seed = 0,
                   OptimizerSettings opt_settings = OptimizerSettings())
@@ -123,18 +124,18 @@ optimizer.set_min_objective(nl_opt_function, (void*)this);
   ...
 nlopt::result optimization_result = optimizer.optimize(parameters, fval);
 ```
-The optimizer uses the target function
+The optimizer uses the target function:
 ```c++
 // Target function for NLOpt object, has to match function prototype
 double nl_opt_function(const std::vector<double>& x, std::vector<double>& gradient, void* val) {
     return ((VQEState*)val)->cost_function(x, gradient);
 };
 ```
-which calls the `cost_function` method of the base class. `cost_function` estimates the gradient (if necessary), calls `energy(x)`, then prints calls the `callback` function.
+which calls the `cost_function` method of the base class. The `cost_function` estimates the gradient (if necessary), calls `energy(x)`, and then invokes the `callback` function.
 
-`energy` first assigns the parameters `x` to the `Ansatz`, then invokes the backend-specific `call_simulator()` function. 
+`energy` first assigns the parameters `x` to the `ansatz`, then invokes the backend-specific `call_simulator()` function. 
 
-`call_simulator()` first simulates `ansatz` to prepare the trial state, then `measurement` to diagonalize and measure the Pauli strings.
+`call_simulator()` first simulates the `ansatz` to prepare the trial state, then uses the `measurement` to diagonalize and measure the Pauli strings.
 ```c++
 virtual ValType energy(const std::vector<double>& x) {
   ansatz->setParams(x);
@@ -148,7 +149,7 @@ virtual ValType energy(const std::vector<double>& x) {
 This loop continues until an NLOpt termination criterion is met, such as the iteration limit or some convergence criterion.
 
 ### Backend-Specific Prototypes
-The following functions are merely prototypes or CPU defaults defined in the base class, and are expected to be overriden by subclasses:
+The following functions are merely prototypes or CPU defaults defined in the base class and are expected to be overridden by subclasses:
 ```c++
 virtual void call_simulator() {};
 ```
@@ -157,7 +158,7 @@ Calls the `SVSim` instance associated with the subclass.
 ```c++
 virtual void call_simulator(std::shared_ptr<Ansatz> _measurement, bool reset) {};
 ```
-Calls the `SVSim` instance associated with the subclass, but use the provided measurement circuit instead of the class property `measurement`. Used by ADAPT-VQE for commutator gradient calculations.
+Calls the `SVSim` instance associated with the subclass, but uses the provided measurement circuit instead of the class property `measurement`. Used by ADAPT-VQE for commutator gradient calculations.
 
 ```c++
 virtual void set_exp_gate(std::shared_ptr<Ansatz> circuit, ObservableList* o, std::vector<IdxType>& zmasks, std::vector<ValType>& coeffs)
@@ -167,16 +168,14 @@ Append an EXPECT gate to the circuit and initialize the `ObservableList` object 
 ```c++
 virtual void allocate_observables(ObservableList*& observables, IdxType size)
 ```
-Allocate space for `size` entries (on host and/or device) for the provided  `observables` pointer.
-
+Allocate space for `size` entries (on host and/or device) for the provided `observables` pointer.
 
 ```c++
 virtual void allocate_observables(IdxType size)
 ```
-Allocate space for `size` entries (on host and/or device) for the class `obs_vec` and other observable-related data structures (may be subclass specific).
-
+Allocate space for `size` entries (on host and/or device) for the class `obs_vec` and other observable-related data structures (may be subclass-specific).
 
 ```c++
 virtual void delete_observables(ObservableList* observables, IdxType size)
 ```
-Delete the data associated with `observables`, could be host or device storage depending on backend.
+Delete the data associated with `observables`; could be host or device storage depending on the backend.

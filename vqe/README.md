@@ -1,7 +1,7 @@
 # NWQ-VQE
 VQE simulation based on the NWQ-Sim platform
 ## Dependencies
-- [NLOpt](https://github.com/stevengj/nlopt): To make simplify installation, NLOpt is a git submodule of NWQ-Sim. After cloning `NWQ-Sim`, we need to sync and build `vqe/nlopt` prior to building NWQ-Sim. The installation steps are:
+- [NLOpt](https://github.com/stevengj/nlopt): To simplify installation, NLOpt is a git submodule of NWQ-Sim. After cloning `NWQ-Sim`, we need to sync and build `vqe/nlopt` prior to building NWQ-Sim. The installation steps are:
 
 ```shell
   git submodule init
@@ -12,14 +12,14 @@ VQE simulation based on the NWQ-Sim platform
   make
 ```
 
-Some user may need to define C and C++ complier for CMake
+Some users may need to define C and C++ compilers for CMake
 ```shell
   cmake .. -DCMAKE_CXX_COMPILER=/usr/bin/g++ -DCMAKE_C_COMPILER=/usr/bin/gcc
 ```
 
+The specific CXX/C compiler paths can be altered as needed. The main emphasis is to ensure that the optimization code has access to C++ STD libraries.
 On OLCF Frontier, you may need to load the cray-python module before using cmake for NLOpt.
 
-The specific CXX/C compiler paths can be altered as needed, the main emphasis is to ensure that the optimization code has access to C++ STD libraries.
 On OLCF Summit, you may use gcc/9.3 for the compilation of NLOpt:
 ```shell
   module load gcc/9.3.0-compiler_only
@@ -30,7 +30,7 @@ On OLCF Summit, you may use gcc/9.3 for the compilation of NLOpt:
 ## Installation/Configuration Directions
 After installing NLOpt, build NWQ-Sim as normal (see the [User Manual](doc/user_manual.md)).
 
- Note that debug messages showing the Fermionic operator indices and Hamiltonian Pauli strings will be printed *unless* the project is built in `Release` mode (add `-DCMAKE_BUILD_TYPE=Release`). 
+Note that debug messages showing the Fermionic operator indices and Hamiltonian Pauli strings will be printed *unless* the project is built in `Release` mode (add `-DCMAKE_BUILD_TYPE=Release`). 
 
 Running `make` from the `build` directory will compile the binary `build/vqe/nwq_vqe`, a shared library `build/vqe/libvqe.dylib`, and the example binaries under `/build/vqe/examples`. 
 
@@ -57,7 +57,7 @@ OPTIONAL
 --ducc                Use DUCC indexing scheme. Defaults to false (defaults to use XACC/Qiskit scheme).
 ```
 
-The default ansatz is UCCSD and comes with 3 levels of symmetries to adjust the numebr of parameters. All three levels are supposed to provide the same accuracy without the discrepancy from the trotterization and optimization. There is also an optional singlet and triplet ansatz. It has much larger number of parameters and it is mainly designed for ADAPT-VQE (but also compatible with VQE if necessary).
+The default ansatz is UCCSD and comes with 3 levels of symmetries to adjust the number of parameters. All three levels are supposed to provide the same accuracy without the discrepancy from the trotterization and optimization. There is also an optional singlet and triplet ansatz. It has a much larger number of parameters and is mainly designed for ADAPT-VQE (but also compatible with VQE if necessary).
 ``` shell
 OPTIONAL
 --sym, --symm         UCCSD Symmetry level (0->none, 1->spin symmetry, 2->also orbital symmetry). Defaults to 0.
@@ -223,7 +223,7 @@ With the given parameters, the example output is:
 Final Parameters: [-0.017729, 0.00190356, -0.00687456, -0.00595677, -0.0362287, 0.0676943, 0.00566315, -0.00576158, -0.00107353, 0.00854818, 0.0418309, -0.00767838, 0.0104276, 0.168057, 0.0427336, 0.00160509, -0.00336476, 0.0288875]
 Final Energy: -2.16938
 ```
-The final energy (-2.16938) is about about 0.11 mHartree away from the true ground state (-2.18031661). 
+The final energy (-2.16938) is about 0.11 mHartree away from the true ground state (-2.18031661). 
 
 The example file [examples/config_example.cpp](examples/config_example.cpp) is similar, but demonstrates how to specify `NLOpt` algorithm parameters and cutoff criteria within NWQ-VQE.
 
@@ -231,7 +231,7 @@ The example file [examples/config_example.cpp](examples/config_example.cpp) is s
 ### Backends
 Note that [examples/basic_example_cuda_mpi.cu](examples/basic_example_cuda_mpi.cu) separates the `SV_CUDA_MPI_VQE` constructor call and the call to `MPI_Finalize()` into two different functions. This is necessary to ensure that the `SV_CUDA_MPI` destructor (which invokes `nvshmem_finalize()`) is called before `MPI_Finalize()`.
 
-To locally run the example CUDA, MPI,and examples respectively, run (from `NWQ-Sim/build`):
+To locally run the example CUDA, MPI, and examples respectively, run (from `NWQ-Sim/build`):
 ```shell
 ./vqe/examples/vqe/examples/basic_example_cuda
 mpirun -n <nproc> ./vqe/examples/vqe/examples/basic_example_mpi

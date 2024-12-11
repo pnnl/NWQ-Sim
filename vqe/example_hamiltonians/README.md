@@ -1,9 +1,9 @@
 # Hamiltonians
 
-* `H415.hamil`: linear H4 (4 spartial orbitals, 4 particles), R(H-H) = 1.5 Angstrom
-* `LiH34.hamil`: LiH (6 spartial orbitals, 4 particles), R(Li-H) = 3.4 Angstrom
-* `H618.hamil`: linear H6 (6 spartial orbitals, 6 particles), R(H-H) = 1.8 Angstrom
-* `H622.hamil`: linear H6 (6 spartial orbitals, 6 particles), R(H-H) = 2.2 Angstrom
+* `H415.hamil`: linear H4 (4 spatial orbitals, 4 particles), R(H-H) = 1.5 Angstrom
+* `LiH34.hamil`: LiH (6 spatial orbitals, 4 particles), R(Li-H) = 3.4 Angstrom
+* `H618.hamil`: linear H6 (6 spatial orbitals, 6 particles), R(H-H) = 1.8 Angstrom
+* `H622.hamil`: linear H6 (6 spatial orbitals, 6 particles), R(H-H) = 2.2 Angstrom
 
 |  Source/Method   |      Ansatz  |     H4 (1.5 Å)    |    LiH (3.4 Å)    |     H6 (1.8 Å)    |     H6 (2.2 Å)    |
 |:----------------:|:------------:|:-----------------:|:-----------------:|:-----------------:|:-----------------:|
@@ -20,12 +20,12 @@
 
 VQE with UCCSD and Symmetry level 2 (0 lowest, 2 highest)
 ```shell
-mpirun -n 4 ./vqe/nwq_vqe -f ./LiH34.hamil -p 4 -b MPI -o LN_NEWUOA -v --abstol 1e-10 --maxeval 4000 --sym 2
+mpirun -n 4 ./vqe/nwq_vqe -f ./LiH34.hamil -p 4 -b MPI -o LN_NEWUOA -v --abstol 1e-10 -lb -0.9 -ub 0.9 --maxeval 4000 --sym 2
 ```
 
 VQE with Singlet and Triplet excitations
 ```shell
-mpirun -n 4 ./vqe/nwq_vqe -f ./LiH34.hamil -p 4 -b MPI -o LN_NEWUOA -v --abstol 1e-10 -lb -0.9 -ub 0.9 --maxeval 20000 --gsd
+mpirun -n 4 ./vqe/nwq_vqe -f ./LiH34.hamil -p 4 -b MPI -o LN_NEWUOA -v --abstol 1e-10 --maxeval 20000 --gsd
 ```
 
 ADAPT-VQE with UCCSD ansatz pool
@@ -33,9 +33,7 @@ ADAPT-VQE with UCCSD ansatz pool
 mpirun -n 4 ./vqe/nwq_vqe -f ./LiH34.hamil -p 4 -b MPI --abstol 1e-10 --maxeval 4000 -lb -0.9 -ub 0.9 --adapt --adapt-fvaltol -1
 ```
 
-ADAPT-VQE with singlet and triplet ansatz pool (this pool currently is not normalized, unlike its VQE/QFlow version, seems like non-normalized one gives $10\%$ smaller error only for ADAPT-VQE in this example)
+ADAPT-VQE with singlet and triplet ansatz pool (this pool is currently not normalized, unlike its VQE/QFlow version. The non-normalized version appears to give 10% smaller error only for ADAPT-VQE in this example)
 ```shell
 mpirun -n 4 ./vqe/nwq_vqe -f ./LiH34.hamil -p 4 -b MPI --abstol 1e-10 --maxeval 16000 --gsd --adapt --adapt-fvaltol -1
 ```
-
-
