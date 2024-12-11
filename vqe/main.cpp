@@ -62,7 +62,7 @@ int show_help() {
   std::cout << "--gsd                 Use singlet GSD ansatz for ADAPT-VQE. Default to false." << std::endl;
   std::cout << "-b, --backend         Simulation backend. Defaults to CPU" << std::endl;
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
-  std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
+  // std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
   std::cout << UNDERLINE << "OPTIONAL (Global Minimizer)" << CLOSEUNDERLINE << std::endl;
   std::cout << "-v, --verbose         Print optimization callback on each VQE iteration. Defaults to false" << std::endl;
   std::cout << "-o, --optimizer       NLOpt optimizer name. Defaults to LN_COBYLA. Other examples are LN_NEWUOA and LD_LBFGS" << std::endl;
@@ -355,14 +355,14 @@ std::shared_ptr<NWQSim::VQE::VQEState> optimize_ansatz(const VQEBackendManager& 
     auto end_commutators = std::chrono::high_resolution_clock::now();
     // double commutator_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_commutators - start_time).count() / 1e9; // MZ: why nanoseconds?
     double commutator_time = std::chrono::duration<double>(end_commutators - start_time).count();
-    // manager.safe_print("Constructed ADAPT-VQE Commutators in %.2e seconds\n", commutator_time); // Report the commutator overhead
+    // NWQSim::safe_print("Constructed ADAPT-VQE Commutators in %.2e seconds\n", commutator_time); // Report the commutator overhead
     state -> set_comm_duration(commutator_time); // MZ: time the commutator construction
 
     adapt_instance.optimize(x, fval, params.adapt_maxeval, params.adapt_gradtol, params.adapt_fvaltol); // MAIN OPTIMIZATION LOOP
     auto end_optimization = std::chrono::high_resolution_clock::now();
     // double optimization_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_optimization - end_commutators ).count() / 1e9; // MZ: why nanoseconds?
     double optimization_time = std::chrono::duration<double>(end_optimization - end_commutators ).count();
-    // manager.safe_print("Completed ADAPT-VQE Optimization in %.2e seconds\n", optimization_time); // Report the total time
+    // NWQSim::safe_print("Completed ADAPT-VQE Optimization in %.2e seconds\n", optimization_time); // Report the total time
     state -> set_duration(optimization_time); // MZ: time the optimization
     state -> set_numpauli(adapt_instance.get_numpauli()); // MZ: get the number of Pauli terms
     state -> set_numcomm(adapt_instance.get_numcomm()); // MZ: get the number of commuting cliques
@@ -406,8 +406,8 @@ int main(int argc, char** argv) {
   std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(params.hamiltonian_path, 
                                                                                                params.nparticles,
                                                                                                params.xacc);
-  manager.safe_print("Constructed %lld Pauli observables\n", hamil->num_ops());
-  manager.safe_print("Constructing the ansatz...\n");
+  NWQSim::safe_print("Constructed %lld Pauli observables\n", hamil->num_ops());
+  NWQSim::safe_print("Constructing the ansatz...\n");
   
   // Build the parameterized ansatz
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
@@ -444,9 +444,9 @@ int main(int argc, char** argv) {
   std::vector<double> x;
   double fval;
   if (params.adapt) {
-    manager.safe_print("Beginning ADAPT-VQE loop...\n");
+    NWQSim::safe_print("Beginning ADAPT-VQE loop...\n");
   } else {
-    manager.safe_print("Beginning VQE loop...\n");
+    NWQSim::safe_print("Beginning VQE loop...\n");
   }
 
 //   // Print out the Fermionic operators with their excitations
@@ -457,9 +457,9 @@ int main(int argc, char** argv) {
 
   // Print out the Fermionic operators with their excitations                                        
   // std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters();  // MZ: comment out for better printing
-  // manager.safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters:\n", fval);         // MZ: comment out for better printing
+  // NWQSim::safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters:\n", fval);         // MZ: comment out for better printing
   // for (auto& pair: param_map) {                                                                       // MZ: comment out for better printing
-  //   manager.safe_print("%s :: %e\n", pair.first.c_str(), pair.second);                                // MZ: comment out for better printing
+  //   NWQSim::safe_print("%s :: %e\n", pair.first.c_str(), pair.second);                                // MZ: comment out for better printing
   // }                                                                                                   // MZ: comment out for better printing
 
 
@@ -473,40 +473,40 @@ int main(int argc, char** argv) {
   // Print out the Fermionic operators with their excitations                                        
   std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters(); 
   // MZ: A better summary at the end so I don't scroll all the way up, especially with gradient-free optimizater    
-  manager.safe_print("\n--------- Result Summary ---------\n");
+  NWQSim::safe_print("\n--------- Result Summary ---------\n");
   if (params.adapt) {
-    manager.safe_print("Method                 : ADAPT-VQE\n");
+    NWQSim::safe_print("Method                 : ADAPT-VQE\n");
   } else {
-    manager.safe_print("Method                 : VQE\n");
+    NWQSim::safe_print("Method                 : VQE\n");
   }
-  manager.safe_print("Ansatz                 : %s\n", ansatz->getAnsatzName().c_str());  // MZ: don't want to scroll all the way up to see this
-  manager.safe_print("# Ham. Pauli Strings   : %lld \n", hamil->num_ops()); // MZ: don't want to scroll all the way up to see this
+  NWQSim::safe_print("Ansatz                 : %s\n", ansatz->getAnsatzName().c_str());  // MZ: don't want to scroll all the way up to see this
+  NWQSim::safe_print("# Ham. Pauli Strings   : %lld \n", hamil->num_ops()); // MZ: don't want to scroll all the way up to see this
   if (params.adapt) {
     double comm_total_secs = opt_info -> get_comm_duration();
     int comm_hours = static_cast<int>(comm_total_secs) / 3600;
     int comm_minutes = (static_cast<int>(comm_total_secs) % 3600) / 60;
     double comm_seconds = comm_total_secs - (comm_hours * 3600 + comm_minutes * 60);
-    manager.safe_print("# commutators   (ADAPT): %d\n", opt_info->get_numcomm());
-    manager.safe_print("# Pauli Strings (ADAPT): %d\n", opt_info->get_numpauli());
-    manager.safe_print("Commutator Time (ADAPT): %d hrs %d mins %.4f secs\n", comm_hours, comm_minutes, comm_seconds);
+    NWQSim::safe_print("# commutators   (ADAPT): %d\n", opt_info->get_numcomm());
+    NWQSim::safe_print("# Pauli Strings (ADAPT): %d\n", opt_info->get_numpauli());
+    NWQSim::safe_print("Commutator Time (ADAPT): %d hrs %d mins %.4f secs\n", comm_hours, comm_minutes, comm_seconds);
   }
-    manager.safe_print("Circuit Stats          : %lld operators, %lld parameters, and %lld Gates\n" , ansatz->numOps(), ansatz->numParams(), ansatz->num_gates()); // MZ: don't want to scroll all the way up to see this
+    NWQSim::safe_print("Circuit Stats          : %lld operators, %lld parameters, and %lld Gates\n" , ansatz->numOps(), ansatz->numParams(), ansatz->num_gates()); // MZ: don't want to scroll all the way up to see this
     std::string ter_rea;
     if (params.adapt) {
       ter_rea = "Optimization terminated: "+get_termination_reason_adapt(opt_info->get_adaptresult())+"\n";
     } else {
       ter_rea = "Optimization terminated: "+get_termination_reason(opt_info->get_optresult())+"\n";
     }
-    manager.safe_print(ter_rea.c_str());
+    NWQSim::safe_print(ter_rea.c_str());
     if (params.adapt) {
-      manager.safe_print("# ADAPT rounds         : %d\n", opt_info->get_adaptrounds()); //MZ: ADAPT round
+      NWQSim::safe_print("# ADAPT rounds         : %d\n", opt_info->get_adaptrounds()); //MZ: ADAPT round
     } else {
-      manager.safe_print("# function eval.       : %d\n", opt_info->get_numevals());
+      NWQSim::safe_print("# function eval.       : %d\n", opt_info->get_numevals());
     }
-    manager.safe_print("Evaluation Time        : %d hrs %d mins %.4f secs\n", hours, minutes, seconds);
-    manager.safe_print("Final objective value  : %.16f\nFinal parameters:\n", fval); 
+    NWQSim::safe_print("Evaluation Time        : %d hrs %d mins %.4f secs\n", hours, minutes, seconds);
+    NWQSim::safe_print("Final objective value  : %.16f\nFinal parameters:\n", fval); 
     for (auto& pair: param_map) {                                                                       
-      manager.safe_print("  %s :: %.16f\n", pair.first.c_str(), pair.second);  
+      NWQSim::safe_print("  %s :: %.16f\n", pair.first.c_str(), pair.second);  
   }                                                                                            
 
 #ifdef MPI_ENABLED

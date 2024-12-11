@@ -28,7 +28,7 @@ int show_help() {
   std::cout << "-b, --backend,        Simulation backend. Defaults to CPU." << std::endl;
   std::cout << "--amplitudes          List of initial amplitudes." << std::endl;
   std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
-  std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
+  // std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
   std::cout << UNDERLINE << "OPTIONAL (Global Minimizer)" << CLOSEUNDERLINE << std::endl;
   std::cout << "-v, --verbose         Print optimization callback on each iteration. Defaults to false." << std::endl;
   std::cout << "-o, --optimizer       NLOpt optimizer name. Defaults to LN_COBYLA. Other examples are LN_NEWUOA and LD_LBFGS" << std::endl;
@@ -71,7 +71,7 @@ int parse_args(int argc, char** argv,
                 double& delta,
                 double& eta,
                 NWQSim::VQE::PoolType& pool) {
-  std::string config_file = "";
+  std::string opt_config_file = "";
   std::string algorithm_name = "LN_COBYLA"; // may use "LN_NEWUOA"
   hamilfile = "";
   backend = "CPU";
@@ -103,10 +103,10 @@ int parse_args(int argc, char** argv,
     if (argname == "-f" || argname == "--hamiltonian") {
       hamilfile = argv[++i];
       continue;
-    } else
-    if (argname == "--config") {
-      config_file = argv[++i];
-      continue;
+    // } else
+    // if (argname == "--config") {
+    //   config_file = argv[++i];
+    //   continue;
     }  else 
     if (argname == "-p" || argname == "-n" || argname == "--nparticles") {
       n_particles = std::atoll(argv[++i]);
@@ -140,7 +140,7 @@ int parse_args(int argc, char** argv,
       eta = std::atof(argv[++i]);
     } else 
     if (argname == "--opt-config" || argname == "--optimizer-config") {
-      config_file = argv[++i];
+      opt_config_file = argv[++i];
     } else 
     if (argname == "-o" ||argname == "--optimizer") {
       algorithm_name = argv[++i];
@@ -182,8 +182,8 @@ int parse_args(int argc, char** argv,
       return show_help();
   }
   algo = (nlopt::algorithm)nlopt_algorithm_from_string(algorithm_name.c_str());
-  if (config_file != "") {
-    std::ifstream f(config_file);
+  if (opt_config_file != "") {
+    std::ifstream f(opt_config_file);
     json data = json::parse(f); 
     for (json::iterator it = data.begin(); it != data.end(); ++it) {
       settings.parameter_map[it.key()] = it.value().get<NWQSim::ValType>();
@@ -284,7 +284,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
   double fval;
   // NWQSim::VQE::Callback callback = verbose ? carriage_return_callback_function: silent_callback_function;
   NWQSim::VQE::Callback callback = verbose ? callback_function_simple: silent_callback_function;
-  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, config, ansatz, hamil, algo, callback, seed, settings); 
+  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, callback, seed, settings); 
 //   std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, callback, seed, settings); 
   params.resize(ansatz->numParams());
   std::cout << "Number of parameters: " << ansatz->numParams() << std::endl;
@@ -322,11 +322,11 @@ void optimize_ansatz(const VQEBackendManager& manager,
   state -> set_duration(opt_duration); // MZ: time the optimization
 
   std::ostringstream strstream;
-  // manager.safe_print("\nFinished in %llu iterations. Initial Energy %f, Final Energy %f\nPrinting excitation amplitudes:\n", num_iterations, initial_ene, final_ene);
+  // NWQSim::safe_print("\nFinished in %llu iterations. Initial Energy %f, Final Energy %f\nPrinting excitation amplitudes:\n", num_iterations, initial_ene, final_ene);
   // for (auto& i: param_tuple) {
   //   strstream << i.first << ": " << i.second << std::endl;
   // }
-  // manager.safe_print("%s", strstream.str().c_str());
+  // NWQSim::safe_print("%s", strstream.str().c_str());
   try { // MZ: catch exception
       double total_seconds = state -> get_duration();
       // Calculate hours, minutes, and seconds
@@ -336,30 +336,30 @@ void optimize_ansatz(const VQEBackendManager& manager,
 
       // Print out the Fermionic operators with their excitations                                        
       std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters(); 
-      manager.safe_print("\n--------- Result Summary ---------\n"); 
+      NWQSim::safe_print("\n--------- Result Summary ---------\n"); 
       if (local) {
-        manager.safe_print("Method                 : QFlow + Local Gradient Follower\n");
+        NWQSim::safe_print("Method                 : QFlow + Local Gradient Follower\n");
       } else {
-        manager.safe_print("Method                 : QFlow + Global minimizer\n");
+        NWQSim::safe_print("Method                 : QFlow + Global minimizer\n");
       }
-      manager.safe_print("Ansatz                 : %s\n", ansatz->getAnsatzName().c_str());  // MZ: don't want to scroll all the way up to see this
-      manager.safe_print("# Ham. Pauli Strings   : %lld \n", hamil->num_ops());
-      manager.safe_print("Circuit Stats          : %lld operators, %lld parameters, and %lld Gates\n" , ansatz->numOps(), ansatz->numParams(), ansatz->num_gates()); // MZ: don't want to scroll all the way up to see this
+      NWQSim::safe_print("Ansatz                 : %s\n", ansatz->getAnsatzName().c_str());  // MZ: don't want to scroll all the way up to see this
+      NWQSim::safe_print("# Ham. Pauli Strings   : %lld \n", hamil->num_ops());
+      NWQSim::safe_print("Circuit Stats          : %lld operators, %lld parameters, and %lld Gates\n" , ansatz->numOps(), ansatz->numParams(), ansatz->num_gates()); // MZ: don't want to scroll all the way up to see this
       std::string ter_rea;
       if (local) {
         ter_rea = "Optimization terminated: "+get_termination_reason_local(state->get_optresult())+"\n";
       } else {
         ter_rea = "Optimization terminated: "+get_termination_reason(state->get_optresult())+"\n";
       }
-      manager.safe_print(ter_rea.c_str());
-      manager.safe_print("# iterations           : %d\n", num_iterations);
-      manager.safe_print("Evaluation Time        : %d hrs %d mins %.4f secs\n", hours, minutes, seconds);
-      manager.safe_print("Initial objective value: %.16f\n", initial_ene); 
-      manager.safe_print("Final objective value  : %.16f\nFinal parameters:\n", final_ene); 
+      NWQSim::safe_print(ter_rea.c_str());
+      NWQSim::safe_print("# iterations           : %d\n", num_iterations);
+      NWQSim::safe_print("Evaluation Time        : %d hrs %d mins %.4f secs\n", hours, minutes, seconds);
+      NWQSim::safe_print("Initial objective value: %.16f\n", initial_ene); 
+      NWQSim::safe_print("Final objective value  : %.16f\nFinal parameters:\n", final_ene); 
       for (auto& i: param_tuple) {
         strstream << i.first << ": " << i.second << std::endl;
       }
-      manager.safe_print("%s", strstream.str().c_str());                                                                                            
+      NWQSim::safe_print("%s", strstream.str().c_str());                                                                                            
     } 
     catch(std::exception &e) {
         std::cout << "Optimization failed: " << e.what() << std::endl;
@@ -386,7 +386,7 @@ int main(int argc, char** argv) {
   int n_trials;
   NWQSim::VQE::PoolType pool;
 
-  if (parse_args(argc, argv, manager, hamil_path, backend, config, amplitudes,  n_part, algo, settings, 
+  if (parse_args(argc, argv, manager, hamil_path, backend, amplitudes,  n_part, algo, settings, 
                  n_trials, use_xacc, local, verbose, symm_level, 
                   seed, delta, eta, pool)) {
 //   if (parse_args(argc, argv, manager, hamil_path, backend, amplitudes, n_part, algo, settings, n_trials, use_xacc, local, verbose, seed, delta, eta)) {
@@ -402,7 +402,7 @@ int main(int argc, char** argv) {
 #endif
   NWQSim::safe_print("Reading Hamiltonian...\n");
   std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(hamil_path, n_part, use_xacc);
-  manager.safe_print("Constructing the ansatz...\n");
+  NWQSim::safe_print("Constructing the ansatz...\n");
 
   std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
   if (pool == NWQSim::VQE::PoolType::Fermionic_Origin) {
@@ -429,8 +429,8 @@ int main(int argc, char** argv) {
 
   ansatz->buildAnsatz();
   std::vector<double> params;
-  manager.safe_print("Beginning the loop...\n");
-  optimize_ansatz(manager, backend, config, amplitudes, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta);
+  NWQSim::safe_print("Beginning the loop...\n");
+  optimize_ansatz(manager, backend, amplitudes, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta);
 //   optimize_ansatz(manager, backend, amplitudes, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta);
 #ifdef MPI_ENABLED
   if (backend == "MPI" || backend == "NVGPU_MPI")
