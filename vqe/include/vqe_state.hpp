@@ -131,8 +131,9 @@ namespace NWQSim
        * @param  n_grad_est: Number of gradient estimates for SPSA average (higher=more accurate but slower)
        * @retval 
        */
-      virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& initial_ene, ValType& final_ene, IdxType& num_iterations, ValType delta, ValType eta, IdxType n_grad_est) {
+      virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& initial_ene, ValType& final_ene, IdxType& num_iterations, ValType delta, ValType eta, IdxType n_grad_est, bool verbose) {
         Config::PRINT_SIM_TRACE = false;
+        local_result = 9; // MZ: initial flag
         // initialize data structures
         std::vector<ValType> gradient (x0.size(),1.0);
         std::vector<ValType> params(x0);
@@ -150,12 +151,33 @@ namespace NWQSim
             params[i] -= eta * gradient[i];
           }
           ene_curr = energy(params);
+          // MZ: some printout
+          if ( (process_rank == 0) && verbose) {
+            if (iteration == 0) {
+              std::cout << "\n----------- Iteration Summary -----------\n" << std::left
+                        << std::setw(8) << " Iter."
+                        << std::setw(17) << "Objective Value"
+                        << std::setw(12) << "Grad. Norm"
+                        << std::endl;
+              std::cout << std::string(41, '-') << std::endl;
+            }
+            double grad_norm = std::sqrt(std::accumulate(gradient.begin(), gradient.end(), 0.0, [] (ValType a, ValType b) {
+              return a + b * b;
+            }));
+            std::cout << std::left << " "
+                      << std::setw(7) << iteration
+                      << std::setw(17) << std::fixed << std::setprecision(12) << ene_curr
+                      << std::setw(12) << std::fixed << std::setprecision(8) << grad_norm
+                      << std::endl;
+          }
+          //
           if (ene_curr >= ene_prev) {
             // local minimum reached, undo the last update and break
             for (size_t i = 0; i < params.size(); i++) {
               params[i] += eta * gradient[i];
             }
             break;
+            local_result = 0; // MZ: reach local graident minimum
           } else {
             ene_prev = ene_curr;
           }
@@ -180,10 +202,12 @@ namespace NWQSim
           nlopt::opt optimizer = nlopt::opt(optimizer_algorithm, ansatz->numParams());
           // set the objective function
           optimizer.set_min_objective(nl_opt_function, (void*)this);
-          std::vector<double> lower_bounds(ansatz->numParams(), optimizer_settings.lbound);
-          std::vector<double> upper_bounds(ansatz->numParams(), optimizer_settings.ubound);  
-          optimizer.set_lower_bounds(lower_bounds);
-          optimizer.set_upper_bounds(upper_bounds);
+          // std::vector<double> lower_bounds(ansatz->numParams(), optimizer_settings.lbound);
+          // std::vector<double> upper_bounds(ansatz->numParams(), optimizer_settings.ubound); 
+          // optimizer.set_lower_bounds(lower_bounds);
+          // optimizer.set_upper_bounds(upper_bounds);
+          optimizer.set_lower_bounds(optimizer_settings.lbound); // MZ: use the overload since bounds for all parameters are the same (https://nlopt.readthedocs.io/en/latest/NLopt_C-plus-plus_Reference/#bound-constraints)
+          optimizer.set_upper_bounds(optimizer_settings.ubound); // MZ: same as above
           // Set the termination criteria
           optimizer.set_maxeval(optimizer_settings.max_evals);
           optimizer.set_maxtime(optimizer_settings.max_time);
@@ -197,7 +221,19 @@ namespace NWQSim
           iteration = 0;
           // Call the optimizer
           // final_ene = energy(parameters);
-          nlopt::result optimization_result = optimizer.optimize(parameters, final_ene);
+          // nlopt::result optimization_result = optimizer.optimize(parameters, final_ene); // MZ
+          optimizer.optimize(parameters, final_ene); // MZ
+          opt_result = optimizer.last_optimize_result(); // MZ: this is the correct way to get the result, otherwise always give 0
+          num_evals = optimizer.get_numevals(); // MZ: get numebr of function evaluations
+
+          // std::cout << "Lower bound" << std::endl;
+          // for (auto& i: optimizer.get_lower_bounds()) {
+          //   std::cout << i << std::endl;
+          // }
+          // std::cout << "Upper bound" << std::endl;
+          // for (auto& i: optimizer.get_upper_bounds()) {
+          //   std::cout << i << std::endl;
+          // }
       }
 
       // Function declarations (overloaded by backends) 
@@ -237,6 +273,28 @@ namespace NWQSim
       
       std::shared_ptr<Hamiltonian> get_hamiltonian() const { return hamil; }
       IdxType get_iteration() const {return iteration;};
+      nlopt::result get_optresult() const {return opt_result;}; // MZ
+      int get_numevals() const { return num_evals;}; // MZ
+      double get_duration() const { return opt_duration;}; // MZ
+      void set_duration(double value) { opt_duration = value; }; //MZ
+
+      double get_comm_duration() const { return comm_duration;}; // MZ, for adapt-vqe
+      void set_comm_duration(double value) { comm_duration = value; }; //MZ, for adapt-vqe
+
+      size_t get_numpauli() const { return num_pauli_terms_total;}; // MZ, for adapt-vqe
+      void set_numpauli(size_t value) { num_pauli_terms_total = value; }; //MZ, for adapt-vqe
+
+      size_t  get_numcomm() const { return num_comm_cliques;}; // MZ, for adapt-vqe
+      void set_numcomm(size_t value) { num_comm_cliques = value; }; //MZ, for adapt-vqe
+
+      int get_adaptrounds() const {return num_adapt_rounds;}; // MZ: for adapt-vqe
+      void set_adaptrounds(int rounds) { num_adapt_rounds = rounds;}; // MZ: for adapt-vqe
+
+      int get_adaptresult() const {return adapt_result;}; // MZ: for get adapt result flag
+      void set_adaptresult(int res) { adapt_result = res;}; // MZ: for set adapt result flag
+
+      int get_localresult() const {return local_result;}; // MZ: for get Local Gradient Follower flag
+      void set_localresult(int res) { local_result = res;}; // MZ: for set Local Gradient Follower flag
       protected:
         std::shared_ptr<Ansatz> ansatz;                    // state preparation circuit
         std::shared_ptr<Ansatz> measurement;               // circuit to measure expectation values
@@ -252,7 +310,21 @@ namespace NWQSim
         std::vector<std::vector<ValType> > coeffs;         // vector of diagonalized operator coefficients
         double expectation_value;                          // last computed expectation value
         nlopt::algorithm optimizer_algorithm;              // NLOpt optimization algorithm for circuit updates 
-
+        nlopt::result opt_result;                          // MZ: optimzation success or fail and the reason
+        int num_evals;                                     // MZ: total number of evaluations
+        double opt_duration;                               // MZ: time the optimization
+        double comm_duration;                              // MZ: time construction of ADAPT-VQE Commutators
+        size_t num_pauli_terms_total;                      // MZ: Total number of Pauli terms in the commutator, for ADAPT-VQE 
+        size_t num_comm_cliques;                           // MZ: Total number of commuting cliques, for ADAPT-VQE 
+        int num_adapt_rounds;                              // MZ: total number of ADAPT rounds
+        int adapt_result;                                  // MZ: save adapt results: 
+                                                           //    0 -> Reach gradient norm tolerance
+                                                           //    1 -> Reach function tolerance
+                                                           //    2 -> Reach maximum # ADAPT iterations
+                                                           //    9 -> ADAPT iteration is not run successfully
+        int local_result;                                  // MZ: save local gradient flow results: 
+                                                           //    0 -> Reach local gradient minimum
+                                                           //    9 -> Local Gradient Follower is not run
       
 
       // deprecated function, only implemented by CPU backend for debugging
