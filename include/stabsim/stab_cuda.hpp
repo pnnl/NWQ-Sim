@@ -37,32 +37,35 @@ namespace NWQSim
             n = _n_qubits;
             rows = 2*n+1;
             cols = n;
-            
-            //Host pointers for me
-            uint32_t* h_X = nullptr;
-            uint32_t* h_Z = nullptr;
-            uint32_t* h_R = nullptr;
+            stabCounts = n;
+            x.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
+                                                       //second n represents stabilizers + 1 extra row
+            z.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
+            r.resize(rows, 0); //column on the right with 2n+1 rows
+            //The 2n+1 th row is scratch space
 
-            // Initialize and pack
-            initializeAndPack(n, X, Z, R);
-            
-            //Device pointers for the gpu
-            uint32_t* g_X = nullptr;
-            uint32_t* g_Z = nullptr;
-            uint32_t* g_R = nullptr;
+            //Intialize the identity tableau
+            for(int i = 0; i < n; i++)
+            {
+                x[i][i] = 1;
+                z[i+n][i] = 1;
+            }
+            //(2n+1 x 2n+1) 
+            //2n+1 rows comes from destab+stab+scratch space
+            //2n+1 cols comes from each qubit getting an x and z matrix, plus the r column
+            cudaMalloc(&host_XZR, (2*n+1)/*rows*/ * (2*n+1)/*cols*/ * sizeof(uint32_t)/32);
+            /*we packed the uint32 so we can divide out 32 bits*/
 
-            //Initialize h_x, h_z, and h_r...
-            cudaMalloc(&g_X, rows * sizeof(uint32_t));
-            cudaMalloc(&g_Z, rows * sizeof(uint32_t));
-            cudaMalloc(&g_R, rows * sizeof(uint32_t));
+            combine_words_and_interleave();
 
-            cudaMemcpy(g_X, h_X, rows * sizeof(uint32_t), cudaMemcpyHostToDevice);
-            cudaMemcpy(g_Z, h_Z, rows * sizeof(uint32_t), cudaMemcpyHostToDevice);
-            cudaMemcpy(g_R, h_R, rows * sizeof(uint32_t), cudaMemcpyHostToDevice);
+            //Packs x, z, and r bits into interleaved gpu warps (2D array of uint 32's)
+            //Columns in the new format are stabilizers, rows are qubits. Each qubit gets a row of x and a row of z
+            PackTo32Col();
 
-            int threads_per_block = 256;
-            int num_blocks = (rows + threads_per_block - 1) / threads_per_block;
+            cudaMemcpy(gpu_XZR, host_XZR, (2n) * (2*n+2) * sizeof(uint32_t)/32, cudaMemcpyHostToDevice);
 
+            int threads_per_block = 32;
+            int num_blocks = (2*n) * (2*n+2) / (32*32);
 
             rng.seed(Config::RANDOM_SEED);
             dist = std::uniform_int_distribution<int>(0,1);
@@ -77,24 +80,76 @@ namespace NWQSim
             SAFE_FREE_HOST(totalResults);
         }
 
-        void initializeAndPack(int n, uint32_t*& packedX, uint32_t*& packedZ, uint32_t*& packedR) {
-            const int warp_rows = rows-1;                // Number of rows in X and Z
-            const int packedCols = (n + 31) / 32; // Number of uint32_t per row (bit-packed)
+        void combine_words_and_interleave()
+        {
+            host_XZR = nullptr;
 
-            // Allocate memory for packed arrays
-            packedX = new uint32_t[warp_rows * packedCols]();
-            packedZ = new uint32_t[warp_rows * packedCols]();
-            packedR = new uint32_t[(warp_rows + 31) / 32]();
+            uint32_t* temp_row;
+            
+            //Number of warps wide (number of lanes in a row) = (x.size()/32)+1
+            for(int row = 0; row < (n*2); row++)
+            {
+                for(int i = 0; i < (x.size()/32)+1; i++)
+                {
+                    //Pack x bits into a uint 32 array. This array serves as a row of the total grid.
+                    for(int j = 0; j < 32; j++)
+                    {
+                        host_XZR[row][i] |= x[(i * 32) + j] << j;
+                    }
 
-            // Identity tableau initialization and packing
-            for (int i = 0; i < n; i++) {
-                // Set x[i][i] = 1 (X diagonal element)
-                packedX[i * packedCols + i / 32] |= (1U << (i % 32));
+                    row++;
 
-                // Set z[i + n][i] = 1 (Z diagonal element)
-                packedZ[(i + n) * packedCols + i / 32] |= (1U << (i % 32));
+                    //Pack z bits into a uint 32 array. This array serves as a row of the total grid.
+                    for(int j = 0; j < 32; j++)
+                    {
+                        host_XZR[row][i] |= z[(i * 32) + j] << j;
+                    }
+                }
             }
+            
+            
+            //the last two rows -- buffer and r -- are treated seperately and appended to the grid
         }
+
+        template <typename T>
+        __global__ void PackTo32Col(const T* X, unsigned* B, int height, int width)
+        {
+            unsigned Bval, laneid;//fetch lane−id
+            asm("mov.u32 %0, %%laneid;":"=r"(laneid));
+
+            #pragma unroll
+            for(int i = 0; i < WARP_SIZE; i++)
+            {
+                T f0 = X[(blockIdx.x * WARP_SIZE + i) * width + blockIdx.y * WARP_SIZE + laneid];
+
+                //rotate anticlockwise for Col packing
+                unsigned r0 = __brev(__ballot(f0> = 0));
+
+                if (laneid == i ) 
+                    Bval = r0;
+            }
+            
+            B[blockIdx.y * height + blockIdx.x * WARP_SIZE + laneid] = Bval;
+        }
+
+        // __global__ void PackTo32Row(const int* input, unsigned* output, int width, int height) 
+        // {
+        //     int laneId = threadIdx.x; // Warp lane ID
+        //     int blockRow = blockIdx.x * 32; // Block row start
+        //     int blockCol = blockIdx.y * 32; // Block column start
+
+        //     if (blockRow + laneId < height) {
+        //         unsigned packed = 0;
+        //         for (int i = 0; i < 32; ++i) {
+        //             int colIdx = blockCol + i;
+        //             if (colIdx < width) {
+        //                 int bit = input[(blockRow + laneId) * width + colIdx];
+        //                 packed |= (bit > 0 ? 1 : 0) << (31 - i);
+        //             }
+        //         }
+        //         output[(blockRow + laneId) * (width / 32) + blockCol / 32] = packed;
+        //     }
+        // }
 
         //resets the tableau to a full identity
         void reset_state() override
@@ -425,7 +480,7 @@ namespace NWQSim
         }
 
         // Kernel for parallelized row operations
-        __global__ void Skernel(uint32_t* x, uint32_t* z, uint32_t* r, int rows, int cols, int a) {
+        __global__ void S_kernel(uint32_t* x, uint32_t* z, uint32_t* r, int rows, int cols, int a) {
             int tid = threadIdx.x + blockIdx.x * blockDim.x; // Thread ID
             int warp_id = tid / 32;  // Warp ID (32 threads per warp)
             int lane = tid % 32;     // Lane ID within the warp
@@ -466,6 +521,10 @@ namespace NWQSim
         std::vector<std::vector<int>> z;
         std::vector<int> r;
         IdxType* totalResults = NULL;
+        //Device pointers for the gpu
+        uint32_t** host_XZR = nullptr;
+        uint32_t** gpu_XZR = nullptr;
+
 
         std::mt19937 rng;
         std::uniform_int_distribution<int> dist;   

@@ -50,42 +50,95 @@ namespace NWQSim
 
         virtual ValType fidelity(std::shared_ptr<QuantumState> other)
         {
-            throw std::runtime_error("Fidelity computation not implemented");
+            throw std::runtime_error("Fidelity computation not Implemented");
         };
         virtual void print_res_state() = 0;
         virtual void dump_res_state(std::string outfile) = 0;
 
         virtual void save_state()
         {
-            throw std::runtime_error("Save State Not implemented");
+            throw std::runtime_error("Save State Not Implemented");
         }
 
         virtual void load_state()
         {
-            throw std::runtime_error("Load State Not implemented");
+            throw std::runtime_error("Load State Not Implemented");
         }
 
         virtual void clear_state()
         {
-            throw std::runtime_error("Clear Buffer Not implemented");
+            throw std::runtime_error("Clear Buffer Not Implemented");
         }
 
         virtual std::vector<std::vector<double>> get_density_matrix()
         {
-            throw std::runtime_error("Density Matrix Return Not implemented");
+            throw std::runtime_error("Density Matrix Return Not Implemented");
         }
         virtual std::vector<std::vector<int>> get_graph_matrix()
         {
-            throw std::runtime_error("Graph Matrix Return Not implemented");
+            throw std::runtime_error("Graph Matrix Return Not Implemented");
         }
         virtual std::vector<std::string> get_stabilizers()
         {
-            throw std::runtime_error("Get Stabilizers Not implemented");
+            throw std::runtime_error("Get Stabilizers Not Implemented");
         }
         virtual void replace_stabilizer(std::string pauliString, int stabPos)
         {
-            throw std::runtime_error("Replace Stabilizers Not implemented");
+            throw std::runtime_error("Replace Stabilizers Not Implemented");
         }
+        virtual void remove_destabilizers()
+        {
+            throw std::runtime_error("Remove Destabilizers Not Implemented");
+        }
+        virtual void delete_all_rows()
+        {
+            throw std::runtime_error("Delete All Rows Not Implemented");
+        }
+        virtual int get_num_rows()
+        {
+            throw std::runtime_error("Get Number of Tableau Rows Not Implemented");
+        }
+        virtual std::unordered_map<std::string, int> stabilizer_count()
+        {
+            throw std::runtime_error("Stabilizer Count Not Implemented");
+        }
+        virtual bool check_commutation(std::string pauliString)
+        {
+            throw std::runtime_error("Check Commutation Not Implemented");
+        }
+        virtual bool check_row_commutation(std::string pauliString, int row)
+        {
+            throw std::runtime_error("Check Row Commutation Not Implemented");
+        }
+        virtual std::pair<std::string,int> get_stabilizer_line(int row)
+        {
+            throw std::runtime_error("Check Row Commutation Not Implemented");
+        }
+        virtual void add_stabilizer(std::string pauliString, int phase_bit = 0)
+        {
+            throw std::runtime_error("Add Stabilizer Not Implemented");
+        }
+        virtual IdxType get_qubits()
+        {
+            throw std::runtime_error("Get Qubits Not Implemented");
+        }
+        virtual void remove_repetitions(std::string stab, int num_s)
+        {
+            throw std::runtime_error("Remove Repetitions Not Implemented");
+        }
+        virtual void rowsum(int h, int i)
+        {
+            throw std::runtime_error("Rowsum Not Implemented");
+        }
+        virtual void remove_stabilizer(int row_index)
+        {
+            throw std::runtime_error("Remove Stabilizer Not Implemented");
+        }
+        virtual void apply_gate(std::string gate, int a, int b = -1)
+        {
+            throw std::runtime_error("Apply Gate Not Implemented");
+        }
+
 
 
 

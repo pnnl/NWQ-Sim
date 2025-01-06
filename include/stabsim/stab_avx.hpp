@@ -27,31 +27,33 @@
 
 namespace NWQSim
 {
-    class STAB_CPU : public QuantumState
+    class STAB_AVX : public QuantumState
     {
 
     public:
         //Default identity constructor
-        bool has_destabilizers;
-
-        STAB_CPU(IdxType _n_qubits) : QuantumState(SimType::STAB)
+        STAB_AVX(IdxType _n_qubits) : QuantumState(SimType::STAB)
         {
             n = _n_qubits;
             rows = 2*n+1;
             cols = n;
             stabCounts = n;
-            x.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
+            bit_x.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
                                                        //second n represents stabilizers + 1 extra row
-            z.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
-            r.resize(rows, 0); //column on the right with 2n+1 rows
+            bit_z.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
+            bit_r.resize(rows, 0); //column on the right with 2n+1 rows
             //The 2n+1 th row is scratch space
 
             //Intialize the identity tableau
             for(int i = 0; i < n; i++)
             {
-                x[i][i] = 1;
-                z[i+n][i] = 1;
+                bit_x[i][i] = 1;
+                bit_z[i+n][i] = 1;
             }
+
+            x = packBitsToAVX(bit_x);
+            z = packBitsToAVX(bit_z);
+            r = packBitsToAVX(bit_r);
             
             rng.seed(Config::RANDOM_SEED);
             dist = std::uniform_int_distribution<int>(0,1);
@@ -62,37 +64,58 @@ namespace NWQSim
             memset(totalResults, 0, sizeof(IdxType));
         }
 
-        ~STAB_CPU()
+        ~STAB_AVX()
         {
             // Release for CPU side
             SAFE_FREE_HOST(totalResults);
         }
 
-        IdxType get_qubits() override
+        //Pack bits to a 2D AVX array
+        std::vector<std::vector<__m256i>> packBitsToAVX(const std::vector<std::vector<int>>& input) 
         {
-            return n;
+            size_t avx_cols = (input[0].size()/256) + 1; //round up
+
+            //Resulting AVX 2D vector
+            std::vector<std::vector<__m256i>> avxData(rows, std::vector<__m256i>(avx_cols, _mm256_setzero_si256()));
+
+            for (size_t i = 0; i < rows; i++) 
+            {
+                for (size_t j = 0; j < avx_cols; j++)
+                {
+                    for (size_t k = 0; k < 256; k++) 
+                    {
+                        size_t target_col = (j * 256) + k;
+                        while(cols > target_col)
+                        {
+                            if(input[i][target_col] == 1) 
+                            {
+                                avxData[i][j] = _mm256_or_si256(avxData[i][j], _mm256_set1_epi64x(1ULL << k));
+                            }
+                        }
+                    }
+                }
+            }
+            return avxData;
         }
 
         void delete_all_rows() override
         {
             rows = 0;
             stabCounts = 0;
-            x.resize(0, std::vector<int>(cols,0));
-            z.resize(0, std::vector<int>(cols,0)); 
-            r.resize(0, 0);   
+            x.resize(rows, std::vector<__m256i>(cols,0));
+            z.resize(rows, std::vector<__m256i>(cols,0)); 
+            r.resize(rows, 0);   
         }
 
         void remove_destabilizers() override
         {
             has_destabilizers = false;
+        
+            x.erase(x.begin(), x.begin()+rows/2);
+            z.erase(z.begin(), z.begin()+rows/2);
+            r.erase(r.begin(), r.begin()+rows/2);
 
-            if(rows > 0)
-            {
-                x.erase(x.begin(), x.begin()+rows/2);
-                z.erase(z.begin(), z.begin()+rows/2);
-                r.erase(r.begin(), r.begin()+rows/2);
-                rows = (rows/2) + 1;
-            }
+            rows = (rows/2) + 1;
         }
 
         int get_num_rows() override
@@ -109,65 +132,23 @@ namespace NWQSim
             //Destabilizer/stabilizer rows can have more stabilizers added later ti become 2*n x m
             rows = 2*n+1;
             cols = n;
-
             stabCounts = n;
-
-            x.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
+            bit_x.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
                                                        //second n represents stabilizers + 1 extra row
-            z.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
-            r.resize(rows, 0); //column on the right with 2n+1 rows
+            bit_z.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
+            bit_r.resize(rows, 0); //column on the right with 2n+1 rows
             //The 2n+1 th row is scratch space
 
             //Intialize the identity tableau
             for(int i = 0; i < n; i++)
             {
-                x[i][i] = 1;
-                z[i+n][i] = 1;
+                bit_x[i][i] = 1;
+                bit_z[i+n][i] = 1;
             }
-        }
 
-        void apply_gate(std::string gate, int a, int b = -1) override
-        {
-            int tempVal;
-            if(gate == "H")
-            {
-                for(int i = 0; i < rows-1; i++)
-                {
-                    //Phase
-                    r[i] ^= (x[i][a] & z[i][a]);
-                    //Entry -- swap x and z bits
-                    tempVal = x[i][a];
-                    x[i][a] = z[i][a];
-                    z[i][a] = tempVal; 
-                } 
-            }
-            else if(gate == "S")
-            {
-                for(int i = 0; i < rows-1; i++)
-                {
-                    //Phase
-                    r[i] ^= (x[i][a] & z[i][a]);
-
-                    //Entry
-                    z[i][a] ^= x[i][a];
-                }
-            }
-            else if(gate == "CX")
-            {
-                for(int i = 0; i < rows-1; i++)
-                {
-                    //Phase
-                    r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
-
-                    //Entry
-                    x[i][b] ^= x[i][a];
-                    z[i][a] ^= z[i][b];
-                }
-            }
-            else
-            {
-                std::cout << "Non-Clifford Gatae in apply_gate!" << std::endl;
-            }
+            x = packBitsToAVX(bit_x);
+            z = packBitsToAVX(bit_z);
+            r = packBitsToAVX(bit_r);
         }
 
         void set_seed(IdxType s) override
@@ -411,7 +392,7 @@ namespace NWQSim
         }
 
         //Removes all but one repitions of a stabilizer
-        void remove_repetitions(std::string stab, int num_s) override
+        void remove_repetitions(std::string stab, int num_s)
         {
             std::vector<int> temp_x;
             std::vector<int> temp_z;
@@ -473,51 +454,45 @@ namespace NWQSim
             int new_z;
             int start = 0;
 
-            // std::cout << "cols: " << cols << " string: " << pauliString << std::endl;
-
-            // //Loop over every stabilizer of the tableau
-            // if(has_destabilizers)
-            //     start = rows/2;
-            
-            // std::cout << "start: " << start << " rows: " << rows << std::endl;
-
-            // for (int i = start; i < rows; i++) 
-            // {
-            //     //Compute inner product
-            //     int product = 0;
+            //Loop over every stabilizer of the tableau
+            if(has_destabilizers)
+                start = rows/2;
+            for (int i = start; i < x.size()-1; i++) 
+            {
+                //Compute inner product
+                int product = 0;
                 
-            //     //loop over every column
-            //     for (int j = 0; j < cols; j++) 
-            //     {
-            //         switch(pauliString[j])
-            //         {
-            //             case 'I':
-            //                 new_x = 0;
-            //                 new_z = 0;
-            //                 break;
-            //             case 'X':
-            //                 new_x = 1;
-            //                 new_z = 0;
-            //                 break;
-            //             case 'Y':   
-            //                 new_x = 1;
-            //                 new_z = 1;
-            //                 break;
-            //             case 'Z':
-            //                 new_x = 0;
-            //                 new_z = 1;
-            //                 break;
-            //             default:
-            //                 std::logic_error("Invalid stabilizer");
-            //                 break;
-            //         }
-            //         product += (x[i][j] * new_z + z[i][j] * new_x) % 2;
-            //     }
-            //     std::cout << "Product done." << std::endl;
-            //     if (product % 2 != 0) {
-            //         return false; //Anti-commutation somewhere in the Pauli string
-            //     }
-            // }
+                //loop over every column
+                for (int j = 0; j < x[i].size(); j++) 
+                {
+                    switch(pauliString[j])
+                    {
+                        case 'I':
+                            new_x = 0;
+                            new_z = 0;
+                            break;
+                        case 'X':
+                            new_x = 1;
+                            new_z = 0;
+                            break;
+                        case 'Y':   
+                            new_x = 1;
+                            new_z = 1;
+                            break;
+                        case 'Z':
+                            new_x = 0;
+                            new_z = 1;
+                            break;
+                        default:
+                            std::logic_error("Invalid stabilizer");
+                            break;
+                    }
+                    product += (x[i][j] * new_z + z[i][j] * new_x) % 2;
+                }
+                if (product % 2 != 0) {
+                    return false; //Anti-commutation somewhere in the Pauli string
+                }
+            }
             return true; //Commutes with all stabilizers
         }
         
@@ -564,7 +539,6 @@ namespace NWQSim
             assert(pauliString.length() == n);
             if(has_destabilizers)
             {
-                std::cout << "Shouldn't be here for T case" << std::endl;
                 if(check_commutation(pauliString))
                 {
                     //Start by adding a row of destabilizers and stabilizers to T
@@ -622,37 +596,46 @@ namespace NWQSim
             }
             else
             {
-                std::cout << "Rows before addition: " << rows << std::endl;
                 if(check_commutation(pauliString))
                 {
                     //Start by adding a row of stabilizers to T
                     stabCounts++;
                     rows++;
-                    x.push_back(std::vector<int>(cols,0));
-                    z.push_back(std::vector<int>(cols,0));
-                    r.push_back(phase_bit);
+                    x.insert(x.end()-1, std::vector<int>(cols,0));
+                    z.insert(z.end()-1, std::vector<int>(cols,0));
+                    r.insert(r.end()-1, phase_bit);
                     
                     //Stabilizer and destabilizer addition
-                    for(int i = 0; i < cols; i++)
+                    for(int i = 0; i < pauliString.length(); i++)
                     {
                         switch(pauliString[i])
                         {
                             case 'I':
-                                x[rows-1][i] = 0;
-                                z[rows-1][i] = 0;
+                                x[rows-2][i] = 0;
+                                z[rows-2][i] = 0;
+                                x[(rows>>1)-1][i] = 0;
+                                z[(rows>>1)-1][i] = 0;
                                 break;
                             case 'X':
-                                x[rows-1][i] = 1;
-                                z[rows-1][i] = 0;
+                                x[rows-2][i] = 1;
+                                z[rows-2][i] = 0;
+                                x[(rows>>1)-1][i] = 0;
+                                z[(rows>>1)-1][i] = 1;
                                 break;
                             case 'Y':   
-                                x[rows-1][i] = 1;
-                                z[rows-1][i] = 1;
-                                r[rows-1] = 1;
+                                x[rows-2][i] = 1;
+                                z[rows-2][i] = 1;
+                                //make the destabilizer X to anticommute with Y
+                                x[(rows>>1)-1][i] = 1;
+                                z[(rows>>1)-1][i] = 0;
+                                //add an i to the 2 bit phase representation at the stabilizer row
+                                r[rows-1] = (r[rows-1] + 1) % 4;
                                 break;
                             case 'Z':
-                                x[rows-1][i] = 0;
-                                z[rows-1][i] = 1;
+                                x[rows-2][i] = 0;
+                                z[rows-2][i] = 1;
+                                x[(rows>>1)-1][i] = 1;
+                                z[(rows>>1)-1][i] = 0;
                                 break;
                             default:
                                 std::logic_error("Invalid stabilizer");
@@ -719,7 +702,7 @@ namespace NWQSim
             }
         }
 
-        void remove_stabilizer(int row_index) override
+        void remove_stabilizer(int row_index)
         {
             x.erase(x.begin()+row_index);
             z.erase(z.begin()+row_index);
@@ -768,7 +751,7 @@ namespace NWQSim
         }
 
         //Sub-process in measurement gates
-        void rowsum(int h, int i) override
+        void rowsum(int h, int i)
         {
             int sum = 0;
             for(int j = 0; j < n; j++)
@@ -1137,13 +1120,17 @@ namespace NWQSim
         }
 
     protected:
-        IdxType n;
+        bool has_destabilizers;
+        const IdxType n;
         int stabCounts;
         IdxType rows;
         IdxType cols;
-        std::vector<std::vector<int>> x;
-        std::vector<std::vector<int>> z;
-        std::vector<int> r;
+        std::vector<std::vector<int>> bit_x;
+        std::vector<std::vector<int>> bit_z;
+        std::vector<int> bit_r;
+        std::vector<std::vector<__m256i>> x;
+        std::vector<std::vector<__m256i>> z;
+        std::vector<__m256i> r;
         IdxType* totalResults = NULL;
 
         std::mt19937 rng;
