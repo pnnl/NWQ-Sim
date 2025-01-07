@@ -73,6 +73,7 @@ namespace NWQSim
             return n;
         }
 
+        //Delete all stabilizers and leave an empty tableau object
         void delete_all_rows() override
         {
             rows = 0;
@@ -82,6 +83,7 @@ namespace NWQSim
             r.resize(0, 0);   
         }
 
+        //Remove only the destabilizers for cases where full states aren't necessary
         void remove_destabilizers() override
         {
             has_destabilizers = false;
@@ -91,7 +93,7 @@ namespace NWQSim
                 x.erase(x.begin(), x.begin()+rows/2);
                 z.erase(z.begin(), z.begin()+rows/2);
                 r.erase(r.begin(), r.begin()+rows/2);
-                rows = (rows/2) + 1;
+                rows = (rows/2);
             }
         }
 
@@ -315,7 +317,7 @@ namespace NWQSim
             return full_paulis;
         }
 
-        //Creates a sparse density matrix out of the Pauli strings stabilizers
+        //Creates a sparse density matrix out of Pauli stabilizers
         std::vector<std::vector<double>> get_density_matrix() override
         {
             std::vector<std::pair<std::string,int>> full_paulis = get_all_lines();
@@ -335,7 +337,7 @@ namespace NWQSim
                             S = kroneckerProduct(S, sparsePauliI());
                             break;
                         case 'X':
-                            S= kroneckerProduct(S, sparsePauliX());
+                            S = kroneckerProduct(S, sparsePauliX());
                             break;
                         case 'Y':   
                             S = kroneckerProduct(S, sparsePauliY());
@@ -462,67 +464,71 @@ namespace NWQSim
         {
             std::unordered_map<std::string, int> map;
             std::vector<std::string> stabs = get_stabilizers();
+
+            std::cout << "--- Current state ---" << std::endl;
+            this->print_res_state();
             for(int i = 0; i < stabs.size(); i++)
+            {
+                std::cout << stabs[i] << std::endl;
                 map[stabs[i]]++;            
+                std::cout << map[stabs[i]] << std::endl;
+            }
+            std::cout << "--- Current state ---" << std::endl;
             return map;
         }
 
-        bool check_commutation(std::string pauliString) override
+        //Check every stabilizer of the tableau
+        //If one of the stabilizers doesn't commute with the provide pauli string, return false
+        bool check_commutation(std::string& pauliString) override
         {
             int new_x;
             int new_z;
             int start = 0;
-
-            // std::cout << "cols: " << cols << " string: " << pauliString << std::endl;
-
-            // //Loop over every stabilizer of the tableau
-            // if(has_destabilizers)
-            //     start = rows/2;
             
-            // std::cout << "start: " << start << " rows: " << rows << std::endl;
+            if(has_destabilizers)
+                start = rows/2;
 
-            // for (int i = start; i < rows; i++) 
-            // {
-            //     //Compute inner product
-            //     int product = 0;
+            for (int i = start; i < rows; i++) 
+            {
+                //Compute inner product
+                int product = 0;
                 
-            //     //loop over every column
-            //     for (int j = 0; j < cols; j++) 
-            //     {
-            //         switch(pauliString[j])
-            //         {
-            //             case 'I':
-            //                 new_x = 0;
-            //                 new_z = 0;
-            //                 break;
-            //             case 'X':
-            //                 new_x = 1;
-            //                 new_z = 0;
-            //                 break;
-            //             case 'Y':   
-            //                 new_x = 1;
-            //                 new_z = 1;
-            //                 break;
-            //             case 'Z':
-            //                 new_x = 0;
-            //                 new_z = 1;
-            //                 break;
-            //             default:
-            //                 std::logic_error("Invalid stabilizer");
-            //                 break;
-            //         }
-            //         product += (x[i][j] * new_z + z[i][j] * new_x) % 2;
-            //     }
-            //     std::cout << "Product done." << std::endl;
-            //     if (product % 2 != 0) {
-            //         return false; //Anti-commutation somewhere in the Pauli string
-            //     }
-            // }
+                //Loop over every column
+                for (int j = 0; j < cols; j++) 
+                {
+                    switch(pauliString[j])
+                    {
+                        case 'I':
+                            new_x = 0;
+                            new_z = 0;
+                            break;
+                        case 'X':
+                            new_x = 1;
+                            new_z = 0;
+                            break;
+                        case 'Y':   
+                            new_x = 1;
+                            new_z = 1;
+                            break;
+                        case 'Z':
+                            new_x = 0;
+                            new_z = 1;
+                            break;
+                        default:
+                            std::logic_error("Invalid stabilizer");
+                            break;
+                    }
+                    product ^= ((x[i][j] & new_z) ^ (z[i][j] & new_x));
+                }
+                std::cout << "Full commutation product done. Result: " << product << std::endl;
+                if(product > 0) {
+                    return false; //Anti-commutation somewhere in the Pauli string
+                }
+            }
             return true; //Commutes with all stabilizers
         }
         
         //True if pauliString and target row stabilizer commute
-        //False if not
         bool check_row_commutation(std::string pauliString, int row) override
         {
             int temp_x;
@@ -552,16 +558,20 @@ namespace NWQSim
                         std::logic_error("Invalid stabilizer");
                         break;
                 }
-                product += (x[row][col] * temp_z + z[row][col] * temp_x);
+                product ^= ((x[row][col] & temp_z) ^ (z[row][col] & temp_x));
             }
-            if(product%2)
-                return true;
-            return false;
+            std::cout << "Row commutation product done. Result: " << product << std::endl;
+
+            if(product > 0)
+                return false;
+            return true;
         }
 
         void add_stabilizer(std::string pauliString, int phase_bit = 0) override
         {
             assert(pauliString.length() == n);
+
+            //Full stabilizer/destabilizer tableau
             if(has_destabilizers)
             {
                 std::cout << "Shouldn't be here for T case" << std::endl;
@@ -617,9 +627,11 @@ namespace NWQSim
                 }
                 else
                 {
-                    std::logic_error("Stabilizer fails commutation check" + pauliString);
+                    std::logic_error("Stabilizer fails commutation check: " + pauliString);
                 }
             }
+
+            //Only stabilizer tableau
             else
             {
                 std::cout << "Rows before addition: " << rows << std::endl;
@@ -632,7 +644,7 @@ namespace NWQSim
                     z.push_back(std::vector<int>(cols,0));
                     r.push_back(phase_bit);
                     
-                    //Stabilizer and destabilizer addition
+                    //Stabilizer only addition
                     for(int i = 0; i < cols; i++)
                     {
                         switch(pauliString[i])
@@ -668,7 +680,7 @@ namespace NWQSim
         }
 
         //Replaces a stabilizer pauli string at some row in the Tableau. Useful for initializing a
-        // new Tableau in a for loop without circuit initialization
+        //new Tableau in a for loop without circuit initialization
         void replace_stabilizer(std::string pauliString, int stabPos) override
         {
             assert(pauliString.length() == n);
@@ -724,6 +736,8 @@ namespace NWQSim
             x.erase(x.begin()+row_index);
             z.erase(z.begin()+row_index);
             r.erase(r.begin()+row_index);
+            stabCounts--;
+            rows--;
         }
         
         void transpose(std::vector<std::vector<int>>& M)
@@ -731,7 +745,6 @@ namespace NWQSim
             int rowSize = M.size();
             int colSize = M[0].size();
             std::vector<std::vector<int>> MT = M;
-
 
             for(int i = 0; i < rowSize; i++)
             {

@@ -102,7 +102,7 @@ namespace NWQSim
         {
             throw std::runtime_error("Stabilizer Count Not Implemented");
         }
-        virtual bool check_commutation(std::string pauliString)
+        virtual bool check_commutation(std::string& pauliString)
         {
             throw std::runtime_error("Check Commutation Not Implemented");
         }
