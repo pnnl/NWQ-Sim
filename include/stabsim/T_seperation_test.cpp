@@ -9,7 +9,7 @@
 #include "../circuit.hpp"
 #include "../nwq_util.hpp"
 
-// #include "T_seperation.hpp"
+//#include "T_seperation.hpp"
 
 namespace NWQSim
 {
@@ -115,14 +115,14 @@ namespace NWQSim
 
         /*Process T tableaus*/
 
-        std::cout << "---- T tableau before processing -----" << std::endl;
+        std::cout << "---- T tableau before processing. Rows: " << T_rows << " ----" << std::endl;
         T_tab->print_res_state();
 
         //Sort through the T tableau in reverse order to undo our first reverse parse of the Cliff+T circuit
-        for(int i = T_rows-1; i > -1; i--)
+        for(int i = T_rows-2; i > -1; i--)
         {
             tempStab = (T_tab->get_stabilizer_line(i)).first;
-            
+
             //Check all of the tableaus we have right now and see if any of them commute with the T line, starting with the first tableau
             for(int i = 0; i < P.size(); i++)
             {

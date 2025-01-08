@@ -417,7 +417,6 @@ namespace NWQSim
         {
             std::vector<int> temp_x;
             std::vector<int> temp_z;
-
             for (int j = 0; j < stab.size(); j++) 
             {
                 switch(stab[j])

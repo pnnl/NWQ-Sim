@@ -1,8 +1,5 @@
 #pragma once
 
-// #ifndef tableau_addons
-// #define tableau_addons
-
 //Eigen and pauli math
 #include "pauli_math.hpp"
 
@@ -24,12 +21,24 @@
 #include <stdexcept>
 #include <vector>
 #include <set>
+#include <assert.h>
+#include <cooperative_groups.h>
+#include <iostream>
+#include <cuda.h>
+#include <memory>
+#include <mma.h>
 
 namespace NWQSim
 {
+    using namespace cooperative_groups;
+    using namespace std;
+
+    // Simulation kernel runtime
+    class STAB_CUDA;
+    __global__ void simulation_kernel_cuda(STAB_CUDA *stab_gpu, IdxType n_gates);
+
     class STAB_CUDA : public QuantumState
     {
-
     public:
         //Default identity constructor
         STAB_CUDA(IdxType _n_qubits) : QuantumState(SimType::STAB)
@@ -58,7 +67,7 @@ namespace NWQSim
 
             combine_words_and_interleave();
 
-            //Packs x, z, and r bits into interleaved gpu warps (2D array of uint 32's)
+            //Packs x, z, and r bits into interleaved gpu warps (2D array of (uint32x32))
             //Columns in the new format are stabilizers, rows are qubits. Each qubit gets a row of x and a row of z
             PackTo32Col();
 
