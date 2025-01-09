@@ -1,0 +1,60 @@
+#include <cuda_runtime.h>
+#include <iostream>
+#include <vector>
+
+__global__ void computeXOR(const uint8_t* x, const uint8_t* z, uint8_t* result, int n, int col_idx) {
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (row < 2 * n) {
+        // Calculate XOR for the selected column
+        result[row] = x[row * n + col_idx] ^ z[row * n + col_idx];
+    }
+}
+
+int main() {
+    int n = 1024; // Number of columns, 2n rows
+    int col_idx = 0; // Column to compute XOR for
+
+    // Host matrices (CPU)
+    std::vector<uint8_t> x(2 * n * n, 0); // 2n x n matrix
+    std::vector<uint8_t> z(2 * n * n, 0); // 2n x n matrix
+    std::vector<uint8_t> result(2 * n, 0);
+
+    // Initialize matrices x and z
+    for (int i = 0; i < 2 * n * n; ++i) {
+        x[i] = i % 2;
+        z[i] = (i + 1) % 2;
+    }
+
+    // Device matrices (GPU)
+    uint8_t *d_x, *d_z, *d_result;
+    cudaMalloc((void**)&d_x, x.size() * sizeof(uint8_t));
+    cudaMalloc((void**)&d_z, z.size() * sizeof(uint8_t));
+    cudaMalloc((void**)&d_result, result.size() * sizeof(uint8_t));
+
+    // Copy data from host to device
+    cudaMemcpy(d_x, x.data(), x.size() * sizeof(uint8_t), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_z, z.data(), z.size() * sizeof(uint8_t), cudaMemcpyHostToDevice);
+
+    // Define grid and block size
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (2 * n + threadsPerBlock - 1) / threadsPerBlock;
+
+    // Launch the kernel
+    computeXOR<<<blocksPerGrid, threadsPerBlock>>>(d_x, d_z, d_result, n, col_idx);
+
+    // Copy result back to host
+    cudaMemcpy(result.data(), d_result, result.size() * sizeof(uint8_t), cudaMemcpyDeviceToHost);
+
+    // Print result for verification
+    for (int i = 0; i < 2 * n; ++i) {
+        std::cout << "Row " << i << ": " << (int)result[i] << std::endl;
+    }
+
+    // Free device memory
+    cudaFree(d_x);
+    cudaFree(d_z);
+    cudaFree(d_result);
+
+    return 0;
+}

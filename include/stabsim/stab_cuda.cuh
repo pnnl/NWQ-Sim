@@ -47,17 +47,19 @@ namespace NWQSim
             rows = 2*n+1;
             cols = n;
             stabCounts = n;
-            x.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
+            x.resize(rows * cols); //first 2n+1 x n block. first n represents destabilizers
                                                        //second n represents stabilizers + 1 extra row
-            z.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
+            z.resize(rows * cols); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
             r.resize(rows, 0); //column on the right with 2n+1 rows
             //The 2n+1 th row is scratch space
 
             //Intialize the identity tableau
             for(int i = 0; i < n; i++)
             {
-                x[i][i] = 1;
-                z[i+n][i] = 1;
+                // x[i][i] = 1;
+                // z[i+n][i] = 1;
+                x[i + (i * n)] = 1;
+                z[i + (i * n)] = 1;
             }
             //(2n+1 x 2n+1) 
             //2n+1 rows comes from destab+stab+scratch space
