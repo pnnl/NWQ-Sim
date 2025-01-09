@@ -19,6 +19,7 @@
 #ifdef CUDA_ENABLED
 #include "svsim/sv_cuda.cuh"
 #include "dmsim/dm_cuda.cuh"
+#include "stabsim/stab_cuda.cuh"
 #endif
 
 #ifdef CUDA_MPI_ENABLED
