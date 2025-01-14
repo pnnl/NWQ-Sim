@@ -159,11 +159,11 @@ namespace NWQSim
                 for(int i = 0; i < rows-1; i++)
                 {
                     //Phase
-                    r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
+                    r[i] ^= ((x[i][b] & z[i][a]) & (x[i][a]^z[i][b]^1));
 
                     //Entry
-                    x[i][b] ^= x[i][a];
-                    z[i][a] ^= z[i][b];
+                    x[i][a] ^= x[i][b];
+                    z[i][b] ^= z[i][a];
                 }
             }
             else
@@ -1540,161 +1540,159 @@ namespace NWQSim
                 int a = gate.qubit;
                 assert(a < n);
 
-                if (gate.op_name == OP::H)
+                switch (gate.op_name)
                 {
-                    
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Phase
-                        r[i] ^= (x[i][a] & z[i][a]);
-                        //Entry -- swap x and z bits
-                        tempVal = x[i][a];
-                        x[i][a] = z[i][a];
-                        z[i][a] = tempVal; 
-                    } 
-                }
-                else if (gate.op_name == OP::S)
-                {
-                    int a = gate.qubit;
-
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Phase
-                        r[i] ^= (x[i][a] & z[i][a]);
-
-                        //Entry
-                        z[i][a] ^= x[i][a];
-                    }
-
-                }
-                else if (gate.op_name == OP::CX)
-                {  
-                    int a = gate.ctrl;
-                    int b = gate.qubit;
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Phase
-                        r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
-
-                        //Entry
-                        x[i][b] ^= x[i][a];
-                        z[i][a] ^= z[i][b];
-                    }
-                }
-                else if (gate.op_name == OP::M)
-                {  
-                    int a = gate.qubit;
-                    int p = -1;
-                    for(int p_index = half_rows; p_index < rows-1; p_index++)
-                    {  
-                        //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
-                        if(x[p_index][a])
-                        {
-                            p = p_index;
-                            break;
-                        }
-                    }
-                    //A p such that x[p][a] = 1 exists
-                    if(p > -1)
-                    {
+                    case OP::H: 
                         for(int i = 0; i < rows-1; i++)
                         {
-                            if((x[i][a]) && (i != p))
+                            //Phase
+                            r[i] ^= (x[i][a] & z[i][a]);
+                            //Entry -- swap x and z bits
+                            tempVal = x[i][a];
+                            x[i][a] = z[i][a];
+                            z[i][a] = tempVal; 
+                        }
+                        break;
+        
+                    case OP::S:
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            //Phase
+                            r[i] ^= (x[i][a] & z[i][a]);
+
+                            //Entry
+                            z[i][a] ^= x[i][a];
+                        }
+                        break;
+
+                    case OP::CX:
+                    {
+                        int b = gate.ctrl;
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            //Phase
+                            r[i] ^= ((x[i][b] & z[i][a]) & (x[i][a]^z[i][b]^1));
+
+                            //Entry
+                            x[i][a] ^= x[i][b];
+                            z[i][b] ^= z[i][a];
+                        }
+                        break;
+                    }
+
+                    case OP::M:
+                    {
+                        int p = -1;
+                        for(int p_index = half_rows; p_index < rows-1; p_index++)
+                        {  
+                            //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
+                            if(x[p_index][a])
                             {
-                                rowsum(i, p);
+                                p = p_index;
+                                break;
                             }
                         }
-                        x[p-half_rows] = x[p];
-                        z[p-half_rows] = z[p];
-                        //Change all the columns in row p to be 0
-                        for(int i = 0; i < n; i++)
+                        //A p such that x[p][a] = 1 exists
+                        if(p > -1)
                         {
-                            x[p][i] = 0;
-                            z[p][i] = 0;                        
-                        }
+                            for(int i = 0; i < rows-1; i++)
+                            {
+                                if((x[i][a]) && (i != p))
+                                {
+                                    rowsum(i, p);
+                                }
+                            }
+                            x[p-half_rows] = x[p];
+                            z[p-half_rows] = z[p];
+                            //Change all the columns in row p to be 0
+                            for(int i = 0; i < n; i++)
+                            {
+                                x[p][i] = 0;
+                                z[p][i] = 0;                        
+                            }
 
-                        //Generate and display a random number
-                        int randomBit = dist(rng);
-                        
-                        if(randomBit)
-                        {
-                            //std::cout << "Random result of 1" << std::endl;
-                            r[p] = 1;
+                            //Generate and display a random number
+                            int randomBit = dist(rng);
+                            
+                            if(randomBit)
+                            {
+                                //std::cout << "Random result of 1" << std::endl;
+                                r[p] = 1;
+                            }
+                            else
+                            {
+                                //std::cout << "Random result of 0" << std::endl;
+                                r[p] = 0;
+                            }
+                            z[p][a] = 1;
+
+                            totalResults[0] += r[p] << a;
+                            // std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
                         }
                         else
                         {
-                            //std::cout << "Random result of 0" << std::endl;
-                            r[p] = 0;
-                        }
-                        z[p][a] = 1;
-
-                        totalResults[0] += r[p] << a;
-                        // std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
-                    }
-                    else
-                    {
-
-                        //Set the scratch space row to be 0
-                        //i is the column indexer in this case
-                        for(int i = 0; i < n; i++)
-                        {
-                            x[rows-1][i] = 0;
-                            z[rows-1][i] = 0;
-                        }
-                        r[rows-1] = 0;
-
-                        //Run rowsum subroutine
-                        for(int i = 0; i < half_rows; i++)
-                        {
-                            if(x[i][a] == 1)
+                            //Set the scratch space row to be 0
+                            //i is the column indexer in this case
+                            for(int i = 0; i < n; i++)
                             {
-                                //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
-                                rowsum(rows-1, i+half_rows);
+                                x[rows-1][i] = 0;
+                                z[rows-1][i] = 0;
                             }
+                            r[rows-1] = 0;
+
+                            //Run rowsum subroutine
+                            for(int i = 0; i < half_rows; i++)
+                            {
+                                if(x[i][a] == 1)
+                                {
+                                    //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
+                                    rowsum(rows-1, i+half_rows);
+                                }
+                            }
+                            // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
+                            totalResults[0] += r[rows-1] << a;
                         }
-                        // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
-                        totalResults[0] += r[rows-1] << a;
+                        break;
                     }
-                } //End M
-                else if (gate.op_name == OP::X)
-                {
-                    //equiv to H S S H or H Z H
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        r[i] ^= z[i][a];
-                    } 
-                }
-                else if (gate.op_name == OP::Y)
-                {   
-                    //equiv to Z X
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        r[i] = r[i] ^ x[i][a] ^ z[i][a];
-                    }
-                }
-                else if (gate.op_name == OP::Z)
-                {
-                    //equiv to S S gates
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Phase
-                        r[i] ^= x[i][a];
-                    }
-                }
-                else if (gate.op_name == OP::MA)
-                {
-                    measure_all();
-                }
-                else    
-                {
-                    std::cout << "Non-Clifford or unrecognized gate: "
-                                << OP_NAMES[gate.op_name] << std::endl;
-                    std::logic_error("Invalid gate type");
-                    exit(1);
-                }
+
+                    case OP::X:
+                        //equiv to H S S H or H Z H
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            r[i] ^= z[i][a];
+                        }
+                        break;
+        
+                    case OP::Y:
+                        //equiv to Z X
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            r[i] = r[i] ^ x[i][a] ^ z[i][a];
+                        }
+                        break;
+
+                    case OP::Z:
+                        //equiv to S S gates
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            //Phase
+                            r[i] ^= x[i][a];
+                        }
+                        break;
+                    
+                    case OP::MA:
+                        measure_all();
+                        break;
+                    
+                    default:
+                        std::cout << "Non-Clifford or unrecognized gate: "
+                                    << OP_NAMES[gate.op_name] << std::endl;
+                        std::logic_error("Invalid gate type");
+                        exit(1);
+                }//End switch
             } //End gates for loop
         } //End simulate
     }; //End tableau class
-} // namespace NWQSim
+} //namespace NWQSim
 
-// #endif
+//#endif

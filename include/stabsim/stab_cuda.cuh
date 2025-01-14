@@ -30,8 +30,6 @@
 
 namespace NWQSim
 {
-    const int packed_size = 64;
-
     using namespace cooperative_groups;
     using namespace std;
 
@@ -45,152 +43,146 @@ namespace NWQSim
         //Default identity constructor
         STAB_CUDA(IdxType _n_qubits) : QuantumState(SimType::STAB)
         {
-            /*Initialize like usual*/
+            /*Initialize basic bit data*/
             n = _n_qubits;
             rows = 2*n+1;
             cols = n;
             stabCounts = n;
-            
+            packed_bits = 32;
+            packed_rows = (rows/packed_bits)+1;
+            IdxType packed_r_size = packed_rows * sizeof(uint32_t);
+            IdxType packed_matrix_size = (packed_rows * cols) * sizeof(uint32_t);
+
+            //Space out the vectors
             x.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
                                                        //second n represents stabilizers + 1 extra row
             z.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
             r.resize(rows, 0); //column on the right with 2n+1 rows
             //The 2n+1 th row is scratch space
 
-            //Intialize the identity tableau
-            for(int i = 0; i < n; i++)
-            {
-                x[i][i] = 1;
-                z[i+n][i] = 1;
-            }
-            /*End initialization*/
-
-
-
-            /*Pack bits to IdxType data types*/
-            int col_idx = 0; //Column to compute on
-            int packedCols = ((rows) + (packed_size-1)) / packed_size; //Number of packed columns required to store every row of a given column of bits
-            x_packed.resize(packedCols, std::vector<IdxType>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
-                                                       //second n represents stabilizers + 1 extra row
-            z_packed.resize(packedCols, std::vector<IdxType>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
-            r_packed.resize(packedCols, 0); //column on the right with 2n+1 rows    
-
-            /*Pack data*/
-            for(int i = 0; i < n; i++)
-            {
-                x_packed[i/packed_size][i] = (1 << (i % packed_size));
-                z_packed[(i/packed_size)+(n/packed_size)][i] = (1 << (i % packed_size));
-            }
-
-
-            //Device matrices (GPU)
-            IdxType *d_x, *d_z, *d_r;
-            cudaMalloc((void**)&d_x, x_packed.size() * sizeof(IdxType));
-            cudaMalloc((void**)&d_z, z_packed.size() * sizeof(IdxType));
-            cudaMalloc((void**)&d_r, r_packed.size() * sizeof(IdxType));
-
-            //Copy data from host to device
-            cudaMemcpy(d_x, x_packed.data(), x_packed.size() * sizeof(IdxType), cudaMemcpyHostToDevice);
-            cudaMemcpy(d_z, z_packed.data(), z_packed.size() * sizeof(IdxType), cudaMemcpyHostToDevice);
-            cudaMemcpy(d_r, r_packed.data(), r_packed.size() * sizeof(IdxType), cudaMemcpyHostToDevice);
-
-            //Define grid and block size
-            int threadsPerBlock = 256;
-            int blocksPerGrid = (2 * n + threadsPerBlock - 1) / threadsPerBlock;
-
-            //Launch the kernel
-            computeXOR<<<blocksPerGrid, threadsPerBlock>>>(d_x, d_z, d_result, n, col_idx);
-
-            //Copy result back to host
-            cudaMemcpy(result.data(), d_result, result.size() * sizeof(int), cudaMemcpyDeviceToHost);
-
-            //(2n+1 x 2n+1) 
-            //2n+1 rows comes from destab+stab+scratch space
-            //2n+1 cols comes from each qubit getting an x and z matrix, plus the r column
-            //cudaMalloc(&host_XZR, (2*n+1)/*rows*/ * (2*n+1)/*cols*/ * sizeof(uint32_t)/32);
-            /*we packed the uint32 so we can divide out 32 bits*/
-            // combine_words_and_interleave();
-
-            //Packs x, z, and r bits into interleaved gpu warps (2D array of (uint32x32))
-            //Columns in the new format are stabilizers, rows are qubits. Each qubit gets a row of x and a row of z
-            // PackTo32Col();
-
-            // cudaMemcpy(gpu_XZR, host_XZR, (2n) * (2*n+2) * sizeof(uint32_t)/32, cudaMemcpyHostToDevice);
-
-            // int threads_per_block = 32;
-            // int num_blocks = (2*n) * (2*n+2) / (32*32);
-
             rng.seed(Config::RANDOM_SEED);
             dist = std::uniform_int_distribution<int>(0,1);
-
             SAFE_ALOC_HOST(totalResults, sizeof(IdxType));
             memset(totalResults, 0, sizeof(IdxType));
+            /*End initialization*/
+
+            //Initialize packed matrices
+            SAFE_ALOC_HOST_CUDA(x_packed_cpu, packed_matrix_size);
+            SAFE_ALOC_HOST_CUDA(z_packed_cpu, packed_matrix_size);
+            SAFE_ALOC_HOST_CUDA(r_packed_cpu, packed_r_size);
+            memset(x_packed_cpu, 0, packed_matrix_size);
+            memset(z_packed_cpu, 0, packed_matrix_size);
+            memset(r_packed_cpu, 0, packed_r_size);
+
+            //Transpose and initialize identity tableau in the packed data
+            for(int i = 0; i < n; i++)
+            {
+                x_packed_cpu[i/packed_bits][i] |= (1 << (i % packed_bits));
+                z_packed_cpu[(i/packed_bits)+(n/packed_bits)][i] |= (1 << (i % packed_bits));
+            }
+
+            //Allocate the packed data to the GPU side using NVSHMEM
+            SAFE_ALOC_GPU(x_packed_gpu, packed_matrix_size);
+            SAFE_ALOC_GPU(z_packed_gpu, packed_matrix_size);
+            SAFE_ALOC_GPU(r_packed_gpu, packed_r_size);
+
+            cudaCheckError();
+
+            //Copy data to the GPU side
+            cudaSafeCall(cudaMemcpy(x_packed_gpu, x_packed_cpu, packed_matrix_size,
+                                    cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(z_packed_gpu, z_packed_cpu, packed_matrix_size,
+                                    cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemset(r_packed_gpu, r_packed_cpu, packed_r_size, cudaMemcpyHostToDevice));
         }
 
         ~STAB_CUDA()
         {
             // Release for CPU side
             SAFE_FREE_HOST(totalResults);
+
+            SAFE_FREE_HOST_CUDA(x_packed_cpu);
+            SAFE_FREE_HOST_CUDA(z_packed_cpu);
+            SAFE_FREE_HOST_CUDA(r_packed_cpu);
+
+            //Allocate the packed data to the GPU side using NVSHMEM
+            SAFE_FREE_GPU(x_packed_gpu);
+            SAFE_FREE_GPU(z_packed_gpu);
+            SAFE_FREE_GPU(r_packed_gpu);
         }
 
-        // void combine_words_and_interleave()
-        // {
-        //     host_XZR = nullptr;
+        void pack_to_gpu()
+        {
+            for(int i = 0; i < rows; i++)
+            {
+                mask = i % packed_bits;
+                r_packed_cpu[i/packed_bits] |= r << (mask);
+                for(int j = 0; j < cols; j++)
+                {
+                    x_packed_cpu[i/packed_bits] |= x[i][j] << (mask);
+                    x_packed_cpu[i/packed_bits] |= x[i][j] << (mask);
+                }
+            }
+            //Copy data to the GPU side
+            cudaSafeCall(cudaMemcpy(x_packed_gpu, x_packed_cpu, packed_matrix_size,
+                                    cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(z_packed_gpu, z_packed_cpu, packed_matrix_size,
+                                    cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(r_packed_gpu, r_packed_cpu, packed_r_size, cudaMemcpyHostToDevice));
+        }
 
-        //     uint32_t* temp_row;
-            
-        //     //Number of warps wide (number of lanes in a row) = (x.size()/32)+1
-        //     for(int row = 0; row < (n*2); row++)
-        //     {
-        //         for(int i = 0; i < (x.size()/32)+1; i++)
-        //         {
-        //             //Pack x bits into a uint 32 array. This array serves as a row of the total grid.
-        //             for(int j = 0; j < 32; j++)
-        //             {
-        //                 host_XZR[row][i] |= x[(i * 32) + j] << j;
-        //             }
+        //Unpacks packed CPU arrays back to bit values
+        void unpack_to_cpu()
+        {
+            //Copy data to the CPU side
+            cudaSafeCall(cudaMemcpy(x_packed_cpu, x_packed_gpu, packed_matrix_size,
+                                    cudaMemcpyDevicetoHost));
+            cudaSafeCall(cudaMemcpy(z_packed_cpu, z_packed_gpu, packed_matrix_size,
+                                    cudaMemcpyDevicetoHost));
+            cudaSafeCall(cudaMemcpy(r_packed_cpu, r_packed_gpu, packed_r_size, cudaMemcpyDevicetoHost));
+            for(int i = 0; i < rows; i++)
+            {
+                mask = i % packed_bits;
+                r[i] = (r_packed_gpu[i/packed_bits] >> mask) & 1;
+                for(int j = 0; j < cols; j++)
+                {
+                    x[i][j] = (x_packed_gpu[i/packed_bits][j] >> mask) & 1;
+                    z[i][j] = (z_packed_gpu[i/packed_bits][j] >> mask) & 1;
+                }
+            }
+        }
 
-        //             row++;
+        // Function to check CUDA errors
+        void checkCudaError(cudaError_t error, const char* message) {
+            if (error != cudaSuccess) {
+                fprintf(stderr, "CUDA Error: %s: %s\n", message, cudaGetErrorString(error));
+                exit(EXIT_FAILURE);
+            }
+        }
 
-        //             //Pack z bits into a uint 32 array. This array serves as a row of the total grid.
-        //             for(int j = 0; j < 32; j++)
-        //             {
-        //                 host_XZR[row][i] |= z[(i * 32) + j] << j;
-        //             }
-        //         }
-        //     }
-            
-            
-        //     //the last two rows -- buffer and r -- are treated seperately and appended to the grid
-        // }
+
 
         // template <typename T>
         // __global__ void PackTo32Col(const T* X, unsigned* B, int height, int width)
         // {
         //     unsigned Bval, laneid;//fetch lane−id
         //     asm("mov.u32 %0, %%laneid;":"=r"(laneid));
-
         //     #pragma unroll
         //     for(int i = 0; i < WARP_SIZE; i++)
         //     {
         //         T f0 = X[(blockIdx.x * WARP_SIZE + i) * width + blockIdx.y * WARP_SIZE + laneid];
-
         //         //rotate anticlockwise for Col packing
         //         unsigned r0 = __brev(__ballot(f0> = 0));
-
         //         if (laneid == i ) 
         //             Bval = r0;
         //     }
-            
         //     B[blockIdx.y * height + blockIdx.x * WARP_SIZE + laneid] = Bval;
         // }
-
         // __global__ void PackTo32Row(const int* input, unsigned* output, int width, int height) 
         // {
         //     int laneId = threadIdx.x; // Warp lane ID
         //     int blockRow = blockIdx.x * 32; // Block row start
         //     int blockCol = blockIdx.y * 32; // Block column start
-
         //     if (blockRow + laneId < height) {
         //         unsigned packed = 0;
         //         for (int i = 0; i < 32; ++i) {
@@ -208,16 +200,7 @@ namespace NWQSim
 
         //resets the tableau to a full identity
         void reset_state() override
-        {
-            //Tableau format: 2n x n X matrix, 2n x n Z matrix and 2n x 1 phase column. All have an extra 1 x n scratch space (1x1 for phase).
-            //n is the number of qubits. First n rows represent destabilizer pauli strings, second n rows represent stabilizers
-            //columns represent qubits 
-            //Destabilizer/stabilizer rows can have more stabilizers added later ti become 2*n x m
-            rows = 2*n+1;
-            cols = n;
-
-            stabCounts = n;
-
+        {   
             x.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
                                                        //second n represents stabilizers + 1 extra row
             z.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
@@ -230,7 +213,9 @@ namespace NWQSim
                 x[i][i] = 1;
                 z[i+n][i] = 1;
             }
+            /*End initialization*/
         }
+        
 
         void set_seed(IdxType s) override
         {
@@ -402,7 +387,6 @@ namespace NWQSim
                     int p = -1;
                     for(int p_index = half_rows; p_index < rows-1; p_index++)
                     {  
-                        //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
                         if(temp_x[p_index][a])
                         {
                             p = p_index;
@@ -488,7 +472,12 @@ namespace NWQSim
             sim_timer.start_timer();
 
             //Perform the tableau simulation
-            simulation_kernel(gates);
+            // Launch kernel
+            int threadsPerBlock = 256;
+            int blocksPerGrid = (rows + threadsPerBlock - 1) / threadsPerBlock;
+            simulation_kernel_cuda<<<blocksPerGrid, threadsPerBlock>>>(gates, gates.size(), x_packed_gpu, z_packed_gpu, r_packed_gpu, rows, cols);
+            //Copy result back to host
+            unpack_to_cpu();
 
             //End timer
             sim_timer.stop_timer();
@@ -534,229 +523,85 @@ namespace NWQSim
             throw std::logic_error("get_exp_z Not implemented (STAB_CPU)");
         }
 
-        // //Kernel for parallelized row operations
-        // __global__ void S_kernel(uint32_t* x, uint32_t* z, uint32_t* r, int rows, int cols, int a) {
-        //     int tid = threadIdx.x + blockIdx.x * blockDim.x; // Thread ID
-        //     int warp_id = tid / 32;  // Warp ID (32 threads per warp)
-        //     int lane = tid % 32;     // Lane ID within the warp
-
-        //     int rows_per_warp = (rows + gridDim.x * blockDim.x / 32 - 1) / (gridDim.x * blockDim.x / 32);
-        //     int start_row = warp_id * rows_per_warp;
-        //     int enRow = min(start_row + rows_per_warp, rows);
-
-        //     for (int i = start_row + lane; i < enRow; i += 32) {
-        //         // Load data for the row
-        //         uint32_t x_row = x[i];
-        //         uint32_t z_row = z[i];
-        //         uint32_t r_row = r[i];
-
-        //         // Perform operations on the row
-        //         uint32_t xa = (x_row >> a) & 1; // Extract bit `a` from x_row
-        //         uint32_t za = (z_row >> a) & 1; // Extract bit `a` from z_row
-
-        //         // Phase update
-        //         r_row ^= (xa & za);
-
-        //         // Entry update
-        //         z_row ^= (xa << a);
-
-        //         // Store updated data back to global memory
-        //         z[i] = z_row;
-        //         r[i] = r_row;
-        //     }
-        // }
-
-
     protected:
         IdxType n;
         int stabCounts;
+        int mask;
         IdxType rows;
+        IdxType packed_rows;
         IdxType cols;
+        int packed_bits;
+        IdxType packed_matrix_size
         std::vector<std::vector<int>> x;
         std::vector<std::vector<int>> z;
         std::vector<int> r;
-        int packedCols;
-        std::vector<std::vector<IdxType>> x_packed;
-        std::vector<std::vector<IdxType>> z_packed;
-        std::vector<IdxType> r_packed;
+        //CPU Arrays
+        uint32_t** x_packed_cpu;
+        uint32_t** z_packed_cpu;
+        uint32_t* r_packed_cpu;
+        //GPU Arrays
+        uint32_t** x_packed_gpu;
+        uint32_t** z_packed_gpu;
+        uint32_t* r_packed_gpu;
+
         IdxType* totalResults = NULL;
-        //Device pointers for the gpu
-        uint32_t** host_XZR = nullptr;
-        uint32_t** gpu_XZR = nullptr;
+
         //Random
         std::mt19937 rng;
         std::uniform_int_distribution<int> dist;   
-
-        __global__ void computeS(const int* x, const int* z, int* r, int n, int col_idx) 
-        {
-            int row = blockIdx.x * blockDim.x + threadIdx.x;
-
-            if (row < packedCols) {
-                // Perform XOR for the entire packed column
-                result[row] = x[row] ^ z[row];
-            }
-        }
         
 
-        void simulation_kernel(std::vector<Gate>& gates)
+        __global__ void simulation_kernel_cuda(Gate* gates, int g, uint32_t** x, uint32_t** z, uint32_t* r, int rows, int cols)
         {
-            int g = gates.size();
+            int row = blockIdx.x * blockDim.x + threadIdx.x;
+            if (row >= rows) return;
 
-            //For swapping rows
-            int tempVal;
-            int half_rows = rows >> 1;
-            //Loop over every gate in the circuit and apply them
-            for (int k = 0; k < g; k++)
+            for (int k = 0; k < g; k++) 
             {
-                auto gate = gates[k];
+                Gate gate = gates[k];
                 int a = gate.qubit;
-                assert(a < n);
+                assert(a < cols);
 
-                if (gate.op_name == OP::H)
+                switch (gate.op_name) 
                 {
+                    case OP::H:
+                        r[row] ^= (x[row][a] & z[row][a]);
+                        uint32_t temp = x[row][a];
+                        x[row][a] = z[row][a];
+                        z[row][a] = temp;
+                        break;
+
+                    case OP::S:
+                        r[row] ^= (x[row][a] & z[row][a]);
+                        z[row][a] ^= x[row][a];
+                        break;
+
+                    case OP::CX:
+                        int b = gate.qubit;
+                        int ctrl = gate.ctrl;
+                        r[row] ^= ((x[row][ctrl] & z[row][b]) & (x[row][b] ^ z[row][ctrl] ^ 1));
+                        x[row][b] ^= x[row][ctrl];
+                        z[row][ctrl] ^= z[row][b];
+                        break;
                     
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Phase
-                        r[i] ^= (x[i][a] & z[i][a]);
-                        //Entry -- swap x and z bits at qubit a
-                        std::swap(x[i][a], z[i][a]);
-                    } 
-                }
-                else if (gate.op_name == OP::S)
-                {
-                    int a = gate.qubit;
+                    case OP::X:
+                        r[row] ^= z[row][a];
+                        break;
 
-                }
-                else if (gate.op_name == OP::CX)
-                {  
-                    int a = gate.ctrl;
-                    int b = gate.qubit;
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Phase
-                        r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
+                    case OP::Y: 
+                        r[row] ^= x[row][a] ^ z[row][a];
+                        break;
 
-                        //Entry
-                        x[i][b] ^= x[i][a];
-                        z[i][a] ^= z[i][b];
-                    }
-                }
-                else if (gate.op_name == OP::M)
-                {  
+                    case OP::Z:
+                        r[row] ^= x[row][a];
+                        break;
                     
-
-                    int a = gate.qubit;
-                    int p = -1;
-                    for(int p_index = half_rows; p_index < rows-1; p_index++)
-                    {  
-                        //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
-                        if(x[p_index][a])
-                        {
-                            p = p_index;
-                            break;
-                        }
-                    }
-                    //A p such that x[p][a] = 1 exists
-                    if(p > -1)
-                    {
-                        for(int i = 0; i < rows-1; i++)
-                        {
-                            if((x[i][a]) && (i != p))
-                            {
-                                rowsum(i, p);
-                            }
-                        }
-                        x[p-half_rows] = x[p];
-                        z[p-half_rows] = z[p];
-                        //Change all the columns in row p to be 0
-                        for(int i = 0; i < n; i++)
-                        {
-                            x[p][i] = 0;
-                            z[p][i] = 0;                        
-                        }
-
-                        //Generate and display a random number
-                        int randomBit = dist(rng);
-                        
-                        if(randomBit)
-                        {
-                            //std::cout << "Random result of 1" << std::endl;
-                            r[p] = 1;
-                        }
-                        else
-                        {
-                            //std::cout << "Random result of 0" << std::endl;
-                            r[p] = 0;
-                        }
-                        z[p][a] = 1;
-
-                        totalResults[0] += r[p] << a;
-                        // std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
-                    }
-                    else
-                    {
-
-                        //Set the scratch space row to be 0
-                        //i is the column indexer in this case
-                        for(int i = 0; i < n; i++)
-                        {
-                            x[rows-1][i] = 0;
-                            z[rows-1][i] = 0;
-                        }
-                        r[rows-1] = 0;
-
-                        //Run rowsum subroutine
-                        for(int i = 0; i < half_rows; i++)
-                        {
-                            if(x[i][a] == 1)
-                            {
-                                //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
-                                rowsum(rows-1, i+half_rows);
-                            }
-                        }
-                        // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
-                        totalResults[0] += r[rows-1] << a;
-                    }
-                } //End M
-                else if (gate.op_name == OP::X)
-                {
-                    //equiv to H S S H or H Z H
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        r[i] ^= z[i][a];
-                    } 
+                    default:
+                        printf("Non-Clifford or unrecognized gate: %d\n", gate.op_name);
+                        assert(false);
                 }
-                else if (gate.op_name == OP::Y)
-                {   
-                    //equiv to Z X
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        r[i] = r[i] ^ x[i][a] ^ z[i][a];
-                    }
-                }
-                else if (gate.op_name == OP::Z)
-                {
-                    //equiv to S S gates
-                    for(int i = 0; i < rows-1; i++)
-                    {
-                        //Phase
-                        r[i] ^= x[i][a];
-                    }
-                }
-                else if (gate.op_name == OP::MA)
-                {
-                    measure_all();
-                }
-                else    
-                {
-                    std::cout << "Non-Clifford or unrecognized gate: "
-                                << OP_NAMES[gate.op_name] << std::endl;
-                    std::logic_error("Invalid gate type");
-                    exit(1);
-                }
-            } //End gates for loop
-        } //End simulate
+            }
+        }
     }; //End tableau class
 } // namespace NWQSim
 

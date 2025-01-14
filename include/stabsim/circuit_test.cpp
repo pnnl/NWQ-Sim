@@ -33,10 +33,10 @@ int main(){
     // circuit->CX(1,0);
 
     circuit -> H(0);
-    circuit -> CX(0,1)
+    circuit -> CX(0,1);
 
     std::string backend = "CPU";
-    std::string sim_method = "sv";
+    std::string sim_method = "stab";
     double timer = 0;
     
     /*Create T and Measurement Tableaus with only stabilizers. T starts empty, M starts as identity.*/
