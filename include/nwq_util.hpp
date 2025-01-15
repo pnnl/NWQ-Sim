@@ -2,7 +2,11 @@
 
 #include <assert.h>
 #include <iostream>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <sys/time.h>
+#endif
 #include <vector>
 #include <chrono>
 #include <iomanip>
@@ -130,10 +134,19 @@ namespace NWQSim
     // CPU timer
     inline double get_cpu_timer()
     {
+        #ifdef _WIN32
+        //Get the current time as a time_point
+        auto now = std::chrono::high_resolution_clock::now();
+        //Convert to milliseconds since epoch
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
+        //Return as double (milliseconds)
+        return duration.count();
+        #else
         struct timeval tp;
         gettimeofday(&tp, NULL);
         // get current timestamp in milliseconds
         return (double)tp.tv_sec * 1e3 + (double)tp.tv_usec * 1e-3;
+        #endif
     }
     // CPU timer object definition
     typedef struct CPU_Timer

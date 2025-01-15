@@ -35,7 +35,7 @@ int main(){
     circuit -> H(0);
     circuit -> CX(0,1);
 
-    std::string backend = "CPU";
+    std::string backend = "CUDA";
     std::string sim_method = "stab";
     double timer = 0;
     

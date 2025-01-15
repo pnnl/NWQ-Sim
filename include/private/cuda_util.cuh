@@ -2,7 +2,11 @@
 #include "nwq_util.hpp"
 #include <cooperative_groups.h>
 #include <stdio.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <sys/time.h>
+#endif
 #include <assert.h>
 #include <iostream>
 

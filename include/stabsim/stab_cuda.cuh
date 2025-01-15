@@ -1,19 +1,17 @@
 #pragma once
 
-//Eigen and pauli math
-#include "pauli_math.hpp"
-
 #include "../state.hpp"
-
 #include "../nwq_util.hpp"
 #include "../gate.hpp"
 #include "../circuit.hpp"
-#include "../config.hpp"
-#include "../private/exp_gate_declarations_host.hpp"
 
-#include "../circuit_pass/fusion.hpp"
+#include "../config.hpp"
+#include "../private/cuda_util.cuh"
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
+
+#include "../circuit_pass/fusion.hpp"
+#include "../private/exp_gate_declarations.cuh"
 
 #include <random>
 #include <cstring>
@@ -22,11 +20,15 @@
 #include <vector>
 #include <set>
 #include <assert.h>
+#include <cuda_runtime_api.h>
 #include <cooperative_groups.h>
 #include <iostream>
 #include <cuda.h>
 #include <memory>
+
+#ifdef FP64_TC_AVAILABLE
 #include <mma.h>
+#endif
 
 namespace NWQSim
 {
@@ -35,7 +37,7 @@ namespace NWQSim
 
     // Simulation kernel runtime
     class STAB_CUDA;
-    __global__ void simulation_kernel_cuda(STAB_CUDA *stab_gpu, IdxType n_gates);
+    __global__ void stab_simulation_kernel_cuda(Gate* gates, IdxType g, uint32_t** x, uint32_t** z, uint32_t* r, IdxType rows, IdxType cols);
 
     class STAB_CUDA : public QuantumState
     {
@@ -50,8 +52,8 @@ namespace NWQSim
             stabCounts = n;
             packed_bits = 32;
             packed_rows = (rows/packed_bits)+1;
-            IdxType packed_r_size = packed_rows * sizeof(uint32_t);
-            IdxType packed_matrix_size = (packed_rows * cols) * sizeof(uint32_t);
+            packed_r_size = packed_rows * sizeof(uint32_t);
+            packed_matrix_size = (packed_rows * cols) * sizeof(uint32_t);
 
             //Space out the vectors
             x.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
@@ -93,7 +95,7 @@ namespace NWQSim
                                     cudaMemcpyHostToDevice));
             cudaSafeCall(cudaMemcpy(z_packed_gpu, z_packed_cpu, packed_matrix_size,
                                     cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemset(r_packed_gpu, r_packed_cpu, packed_r_size, cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(r_packed_gpu, r_packed_cpu, packed_r_size, cudaMemcpyHostToDevice));
         }
 
         ~STAB_CUDA()
@@ -116,11 +118,11 @@ namespace NWQSim
             for(int i = 0; i < rows; i++)
             {
                 mask = i % packed_bits;
-                r_packed_cpu[i/packed_bits] |= r << (mask);
+                r_packed_cpu[i/packed_bits] |= r[i] << (mask);
                 for(int j = 0; j < cols; j++)
                 {
-                    x_packed_cpu[i/packed_bits] |= x[i][j] << (mask);
-                    x_packed_cpu[i/packed_bits] |= x[i][j] << (mask);
+                    x_packed_cpu[i/packed_bits][j] |= x[i][j] << (mask);
+                    x_packed_cpu[i/packed_bits][j] |= x[i][j] << (mask);
                 }
             }
             //Copy data to the GPU side
@@ -136,10 +138,10 @@ namespace NWQSim
         {
             //Copy data to the CPU side
             cudaSafeCall(cudaMemcpy(x_packed_cpu, x_packed_gpu, packed_matrix_size,
-                                    cudaMemcpyDevicetoHost));
+                                    cudaMemcpyDeviceToHost));
             cudaSafeCall(cudaMemcpy(z_packed_cpu, z_packed_gpu, packed_matrix_size,
-                                    cudaMemcpyDevicetoHost));
-            cudaSafeCall(cudaMemcpy(r_packed_cpu, r_packed_gpu, packed_r_size, cudaMemcpyDevicetoHost));
+                                    cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaMemcpy(r_packed_cpu, r_packed_gpu, packed_r_size, cudaMemcpyDeviceToHost));
             for(int i = 0; i < rows; i++)
             {
                 mask = i % packed_bits;
@@ -462,26 +464,33 @@ namespace NWQSim
         void sim(std::shared_ptr<NWQSim::Circuit> circuit, double &sim_time) override
         {
             std::vector<Gate> gates = circuit->get_gates();
-            IdxType n_gates = gates.size();
-
-            //Check that the circuit object matches the tableau
+            n_gates = gates.size();
             assert(circuit->num_qubits() == n);
 
+            //Copy gates to the gpu side
+            Gate* gpu_gates;
+            SAFE_ALOC_GPU(gates, n_gates * sizeof(Gate));
+            cudaSafeCall(cudaMemcpy(gpu_gates, gates.data(), n_gates * sizeof(Gate), cudaMemcpyHostToDevice));
+
+            //Launch kernel
+
             //Start a timer
-            cpu_timer sim_timer;
+            gpu_timer sim_timer;
             sim_timer.start_timer();
 
-            //Perform the tableau simulation
-            // Launch kernel
+            //Calculate threads and blocks
             int threadsPerBlock = 256;
             int blocksPerGrid = (rows + threadsPerBlock - 1) / threadsPerBlock;
-            simulation_kernel_cuda<<<blocksPerGrid, threadsPerBlock>>>(gates, gates.size(), x_packed_gpu, z_packed_gpu, r_packed_gpu, rows, cols);
-            //Copy result back to host
-            unpack_to_cpu();
-
+            
+            //Simulate
+            stab_simulation_kernel_cuda<<<blocksPerGrid, threadsPerBlock>>>(gpu_gates, n_gates, x_packed_gpu, z_packed_gpu, r_packed_gpu, rows, cols);
+            
             //End timer
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
+
+            //Copy result back to host
+            unpack_to_cpu();
 
             if (Config::PRINT_SIM_TRACE)
             {
@@ -491,6 +500,9 @@ namespace NWQSim
                        sim_time);
                 printf("=====================================\n");
             }
+
+            SAFE_FREE_GPU(gpu_gates);
+
             //=========================================
         }
 
@@ -525,13 +537,15 @@ namespace NWQSim
 
     protected:
         IdxType n;
+        IdxType n_gates;
         int stabCounts;
         int mask;
         IdxType rows;
         IdxType packed_rows;
         IdxType cols;
         int packed_bits;
-        IdxType packed_matrix_size
+        IdxType packed_r_size;
+        IdxType packed_matrix_size;
         std::vector<std::vector<int>> x;
         std::vector<std::vector<int>> z;
         std::vector<int> r;
@@ -551,7 +565,7 @@ namespace NWQSim
         std::uniform_int_distribution<int> dist;   
         
 
-        __global__ void simulation_kernel_cuda(Gate* gates, int g, uint32_t** x, uint32_t** z, uint32_t* r, int rows, int cols)
+        __global__ void stab_simulation_kernel_cuda(Gate* gates, int g, uint32_t** x, uint32_t** z, uint32_t* r, IdxType rows, IdxType cols)
         {
             int row = blockIdx.x * blockDim.x + threadIdx.x;
             if (row >= rows) return;
