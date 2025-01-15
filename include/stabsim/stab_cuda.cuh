@@ -472,8 +472,6 @@ namespace NWQSim
             SAFE_ALOC_GPU(gates, n_gates * sizeof(Gate));
             cudaSafeCall(cudaMemcpy(gpu_gates, gates.data(), n_gates * sizeof(Gate), cudaMemcpyHostToDevice));
 
-            //Launch kernel
-
             //Start a timer
             gpu_timer sim_timer;
             sim_timer.start_timer();
@@ -484,6 +482,7 @@ namespace NWQSim
             
             //Simulate
             stab_simulation_kernel_cuda<<<blocksPerGrid, threadsPerBlock>>>(gpu_gates, n_gates, x_packed_gpu, z_packed_gpu, r_packed_gpu, rows, cols);
+            cudaDeviceSynchronize();
             
             //End timer
             sim_timer.stop_timer();
