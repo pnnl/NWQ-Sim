@@ -158,8 +158,6 @@ namespace NWQSim
             P[i]->print_res_state();
         }
 
-        
-
 
         //Push through any repeating stabilizers that may result in Clifford gates
         //Start from the last P, and push right. i.e. P1, P2, P3, check P3 for clifford gates first, then P2, then P1. If found in P3, push it through P2 and P1
@@ -175,7 +173,7 @@ namespace NWQSim
                 int num_s_gates = pair.second/2;
                 if(pair.second > 1)
                 {
-                    std::cout << pair.first << " occurs " << pair.second << " times." << std::endl;
+                    std::cout << pair.first << " OCCURS " << pair.second << " TIMES " << std::endl;
                     P[i]->remove_repetitions(pair.first, num_s_gates);
                     
                     //push S gates through next tableaus
@@ -196,7 +194,6 @@ namespace NWQSim
                         P[j]->remove_stabilizer(P_rows);
                     }
                 }
-
                 //Once all of the repeating stabilizers in a P tableau are pushed through,
                 //apply S to the measurement tableau
                 //The original T gate was applied at the qubit where z = 1

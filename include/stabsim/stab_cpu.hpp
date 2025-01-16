@@ -133,15 +133,19 @@ namespace NWQSim
             int tempVal;
             if(gate == "H")
             {
+                std::cout << "APPLYING H" << std::endl;
                 for(int i = 0; i < rows-1; i++)
                 {
                     //Phase
-                    r[i] ^= (x[i][a] & z[i][a]);
+                    this->r[i] ^= (this->x[i][a] & this->z[i][a]);
                     //Entry -- swap x and z bits
-                    tempVal = x[i][a];
-                    x[i][a] = z[i][a];
-                    z[i][a] = tempVal; 
-                } 
+                    tempVal = this->x[i][a];
+                    this->x[i][a] = this->z[i][a];
+                    this->z[i][a] = tempVal; 
+                }
+                std::cout << "After H --------" << std::endl;
+                print_res_state();
+                std::cout << "After H --------" << std::endl;
             }
             else if(gate == "S")
             {
@@ -159,11 +163,11 @@ namespace NWQSim
                 for(int i = 0; i < rows-1; i++)
                 {
                     //Phase
-                    r[i] ^= ((x[i][b] & z[i][a]) & (x[i][a]^z[i][b]^1));
+                    r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
 
                     //Entry
-                    x[i][a] ^= x[i][b];
-                    z[i][b] ^= z[i][a];
+                    x[i][b] ^= x[i][a];
+                    z[i][a] ^= z[i][b];
                 }
             }
             else
@@ -182,6 +186,14 @@ namespace NWQSim
         {
             for(int i = 0; i < rows; i++)
             {
+                if(has_destabilizers && ((i == (rows/2)) || (i == rows-1)))
+                {
+                    for(int j = -5; j < (n*2); j++)
+                    {
+                        std::cout << "-";
+                    }
+                    std::cout << std::endl;
+                }
                 for(int j = 0; j < cols; j++)
                 {
                     std::cout << x[i][j];
@@ -938,7 +950,7 @@ namespace NWQSim
             IdxType n_gates = gates.size();
 
             //Check that the circuit object matches the tableau
-            assert(circuit->num_qubits() == n);
+            assert((circuit->num_qubits() == n) && "Circuit does not match the qubit number of the state!");
 
             //Start a timer
             cpu_timer sim_timer;
@@ -1538,7 +1550,7 @@ namespace NWQSim
             {
                 auto gate = gates[k];
                 int a = gate.qubit;
-                assert(a < n);
+                assert((a < n) && "Gate qubit is out of bounds for the state!");
 
                 switch (gate.op_name)
                 {
