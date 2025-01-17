@@ -124,7 +124,7 @@ namespace NWQSim
             tempStab = (T_tab->get_stabilizer_line(i)).first;
 
             //Check all of the tableaus we have right now and see if any of them commute with the T line, starting with the first tableau
-            for(int i = 0; i < P.size(); i++)
+            for(int i = P.size()-1; i > -1; i++)
             {
                 //Check if it commutes with a tableau
                 //If it does, append it to that existing tableau
@@ -150,63 +150,70 @@ namespace NWQSim
             commutes = false; //reset commutation flag   
         }
         std::cout << "T tableau splitting finished.\n" << std::endl;
+        T_tab->delete_all_rows();
+
         std::cout << "T tableaus after splitting:" << std::endl;
-        for(int i = P.size()-1; i > -1; i--)
+        for(int i = 0; i < P.size()-1; i++)
         {
             std::cout << "P[" << i << "]: " << std::endl;
 
             P[i]->print_res_state();
         }
 
-
         //Push through any repeating stabilizers that may result in Clifford gates
-        //Start from the last P, and push right. i.e. P1, P2, P3, check P3 for clifford gates first, then P2, then P1. If found in P3, push it through P2 and P1
-        for(int i = P.size()-1; i > -1; i--)
+        //Start from the first P, and push left. i.e. for (P1, P2, P3) check P1 for clifford gates first, then P2, then P3. If found in P3, push through P2 and P1.
+        for(int i = 0; i < P.size()-1; i++)
         {
             //Fill in the stabilizer map
             std::unordered_map<std::string, int> stab_map;
             stab_map = P[i]->stabilizer_count();
             //For each recurring stabilizer
-            for (const auto& pair : stab_map)
+            for(const auto& pair : stab_map)
             {
                 //Every 2 T gates is an S gate
                 int num_s_gates = pair.second/2;
-                if(pair.second > 1)
-                {
-                    std::cout << pair.first << " OCCURS " << pair.second << " TIMES " << std::endl;
-                    P[i]->remove_repetitions(pair.first, num_s_gates);
-                    
-                    //push S gates through next tableaus
-                    for(int j = i; j > -1; j--)
-                    {
-                        int P_rows = P[j]->get_num_rows();
-                        P[j]->add_stabilizer(pair.first);
 
-                        //Check the commutation with every line of the tableau
-                        //If a line doesn't commute, rowsum that line with the temp stabilizer
-                        for(int k = 0; k < P_rows; k++)
+                std::cout << pair.first << " OCCURS " << pair.second << " TIMES " << std::endl;
+
+                if(num_s_gates > 0)
+                {
+                    P[i]->remove_repetitions(pair.first, num_s_gates);
+
+                    //4 S gates is a full rotation around the bloch sphere and cancel out
+                    num_s_gates = num_s_gates % 4;
+                    if(num_s_gates != 0)
+                    {
+                        //Perform the push through routine for every S gate that doesn't cancel
+                        for(int s_gates = 0; s_gates < num_s_gates; s_gates++)
                         {
-                            if(!(P[j]->check_row_commutation(pair.first, k)))
+                            //Push an S gate through remaining tableaus in reverse P order
+                            for(int j = i; j > -1; j--)
                             {
-                                P[j]->rowsum(k, P_rows);
+                                int P_rows = P[j]->get_num_rows();
+                                P[j]->add_stabilizer(pair.first);
+
+                                //Check the commutation with every line of the tableau
+                                //If a line doesn't commute, rowsum that line with the temp 'S' stabilizer
+                                for(int k = 0; k < P_rows; k++)
+                                {
+                                    if(!(P[j]->check_row_commutation(pair.first, k)))
+                                    {
+                                        P[j]->rowsum(k, P_rows);
+                                    }
+                                }
+                                P[j]->remove_stabilizer(P_rows);
                             }
+                            //Once all of the repeating stabilizers in a P tableau are pushed through,
+                            //apply S to the measurement tableau.
+                            //The original T gate was applied at the qubit where z = 1 in the 'S' stabilizer.
+                            int target_qubit = pair.first.find('Z');
+                            M_circ->S(target_qubit);
                         }
-                        P[j]->remove_stabilizer(P_rows);
                     }
                 }
-                //Once all of the repeating stabilizers in a P tableau are pushed through,
-                //apply S to the measurement tableau
-                //The original T gate was applied at the qubit where z = 1
-                int target_qubit = pair.first.find('Z');
-                for(int num = 0; num < num_s_gates; num++)
-                {
-                    M_circ->S(target_qubit);
-                }
-                
-            } //Done one P tableau
-        } //Done all P tableaus
+            }
+        }
 
-        T_tab->delete_all_rows();
         //Fill in the T tableau with the newly reduced P tableaus
         for(int i = 0; i < P.size(); i++)
         {
@@ -217,6 +224,9 @@ namespace NWQSim
                 T_tab->add_stabilizer(stabs[j]);
             }
         }
+        //Put the M circuit back in forward time after the new Clifford gates have been appended
+        circuit_reverse(M_circ);
+        //The T circuit was rever
 
         /*Process is done, M and T have been seperated and returned*/
 
