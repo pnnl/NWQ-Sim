@@ -161,8 +161,8 @@ namespace NWQSim
         }
 
         //Push through any repeating stabilizers that may result in Clifford gates
-        //Start from the first P, and push left. i.e. for (P1, P2, P3) check P1 for clifford gates first, then P2, then P3. If found in P3, push through P2 and P1.
-        for(int i = 0; i < P.size()-1; i++)
+        //Start from the last P, and push right. i.e. for (P1, P2, P3) check P3 for clifford gates first, then P2, then P1. If found in P1, push through P2 and P3.
+        for(int i = P.size()-1; i > -1; i--)
         {
             //Fill in the stabilizer map
             std::unordered_map<std::string, int> stab_map;
@@ -186,8 +186,8 @@ namespace NWQSim
                         //Perform the push through routine for every S gate that doesn't cancel
                         for(int s_gates = 0; s_gates < num_s_gates; s_gates++)
                         {
-                            //Push an S gate through remaining tableaus in reverse P order
-                            for(int j = i; j > -1; j--)
+                            //Push an S gate through remaining tableaus in P order (to the right/to the end of the circuit)
+                            for(int j = i; j < P.size(); j++)
                             {
                                 int P_rows = P[j]->get_num_rows();
                                 P[j]->add_stabilizer(pair.first);
