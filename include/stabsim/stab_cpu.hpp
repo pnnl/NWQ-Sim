@@ -389,20 +389,26 @@ namespace NWQSim
         {
             int x_val;
             int z_val;
-            std::string stabilizers;
             std::vector<std::string> pauliStrings;
             int start;
+            int end;
             if(has_destabilizers)
-                start = (rows/2);
-            else
-                start = 0;
-            for(int i = start; i < rows-1; i++) //rows of stabilizers
             {
-                stabilizers.clear(); //clear the temporary stabilizers string
+                start = (rows/2);
+                end = rows-1;
+            }
+            else
+            {
+                start = 0;
+                end = rows;
+            }
+            for(int i = start; i < end; i++) //rows of stabilizers
+            {
+                std::string stabilizers;
                 for(int j = 0; j < cols; j++) //qubits/cols
                 {
-                    x_val = x[i][j];
-                    z_val = z[i][j];
+                    x_val = this->x[i][j];
+                    z_val = this->z[i][j];
                     assert((x_val < 2) && (z_val < 2));
                     if(x_val)
                     {
@@ -429,9 +435,10 @@ namespace NWQSim
         {
             std::vector<int> temp_x;
             std::vector<int> temp_z;
-            for (int j = 0; j < stab.size(); j++) 
+            for (int i = 0; i < stab.size(); i++) 
             {
-                switch(stab[j])
+                std::cout << stab[i];
+                switch(stab[i])
                 {
                     case 'I':
                         temp_x.push_back(0);
@@ -455,14 +462,28 @@ namespace NWQSim
                 }
 
                 //remove 2 T's from the given T tableau for every S gate
-                while(num_s > 0)
+                std::cout << "Before while loop print num_s: " << num_s << std::endl;
+                for(int k = 0; k < temp_x.size(); k++)
+                {
+                    std::cout << temp_x[k];
+                }
+                std::cout << std::endl;
+                for(int k = 0; k < temp_z.size(); k++)
+                {
+                    std::cout << temp_z[k];
+                }
+                std::cout << std::endl;
+
+                int reps = num_s * 2;
+                while(reps > 0)
                 {
                     for(int j = 0; j < rows; j++)
                     {
-                        if((x[j] == temp_x) && (z[j] == temp_z))
+                        if((this->x[j] == temp_x) && (this->z[j] == temp_z))
                         {
-                            remove_stabilizer(j);
-                            num_s--;
+                            std::cout << "removed stabilizer 1" << std::endl;
+                            this->remove_stabilizer(j);
+                            reps--;
                             break;
                         }
                     }
@@ -474,9 +495,9 @@ namespace NWQSim
         std::unordered_map<std::string, int> stabilizer_count() override
         {
             std::unordered_map<std::string, int> map;
-            std::vector<std::string> stabs = get_stabilizers();
+            std::vector<std::string> stabs = this->get_stabilizers();
 
-            std::cout << "--- Current state ---" << std::endl;
+            std::cout << "--- Current state in stab count ---" << std::endl;
             this->print_res_state();
             for(int i = 0; i < stabs.size(); i++)
             {
@@ -484,7 +505,7 @@ namespace NWQSim
                 map[stabs[i]]++;            
                 std::cout << map[stabs[i]] << std::endl;
             }
-            std::cout << "--- Current state ---" << std::endl;
+            std::cout << "--- End current state in stab count ---" << std::endl;
             return map;
         }
 
@@ -505,7 +526,7 @@ namespace NWQSim
                 int product = 0;
                 
                 //Loop over every column
-                for (int j = 0; j < cols; j++) 
+                for(int j = 0; j < cols; j++) 
                 {
                     switch(pauliString[j])
                     {
@@ -531,7 +552,6 @@ namespace NWQSim
                     }
                     product ^= ((x[i][j] & new_z) ^ (z[i][j] & new_x));
                 }
-                std::cout << "Full commutation product done. Result: " << product << std::endl;
                 if(product > 0) {
                     return false; //Anti-commutation somewhere in the Pauli string
                 }
@@ -571,8 +591,6 @@ namespace NWQSim
                 }
                 product ^= ((x[row][col] & temp_z) ^ (z[row][col] & temp_x));
             }
-            std::cout << "Row commutation product done. Result: " << product << std::endl;
-
             if(product > 0)
                 return false;
             return true;
@@ -645,7 +663,6 @@ namespace NWQSim
             //Only stabilizer tableau
             else
             {
-                std::cout << "Rows before addition: " << rows << std::endl;
                 if(check_commutation(pauliString))
                 {
                     //Start by adding a row of stabilizers to T
@@ -744,11 +761,11 @@ namespace NWQSim
 
         void remove_stabilizer(int row_index) override
         {
-            x.erase(x.begin()+row_index);
-            z.erase(z.begin()+row_index);
-            r.erase(r.begin()+row_index);
-            stabCounts--;
-            rows--;
+            this->x.erase(this->x.begin()+row_index);
+            this->z.erase(this->z.begin()+row_index);
+            this->r.erase(this->r.begin()+row_index);
+            this->stabCounts--;
+            this->rows--;
         }
         
         void transpose(std::vector<std::vector<int>>& M)
