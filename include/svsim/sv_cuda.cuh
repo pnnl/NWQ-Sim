@@ -162,7 +162,7 @@ namespace NWQSim
             gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
             return gridDim;
         }
-        void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
+        void sim(std::shared_ptr<NWQSim::Circuit> circuit, double& timer) override
         {
             IdxType origional_gates = circuit->num_gates();
 

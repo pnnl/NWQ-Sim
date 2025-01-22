@@ -35,7 +35,7 @@ int main(){
     // circuit -> Z(0);
     // circuit -> CX(0,1);
 
-    std::string backend = "CPU";
+    std::string backend = "NVGPU";
     std::string sim_method = "stab";
     double timer = 0;
     

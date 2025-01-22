@@ -12,10 +12,6 @@
 #include "../private/macros.hpp"
 #include "../private/sim_gate.hpp"
 
-/*TESTING HEADERS*/
-//#include "../../stabilizer/tableau.hpp"
-/*END TESTING HEADERS*/
-
 #include <random>
 #include <cstring>
 #include <algorithm>
@@ -297,10 +293,18 @@ namespace NWQSim
             const IdxType per_pe_work = (dim >> 2);
             assert(qubit0 != qubit1); // Non-cloning
 
+            #ifdef _WIN32
+            const IdxType q0dim = ((IdxType)1 << max(qubit0, qubit1));
+            const IdxType q1dim = ((IdxType)1 << min(qubit0, qubit1));
+            // const IdxType outer_factor = (dim + q0dim + q0dim - 1) >> (std::max(qubit0, qubit1) + 1);
+            const IdxType mider_factor = (q0dim + q1dim + q1dim - 1) >> (min(qubit0, qubit1) + 1);
+            #else
             const IdxType q0dim = ((IdxType)1 << std::max(qubit0, qubit1));
             const IdxType q1dim = ((IdxType)1 << std::min(qubit0, qubit1));
             // const IdxType outer_factor = (dim + q0dim + q0dim - 1) >> (std::max(qubit0, qubit1) + 1);
             const IdxType mider_factor = (q0dim + q1dim + q1dim - 1) >> (std::min(qubit0, qubit1) + 1);
+            #endif
+            
             const IdxType inner_factor = q1dim;
             const IdxType qubit0_dim = ((IdxType)1 << qubit0);
             const IdxType qubit1_dim = ((IdxType)1 << qubit1);
@@ -359,6 +363,16 @@ namespace NWQSim
             assert(qubit1 != qubit3); // Non-cloning
             assert(qubit2 != qubit3); // Non-cloning
             // need to sort qubits: min->max: p, q, r, s
+            #ifdef _WIN32
+            const IdxType v0 = min(qubit0, qubit1);
+            const IdxType v1 = min(qubit2, qubit3);
+            const IdxType v2 = max(qubit0, qubit1);
+            const IdxType v3 = max(qubit2, qubit3);
+            const IdxType p = min(v0, v1);
+            const IdxType q = min(min(v2, v3), max(v0, v1));
+            const IdxType r = max(min(v2, v3), max(v0, v1));
+            const IdxType s = max(v2, v3);
+            #else
             const IdxType v0 = std::min(qubit0, qubit1);
             const IdxType v1 = std::min(qubit2, qubit3);
             const IdxType v2 = std::max(qubit0, qubit1);
@@ -367,6 +381,8 @@ namespace NWQSim
             const IdxType q = std::min(std::min(v2, v3), std::max(v0, v1));
             const IdxType r = std::max(std::min(v2, v3), std::max(v0, v1));
             const IdxType s = std::max(v2, v3);
+            #endif
+            
             for (IdxType i = 0; i < (dim >> 4); i++)
             {
                 const IdxType term0 = MOD2E(i, p);
@@ -503,6 +519,18 @@ namespace NWQSim
             assert(qubit1 != qubit3); // Non-cloning
             assert(qubit2 != qubit3); // Non-cloning
             // need to sort qubits: min->max: p, q, r, s
+            
+
+            #ifdef _WIN32
+            const IdxType v0 = min(qubit0, qubit1);
+            const IdxType v1 = min(qubit2, qubit3);
+            const IdxType v2 = max(qubit0, qubit1);
+            const IdxType v3 = max(qubit2, qubit3);
+            const IdxType p = min(v0, v1);
+            const IdxType q = min(min(v2, v3), max(v0, v1));
+            const IdxType r = max(min(v2, v3), max(v0, v1));
+            const IdxType s = max(v2, v3);
+            #else
             const IdxType v0 = std::min(qubit0, qubit1);
             const IdxType v1 = std::min(qubit2, qubit3);
             const IdxType v2 = std::max(qubit0, qubit1);
@@ -511,6 +539,8 @@ namespace NWQSim
             const IdxType q = std::min(std::min(v2, v3), std::max(v0, v1));
             const IdxType r = std::max(std::min(v2, v3), std::max(v0, v1));
             const IdxType s = std::max(v2, v3);
+            #endif
+
             ValType exp_val = 0.0;
             for (IdxType i = 0; i < (dim >> 4); i++)
             {
@@ -562,10 +592,18 @@ namespace NWQSim
             const IdxType per_pe_work = (dim >> 2);
             assert(qubit0 != qubit1); // Non-cloning
 
-            const IdxType q0dim = ((IdxType)1 << std::max(qubit0, qubit1));
-            const IdxType q1dim = ((IdxType)1 << std::min(qubit0, qubit1));
-            // const IdxType outer_factor = (dim + q0dim + q0dim - 1) >> (std::max(qubit0, qubit1) + 1);
-            const IdxType mider_factor = (q0dim + q1dim + q1dim - 1) >> (std::min(qubit0, qubit1) + 1);
+            #ifdef _WIN32
+                const IdxType q0dim = ((IdxType)1 << max(qubit0, qubit1));
+                const IdxType q1dim = ((IdxType)1 << min(qubit0, qubit1));
+                // const IdxType outer_factor = (dim + q0dim + q0dim - 1) >> (std::max(qubit0, qubit1) + 1);
+                const IdxType mider_factor = (q0dim + q1dim + q1dim - 1) >> (min(qubit0, qubit1) + 1);
+            #else
+                const IdxType q0dim = ((IdxType)1 << std::max(qubit0, qubit1));
+                const IdxType q1dim = ((IdxType)1 << std::min(qubit0, qubit1));
+                // const IdxType outer_factor = (dim + q0dim + q0dim - 1) >> (std::max(qubit0, qubit1) + 1);
+                const IdxType mider_factor = (q0dim + q1dim + q1dim - 1) >> (std::min(qubit0, qubit1) + 1);
+            #endif
+
             const IdxType inner_factor = q1dim;
             const IdxType qubit0_dim = ((IdxType)1 << qubit0);
             const IdxType qubit1_dim = ((IdxType)1 << qubit1);
