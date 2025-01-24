@@ -45,57 +45,8 @@ namespace NWQSim
         circuit = new_circ;
     }
 
-    //Main compilation function for T pushthrough using tableau simulation
-    void T_passthrough(std::shared_ptr<Circuit>& circuit, std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<Circuit>& M_circ, int reps = 1)
+    void T_optimize(std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<Circuit>& M_circ, int reps)
     {
-        IdxType n = circuit->num_qubits();
-
-        std::vector<Gate> gates = circuit->get_gates();
-        IdxType num_gates = gates.size();
-
-        int a; //qubit
-        int b; //control
-        //As we loop through the circuit, keep track of the status of T
-        for(int i = num_gates-1; i > -1; i--)
-        {
-            auto gate = gates[i];
-            a = gate.qubit;
-            b = gate.ctrl;
-            if(gate.op_name == OP::T)
-            {
-                //Create a new Z stabilizer for the T gate
-                std::string new_row;
-                for(int i = 0; i < n; i++)
-                {
-                    new_row.push_back('I');
-                }
-                new_row[a] = 'Z';
-
-                T_tab->add_stabilizer(new_row);
-
-                std::cout << "T stab " << new_row << std::endl;
-
-            }
-            else if(gate.op_name == OP::S)
-            {
-                T_tab->apply_gate("S", a);
-                M_circ->S(a);
-            }
-            else if(gate.op_name == OP::H)
-            {
-                T_tab->apply_gate("H", a);
-                M_circ->H(a);
-            }
-            else if(gate.op_name == OP::CX)
-            {
-                T_tab->apply_gate("CX", a, b);
-                M_circ->CX(b, a);
-            }
-            else
-                std::cerr << "Unsupported gate in T transpilation!" << std::endl;
-        }//End for loop of original circuit
-        
-        
         std::vector<std::shared_ptr<QuantumState>> P; //Empty vector of tableaus
         std::string tempStab;
         
@@ -165,28 +116,28 @@ namespace NWQSim
         {
             //Fill in the stabilizer map
             std::unordered_map<std::string, int> stab_map;
-            stab_map = P[i]->stabilizer_count();
+            P[i]->stabilizer_count(stab_map);
             //For each recurring stabilizer
             for(const auto& pair : stab_map)
             {
                 //Every 2 T gates is an S gate
-                int num_s_gates = pair.second/2;
+                int num_quarter_gates = pair.second/2;
 
-                std::cout << pair.first << " OCCURS " << pair.second << " TIMES " << std::endl;
+                std::cout << pair.first<< " OCCURS " << pair.second << " TIMES " << std::endl;
 
-                if(num_s_gates > 0)
+                //Positive rotation gates come out of multiple T's
+                if(num_quarter_gates > 0)
                 {
-                    std::cout << "In num s gates" << std::endl;
+                    std::cout << "In num quarter gates" << std::endl;
 
-                    P[i]->remove_repetitions(pair.first, num_s_gates);
-                    
+                    P[i]->remove_repetitions(pair.first, num_quarter_gates * 2);
 
                     //4 S gates is a full rotation around the bloch sphere and cancel out
-                    num_s_gates = num_s_gates % 4;
-                    if(num_s_gates != 0)
+                    num_quarter_gates = num_quarter_gates % 4;
+                    if(num_quarter_gates != 0)
                     {
                         //Perform the push through routine for every S gate that doesn't cancel
-                        for(int s_gates = 0; s_gates < num_s_gates; s_gates++)
+                        for(int gate_num = 0; gate_num < num_quarter_gates; gate_num++)
                         {
                             //Push an S gate through remaining tableaus in P order (to the right/to the end of the circuit)
                             for(int j = i; j < P.size(); j++)
@@ -207,15 +158,80 @@ namespace NWQSim
                             }
                             //Once all of the repeating stabilizers in a P tableau are pushed through,
                             //apply S to the measurement tableau.
-                            //The original T gate was applied at the qubit where z = 1 in the 'S' stabilizer.
-                            int target_qubit = pair.first.find('Z');
-                            M_circ->S(target_qubit);
+                            //The original T gate was applied where z = 1 in the 'S' stabilizer.
+                            for(int col= 0; col < pair.first.size(); col++)
+                            {
+                                if(pair.first[col] == 'Z')
+                                {
+                                    M_circ->S(target_qubit);
+                                }
+                                else if(pair.first[col] == 'Y')
+                                {
+                                    M_circ->RY(PI/2, target_qubit);
+                                }
+                                else if(pair.first[col] == 'X')
+                                {
+                                    M_circ->RX(PI/2, target_qubit);
+                                }
+                            }
+                        }
+                    }
+                }
+                //Negative quarter rotation gates that come out of repeated TDG or similar
+                else if(num_quarter_gates < 0)
+                {
+                    std::cout << "In num sdg gates" << std::endl;
+
+                    P[i]->remove_repetitions(pair.first, num_quarter_gates * -2);
+
+                    //4 S gates is a full rotation around the bloch sphere and cancel out
+                    num_quarter_gates = num_quarter_gates % 4;
+                    if(num_quarter_gates != 0)
+                    {
+                        //Perform the push through routine for every S gate that doesn't cancel
+                        for(int s_gates = 0; s_gates > num_quarter_gates; s_gates--)
+                        {
+                            //Push an SDG gate through remaining tableaus in P order (to the right/to the end of the circuit)
+                            for(int j = i; j < P.size(); j++)
+                            {
+                                int P_rows = P[j]->get_num_rows();
+                                //SDG
+                                P[j]->add_stabilizer(pair.first, 1);
+
+                                //Check the commutation with every line of the tableau
+                                //If a line doesn't commute, rowsum that line with the temp 'S' stabilizer
+                                for(int k = 0; k < P_rows; k++)
+                                {
+                                    if(!(P[j]->check_row_commutation(pair.first, k)))
+                                    {
+                                        P[j]->rowsum(k, P_rows);
+                                    }
+                                }
+                                P[j]->remove_stabilizer(P_rows);
+                            }
+                            //Once all of the repeating stabilizers in a P tableau are pushed through,
+                            //apply S to the measurement tableau.
+                            //The original T gate was applied where z = 1 in the 'S' stabilizer.
+                            for(int col= 0; col < pair.first.size(); col++)
+                            {
+                                if(pair.first[col] == 'Z')
+                                {
+                                    M_circ->SDG(target_qubit);
+                                }
+                                else if(pair.first[col] == 'Y')
+                                {
+                                    M_circ->RY(-PI/2, target_qubit);
+                                }
+                                else if(pair.first[col] == 'X')
+                                {
+                                    M_circ->RX(-PI/2, target_qubit);
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-
         //Fill in the T tableau with the newly reduced P tableaus
         for(int i = 0; i < P.size(); i++)
         {
@@ -231,9 +247,81 @@ namespace NWQSim
                 T_tab->add_stabilizer(stabs[j]);
             }
         }
+    }
+
+
+    //Main compilation function for T pushthrough using tableau simulation
+    void T_passthrough(std::shared_ptr<Circuit>& circuit, std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<Circuit>& M_circ, int reps = 1)
+    {
+        IdxType n = circuit->num_qubits();
+
+        std::vector<Gate> gates = circuit->get_gates();
+        IdxType num_gates = gates.size();
+
+        int a; //qubit
+        int b; //control
+        //As we loop through the circuit, keep track of the status of T
+        for(int i = num_gates-1; i > -1; i--)
+        {
+            auto gate = gates[i];
+            a = gate.qubit;
+            b = gate.ctrl;
+            if(gate.op_name == OP::T)
+            {
+                //Create a new Z stabilizer for the T gate
+                std::string new_row;
+                for(int i = 0; i < n; i++)
+                {
+                    new_row.push_back('I');
+                }
+                new_row[a] = 'Z';
+
+                T_tab->add_stabilizer(new_row);
+
+                std::cout << "T stab " << new_row << std::endl;
+
+            }
+            else if(gate.op_name == OP::TDG)
+            {
+                //Create a new Z stabilizer for the T gate
+                std::string new_row;
+                for(int i = 0; i < n; i++)
+                {
+                    new_row.push_back('I');
+                }
+                new_row[a] = 'Z';
+
+                T_tab->add_stabilizer(new_row, 1);
+
+                std::cout << "T stab " << new_row << std::endl;
+
+            }
+            else if(gate.op_name == OP::S)
+            {
+                T_tab->apply_gate("S", a);
+                M_circ->S(a);
+            }
+            else if(gate.op_name == OP::H)
+            {
+                T_tab->apply_gate("H", a);
+                M_circ->H(a);
+            }
+            else if(gate.op_name == OP::CX)
+            {
+                T_tab->apply_gate("CX", a, b);
+                M_circ->CX(b, a);
+            }
+            else
+                std::cerr << "Unsupported gate in T transpilation!" << std::endl;
+        }//End for loop of original circuit
+
+        for(int i = 0; i < reps; i++)
+        {
+            T_optimize(T_tab, M_circ, reps);
+        }
+        
         //Put the M circuit back in forward time after the new Clifford gates have been appended
         circuit_reverse(M_circ);
-        //The T circuit was rever
 
         /*Process is done, M and T have been seperated and returned*/
 

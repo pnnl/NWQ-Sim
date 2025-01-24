@@ -98,7 +98,7 @@ namespace NWQSim
         {
             throw std::runtime_error("Get Number of Tableau Rows Not Implemented");
         }
-        virtual std::unordered_map<std::string, int> stabilizer_count()
+        virtual void stabilizer_count(std::unordered_map<std::string, int>& map)
         {
             throw std::runtime_error("Stabilizer Count Not Implemented");
         }
@@ -122,7 +122,7 @@ namespace NWQSim
         {
             throw std::runtime_error("Get Qubits Not Implemented");
         }
-        virtual void remove_repetitions(std::string stab, int num_s)
+        virtual void remove_repetitions(std::string stab, int reps)
         {
             throw std::runtime_error("Remove Repetitions Not Implemented");
         }

@@ -137,11 +137,11 @@ namespace NWQSim
                 for(int i = 0; i < rows-1; i++)
                 {
                     //Phase
-                    this->r[i] ^= (this->x[i][a] & this->z[i][a]);
+                    r[i] ^= (x[i][a] & z[i][a]);
                     //Entry -- swap x and z bits
-                    tempVal = this->x[i][a];
-                    this->x[i][a] = this->z[i][a];
-                    this->z[i][a] = tempVal; 
+                    tempVal = x[i][a];
+                    x[i][a] = z[i][a];
+                    z[i][a] = tempVal; 
                 }
                 std::cout << "After H --------" << std::endl;
                 print_res_state();
@@ -407,8 +407,8 @@ namespace NWQSim
                 std::string stabilizers;
                 for(int j = 0; j < cols; j++) //qubits/cols
                 {
-                    x_val = this->x[i][j];
-                    z_val = this->z[i][j];
+                    x_val = x[i][j];
+                    z_val = z[i][j];
                     assert((x_val < 2) && (z_val < 2));
                     if(x_val)
                     {
@@ -431,82 +431,36 @@ namespace NWQSim
         }
 
         //Removes all but one repitions of a stabilizer
-        void remove_repetitions(std::string stab, int num_s) override
+        void remove_repetitions(std::string stab, int reps) override
         {
-            std::vector<int> temp_x;
-            std::vector<int> temp_z;
-            for (int i = 0; i < stab.size(); i++) 
+            for(int j = 0; j < rows; j++)
             {
-                std::cout << stab[i];
-                switch(stab[i])
+                if((get_stabilizer_line(j).first == stab))
                 {
-                    case 'I':
-                        temp_x.push_back(0);
-                        temp_z.push_back(0);
-                        break;
-                    case 'X':
-                        temp_x.push_back(1);
-                        temp_z.push_back(0);
-                        break;
-                    case 'Y':   
-                        temp_x.push_back(1);
-                        temp_z.push_back(1);
-                        break;
-                    case 'Z':
-                        temp_x.push_back(0);
-                        temp_z.push_back(1);
-                        break;
-                    default:
-                        std::logic_error("Invalid stabilizer");
-                        break;
+                    std::cout << "Removed " << stab << std::endl;
+                    remove_stabilizer(j); //decrements rows
+                    reps--;
+                    j--;
                 }
-
-                //remove 2 T's from the given T tableau for every S gate
-                std::cout << "Before while loop print num_s: " << num_s << std::endl;
-                for(int k = 0; k < temp_x.size(); k++)
-                {
-                    std::cout << temp_x[k];
-                }
-                std::cout << std::endl;
-                for(int k = 0; k < temp_z.size(); k++)
-                {
-                    std::cout << temp_z[k];
-                }
-                std::cout << std::endl;
-
-                int reps = num_s * 2;
-                while(reps > 0)
-                {
-                    for(int j = 0; j < rows; j++)
-                    {
-                        if((this->x[j] == temp_x) && (this->z[j] == temp_z))
-                        {
-                            std::cout << "removed stabilizer 1" << std::endl;
-                            this->remove_stabilizer(j);
-                            reps--;
-                            break;
-                        }
-                    }
-                }
+                if(!reps)
+                    break;
             }
         }
 
         //Returns a map of stabilizers and the number of times they ocurr in the tableau
-        std::unordered_map<std::string, int> stabilizer_count() override
+        void stabilizer_count(std::unordered_map<std::string, int>& stab_counts) override
         {
-            std::unordered_map<std::string, int> map;
-            std::vector<std::string> stabs = this->get_stabilizers();
 
             std::cout << "--- Current state in stab count ---" << std::endl;
-            this->print_res_state();
-            for(int i = 0; i < stabs.size(); i++)
+            print_res_state();
+            for(int i = 0; i < rows; i++)
             {
-                std::cout << stabs[i] << std::endl;
-                map[stabs[i]]++;            
-                std::cout << map[stabs[i]] << std::endl;
+                if(get_stabilizer_line(i).second == 0)
+                    stab_counts[get_stabilizer_line(i).first]++;
+                else
+                    stab_counts[get_stabilizer_line(i).first]--;
             }
             std::cout << "--- End current state in stab count ---" << std::endl;
-            return map;
         }
 
         //Check every stabilizer of the tableau
@@ -761,11 +715,11 @@ namespace NWQSim
 
         void remove_stabilizer(int row_index) override
         {
-            this->x.erase(this->x.begin()+row_index);
-            this->z.erase(this->z.begin()+row_index);
-            this->r.erase(this->r.begin()+row_index);
-            this->stabCounts--;
-            this->rows--;
+            x.erase(x.begin()+row_index);
+            z.erase(z.begin()+row_index);
+            r.erase(r.begin()+row_index);
+            stabCounts--;
+            rows--;
         }
         
         void transpose(std::vector<std::vector<int>>& M)
