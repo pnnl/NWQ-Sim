@@ -133,7 +133,7 @@ namespace NWQSim
             int tempVal;
             if(gate == "H")
             {
-                std::cout << "APPLYING H" << std::endl;
+                std::cout << "APPLYING H(" << a << ")" << std::endl;
                 for(int i = 0; i < rows-1; i++)
                 {
                     //Phase
@@ -145,7 +145,6 @@ namespace NWQSim
                 }
                 std::cout << "After H --------" << std::endl;
                 print_res_state();
-                std::cout << "After H --------" << std::endl;
             }
             else if(gate == "S")
             {
@@ -160,6 +159,7 @@ namespace NWQSim
             }
             else if(gate == "CX")
             {
+                std::cout << "APPLYING CX(" << a << ", " << b << ")" << std::endl;
                 for(int i = 0; i < rows-1; i++)
                 {
                     //Phase
@@ -169,6 +169,8 @@ namespace NWQSim
                     x[i][b] ^= x[i][a];
                     z[i][a] ^= z[i][b];
                 }
+                std::cout << "After CX --------" << std::endl;
+                print_res_state();
             }
             else
             {
@@ -1550,15 +1552,16 @@ namespace NWQSim
 
                     case OP::CX:
                     {
-                        int b = gate.ctrl;
+                        int a = gate.ctrl;
+                        int b = gate.qubit;
                         for(int i = 0; i < rows-1; i++)
                         {
                             //Phase
-                            r[i] ^= ((x[i][b] & z[i][a]) & (x[i][a]^z[i][b]^1));
+                            r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
 
                             //Entry
-                            x[i][a] ^= x[i][b];
-                            z[i][b] ^= z[i][a];
+                            x[i][b] ^= x[i][a];
+                            z[i][a] ^= z[i][b];
                         }
                         break;
                     }
