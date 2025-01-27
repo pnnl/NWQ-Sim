@@ -26,26 +26,39 @@ namespace NWQSim
         {
             auto gate = gates[i];
             a = gate.qubit;
-            b = gate.ctrl;
             if(gate.op_name == OP::S)
             {
                 new_circ->S(a);
             }
+            else if(gate.op_name == OP::SDG)
+            {
+                new_circ->SDG(a);
+            } 
             else if(gate.op_name == OP::H)
             {
                 new_circ->H(a);
             }
+            else if(gate.op_name == OP::RY)
+            {
+                new_circ->RY(gate.theta, a);
+            }
+            else if(gate.op_name == OP::RX)
+            {
+                new_circ->RX(gate.theta, a);
+            }
             else if(gate.op_name == OP::CX)
             {
-                new_circ->CX(b, a);
+                a = gate.ctrl;
+                b = gate.qubit;
+                new_circ->CX(a, b);
             }
             else
-                std::cerr << "Unsupported gate in T transpilation!" << std::endl;
+                std::cerr << "Unsupported gate in circuit reverse!" << std::endl;
         }
         circuit = new_circ;
     }
 
-    void T_optimize(std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<Circuit>& M_circ, int reps)
+    void T_optimize(std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<Circuit>& M_circ, int reps, int n)
     {
         std::vector<std::shared_ptr<QuantumState>> P; //Empty vector of tableaus
         std::string tempStab;
@@ -163,15 +176,15 @@ namespace NWQSim
                             {
                                 if(pair.first[col] == 'Z')
                                 {
-                                    M_circ->S(target_qubit);
+                                    M_circ->S(col);
                                 }
                                 else if(pair.first[col] == 'Y')
                                 {
-                                    M_circ->RY(PI/2, target_qubit);
+                                    M_circ->RY(PI/2, col);
                                 }
                                 else if(pair.first[col] == 'X')
                                 {
-                                    M_circ->RX(PI/2, target_qubit);
+                                    M_circ->RX(PI/2, col);
                                 }
                             }
                         }
@@ -212,19 +225,19 @@ namespace NWQSim
                             //Once all of the repeating stabilizers in a P tableau are pushed through,
                             //apply S to the measurement tableau.
                             //The original T gate was applied where z = 1 in the 'S' stabilizer.
-                            for(int col= 0; col < pair.first.size(); col++)
+                            for(int col = 0; col < pair.first.size(); col++)
                             {
                                 if(pair.first[col] == 'Z')
                                 {
-                                    M_circ->SDG(target_qubit);
+                                    M_circ->SDG(col);
                                 }
                                 else if(pair.first[col] == 'Y')
                                 {
-                                    M_circ->RY(-PI/2, target_qubit);
+                                    M_circ->RY(-PI/2, col);
                                 }
                                 else if(pair.first[col] == 'X')
                                 {
-                                    M_circ->RX(-PI/2, target_qubit);
+                                    M_circ->RX(-PI/2, col);
                                 }
                             }
                         }
@@ -265,7 +278,6 @@ namespace NWQSim
         {
             auto gate = gates[i];
             a = gate.qubit;
-            b = gate.ctrl;
             if(gate.op_name == OP::T)
             {
                 //Create a new Z stabilizer for the T gate
@@ -308,8 +320,10 @@ namespace NWQSim
             }
             else if(gate.op_name == OP::CX)
             {
+                a = gate.ctrl;
+                b = gate.qubit;
                 T_tab->apply_gate("CX", a, b);
-                M_circ->CX(b, a);
+                M_circ->CX(a, b);
             }
             else
                 std::cerr << "Unsupported gate in T transpilation!" << std::endl;
@@ -317,7 +331,7 @@ namespace NWQSim
 
         for(int i = 0; i < reps; i++)
         {
-            T_optimize(T_tab, M_circ, reps);
+            T_optimize(T_tab, M_circ, reps, n);
         }
         
         //Put the M circuit back in forward time after the new Clifford gates have been appended
