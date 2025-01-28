@@ -1,10 +1,9 @@
 #pragma once
 
-// #ifndef tableau_addons
-// #define tableau_addons
-
+#ifdef EIGEN
 //Eigen and pauli math
 #include "pauli_math.hpp"
+#endif
 
 #include "../state.hpp"
 
@@ -342,6 +341,7 @@ namespace NWQSim
             return full_paulis;
         }
 
+#ifdef EIGEN
         //Creates a sparse density matrix out of Pauli stabilizers
         std::vector<std::vector<double>> get_density_matrix() override
         {
@@ -375,16 +375,13 @@ namespace NWQSim
                             break;
                     }
                 }
-                
                 if(line.second == 1)
                     S = S * -1.0;
 
                 DM = DM * .5 * (I + S);
             }
-
             std::vector<std::vector<double>> densityMatrix;
             densityMatrix.resize(DM.rows(), std::vector<double>(DM.cols(),0));
-
             for(int i = 0; i < DM.rows(); i++)
             {
                 for(int j = 0; j < DM.cols(); j++)
@@ -392,9 +389,9 @@ namespace NWQSim
                     densityMatrix[i][j] = DM.coeff(i, j).real();
                 }
             }
-
             return densityMatrix;
         }
+#endif
 
 
         //Get the stabilizers in the tableau, i.e. all of the Pauli strings that stabilize a certain circuit
