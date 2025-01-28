@@ -133,7 +133,7 @@ namespace NWQSim
             int tempVal;
             if(gate == "H")
             {
-                std::cout << "APPLYING H(" << a << ")" << std::endl;
+                //std::cout << "APPLYING H(" << a << ")" << std::endl;
                 for(int i = 0; i < rows-1; i++)
                 {
                     //Phase
@@ -143,8 +143,8 @@ namespace NWQSim
                     x[i][a] = z[i][a];
                     z[i][a] = tempVal; 
                 }
-                std::cout << "After H --------" << std::endl;
-                print_res_state();
+                //std::cout << "After H --------" << std::endl;
+               // print_res_state();
             }
             else if(gate == "S")
             {
@@ -157,9 +157,20 @@ namespace NWQSim
                     z[i][a] ^= x[i][a];
                 }
             }
+            else if(gate == "SDG")
+            {
+                for(int i = 0; i < rows-1; i++)
+                {
+                    r[i] ^= x[i][a] ^ (x[i][a] & z[i][a]);
+
+                    //Entry
+                    z[i][a] ^= x[i][a];
+                }
+            }
+                            
             else if(gate == "CX")
             {
-                std::cout << "APPLYING CX(" << a << ", " << b << ")" << std::endl;
+                //std::cout << "APPLYING CX(" << a << ", " << b << ")" << std::endl;
                 for(int i = 0; i < rows-1; i++)
                 {
                     //Phase
@@ -169,8 +180,8 @@ namespace NWQSim
                     x[i][b] ^= x[i][a];
                     z[i][a] ^= z[i][b];
                 }
-                std::cout << "After CX --------" << std::endl;
-                print_res_state();
+                //std::cout << "After CX --------" << std::endl;
+                //print_res_state();
             }
             else
             {
@@ -439,7 +450,7 @@ namespace NWQSim
             {
                 if((get_stabilizer_line(j).first == stab))
                 {
-                    std::cout << "Removed " << stab << std::endl;
+                    // std::cout << "Removed " << stab << std::endl;
                     remove_stabilizer(j); //decrements rows
                     reps--;
                     j--;
@@ -453,8 +464,8 @@ namespace NWQSim
         void stabilizer_count(std::unordered_map<std::string, int>& stab_counts) override
         {
 
-            std::cout << "--- Current state in stab count ---" << std::endl;
-            print_res_state();
+            // std::cout << "--- Current state in stab count ---" << std::endl;
+            // print_res_state();
             for(int i = 0; i < rows; i++)
             {
                 if(get_stabilizer_line(i).second == 0)
@@ -462,7 +473,7 @@ namespace NWQSim
                 else
                     stab_counts[get_stabilizer_line(i).first]--;
             }
-            std::cout << "--- End current state in stab count ---" << std::endl;
+            // std::cout << "--- End current state in stab count ---" << std::endl;
         }
 
         //Check every stabilizer of the tableau
@@ -1544,6 +1555,17 @@ namespace NWQSim
                         {
                             //Phase
                             r[i] ^= (x[i][a] & z[i][a]);
+
+                            //Entry
+                            z[i][a] ^= x[i][a];
+                        }
+                        break;
+
+                    case OP::SDG:
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            //Phase -- Equal to Z S or r^= x & !z
+                            r[i] ^= x[i][a] ^ (x[i][a] & z[i][a]);
 
                             //Entry
                             z[i][a] ^= x[i][a];
