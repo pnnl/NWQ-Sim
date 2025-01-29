@@ -95,10 +95,10 @@ namespace NWQSim{
     OptimizerSettings(): rel_tol(-1), 
                          abs_tol(-1),
                          stop_val(-MAXFLOAT),
-                         max_evals(50),
+                         max_evals(100), // MZ: changed from 50 to 100, to match the default in main.cpp.
                          max_time(-1),
-                         lbound(-PI),
-                         ubound(PI) {}
+                         lbound(-PI+0.00001), // MZ: avoid bad numerical issues
+                         ubound(PI-0.00001) {}
   };
 
 
@@ -120,7 +120,8 @@ namespace NWQSim{
       // DUCC scheme
       index = (orbital_index) \
           + (orb_type * spin * n_virt + (!orb_type) * spin * n_occ) \
-          + orb_type * 2 * n_occ; 
+          + orb_type * 2 * n_occ;  // MZ: not for PySCF, temporarily commented out
+      // index = 2*(orbital_index+ (orb_type * n_occ)) + spin; // MZ: DEBUG: for PySCF and original ADAPT-VQE code, TODO: keep it or recover it
     } else {
       // Qiskit/XACC scheme
       index = (orbital_index) \
@@ -129,6 +130,7 @@ namespace NWQSim{
     }
     return index;
   }
+
 
 /**
  * @brief  Count the ones in a long long bitmask
@@ -182,6 +184,72 @@ IdxType count_ones(IdxType val) {
       orbital_index -= orb_type * n_occ;
     }
   }
+
+
+/**
+  * @brief MZ: Counting the number of double excitations for singlet GSD
+  * @note MZ: yeah, I know it's stupid
+  * @param n_spatial 
+  * @return int 
+  */
+  inline
+  int counting_doubles(int n_spatial) {
+    int doublt_term1_counter = 0;
+    int doublt_term2_counter = 0;
+    int doublt_term4_counter = 0;
+    int doublt_term6_counter = 0;
+
+    // Singlets and Triplets
+    int rs = -1;
+    for (IdxType r = 0; r < n_spatial; r++) {
+      for (IdxType s = r; s < n_spatial; s++) {
+        int pq = -1;
+        for (IdxType p = 0; p < n_spatial; p++) {
+          for (IdxType q = p; q < n_spatial; q++) {
+            pq += 1;
+            if (rs > pq) continue;
+            if ( (p == r) && (q == s) ) continue;
+            if (p!=q) {
+              if (r == s) { // only singlet with two terms, not sure Group 3 or Group 4 cases
+                doublt_term2_counter += 1;
+                continue;
+              }
+              if ( ((r!=s)&&(q!=r)) || ((p==r)&&(q!=s)&(r!=s)) || ((p==s)&&(q!=r)&(r!=s)) || ((q==s)&&(p!=r)) || ((q==r)&&(p!=s))) {
+                doublt_term4_counter += 1;
+                doublt_term6_counter += 1;
+              }
+            }
+            // Group 3 to 5
+            if (p == q) {
+              // Group 3
+              if ((q != r)&&(r!=s)) {
+                // only singlet
+                doublt_term2_counter += 1;
+                continue;
+              }
+              // Group 4
+              if ((q == r)&&(r!=s)) {
+                // only singlet
+                doublt_term2_counter += 1;
+                continue;
+              }
+              // Group 5
+              if ((q != r)&&(r==s)) {
+                // only singlet
+                doublt_term1_counter += 1;
+                continue;
+              }
+            } // p == q
+          } // q
+        } // p
+      } // s
+    } // r
+    return doublt_term1_counter+2*doublt_term2_counter+4*doublt_term4_counter+6*doublt_term6_counter;
+  }
+
+
+
+
 
   // Forward declaration for PauliOperator class
   class PauliOperator;
