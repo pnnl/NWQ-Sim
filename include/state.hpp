@@ -8,6 +8,7 @@
 #include <stdexcept> // For std::runtime_error
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 namespace NWQSim
 {

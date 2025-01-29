@@ -1,5 +1,5 @@
 #pragma once
-#include "nwq_util.hpp"
+#include "../nwq_util.hpp"
 #include <cooperative_groups.h>
 #include <stdio.h>
 #ifdef _WIN32

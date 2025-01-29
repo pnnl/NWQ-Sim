@@ -65,16 +65,6 @@ CMAKE_BINARY_DIR = /people/garn195/NWQ-Sim
 #=============================================================================
 # Targets provided globally by CMake.
 
-# Special rule for the target edit_cache
-edit_cache:
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake cache editor..."
-	/qfs/projects/ops/rh7_gpu/rocmapps/views/cmake/3.21.4/bin/ccmake -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
-.PHONY : edit_cache
-
-# Special rule for the target edit_cache
-edit_cache/fast: edit_cache
-.PHONY : edit_cache/fast
-
 # Special rule for the target rebuild_cache
 rebuild_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake to regenerate build system..."
@@ -85,16 +75,26 @@ rebuild_cache:
 rebuild_cache/fast: rebuild_cache
 .PHONY : rebuild_cache/fast
 
+# Special rule for the target edit_cache
+edit_cache:
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake cache editor..."
+	/qfs/projects/ops/rh7_gpu/rocmapps/views/cmake/3.21.4/bin/ccmake -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+.PHONY : edit_cache
+
+# Special rule for the target edit_cache
+edit_cache/fast: edit_cache
+.PHONY : edit_cache/fast
+
 # The main all target
 all: cmake_check_build_system
-	cd /people/garn195/NWQ-Sim && $(CMAKE_COMMAND) -E cmake_progress_start /people/garn195/NWQ-Sim/CMakeFiles /people/garn195/NWQ-Sim/qasm//CMakeFiles/progress.marks
-	cd /people/garn195/NWQ-Sim && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 qasm/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /people/garn195/NWQ-Sim/CMakeFiles /people/garn195/NWQ-Sim//CMakeFiles/progress.marks
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 all
 	$(CMAKE_COMMAND) -E cmake_progress_start /people/garn195/NWQ-Sim/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
 clean:
-	cd /people/garn195/NWQ-Sim && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 qasm/clean
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 clean
 .PHONY : clean
 
 # The main clean target
@@ -103,56 +103,31 @@ clean/fast: clean
 
 # Prepare targets for installation.
 preinstall: all
-	cd /people/garn195/NWQ-Sim && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 qasm/preinstall
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 preinstall
 .PHONY : preinstall
 
 # Prepare targets for installation.
 preinstall/fast:
-	cd /people/garn195/NWQ-Sim && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 qasm/preinstall
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 preinstall
 .PHONY : preinstall/fast
 
 # clear depends
 depend:
-	cd /people/garn195/NWQ-Sim && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
+	$(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
 .PHONY : depend
 
-# Convenience name for target.
-qasm/CMakeFiles/nwq_qasm.dir/rule:
-	cd /people/garn195/NWQ-Sim && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 qasm/CMakeFiles/nwq_qasm.dir/rule
-.PHONY : qasm/CMakeFiles/nwq_qasm.dir/rule
+#=============================================================================
+# Target rules for targets named nwq_qasm
 
-# Convenience name for target.
-nwq_qasm: qasm/CMakeFiles/nwq_qasm.dir/rule
+# Build rule for target.
+nwq_qasm: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 nwq_qasm
 .PHONY : nwq_qasm
 
 # fast build rule for target.
 nwq_qasm/fast:
-	cd /people/garn195/NWQ-Sim && $(MAKE) $(MAKESILENT) -f qasm/CMakeFiles/nwq_qasm.dir/build.make qasm/CMakeFiles/nwq_qasm.dir/build
+	$(MAKE) $(MAKESILENT) -f qasm/CMakeFiles/nwq_qasm.dir/build.make qasm/CMakeFiles/nwq_qasm.dir/build
 .PHONY : nwq_qasm/fast
-
-nwq_qasm.o: nwq_qasm.cpp.o
-.PHONY : nwq_qasm.o
-
-# target to build an object file
-nwq_qasm.cpp.o:
-	cd /people/garn195/NWQ-Sim && $(MAKE) $(MAKESILENT) -f qasm/CMakeFiles/nwq_qasm.dir/build.make qasm/CMakeFiles/nwq_qasm.dir/nwq_qasm.cpp.o
-.PHONY : nwq_qasm.cpp.o
-
-nwq_qasm.i: nwq_qasm.cpp.i
-.PHONY : nwq_qasm.i
-
-# target to preprocess a source file
-nwq_qasm.cpp.i:
-	cd /people/garn195/NWQ-Sim && $(MAKE) $(MAKESILENT) -f qasm/CMakeFiles/nwq_qasm.dir/build.make qasm/CMakeFiles/nwq_qasm.dir/nwq_qasm.cpp.i
-.PHONY : nwq_qasm.cpp.i
-
-nwq_qasm.s: nwq_qasm.cpp.s
-.PHONY : nwq_qasm.s
-
-# target to generate assembly for a file
-nwq_qasm.cpp.s:
-	cd /people/garn195/NWQ-Sim && $(MAKE) $(MAKESILENT) -f qasm/CMakeFiles/nwq_qasm.dir/build.make qasm/CMakeFiles/nwq_qasm.dir/nwq_qasm.cpp.s
-.PHONY : nwq_qasm.cpp.s
 
 # Help Target
 help:
@@ -163,9 +138,6 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... nwq_qasm"
-	@echo "... nwq_qasm.o"
-	@echo "... nwq_qasm.i"
-	@echo "... nwq_qasm.s"
 .PHONY : help
 
 
@@ -177,6 +149,6 @@ help:
 # No rule that depends on this can have commands that come from listfiles
 # because they might be regenerated.
 cmake_check_build_system:
-	cd /people/garn195/NWQ-Sim && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
+	$(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
 .PHONY : cmake_check_build_system
 

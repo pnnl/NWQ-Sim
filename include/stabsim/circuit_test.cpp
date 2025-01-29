@@ -36,7 +36,7 @@ int main(){
     // circuit -> CX(0,1);
 
     std::string backend = "NVGPU";
-    std::string sim_method = "stab";
+    std::string sim_method = "sv";
     double timer = 0;
     
     /*Create T and Measurement Tableaus with only stabilizers. T starts empty, M starts as identity.*/

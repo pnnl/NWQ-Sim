@@ -956,7 +956,7 @@ namespace NWQSim
             auto op_name = (sv_gpu->gates_gpu)[t].op_name;
 
             auto qubit = (sv_gpu->gates_gpu)[t].qubit;
-
+    
             auto ctrl = (sv_gpu->gates_gpu)[t].ctrl;
             auto gm_real = (sv_gpu->gates_gpu)[t].gm_real;
             auto gm_imag = (sv_gpu->gates_gpu)[t].gm_imag;
