@@ -534,7 +534,7 @@ namespace NWQSim
             throw std::logic_error("get_exp_z Not implemented (STAB_CPU)");
         }
 
-    protected:
+    public:
         IdxType n;
         IdxType n_gates;
         int stabCounts;

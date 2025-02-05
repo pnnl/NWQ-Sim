@@ -162,7 +162,7 @@ namespace NWQSim
                 MPI_Send(&ticket, 1, MPI_INT64_T, i_proc + 1, i_proc + 1, comm_global);
             }
         };
-        void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
+        void sim(std::shared_ptr<NWQSim::Circuit> circuit, double &timer) override
         {
             IdxType origional_gates = circuit->num_gates();
 
