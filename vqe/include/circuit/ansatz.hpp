@@ -18,6 +18,16 @@
 
 namespace NWQSim {
   namespace VQE {
+    
+    // // MZ: moved from dynamic_ansatz.hpp, want to make it a more unified switch to switch pools for ADAPT-VQE or VQE  
+    enum class PoolType {
+      Fermionic,
+      Pauli,
+      MinimalPauli,
+      Singlet_GSD,
+      Fermionic_Origin
+    };
+
     class Ansatz: public Circuit {
       protected:
         std::shared_ptr<std::vector<ValType> > theta;
@@ -25,6 +35,7 @@ namespace NWQSim {
         std::shared_ptr<std::vector<std::vector<std::pair<IdxType, ValType> > > > gate_parameter_pointers; // Gate parameter indices
         std::shared_ptr<std::vector<ValType> > gate_coefficients; // Gate coefficients
         std::unordered_map<std::string, IdxType> excitation_index_map;
+        std::string ansatz_name;
       public:
         Ansatz(IdxType n_qubits): Circuit(n_qubits) {
           theta = std::make_shared<std::vector<ValType> >();
@@ -136,6 +147,7 @@ namespace NWQSim {
         }
         // Accessors
         virtual IdxType numParams() const { return theta->size(); };
+        virtual IdxType numOps() const { return theta->size(); }; // MZ: # params and # operators could be different with further implementation
         const std::shared_ptr<std::vector<IdxType> > getParamGateIndices() const {return parameterized_gates;}
         const std::shared_ptr<std::vector<std::vector<std::pair<IdxType, ValType> > > > getParamGatePointers() const {return gate_parameter_pointers;}
         std::vector<ValType> getGateParams() const {
@@ -149,6 +161,7 @@ namespace NWQSim {
         // const/Non-const access
         std::shared_ptr<std::vector<ValType> > getParams() const {return theta;}
         std::vector<ValType>* getParams() {return theta.get();}
+        std::string getAnsatzName() const {return ansatz_name;}
         const std::vector<ValType>& getParamRef() const {return *theta.get();}
 
         void OneParamGate(enum OP _op_name,
@@ -262,6 +275,7 @@ namespace NWQSim {
         IdxType n_doubles;
         IdxType trotter_n;
         IdxType unique_params;
+        IdxType symm_level;
         Transformer qubit_transform;
         /** 
          * Enforce symmetries for each term. Each fermionic term will have one symmetry entry. If no symmetries are enforced, 
@@ -271,22 +285,26 @@ namespace NWQSim {
         std::vector<IdxType> fermion_ops_to_params; // map from fermion operators to parameters (used in update)
         std::vector<std::vector<FermionOperator> > fermion_operators;
         virtual void getFermionOps();
+        void generate_mixed_excitation(IdxType i, IdxType j, IdxType r, IdxType s);
+        void add_double_excitation(FermionOperator i, FermionOperator j, FermionOperator r, FermionOperator s,  const std::vector<std::pair<IdxType, double>>& symm_expr, bool param);
+        void add_double_excitation(FermionOperator i, FermionOperator j, FermionOperator r, FermionOperator s);
       public:
-        UCCSD(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1): 
+        UCCSD(const MolecularEnvironment& _env, Transformer _qubit_transform, IdxType _trotter_n = 1, IdxType _symm_level = 0): 
                                   env(_env),
                                   trotter_n(_trotter_n),
+                                  symm_level(_symm_level),
                                   qubit_transform(_qubit_transform),
                                   Ansatz(2 * _env.n_spatial) {
           n_singles = 2 * env.n_occ * env.n_virt;
           IdxType c2virtual = choose2(env.n_virt);
           IdxType c2occupied = choose2(env.n_occ);
-          n_doubles = 2 * (env.n_occ) * c2virtual + 2 * (env.n_virt) * c2occupied + env.n_occ * env.n_virt +\
-              c2occupied * c2virtual * 4;
+          n_doubles = 10 * (env.n_occ) * (env.n_virt) * (env.n_occ) * (env.n_virt);
           fermion_operators.reserve(n_singles + n_doubles);
           symmetries = std::vector<std::vector<std::pair<IdxType, ValType> > >((n_singles + n_doubles));
           fermion_ops_to_params.resize(n_doubles + n_singles);
           std::fill(fermion_ops_to_params.begin(), fermion_ops_to_params.end(), -1);
           unique_params = 0;
+          ansatz_name = "UCCSD Original";
           
         };
         virtual void buildAnsatz() override;
@@ -337,25 +355,26 @@ namespace NWQSim {
               opstring = op.toString(env.n_occ, env.n_virt) + opstring;
             }
             result.push_back(std::make_pair(opstring, param));
-            if (is_distinct && oplist.size() == 4 && is_mixed) {
-              first = true;
-              opstring = "";
-              for (auto& op: oplist) {
-                if (!first) {
-                  opstring = " " + opstring;
-                } else {
-                  first = false;
-                }
-                opstring = op.spinReversed().toString(env.n_occ, env.n_virt) + opstring;
-              }
-              result.push_back(std::make_pair(opstring, param));
-            }
+            // if (is_distinct && oplist.size() == 4 && is_mixed) {
+            //   first = true;
+            //   opstring = "";
+            //   for (auto& op: oplist) {
+            //     if (!first) {
+            //       opstring = " " + opstring;
+            //     } else {
+            //       first = false;
+            //     }
+            //     opstring = op.spinReversed().toString(env.n_occ, env.n_virt) + opstring;
+            //   }
+            //   result.push_back(std::make_pair(opstring, param));
+            // }
           }
           return result;
         };
         
         const MolecularEnvironment& getEnv() const {return env;};
         virtual IdxType numParams() const override { return unique_params; };
+        virtual IdxType numOps() const override {return fermion_operators.size();};
     };
     
   };// namespace vqe
