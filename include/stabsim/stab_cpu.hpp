@@ -127,13 +127,14 @@ namespace NWQSim
             }
         }
 
+        //Apply gates to stabilizer-only tableau
         void apply_gate(std::string gate, int a, int b = -1) override
         {
             int tempVal;
             if(gate == "H")
             {
                 //std::cout << "APPLYING H(" << a << ")" << std::endl;
-                for(int i = 0; i < rows-1; i++)
+                for(int i = 0; i < rows; i++)
                 {
                     //Phase
                     r[i] ^= (x[i][a] & z[i][a]);
@@ -147,7 +148,7 @@ namespace NWQSim
             }
             else if(gate == "S")
             {
-                for(int i = 0; i < rows-1; i++)
+                for(int i = 0; i < rows; i++)
                 {
                     //Phase
                     r[i] ^= (x[i][a] & z[i][a]);
@@ -158,7 +159,7 @@ namespace NWQSim
             }
             else if(gate == "SDG")
             {
-                for(int i = 0; i < rows-1; i++)
+                for(int i = 0; i < rows; i++)
                 {
                     r[i] ^= x[i][a] ^ (x[i][a] & z[i][a]);
 
@@ -170,7 +171,7 @@ namespace NWQSim
             else if(gate == "CX")
             {
                 //std::cout << "APPLYING CX(" << a << ", " << b << ")" << std::endl;
-                for(int i = 0; i < rows-1; i++)
+                for(int i = 0; i < rows; i++)
                 {
                     //Phase
                     r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
@@ -1561,11 +1562,95 @@ namespace NWQSim
                     case OP::SDG:
                         for(int i = 0; i < rows-1; i++)
                         {
-                            //Phase -- Equal to Z S or r^= x & !z
+                            //Phase -- Equal to Z S or x & !z
                             r[i] ^= x[i][a] ^ (x[i][a] & z[i][a]);
 
                             //Entry
                             z[i][a] ^= x[i][a];
+                        }
+                        break;
+                    
+                    
+                    case OP::RX:
+                        //H SDG
+                        if(gate.theta == PI/2)
+                        {
+                            for(int i = 0; i < rows-1; i++)
+                            {
+                                //Phase
+                                r[i] ^= z[i][a];
+                                //Entry -- swap x and z bits
+                                tempVal = x[i][a];
+                                x[i][a] = z[i][a];
+                                z[i][a] = tempVal; 
+
+                                //Phase
+                                //r[i] ^= x[i][a] ^ (x[i][a] & z[i][a]); -- pass through the hadamard entry, becomes r^= z
+
+                                //Entry
+                                z[i][a] ^= x[i][a];
+                            }
+                        }
+                        //H S
+                        else if(gate.theta == -PI/2)
+                        {
+                            for(int i = 0; i < rows-1; i++)
+                            {
+                                //H
+                                //Entry -- swap x and z bits
+                                tempVal = x[i][a];
+                                x[i][a] = z[i][a];
+                                z[i][a] = tempVal; 
+
+                                //S
+                                //Entry
+                                z[i][a] ^= x[i][a];
+                            }
+                        }
+                        else
+                        {
+                            std::cout << "Non-Clifford angle in RX gate! "
+                                    << OP_NAMES[gate.op_name] << "(" << gate.theta << ")" << std::endl;
+                            std::logic_error("Invalid gate type");
+                            exit(1);
+                        }
+                        break;
+                    
+                    case OP::RY:
+                        //H X -- X : r[i] ^= z[i][a]
+                        if(gate.theta == PI/2)
+                        {
+                            for(int i = 0; i < rows-1; i++)
+                            {
+                                //Phase
+                                r[i] ^= x[i][a] ^ (x[i][a] & z[i][a]);
+                                //Entry -- swap x and z bits
+                                tempVal = x[i][a];
+                                x[i][a] = z[i][a];
+                                z[i][a] = tempVal; 
+
+                                //r[i] ^= z[i][a]; <- z is passed up through the hadamard and becomes x
+                            }
+                        }
+                        //X H
+                        else if(gate.theta == -PI/2)
+                        {
+                            for(int i = 0; i < rows-1; i++)
+                            {
+                                //Phase -- z is added into the r calculation
+                                r[i] ^= z[i][a] ^ (x[i][a] & z[i][a]);
+                                //Entry -- swap x and z bits
+                                tempVal = x[i][a];
+                                x[i][a] = z[i][a];
+                                z[i][a] = tempVal; 
+                            }
+                        }
+                        else
+                        {
+                            std::cout << "Non-Clifford angle in RY gate! "
+                                    << OP_NAMES[gate.op_name] << "(" << gate.phi << ")" << std::endl;
+                            std::logic_error("Invalid gate type");
+                            exit(1);
                         }
                         break;
 

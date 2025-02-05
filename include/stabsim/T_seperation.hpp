@@ -5,6 +5,7 @@
 #include <iostream>
 #include <vector>
 #include <iomanip>
+#include <fstream>
 
 #include "../backendManager.hpp"
 #include "../state.hpp"
@@ -29,20 +30,34 @@ namespace NWQSim
             if(gate.op_name == OP::S)
             {
                 new_circ->S(a);
+                // std::cout << "S(" << a << ")" << std::endl;
             }
             else if(gate.op_name == OP::SDG)
             {
                 new_circ->SDG(a);
+                // std::cout << "SDG(" << a << ")" << std::endl;
             } 
             else if(gate.op_name == OP::H)
             {
                 new_circ->H(a);
+                // std::cout << "H(" << a << ")" << std::endl;
+            }
+            else if(gate.op_name == OP::RX)
+            {
+                new_circ->RX(gate.theta, a);
+                // std::cout << "RX(" << a << ")" << std::endl;
+            }
+            else if(gate.op_name == OP::RY)
+            {
+                new_circ->RY(gate.theta, a);
+                // std::cout << "RY(" << a << ")" << std::endl;
             }
             else if(gate.op_name == OP::CX)
             {
                 a = gate.ctrl;
                 b = gate.qubit;
                 new_circ->CX(a, b);
+                // std::cout << "CX(" << a << ", " << b << ")" << std::endl;
             }
             else
                 std::cerr << "Unsupported gate in circuit reverse!" << std::endl;
@@ -70,13 +85,13 @@ namespace NWQSim
 
         /*Process T tableaus*/
 
-        // std::cout << "---- T tableau before processing. Rows: " << T_rows << " ----" << std::endl;
+        // std::cout <<"---- T tableau before processing. Rows: " << T_rows << " ----" << std::endl;
         // T_tab->print_res_state();
 
         //Sort through the T tableau in reverse order to undo our first reverse parse of the Cliff+T circuit
         for(int i = T_rows-2; i > -1; i--)
         {
-            // std::cout << i << std::endl;
+            // // std::cout <<i << std::endl;
             tempStab = (T_tab->get_stabilizer_line(i)).first;
 
             //Check all of the tableaus we have right now and see if any of them commute with the T line, starting with the first tableau
@@ -88,7 +103,7 @@ namespace NWQSim
                 {
                     P[j]->add_stabilizer(tempStab);
                     commutes = true;
-                    // std::cout << "Temp stab " << tempStab << " commutes with P" << i << std::endl;
+                    // std::cout <<"Temp stab " << tempStab << " commutes with P" << i << std::endl;
                     break;
                 }
             }
@@ -100,18 +115,18 @@ namespace NWQSim
                 P.back()->delete_all_rows();
                 P.back()->remove_destabilizers();
                 P.back()->add_stabilizer(tempStab);
-                // std::cout << "Temp stab " << tempStab << " does not commute. New P state ---" << std::endl;
+                // std::cout <<"Temp stab " << tempStab << " does not commute. New P state ---" << std::endl;
                 // P.back()->print_res_state();
             }
             commutes = false; //reset commutation flag   
         }
-        // std::cout << "T tableau splitting finished.\n" << std::endl;
+        // // std::cout <<"T tableau splitting finished.\n" << std::endl;
         T_tab->delete_all_rows();
 
-        // std::cout << "T tableaus after splitting:" << std::endl;
-        // for(int i = 0; i < P.size()-1; i++)
+        // std::cout <<"T tableaus after splitting:" << std::endl;
+        // for(int i = 0; i < P.size(); i++)
         // {
-        //     std::cout << "P[" << i << "]: " << std::endl;
+        //     // std::cout <<"P[" << i << "]: " << std::endl;
 
         //     P[i]->print_res_state();
         // }
@@ -129,19 +144,23 @@ namespace NWQSim
                 //Every 2 T gates is an S gate
                 int num_quarter_gates = pair.second/2;
 
-                // std::cout << pair.first<< " OCCURS " << pair.second << " TIMES " << std::endl;
+                // // std::cout <<pair.first<< " OCCURS " << pair.second << " TIMES " << std::endl;
 
                 //Positive rotation gates come out of multiple T's
                 if(num_quarter_gates > 0)
                 {
-                    // std::cout << "In num quarter gates" << std::endl;
+                    // std::cout <<"In num quarter gates" << std::endl;
 
                     P[i]->remove_repetitions(pair.first, num_quarter_gates * 2);
+
+                    // std::cout <<num_quarter_gates * 2 << " repetitions removed" << std::endl;
+
 
                     //4 S gates is a full rotation around the bloch sphere and cancel out
                     num_quarter_gates = num_quarter_gates % 4;
                     if(num_quarter_gates != 0)
                     {
+                        
                         //Perform the push through routine for every S gate that doesn't cancel
                         for(int gate_num = 0; gate_num < num_quarter_gates; gate_num++)
                         {
@@ -161,6 +180,7 @@ namespace NWQSim
                                     }
                                 }
                                 P[j]->remove_stabilizer(P_rows);
+                                // std::cout <<"Stabilizer removed" << std::endl;
                             }
                             //Once all of the repeating stabilizers in a P tableau are pushed through,
                             //apply S to the measurement tableau.
@@ -173,16 +193,11 @@ namespace NWQSim
                                 }
                                 else if(pair.first[col] == 'Y')
                                 {
-                                    //Backwards so we apply SDG first for +pi/2
-                                    M_circ->SDG(col);
-                                    M_circ->H(col);
-                                    M_circ->S(col);
+                                    M_circ->RY(PI/2, col);
                                 }
                                 else if(pair.first[col] == 'X')
                                 {
-                                    M_circ->H(col);
-                                    M_circ->SDG(col);
-                                    M_circ->H(col);
+                                    M_circ->RX(PI/2, col);
                                 }
                             }
                         }
@@ -191,7 +206,7 @@ namespace NWQSim
                 //Negative quarter rotation gates that come out of repeated TDG or similar
                 else if(num_quarter_gates < 0)
                 {
-                    // std::cout << "In num sdg gates" << std::endl;
+                    // std::cout <<"In num sdg gates" << std::endl;
 
                     P[i]->remove_repetitions(pair.first, num_quarter_gates * -2);
 
@@ -232,15 +247,11 @@ namespace NWQSim
                                 else if(pair.first[col] == 'Y')
                                 {
                                     //Backwards so we apply S first for -pi/2
-                                    M_circ->S(col);
-                                    M_circ->H(col);
-                                    M_circ->SDG(col);
+                                    M_circ->RY(-PI/2, col);
                                 }
                                 else if(pair.first[col] == 'X')
                                 {
-                                    M_circ->H(col);
-                                    M_circ->S(col);
-                                    M_circ->H(col);
+                                    M_circ->RX(-PI/2, col);
                                 }
                             }
                         }
@@ -251,15 +262,15 @@ namespace NWQSim
         //Fill in the T tableau with the newly reduced P tableaus
         for(int i = 0; i < P.size(); i++)
         {
-            // std::cout << "P[" << i << "]: " << std::endl;
+            // // std::cout <<"P[" << i << "]: " << std::endl;
 
             // P[i]->print_res_state();
             std::vector<std::string> stabs = P[i]->get_stabilizers();
-            // std::cout << stabs.size() << " -- stabs.size()" << std::endl;
+            // // std::cout <<stabs.size() << " -- stabs.size()" << std::endl;
 
             for(int j = 0; j < stabs.size(); j++)
             {
-                // std::cout << "First stabilizer at " << i << ": " << stabs[j] << std::endl;
+                // // std::cout <<"First stabilizer at " << i << ": " << stabs[j] << std::endl;
                 T_tab->add_stabilizer(stabs[j]);
             }
         }
@@ -269,6 +280,11 @@ namespace NWQSim
     //Main compilation function for T pushthrough using tableau simulation
     void T_passthrough(std::shared_ptr<Circuit>& circuit, std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<Circuit>& M_circ, int reps = 1)
     {
+
+        std::ofstream outfile("/Users/garn195/Project Repositories/NWQ-Sim/include/stabsim/stab_T_bench/qft_n18.txt"); // Open a file for writing
+
+        
+
         IdxType n = circuit->num_qubits();
 
         std::vector<Gate> gates = circuit->get_gates();
@@ -276,6 +292,10 @@ namespace NWQSim
 
         int a; //qubit
         int b; //control
+        int T_count = 0;
+        int T_rows = 0;
+
+        auto proc_start = std::chrono::high_resolution_clock::now();
         //As we loop through the circuit, keep track of the status of T
         for(int i = num_gates-1; i > -1; i--)
         {
@@ -283,6 +303,7 @@ namespace NWQSim
             a = gate.qubit;
             if(gate.op_name == OP::T)
             {
+                T_count++;
                 //Create a new Z stabilizer for the T gate
                 std::string new_row;
                 for(int i = 0; i < n; i++)
@@ -293,11 +314,12 @@ namespace NWQSim
 
                 T_tab->add_stabilizer(new_row);
 
-                // std::cout << "T stab " << new_row << std::endl;
+                // // std::cout <<"T stab " << new_row << std::endl;
 
             }
             else if(gate.op_name == OP::TDG)
             {
+                T_count++;
                 //Create a new Z stabilizer for the T gate
                 std::string new_row;
                 for(int i = 0; i < n; i++)
@@ -308,7 +330,7 @@ namespace NWQSim
 
                 T_tab->add_stabilizer(new_row, 1);
 
-                // std::cout << "T stab " << new_row << std::endl;
+                // // std::cout <<"T stab " << new_row << std::endl;
 
             }
             else if(gate.op_name == OP::S)
@@ -331,16 +353,39 @@ namespace NWQSim
             else
                 std::cerr << "Unsupported gate in T transpilation!" << std::endl;
         }//End for loop of original circuit
+        
 
+        auto proc_end = std::chrono::high_resolution_clock::now();
+        auto proc_time = std::chrono::duration_cast<std::chrono::microseconds>(proc_end - proc_start);
+        
+        auto opt_start = std::chrono::high_resolution_clock::now();
+
+        T_rows = T_tab->get_num_rows();
         for(int i = 0; i < reps; i++)
         {
-            T_optimize(T_tab, M_circ, reps, n);
+            if(T_rows)
+                T_optimize(T_tab, M_circ, reps, n);
+            else
+            {
+                // std::cout <<"T tableau is empty, passthrough done." << std::endl;
+                break;
+            }
         }
+        auto opt_end = std::chrono::high_resolution_clock::now();
+        auto opt_time = std::chrono::duration_cast<std::chrono::microseconds>(opt_end - opt_start);
+
+        outfile << proc_time.count() << std::endl;
+        outfile << opt_time.count() << std::endl;
+        outfile << T_rows << std::endl;
+        outfile << T_tab->get_num_rows() << std::endl;
+        outfile << reps << std::endl;
+        
         
         //Put the M circuit back in forward time after the new Clifford gates have been appended
         circuit_reverse(M_circ);
 
         /*Process is done, M and T have been seperated and returned*/
 
+        outfile.close(); // Close the file
     } //End T_passthrough
 }//End namespace
