@@ -37,7 +37,7 @@ namespace NWQSim
 
     // Simulation kernel runtime
     class STAB_CUDA;
-    __global__ void stab_simulation_kernel_cuda(Gate* gates, IdxType g, uint32_t** x, uint32_t** z, uint32_t* r, IdxType rows, IdxType cols);
+    __global__ void stab_simulation_kernel_cuda(Gate* gates, uint32_t** x, uint32_t** z, uint32_t* r, IdxType rows, IdxType cols);
 
     class STAB_CUDA : public QuantumState
     {
@@ -460,29 +460,58 @@ namespace NWQSim
             return totalResults;
         }//End measure_all
 
+        dim3 get_dims()
+        {
+            dim3 gridDim(1, 1, 1);
+            cudaDeviceProp deviceProp;
+            cudaSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
+            // 8*16 is per warp shared-memory usage for C4 TC, with real and imag
+            // unsigned smem_size = THREADS_CTA_CUDA/32*8*16*2*sizeof(ValType);
+            unsigned smem_size = 0 * sizeof(uint32_t);
+            int numBlocksPerSm;
+            cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
+                                                                       simulation_kernel_cuda, THREADS_CTA_CUDA, smem_size));
+
+            gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
+            return gridDim;
+        }
+
         //Simulate the gates from a circuit in the tableau
         void sim(std::shared_ptr<NWQSim::Circuit> circuit, double &sim_time) override
         {
             std::vector<Gate> gates = circuit->get_gates();
-            n_gates = gates.size();
             assert(circuit->num_qubits() == n);
 
             //Copy gates to the gpu side
-            Gate* gpu_gates;
-            SAFE_ALOC_GPU(gates, n_gates * sizeof(Gate));
-            cudaSafeCall(cudaMemcpy(gpu_gates, gates.data(), n_gates * sizeof(Gate), cudaMemcpyHostToDevice));
+            copy_gates_to_gpu();
+            IdxType n_gates = cpu_vec.size();
 
-            //Start a timer
+            STAB_CUDA *stab_gpu;
+            SAFE_ALOC_GPU(stab_gpu, sizeof(STAB_CUDA));
+            // Copy the simulator instance to GPU
+            cudaSafeCall(cudaMemcpy(stab_gpu, this,
+                                    sizeof(STAB_CUDA), cudaMemcpyHostToDevice));
+
+            double sim_time;
             gpu_timer sim_timer;
-            sim_timer.start_timer();
+
+            if (Config::PRINT_SIM_TRACE)
+            {
+                printf("STABSim_gpu is running! Requesting %lld qubits.\n", n_qubits);
+            }
 
             //Calculate threads and blocks
             int threadsPerBlock = 256;
             int blocksPerGrid = (rows + threadsPerBlock - 1) / threadsPerBlock;
+            void *args[] = {&stab_gpu, &n_gates};
             
             //Simulate
-            stab_simulation_kernel_cuda<<<blocksPerGrid, threadsPerBlock>>>(gpu_gates, n_gates, x_packed_gpu, z_packed_gpu, r_packed_gpu, rows, cols);
-            cudaDeviceSynchronize();
+            sim_timer.start_timer();
+
+            unsigned smem_size = 0 * sizeof(ValType);
+            cudaLaunchCooperativeKernel((void *)simulation_kernel_cuda, gridDim,
+                                        THREADS_CTA_CUDA, args, smem_size);
+            cudaSafeCall(cudaDeviceSynchronize());
             
             //End timer
             sim_timer.stop_timer();
@@ -562,60 +591,90 @@ namespace NWQSim
         //Random
         std::mt19937 rng;
         std::uniform_int_distribution<int> dist;   
+
+        // GPU-side simulator instance
+        Gate *gates_gpu = NULL;
+
+        void copy_gates_to_gpu(std::vector<Gate> &cpu_vec)
+        {
+            // Allocate memory on CPU
+            size_t vec_size = cpu_vec.size() * sizeof(Gate);
+
+            // Allocate memory on GPU
+            SAFE_FREE_GPU(gates_gpu);
+            SAFE_ALOC_GPU(gates_gpu, vec_size);
+            cudaSafeCall(cudaMemcpy(gates_gpu, cpu_vec.data(), vec_size, cudaMemcpyHostToDevice));
+        }
         
 
-        __global__ void stab_simulation_kernel_cuda(Gate* gates, int g, uint32_t** x, uint32_t** z, uint32_t* r, IdxType rows, IdxType cols)
+        
+    }; //End tableau class
+
+    __device__ void H_gate(uint32_t* r, uint32_t** x, uint32_t** z, int i, int a)
+    {
+        //Phase
+        r[i] ^= (x[i][a] & z[i][a]);
+        //Entry -- swap x and z bits
+        uint32_t tempVal = x[i][a];
+        x[i][a] = z[i][a];
+        z[i][a] = tempVal; 
+    }
+    __device__ void S_gate(uint32_t* r, uint32_t** x, uint32_t** z, int i, int a)
+    {
+        //Phase
+        r[i] ^= (x[i][a] & z[i][a]);
+
+        //Entry
+        z[i][a] ^= x[i][a];
+    }
+    __device__ void CX_gate(uint32_t* r, uint32_t** x, uint32_t** z, int i, int b, int a)
+    {
+        //Phase
+        r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
+
+        //Entry
+        x[i][b] ^= x[i][a];
+        z[i][a] ^= z[i][b];
+    }
+
+    __global__ void stab_simulation_kernel(STAB_CUDA* stab_gpu, IdxType n_gates)
+    {
+        IdxType g = n_gates;
+
+        for (int k = 0; k < g; k++) 
         {
-            int row = blockIdx.x * blockDim.x + threadIdx.x;
-            if (row >= rows) return;
+            int i = blockIdx.x * blockDim.x + threadIdx.x;
+            if (i >= rows) return;  // Compute thread index
 
-            for (int k = 0; k < g; k++) 
+            auto op_name = (stab_gpu->gates_gpu)[k].op_name;
+
+            auto a = (stab_gpu->gates_gpu)[k].qubit;
+    
+            auto b = (stab_gpu->gates_gpu)[k].ctrl;
+
+            assert(a < cols);
+
+            switch (op_name) 
             {
-                Gate gate = gates[k];
-                int a = gate.qubit;
-                assert(a < cols);
+                case OP::H:
+                    stab_gpu->H_gate(r, x, z, i, a);
+                    break;
 
-                switch (gate.op_name) 
-                {
-                    case OP::H:
-                        r[row] ^= (x[row][a] & z[row][a]);
-                        uint32_t temp = x[row][a];
-                        x[row][a] = z[row][a];
-                        z[row][a] = temp;
-                        break;
+                case OP::S:
+                    stab_gpu->S_gate(r, x, z, i, a);
+                    break;
 
-                    case OP::S:
-                        r[row] ^= (x[row][a] & z[row][a]);
-                        z[row][a] ^= x[row][a];
-                        break;
-
-                    case OP::CX:
-                        int b = gate.qubit;
-                        int ctrl = gate.ctrl;
-                        r[row] ^= ((x[row][ctrl] & z[row][b]) & (x[row][b] ^ z[row][ctrl] ^ 1));
-                        x[row][b] ^= x[row][ctrl];
-                        z[row][ctrl] ^= z[row][b];
-                        break;
-                    
-                    case OP::X:
-                        r[row] ^= z[row][a];
-                        break;
-
-                    case OP::Y: 
-                        r[row] ^= x[row][a] ^ z[row][a];
-                        break;
-
-                    case OP::Z:
-                        r[row] ^= x[row][a];
-                        break;
-                    
-                    default:
-                        printf("Non-Clifford or unrecognized gate: %d\n", gate.op_name);
-                        assert(false);
-                }
+                case OP::CX:
+                    stab_gpu->CX_gate(r, x, z, i, a, b);
+                    break;
+                
+                default:
+                    printf("Non-Clifford or unrecognized gate: %d\n", gate.op_name);
+                    assert(false);
             }
         }
-    }; //End tableau class
+    }//end kernel
+
 } // namespace NWQSim
 
 // #endif
