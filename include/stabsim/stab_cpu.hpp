@@ -1570,7 +1570,6 @@ namespace NWQSim
                         }
                         break;
                     
-                    
                     case OP::RX:
                         //H SDG
                         if(gate.theta == PI/2)
@@ -1669,6 +1668,71 @@ namespace NWQSim
                         }
                         break;
                     }
+                    case OP::CY:
+                    {
+                        int a = gate.ctrl;
+                        int b = gate.qubit;
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            //Phase -- Equal to Z S or x & !z
+                            r[i] ^= x[i][b] ^ (x[i][b] & z[i][b]);
+
+                            //Entry
+                            z[i][b] ^= x[i][b];
+                        }
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            //Phase
+                            r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
+
+                            //Entry
+                            x[i][b] ^= x[i][a];
+                            z[i][a] ^= z[i][b];
+                        }
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            //Phase
+                            r[i] ^= (x[i][b] & z[i][b]);
+
+                            //Entry
+                            z[i][b] ^= x[i][b];
+                        }
+                        break;
+                    }
+                    case OP::CZ:
+                    {
+                        int a = gate.ctrl;
+                        int b = gate.qubit;
+
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            //Phase
+                            r[i] ^= (x[i][b] & z[i][b]);
+                            //Entry -- swap x and z bits
+                            tempVal = x[i][b];
+                            x[i][b] = z[i][b];
+                            z[i][b] = tempVal; 
+                        }
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            //Phase
+                            r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
+
+                            //Entry
+                            x[i][b] ^= x[i][a];
+                            z[i][a] ^= z[i][b];
+                        }
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            //Phase
+                            r[i] ^= (x[i][b] & z[i][b]);
+                            //Entry -- swap x and z bits
+                            tempVal = x[i][b];
+                            x[i][b] = z[i][b];
+                            z[i][b] = tempVal; 
+                        }
+                        break;
+                    }
 
                     case OP::M:
                     {
@@ -1744,6 +1808,16 @@ namespace NWQSim
                         }
                         break;
                     }
+                    case OP::RESET:
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            x[i][a] = 0;
+                            z[i][a] = 0;
+                        }
+                        x[a][a] = 1;
+                        z[a+n][a] = 1;
+                        r[a] = 0;
+                        break;
 
                     case OP::X:
                         //equiv to H S S H or H Z H
