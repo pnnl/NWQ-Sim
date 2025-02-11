@@ -842,7 +842,7 @@ namespace NWQSim
 
             int half_rows = rows >> 1;
             
-            for(int i = 0; i < shots; i++)
+            for(int shot = 0; shot < shots; shot++)
             {
                 //Make a copy of the class being measured so many shots can be performed
                 std::vector<std::vector<int>> temp_x = x;
@@ -893,7 +893,7 @@ namespace NWQSim
                         }
                         temp_z[p][a] = 1;
 
-                        totalResults[i] |= (temp_r[p] << a);
+                        totalResults[shot] |= (temp_r[p] << a);
                         // std::cout << "Random measurement at qubit " << a << " value: " << (temp_r[p] << a) << std::endl;
                     }
                     else
@@ -918,7 +918,7 @@ namespace NWQSim
                         }
 
                         // std::cout << "Deterministc measurement at qubit " << a << " value: " << (temp_r[rows-1] << a) << std::endl;
-                        totalResults[i] |=  (temp_r[rows-1] << a);
+                        totalResults[shot] |=  (temp_r[rows-1] << a);
                     } //End if else
                 } //End single shot for all qubits
             }//End shots

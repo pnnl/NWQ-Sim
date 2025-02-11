@@ -378,7 +378,7 @@ namespace NWQSim
             std::vector<std::vector<int>> temp_x;
             std::vector<std::vector<int>> temp_z;
             std::vector<int> temp_r;
-            for(int i = 0; i < shots; i++)
+            for(int shot = 0; shot < shots; shot++)
             {
                 //Make a copy of the class being measured so many shots can be performed
                 temp_x = x;
@@ -428,7 +428,7 @@ namespace NWQSim
                         }
                         temp_z[p][a] = 1;
 
-                        totalResults[i] |= (temp_r[p] << a);
+                        totalResults[shot] |= (temp_r[p] << a);
                         // std::cout << "Random measurement at qubit " << a << " value: " << (temp_r[p] << a) << std::endl;
                     }
                     else //Deterministic
@@ -453,7 +453,7 @@ namespace NWQSim
                         }
 
                         // std::cout << "Deterministc measurement at qubit " << a << " value: " << (temp_r[rows-1] << a) << std::endl;
-                        totalResults[i] |=  (temp_r[rows-1] << a);
+                        totalResults[shot] |=  (temp_r[rows-1] << a);
                     } //End if else
                 } //End single shot for all qubits
             }//End shots
@@ -619,28 +619,28 @@ namespace NWQSim
         __device__ void H_gate(int i, int a)
         {
             //Phase
-            r[i] ^= (x[i][a] & z[i][a]);
+            r_packed_gpu[i] ^= (x_packed_gpu[i][a] & z_packed_gpu[i][a]);
             //Entry -- swap x and z bits
-            uint32_t tempVal = x[i][a];
-            x[i][a] = z[i][a];
-            z[i][a] = tempVal; 
+            uint32_t tempVal = x_packed_gpu[i][a];
+            x_packed_gpu[i][a] = z_packed_gpu[i][a];
+            z_packed_gpu[i][a] = tempVal; 
         }
         __device__ void S_gate(int i, int a)
         {
             //Phase
-            r[i] ^= (x[i][a] & z[i][a]);
+            r_packed_gpu[i] ^= (x_packed_gpu[i][a] & z_packed_gpu[i][a]);
 
             //Entry
-            z[i][a] ^= x[i][a];
+            z_packed_gpu[i][a] ^= x_packed_gpu[i][a];
         }
         __device__ void CX_gate(int i, int b, int a)
         {
             //Phase
-            r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
+            r_packed_gpu[i] ^= ((x_packed_gpu[i][a] & z_packed_gpu[i][b]) & (x_packed_gpu[i][b]^z_packed_gpu[i][a]^1));
 
             //Entry
-            x[i][b] ^= x[i][a];
-            z[i][a] ^= z[i][b];
+            x_packed_gpu[i][b] ^= x_packed_gpu[i][a];
+            z_packed_gpu[i][a] ^= z_packed_gpu[i][b];
         }
     }; //End tableau class
 
@@ -682,6 +682,6 @@ namespace NWQSim
         }
     }//end kernel
 
-} // namespace NWQSim
+} //namespace NWQSim
 
-// #endif
+//#endif

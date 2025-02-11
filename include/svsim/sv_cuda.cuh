@@ -32,7 +32,7 @@ namespace NWQSim
 
     // Simulation kernel runtime
     class SV_CUDA;
-    __global__ void simulation_kernel_cuda(SV_CUDA *sv_gpu, IdxType n_gates);
+    __global__ void stab_simulation_kernel_cuda(SV_CUDA *sv_gpu, IdxType n_gates);
 
     class SV_CUDA : public QuantumState
     {
@@ -157,7 +157,7 @@ namespace NWQSim
             unsigned smem_size = 0 * sizeof(ValType);
             int numBlocksPerSm;
             cudaSafeCall(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm,
-                                                                       simulation_kernel_cuda, THREADS_CTA_CUDA, smem_size));
+                                                                       stab_simulation_kernel_cuda, THREADS_CTA_CUDA, smem_size));
 
             gridDim.x = numBlocksPerSm * deviceProp.multiProcessorCount;
             return gridDim;
@@ -196,7 +196,7 @@ namespace NWQSim
             sim_timer.start_timer();
 
             unsigned smem_size = 0 * sizeof(ValType);
-            cudaLaunchCooperativeKernel((void *)simulation_kernel_cuda, gridDim,
+            cudaLaunchCooperativeKernel((void *)stab_simulation_kernel_cuda, gridDim,
                                         THREADS_CTA_CUDA, args, smem_size);
             cudaSafeCall(cudaDeviceSynchronize());
 
@@ -947,7 +947,7 @@ namespace NWQSim
         virtual ValType *get_imag() const override { return sv_imag; };
     };
 
-    __global__ void simulation_kernel_cuda(SV_CUDA *sv_gpu, IdxType n_gates)
+    __global__ void stab_simulation_kernel_cuda(SV_CUDA *sv_gpu, IdxType n_gates)
     {
         IdxType cur_index = 0;
         grid_group grid = this_grid();

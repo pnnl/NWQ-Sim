@@ -16,31 +16,12 @@ int main(){
 
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
-    // circuit->H(3);
-    // circuit->CX(2,0);
-    // circuit->CX(0,1);
-    // circuit->H(3);
-    // circuit->CX(0,2);
-    // circuit->CX(0,2);
-    // circuit->T(1);
-    // circuit->CX(3,2);
-    // circuit->CX(2,0);
-    // circuit->H(3);
-    // circuit->T(2);
-    // circuit->CX(0,1);
-    // circuit->CX(1,0);
-    // circuit->CX(3,2);
-    // circuit->CX(1,0);
+    circuit -> H(0);
+    circuit -> S(0);
+    circuit -> S(0);
+    circuit -> H(0);
 
-    // circuit -> Z(0);
-    // circuit -> CX(0,1);
-
-    // circuit -> H(0);
-    // circuit -> S(0);
-    // circuit -> S(0);
-    // circuit -> H(0);
-
-    std::string backend = "cpu";
+    std::string backend = "NVGPU";
     std::string sim_method = "stab";
     double timer = 0;
     
