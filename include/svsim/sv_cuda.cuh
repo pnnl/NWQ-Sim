@@ -244,17 +244,19 @@ namespace NWQSim
 
         IdxType measure(IdxType qubit) override
         {
+            double timer;
             std::shared_ptr<Circuit> circuit = std::make_shared<Circuit>(n_qubits);
             circuit->M(qubit);
-            sim(circuit);
+            sim(circuit, timer);
             return results[0];
         }
 
         IdxType *measure_all(IdxType repetition) override
         {
+            double timer;
             std::shared_ptr<Circuit> circuit = std::make_shared<Circuit>(n_qubits);
             circuit->MA(repetition);
-            sim(circuit);
+            sim(circuit, timer);
             return results;
         }
 
