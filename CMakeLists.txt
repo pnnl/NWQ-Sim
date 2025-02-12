@@ -142,7 +142,8 @@ message(STATUS "================================================================
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
 # Subdirectories
-add_subdirectory(qasm)
+# add_subdirectory(qasm)
+add_subdirectory(stabilizer)
 
 if (EXISTS "${PROJECT_SOURCE_DIR}/vqe/nlopt/CMakeLists.txt")
     add_subdirectory(vqe)

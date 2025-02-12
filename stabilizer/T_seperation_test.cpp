@@ -4,12 +4,12 @@
 #include <vector>
 #include <iomanip>
 
-#include "../backendManager.hpp"
-#include "../state.hpp"
-#include "../circuit.hpp"
-#include "../nwq_util.hpp"
+#include "../include/backendManager.hpp"
+#include "../include/state.hpp"
+#include "../include/circuit.hpp"
+#include "../include/nwq_util.hpp"
 
-#include "T_seperation.hpp"
+#include "src/T_seperation.hpp"
 
 int extractQubitIndex(const std::string& qubitStr) 
 {

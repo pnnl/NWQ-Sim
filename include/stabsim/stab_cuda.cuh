@@ -45,6 +45,7 @@ namespace NWQSim
         //Default identity constructor
         STAB_CUDA(IdxType _n_qubits) : QuantumState(SimType::STAB)
         {
+            std::cout << "CUDA constructor" << std::endl;
             /*Initialize basic data*/
             n = _n_qubits;
             rows = 2*n+1;
@@ -83,10 +84,11 @@ namespace NWQSim
             // }
             pack_tableau();
 
-            //Allocate the packed data to the GPU side using NVSHMEM
+            //Allocate the packed data to the GPU side using NVSHMEM and a tempRow for row swapping
             SAFE_ALOC_GPU(x_packed_gpu, packed_matrix_size);
             SAFE_ALOC_GPU(z_packed_gpu, packed_matrix_size);
             SAFE_ALOC_GPU(r_packed_gpu, packed_r_size);
+            SAFE_ALOC_GPU(tempCol, packed_r_size);
 
             cudaCheckError();
 
@@ -113,17 +115,29 @@ namespace NWQSim
             SAFE_FREE_GPU(r_packed_gpu);
         }
 
-        //Packs down 32 rows in each column
+        //Packs down 32 rows in each column and flattens
         void pack_tableau()
         {
+            // Allocate memory for x_packed_cpu (2D array)
+            x_packed_cpu = new uint32_t*[packed_rows];
+            z_packed_cpu = new uint32_t*[packed_rows];
+            for (int i = 0; i < packed_rows; ++i) {
+                x_packed_cpu[i] = new uint32_t[cols];
+                z_packed_cpu[i] = new uint32_t[cols];
+            }
+            std::cout << "pack tableau" << std::endl;
             for(int i = 0; i < rows; i++)
             {
                 mask = i % packed_bits;
                 r_packed_cpu[i/packed_bits] |= r[i] << (mask);
+
                 for(int j = 0; j < cols; j++)
                 {
-                    x_packed_cpu[i/packed_bits][j] |= x[i][j] << (mask);
-                    x_packed_cpu[i/packed_bits][j] |= x[i][j] << (mask);
+                    std::cout << "rows: " << rows << std::endl;
+                    std::cout << "x packed rows: " << sizeof(x_packed_cpu) << std::endl;
+                    std::cout << "x packed cols: " << sizeof(x_packed_cpu[0][0]) << std::endl;
+                    x_packed_cpu[i/packed_bits][j] = new uint32_t (x[i][j] << (mask));
+                    x_packed_cpu[i/packed_bits][j] = new uint32_t (x[i][j] << (mask));
                 }
             }
             //Copy data to the GPU side
@@ -369,7 +383,7 @@ namespace NWQSim
         IdxType *measure_all(IdxType shots = 2048) override
         {
             //Each index of shotResults is a possible result from a full measurement, ex. 01100101 in an 8 qubit system
-            //The integer at that position is the number of times that result occured
+            //The integer at that i is the number of times that result occured
             SAFE_ALOC_HOST(totalResults, sizeof(IdxType) * shots);
             memset(totalResults, 0, sizeof(IdxType) * shots);
 
@@ -592,9 +606,10 @@ namespace NWQSim
         uint32_t** z_packed_cpu;
         uint32_t* r_packed_cpu;
         //GPU Arrays
-        uint32_t** x_packed_gpu;
-        uint32_t** z_packed_gpu;
+        uint32_t* x_packed_gpu;
+        uint32_t* z_packed_gpu;
         uint32_t* r_packed_gpu;
+        uint32_t* tempCol;
 
         IdxType* totalResults = NULL;
 
@@ -616,31 +631,31 @@ namespace NWQSim
             cudaSafeCall(cudaMemcpy(gates_gpu, cpu_vec.data(), vec_size, cudaMemcpyHostToDevice));
         }
 
-        __device__ void H_gate(int i, int a)
+        __device__ void H_gate(int i, int mat_i)
         {
             //Phase
-            r_packed_gpu[i] ^= (x_packed_gpu[i][a] & z_packed_gpu[i][a]);
+            r_packed_gpu[i] ^= (x_packed_gpu[mat_i] & z_packed_gpu[mat_i]);
             //Entry -- swap x and z bits
-            uint32_t tempVal = x_packed_gpu[i][a];
-            x_packed_gpu[i][a] = z_packed_gpu[i][a];
-            z_packed_gpu[i][a] = tempVal; 
+            tempCol = x_packed_gpu[mat_i];
+            x_packed_gpu[mat_i] = z_packed_gpu[mat_i];
+            z_packed_gpu[mat_i] = tempCol; 
         }
-        __device__ void S_gate(int i, int a)
+        __device__ void S_gate(int i, int mat_i)
         {
             //Phase
-            r_packed_gpu[i] ^= (x_packed_gpu[i][a] & z_packed_gpu[i][a]);
+            r_packed_gpu[i] ^= (x_packed_gpu[mat_i] & z_packed_gpu[mat_i]);
 
             //Entry
-            z_packed_gpu[i][a] ^= x_packed_gpu[i][a];
+            z_packed_gpu[mat_i] ^= x_packed_gpu[mat_i];
         }
-        __device__ void CX_gate(int i, int b, int a)
+        __device__ void CX_gate(int i, int ctrl, int qubit)
         {
             //Phase
-            r_packed_gpu[i] ^= ((x_packed_gpu[i][a] & z_packed_gpu[i][b]) & (x_packed_gpu[i][b]^z_packed_gpu[i][a]^1));
+            r_packed_gpu[i] ^= ((x_packed_gpu[ctrl] & z_packed_gpu[qubit]) & (x_packed_gpu[qubit]^z_packed_gpu[ctrl]^1));
 
             //Entry
-            x_packed_gpu[i][b] ^= x_packed_gpu[i][a];
-            z_packed_gpu[i][a] ^= z_packed_gpu[i][b];
+            x_packed_gpu[qubit] ^= x_packed_gpu[ctrl];
+            z_packed_gpu[ctrl] ^= z_packed_gpu[qubit];
         }
     }; //End tableau class
 
@@ -651,7 +666,7 @@ namespace NWQSim
         for (int k = 0; k < g; k++) 
         {
             int i = blockIdx.x * blockDim.x + threadIdx.x;
-            if (i > stab_gpu->rows-1) return;  // Compute thread index
+            if (i >= rows) return;
 
             auto op_name = (stab_gpu->gates_gpu)[k].op_name;
 
@@ -661,18 +676,21 @@ namespace NWQSim
 
             assert(a < stab_gpu->cols);
 
+            int m_index = (i * stab_gpu->cols) + a;
+
             switch (op_name) 
             {
                 case OP::H:
-                    stab_gpu->H_gate(i, a);
+                    stab_gpu->H_gate(i, m_index);
                     break;
 
                 case OP::S:
-                    stab_gpu->S_gate(i, a);
+                    stab_gpu->S_gate(i, m_index);
                     break;
 
                 case OP::CX:
-                    stab_gpu->CX_gate(i, a, b);
+                    int m_index_ctrl = (i * stab_gpu->cols) + b;
+                    stab_gpu->CX_gate(i, m_index_ctrl, m_index);
                     break;
                 
                 default:
@@ -681,7 +699,6 @@ namespace NWQSim
             }
         }
     }//end kernel
-
 } //namespace NWQSim
 
 //#endif
