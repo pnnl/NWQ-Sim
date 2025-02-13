@@ -91,11 +91,11 @@ namespace NWQSim
             cudaCheckError();
 
             //Copy data to the GPU side
-            cudaSafeCall(cudaMemcpy(x_packed_gpu, x_packed_cpu, packed_matrix_size,
+            cudaSafeCall(cudaMemcpy(x_packed_gpu, &x_packed_cpu[0][0], packed_matrix_size,
                                     cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(z_packed_gpu, z_packed_cpu, packed_matrix_size,
+            cudaSafeCall(cudaMemcpy(z_packed_gpu, &z_packed_cpu[0][0], packed_matrix_size,
                                     cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(r_packed_gpu, r_packed_cpu, packed_r_size, cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(r_packed_gpu, &r_packed_cpu[0], packed_r_size, cudaMemcpyHostToDevice));
         }
 
         ~STAB_CUDA()
@@ -142,6 +142,12 @@ namespace NWQSim
                     // std::cout << "Z_packed[" << i/packed_bits << "][" << j << "] = " << z_packed_cpu[i/packed_bits][j] << std::endl;
                 }
             }
+
+            std::cout << "X packed cpu at col 0 " << x_packed_cpu[0][0] << std::endl;
+            std::cout << "X packed cpu at col 1 " << x_packed_cpu[0][1] << std::endl;
+            std::cout << "X packed cpu at col 2 " << x_packed_cpu[0][2] << std::endl;
+            std::cout << "X packed cpu at col 3 " << x_packed_cpu[0][3] << std::endl;
+            std::cout << "r packed cpu " << r_packed_cpu[0] << std::endl;
             
             //Copy data to the GPU side
         //     cudaSafeCall(cudaMemcpy(x_packed_gpu, x_packed_cpu, packed_matrix_size,
@@ -149,11 +155,31 @@ namespace NWQSim
         //     cudaSafeCall(cudaMemcpy(z_packed_gpu, z_packed_cpu, packed_matrix_size,
         //                             cudaMemcpyHostToDevice));
         //     cudaSafeCall(cudaMemcpy(r_packed_gpu, r_packed_cpu, packed_r_size, cudaMemcpyHostToDevice));
+        
         }
 
         //Unpacks packed CPU arrays back to bit values
         void unpack_tableau()
         {
+            std::cout << "Unpacking tableau!" << std::endl;
+
+            // SAFE_FREE_HOST_CUDA(x_packed_cpu);
+            // SAFE_FREE_HOST_CUDA(z_packed_cpu);
+            // SAFE_FREE_HOST_CUDA(r_packed_cpu);
+
+            //Copy data to the CPU side
+            cudaSafeCall(cudaMemcpy(&x_packed_cpu[0][0], x_packed_gpu, packed_matrix_size,
+                                    cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaMemcpy(&z_packed_cpu[0][0], z_packed_gpu, packed_matrix_size,
+                                    cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaMemcpy(&r_packed_cpu[0], r_packed_gpu, packed_r_size, cudaMemcpyDeviceToHost));
+
+            std::cout << "X packed cpu at col 0 " << x_packed_cpu[0][0] << std::endl;
+            std::cout << "X packed cpu at col 1 " << x_packed_cpu[0][1] << std::endl;
+            std::cout << "X packed cpu at col 2 " << x_packed_cpu[0][2] << std::endl;
+            std::cout << "X packed cpu at col 3 " << x_packed_cpu[0][3] << std::endl;
+            std::cout << "r packed cpu " << r_packed_cpu[0] << std::endl;
+
             for(int i = 0; i < rows; i++)
             {
                 mask = i % packed_bits;
@@ -545,7 +571,7 @@ namespace NWQSim
                                     sizeof(STAB_CUDA), cudaMemcpyDeviceToHost));
             cudaCheckError();
 
-            //unpack tableau
+            //unpack tableau and copy data back
             unpack_tableau();
 
             if (Config::PRINT_SIM_TRACE)
@@ -637,15 +663,19 @@ namespace NWQSim
 
         __device__ void H_gate(int i, int mat_i)
         {
+            printf("H ");
             //Phase
             r_packed_gpu[i] ^= (x_packed_gpu[mat_i] & z_packed_gpu[mat_i]);
             //Entry -- swap x and z bits
             x_packed_gpu[mat_i] ^= z_packed_gpu[mat_i];
             z_packed_gpu[mat_i] ^= x_packed_gpu[mat_i];
             x_packed_gpu[mat_i] ^= z_packed_gpu[mat_i];
+
+            printf("x_packed_gpu: %u ", x_packed_gpu[mat_i]);
         }
         __device__ void S_gate(int i, int mat_i)
         {
+            printf("S ");
             //Phase
             r_packed_gpu[i] ^= (x_packed_gpu[mat_i] & z_packed_gpu[mat_i]);
 
@@ -654,6 +684,7 @@ namespace NWQSim
         }
         __device__ void CX_gate(int i, int ctrl, int qubit)
         {
+            printf("CX ");          
             //Phase
             r_packed_gpu[i] ^= ((x_packed_gpu[ctrl] & z_packed_gpu[qubit]) & (x_packed_gpu[qubit]^z_packed_gpu[ctrl]^1));
 
@@ -687,17 +718,14 @@ namespace NWQSim
             switch (op_name) 
             {
                 case OP::H:
-                    printf("H ");
                     stab_gpu->H_gate(i, m_index);
                     break;
 
                 case OP::S:
-                    printf("S ");
                     stab_gpu->S_gate(i, m_index);
                     break;
 
                 case OP::CX:
-                    printf("CX ");
                     m_index_ctrl = (i * stab_gpu->cols) + b;
                     stab_gpu->CX_gate(i, m_index_ctrl, m_index);
                     break;
@@ -707,6 +735,7 @@ namespace NWQSim
                     assert(false);
             }
         }
+        printf("Kernel is done!\n");
     }//end kernel
 } //namespace NWQSim
 
