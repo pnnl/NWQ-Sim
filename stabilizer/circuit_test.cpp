@@ -54,7 +54,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->TDG(qubit1);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            std::cout << gate << qubit1 << std::endl;
         }
         else if(gate == "h")
         {
@@ -65,7 +65,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->H(qubit1);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            std::cout << gate << qubit1 << std::endl;
         }
         else if(gate == "s")
         {
@@ -76,7 +76,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->S(qubit1);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            std::cout << gate << qubit1 << std::endl;
         }
         else if(gate == "sdg")
         {
@@ -87,7 +87,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->SDG(qubit1);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            std::cout << gate << qubit1 << std::endl;
         }
         else if(gate == "t")
         {
@@ -98,7 +98,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->T(qubit1);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            std::cout << gate << qubit1 << std::endl;
         }
         else if(gate == "measure")
         {
@@ -109,7 +109,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->M(qubit1);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            std::cout << gate << qubit1 << std::endl;
         }
         else if(gate == "reset")
         {
@@ -120,7 +120,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->RESET(qubit1);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            std::cout << gate << qubit1 << std::endl;
         }
         else if(gate == "cx")
         {
@@ -176,15 +176,23 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
 // Create a circuit with 2 qubits
 int main(){
     std::cout << "Starting program" << std::endl;
-    int n_qubits = 4;
+    int n_qubits = 64;
     int shots = 10;
+
+    NWQSim::IdxType S_count = 0;
+    NWQSim::IdxType H_count = 0;
+    NWQSim::IdxType CX_count = 0;
 
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
-    circuit -> H(0);
-    circuit -> S(0);
-    circuit -> S(0);
-    circuit -> H(0);
+    for(int rounds = 0; rounds < 1000000; rounds++)
+    {
+        for(int i = 0; i < n_qubits; i++)
+        {
+            circuit->S(i);
+            S_count++;
+        }
+    }
 
     std::string backend = "NVGPU";
     std::string sim_method = "stab";
@@ -202,4 +210,6 @@ int main(){
 
     for(int i = 0; i < shots; i++)
         std::cout << "Result " << i << ": " << results[i] << std::endl;
+
+    std::cout << "Sim time: " << timer << "ms" << std::endl;
 }

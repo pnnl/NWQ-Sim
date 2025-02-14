@@ -60,7 +60,6 @@ namespace NWQSim
             cudaSafeCall(cudaSetDevice(i_proc));
 
             //Space out the vectors
-            // std::cout << "Reseting state" << std::endl;
             reset_state();
 
             rng.seed(Config::RANDOM_SEED);
@@ -68,34 +67,13 @@ namespace NWQSim
             SAFE_ALOC_HOST(totalResults, sizeof(IdxType));
             memset(totalResults, 0, sizeof(IdxType));
             /*End initialization*/
-
-            // std::cout << "Allocating x z and r" << std::endl;
-
-            //Initialize packed matrices
-            // SAFE_ALOC_HOST_CUDA(x_packed_cpu, packed_matrix_size);
-            // SAFE_ALOC_HOST_CUDA(z_packed_cpu, packed_matrix_size);
-            // SAFE_ALOC_HOST_CUDA(r_packed_cpu, packed_r_size);
-            // memset(x_packed_cpu, 0, packed_matrix_size);
-            // memset(z_packed_cpu, 0, packed_matrix_size);
-            // memset(r_packed_cpu, 0, packed_r_size);
-
-            // std::cout << "Packing tableau" << std::endl;
-
-            pack_tableau();
-
+            
             //Allocate the packed data to the GPU side using NVSHMEM and a tempRow for row swapping
             SAFE_ALOC_GPU(x_packed_gpu, packed_matrix_size);
             SAFE_ALOC_GPU(z_packed_gpu, packed_matrix_size);
             SAFE_ALOC_GPU(r_packed_gpu, packed_r_size);
 
             cudaCheckError();
-
-            //Copy data to the GPU side
-            cudaSafeCall(cudaMemcpy(x_packed_gpu, &x_packed_cpu[0][0], packed_matrix_size,
-                                    cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(z_packed_gpu, &z_packed_cpu[0][0], packed_matrix_size,
-                                    cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(r_packed_gpu, &r_packed_cpu[0], packed_r_size, cudaMemcpyHostToDevice));
         }
 
         ~STAB_CUDA()
@@ -116,80 +94,87 @@ namespace NWQSim
         //Packs down 32 rows in each column and flattens
         void pack_tableau()
         {
-            // Allocate memory for x_packed_cpu (2D array)
-            x_packed_cpu = new uint32_t*[packed_rows];
-            z_packed_cpu = new uint32_t*[packed_rows];
+            print_res_state();
+            //Allocate memory for x_packed_cpu (2D array), but as a flattened 1D array to ensure memory is contiguous
+            x_packed_cpu = new uint32_t[packed_rows * cols]();
+            z_packed_cpu = new uint32_t[packed_rows * cols]();
             r_packed_cpu = new uint32_t[packed_rows]();
-            for (int i = 0; i < packed_rows; i++) {
-                x_packed_cpu[i] = new uint32_t[cols]();
-                z_packed_cpu[i] = new uint32_t[cols]();
-            }
-            // std::cout << "Time to pack" << std::endl;
+            int index;
+            
             for(int i = 0; i < rows; i++)
             {
                 mask = i % packed_bits;
                 r_packed_cpu[i/packed_bits] |= r[i] << (mask);
-                // std::cout << "R packed" << std::endl;
 
                 for(int j = 0; j < cols; j++)
                 {
-                    // std::cout << "rows: " << rows << std::endl;
-                    // std::cout << "cols: " << cols << std::endl;
+                    //Index conversion
+                    index = ((i/packed_bits) * cols) + j;
 
-                    x_packed_cpu[i/packed_bits][j] |= (x[i][j] << (mask));
-                    z_packed_cpu[i/packed_bits][j] |= (z[i][j] << (mask));
-                    // std::cout << "X_packed[" << i/packed_bits << "][" << j << "] = " << x_packed_cpu[i/packed_bits][j] << std::endl;
-                    // std::cout << "Z_packed[" << i/packed_bits << "][" << j << "] = " << z_packed_cpu[i/packed_bits][j] << std::endl;
+                    x_packed_cpu[index] |= (x[i][j] << (mask));
+                    z_packed_cpu[index] |= (z[i][j] << (mask));
                 }
             }
 
-            std::cout << "X packed cpu at col 0 " << x_packed_cpu[0][0] << std::endl;
-            std::cout << "X packed cpu at col 1 " << x_packed_cpu[0][1] << std::endl;
-            std::cout << "X packed cpu at col 2 " << x_packed_cpu[0][2] << std::endl;
-            std::cout << "X packed cpu at col 3 " << x_packed_cpu[0][3] << std::endl;
-            std::cout << "r packed cpu " << r_packed_cpu[0] << std::endl;
-            
-            //Copy data to the GPU side
-        //     cudaSafeCall(cudaMemcpy(x_packed_gpu, x_packed_cpu, packed_matrix_size,
-        //                             cudaMemcpyHostToDevice));
-        //     cudaSafeCall(cudaMemcpy(z_packed_gpu, z_packed_cpu, packed_matrix_size,
-        //                             cudaMemcpyHostToDevice));
-        //     cudaSafeCall(cudaMemcpy(r_packed_gpu, r_packed_cpu, packed_r_size, cudaMemcpyHostToDevice));
-        
+            std::cout << "Pack tableau done!" << std::endl;
+
+            print_packed_state();
         }
 
         //Unpacks packed CPU arrays back to bit values
         void unpack_tableau()
         {
             std::cout << "Unpacking tableau!" << std::endl;
-
-            // SAFE_FREE_HOST_CUDA(x_packed_cpu);
-            // SAFE_FREE_HOST_CUDA(z_packed_cpu);
-            // SAFE_FREE_HOST_CUDA(r_packed_cpu);
-
-            //Copy data to the CPU side
-            cudaSafeCall(cudaMemcpy(&x_packed_cpu[0][0], x_packed_gpu, packed_matrix_size,
-                                    cudaMemcpyDeviceToHost));
-            cudaSafeCall(cudaMemcpy(&z_packed_cpu[0][0], z_packed_gpu, packed_matrix_size,
-                                    cudaMemcpyDeviceToHost));
-            cudaSafeCall(cudaMemcpy(&r_packed_cpu[0], r_packed_gpu, packed_r_size, cudaMemcpyDeviceToHost));
-
-            std::cout << "X packed cpu at col 0 " << x_packed_cpu[0][0] << std::endl;
-            std::cout << "X packed cpu at col 1 " << x_packed_cpu[0][1] << std::endl;
-            std::cout << "X packed cpu at col 2 " << x_packed_cpu[0][2] << std::endl;
-            std::cout << "X packed cpu at col 3 " << x_packed_cpu[0][3] << std::endl;
-            std::cout << "r packed cpu " << r_packed_cpu[0] << std::endl;
+            int index;
 
             for(int i = 0; i < rows; i++)
             {
-                mask = i % packed_bits;
-                r[i] = (r_packed_cpu[i/packed_bits] >> mask) & 1;
+                mask = 1 << (i % packed_bits);
+                r[i] = (r_packed_cpu[i/packed_bits] & mask) ? 1 : 0;
                 for(int j = 0; j < cols; j++)
                 {
-                    x[i][j] = (x_packed_cpu[i/packed_bits][j] >> mask) & 1;
-                    z[i][j] = (z_packed_cpu[i/packed_bits][j] >> mask) & 1;
+                    //Index conversion
+                    index = (i/packed_bits * cols) + j;
+
+                    x[i][j] = (x_packed_cpu[index] & mask) ? 1 : 0;
+                    z[i][j] = (z_packed_cpu[index] & mask) ? 1 : 0;
                 }
             }
+        }
+
+        //Prints the tableau including phase
+        void print_packed_state()
+        {
+            int index;
+            std::cout << "---------- Packed Tableau: ----------" << std::endl;
+            for(int i = 0; i < rows; i++)
+            {
+                mask = 1 << (i % packed_bits);
+
+                if(((i == (rows/2)) || (i == rows-1)))
+                {
+                    for(int j = -5; j < (n*2); j++)
+                    {
+                        std::cout << "-";
+                    }
+                    std::cout << std::endl;
+                }
+                for(int j = 0; j < cols; j++)
+                {
+                    //Index conversion
+                    index = (i/packed_bits * cols) + j;
+                    std::cout << ((x_packed_cpu[index] & mask) ? 1 : 0);
+                }
+                std::cout << " | ";
+                for(int j = 0; j < cols; j++)
+                {
+                    //Index conversion
+                    index = (i/packed_bits * cols) + j;
+                    std::cout << ((z_packed_cpu[index] & mask) ? 1 : 0);
+                }
+                std::cout << "|" << ((r_packed_cpu[i/packed_bits] & mask) ? 1 : 0) << std::endl;
+            }
+            std::cout << "---------- ----------" << std::endl;
         }
 
         // Function to check CUDA errors
@@ -543,21 +528,35 @@ namespace NWQSim
                 printf("STABSim_gpu is running! Using %lld qubits.\n", n);
             }
 
-            //Calculate blocks per grid based on cooperative launch limits
-            int numBlocks;
-            int numThreads = 256;
-            cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocks, simulation_kernel_cuda, numThreads, 0);
+            //Calculate blocks
+            int numBlocksPerSM;
+            int numThreads = 1024;  //Change 256, 512, or 1024 based on kernel speed
+            int sharedMemSize = 0;
+            cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSM, simulation_kernel_cuda, numThreads, sharedMemSize);
+
+            //Scale based on test device SM count (should be like 132 for an h100)
+            int numSMs;
+            cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
+
+            int numBlocks = numBlocksPerSM * numSMs; //Utilize all SM's
+
+
+
             void *args[] = {&stab_gpu, &n_gates};
 
-            //pack tableau
+            //Pack tableau and copy to GPU
             pack_tableau();
+            cudaSafeCall(cudaMemcpy(x_packed_gpu, x_packed_cpu, packed_matrix_size,
+                                    cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(z_packed_gpu, z_packed_cpu, packed_matrix_size,
+                                    cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(r_packed_gpu, r_packed_cpu, packed_r_size, cudaMemcpyHostToDevice));
             
             /*Simulate*/
             sim_timer.start_timer();
 
             //Launch with cooperative kernel
             cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda, numBlocks, numThreads, args);
-            cudaDeviceSynchronize();
             cudaSafeCall(cudaDeviceSynchronize());
 
             sim_timer.stop_timer();
@@ -565,13 +564,14 @@ namespace NWQSim
 
             sim_time = sim_timer.measure();
 
-            //Copy result back to host
-            //Copy the simulator instance to GPU
-            cudaSafeCall(cudaMemcpy(this, stab_gpu,
-                                    sizeof(STAB_CUDA), cudaMemcpyDeviceToHost));
             cudaCheckError();
 
-            //unpack tableau and copy data back
+            //Copy data to the CPU side and unpack
+            cudaSafeCall(cudaMemcpy(x_packed_cpu, x_packed_gpu, packed_matrix_size,
+                                    cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaMemcpy(z_packed_cpu, z_packed_gpu, packed_matrix_size,
+                                    cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaMemcpy(r_packed_cpu, r_packed_gpu, packed_r_size, cudaMemcpyDeviceToHost));
             unpack_tableau();
 
             if (Config::PRINT_SIM_TRACE)
@@ -632,23 +632,22 @@ namespace NWQSim
         std::vector<std::vector<int>> z;
         std::vector<int> r;
         //CPU Arrays
-        uint32_t** x_packed_cpu;
-        uint32_t** z_packed_cpu;
-        uint32_t* r_packed_cpu;
+        uint32_t* x_packed_cpu = nullptr;
+        uint32_t* z_packed_cpu = nullptr;
+        uint32_t* r_packed_cpu = nullptr;
         //GPU Arrays
-        uint32_t* x_packed_gpu;
-        uint32_t* z_packed_gpu;
-        uint32_t* r_packed_gpu;
-        uint32_t* tempCol;
+        uint32_t* x_packed_gpu = nullptr;
+        uint32_t* z_packed_gpu = nullptr;
+        uint32_t* r_packed_gpu = nullptr;
 
-        IdxType* totalResults = NULL;
+        IdxType* totalResults = nullptr;
 
         //Random
         std::mt19937 rng;
         std::uniform_int_distribution<int> dist;   
 
         // GPU-side simulator instance
-        Gate *gates_gpu = NULL;
+        Gate *gates_gpu = nullptr;
 
         void copy_gates_to_gpu(std::vector<Gate> &cpu_vec)
         {
@@ -663,19 +662,15 @@ namespace NWQSim
 
         __device__ void H_gate(int i, int mat_i)
         {
-            printf("H ");
             //Phase
             r_packed_gpu[i] ^= (x_packed_gpu[mat_i] & z_packed_gpu[mat_i]);
             //Entry -- swap x and z bits
             x_packed_gpu[mat_i] ^= z_packed_gpu[mat_i];
             z_packed_gpu[mat_i] ^= x_packed_gpu[mat_i];
             x_packed_gpu[mat_i] ^= z_packed_gpu[mat_i];
-
-            printf("x_packed_gpu: %u ", x_packed_gpu[mat_i]);
         }
         __device__ void S_gate(int i, int mat_i)
         {
-            printf("S ");
             //Phase
             r_packed_gpu[i] ^= (x_packed_gpu[mat_i] & z_packed_gpu[mat_i]);
 
@@ -683,8 +678,7 @@ namespace NWQSim
             z_packed_gpu[mat_i] ^= x_packed_gpu[mat_i];
         }
         __device__ void CX_gate(int i, int ctrl, int qubit)
-        {
-            printf("CX ");          
+        {       
             //Phase
             r_packed_gpu[i] ^= ((x_packed_gpu[ctrl] & z_packed_gpu[qubit]) & (x_packed_gpu[qubit]^z_packed_gpu[ctrl]^1));
 
