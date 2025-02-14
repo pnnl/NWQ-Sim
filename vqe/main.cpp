@@ -242,10 +242,10 @@ void silent_callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::Val
 void print_header() {
     std::cout << "\n----- Iteration Summary -----\n" << std::left
               << std::setw(8) << " Iter."
-              << std::setw(19) << "Objective Value"
+              << std::setw(29) << "Objective Value"
               << std::setw(55) << "Parameters (first 5)"
               << std::endl;
-    std::cout << std::string(80, '-') << std::endl;
+    std::cout << std::string(90, '-') << std::endl;
 }
 
 // Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
@@ -255,7 +255,7 @@ void callback_function_simple(const std::vector<NWQSim::ValType>& x, NWQSim::Val
   }
   std::cout << std::left << " "
             << std::setw(7) << iteration
-            << std::setw(19) << std::fixed << std::setprecision(12) << fval;
+            << std::setw(29) << std::fixed << std::setprecision(14) << fval;
   
   std::cout << std::fixed << std::setprecision(6);
   for (size_t i = 0; i < std::min(x.size(), size_t(5)); ++i) {
