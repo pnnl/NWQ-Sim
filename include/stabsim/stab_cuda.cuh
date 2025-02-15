@@ -530,7 +530,7 @@ namespace NWQSim
 
             //Calculate blocks
             int numBlocksPerSM;
-            int numThreads = 1024;  //Change 256, 512, or 1024 based on kernel speed
+            int numThreads = 256;  //Change 256, 512, 1024, etc based on kernel speed
             int sharedMemSize = 0;
             cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSM, simulation_kernel_cuda, numThreads, sharedMemSize);
 
@@ -542,7 +542,7 @@ namespace NWQSim
 
 
 
-            
+            void *args[] = {&stab_gpu, &n_gates};
 
             //Pack tableau and copy to GPU
             pack_tableau();
@@ -555,14 +555,9 @@ namespace NWQSim
             /*Simulate*/
             sim_timer.start_timer();
 
-            for(int k = 0; k < n_gates; k++)
-            {
-                void *args[] = {&stab_gpu, &n_gates, &k};
-
-                //Launch with cooperative kernel
-                cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda, numBlocks, numThreads, args);
-                cudaDeviceSynchronize();
-            }
+            //Launch with cooperative kernel
+            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda, numBlocks, numThreads, args);
+            cudaSafeCall(cudaDeviceSynchronize());
 
             sim_timer.stop_timer();
             /*End simulate*/
@@ -693,14 +688,14 @@ namespace NWQSim
         }
     }; //End tableau class
 
-    __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, IdxType n_gates, int k)
+    __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, IdxType n_gates)
     {
         IdxType g = n_gates;
 
         int m_index_ctrl;
 
-        // for (int k = 0; k < g; k++) 
-        // {
+        for (int k = 0; k < g; k++) 
+        {
             int i = blockIdx.x * blockDim.x + threadIdx.x;
             if (i >= stab_gpu->packed_rows) return;
 
@@ -733,8 +728,8 @@ namespace NWQSim
                     printf("Non-Clifford or unrecognized gate: %d\n", op_name);
                     assert(false);
             }
-        // }//for loop of gates
-        // printf("Kernel is done!\n");
+        }
+        printf("Kernel is done!\n");
     }//end kernel
 } //namespace NWQSim
 
