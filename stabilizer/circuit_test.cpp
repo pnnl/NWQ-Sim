@@ -212,4 +212,25 @@ int main(){
         std::cout << "Result " << i << ": " << results[i] << std::endl;
 
     std::cout << "Sim time: " << timer << "ms" << std::endl;
+
+    NWQSim::IdxType gate_count = S_count + H_count + CX_count;
+
+    std::ofstream outfile("/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/sim_bench/test_%s_%lld.txt", sim_method, n_qubits); // Open a file for writing
+
+
+    outfile << timer.count() << std::endl;
+    outfile << n_qubits << std::endl;
+    outfile << gate_count << std::endl;
+    outfile << S_count << std::endl;
+    outfile << H_count << std::endl;
+    outfile << CX_count << std::endl;
+
+    
+    
+    //Put the M circuit back in forward time after the new Clifford gates have been appended
+    circuit_reverse(M_circ);
+
+    /*Process is done, M and T have been seperated and returned*/
+
+    outfile.close(); // Close the file
 }

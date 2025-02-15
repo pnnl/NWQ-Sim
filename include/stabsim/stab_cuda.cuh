@@ -542,7 +542,7 @@ namespace NWQSim
 
 
 
-            void *args[] = {&stab_gpu, &n_gates};
+            
 
             //Pack tableau and copy to GPU
             pack_tableau();
@@ -555,9 +555,14 @@ namespace NWQSim
             /*Simulate*/
             sim_timer.start_timer();
 
-            //Launch with cooperative kernel
-            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda, numBlocks, numThreads, args);
-            cudaSafeCall(cudaDeviceSynchronize());
+            for(int k = 0; k < n_gates; k++)
+            {
+                void *args[] = {&stab_gpu, &n_gates, &k};
+
+                //Launch with cooperative kernel
+                cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda, numBlocks, numThreads, args);
+                cudaDeviceSynchronize();
+            }
 
             sim_timer.stop_timer();
             /*End simulate*/
@@ -688,14 +693,14 @@ namespace NWQSim
         }
     }; //End tableau class
 
-    __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, IdxType n_gates)
+    __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, IdxType n_gates, int k)
     {
         IdxType g = n_gates;
 
         int m_index_ctrl;
 
-        for (int k = 0; k < g; k++) 
-        {
+        // for (int k = 0; k < g; k++) 
+        // {
             int i = blockIdx.x * blockDim.x + threadIdx.x;
             if (i >= stab_gpu->packed_rows) return;
 
@@ -728,8 +733,8 @@ namespace NWQSim
                     printf("Non-Clifford or unrecognized gate: %d\n", op_name);
                     assert(false);
             }
-        }
-        printf("Kernel is done!\n");
+        // }//for loop of gates
+        // printf("Kernel is done!\n");
     }//end kernel
 } //namespace NWQSim
 
