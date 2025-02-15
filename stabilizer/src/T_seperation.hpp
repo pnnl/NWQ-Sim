@@ -360,9 +360,9 @@ namespace NWQSim
         
         auto opt_start = std::chrono::high_resolution_clock::now();
 
-        T_rows = T_tab->get_num_rows();
         for(int i = 0; i < reps; i++)
         {
+            T_rows = T_tab->get_num_rows();
             if(T_rows)
                 T_optimize(T_tab, M_circ, reps, n);
             else
@@ -370,7 +370,11 @@ namespace NWQSim
                 // std::cout <<"T tableau is empty, passthrough done." << std::endl;
                 break;
             }
+            //If the number of rows is the same after optimizing, end the optimization
+            if(T_rows == (T_tab->get_num_rows()))
+                break;
         }
+
         auto opt_end = std::chrono::high_resolution_clock::now();
         auto opt_time = std::chrono::duration_cast<std::chrono::microseconds>(opt_end - opt_start);
 
