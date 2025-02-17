@@ -687,6 +687,78 @@ namespace NWQSim
             //Entry
             z_packed_gpu[mat_i] ^= x;
         }
+        __device__ void SDG_gate(int i, int mat_i)
+        {
+            uint32_t x = x_packed_gpu[mat_i];
+
+            //Phase
+            r_packed_gpu[i] ^= x ^ (x & z_packed_gpu[mat_i]);
+
+            //Entry
+            z_packed_gpu[mat_i] ^= x;
+        }
+        __device__ void RX_gate(int i, int mat_i, IdxType theta)
+        {
+            switch(theta)
+            {
+                case PI/2: //H SDG
+                {
+                    uint32_t x = x_packed_gpu[mat_i];
+                    uint32_t z = z_packed_gpu[mat_i];
+
+                    //Phase
+                    r_packed_gpu[i] ^= z;
+
+                    //Entry -- swap x and z bits
+                    x ^= z;
+                    z ^= x;
+                    x ^= z;
+
+                    x_packed_gpu[mat_i] = x;
+
+                    //Phase -- pass through the swap to make r_packed_gpu[i] ^= z;
+                    //r_packed_gpu[i] ^= x ^ (x & z_packed_gpu[mat_i]);
+
+                    //Entry
+                    z_packed_gpu[mat_i] ^= x;
+
+                    break;
+                }
+                case -PI/2: //H S
+                {
+                    uint32_t x = x_packed_gpu[mat_i];
+                    uint32_t z = z_packed_gpu[mat_i];
+
+                    //Entry -- swap x and z bits
+                    x ^= z;
+                    z ^= x;
+                    x ^= z;
+
+                    //Entry
+                    x_packed_gpu[mat_i] = x;
+                    z_packed_gpu[mat_i] ^= x;
+                    
+                    break;
+                }
+                case PI: //X
+                {
+                    r_packed_gpu ^= z[mat_i];
+
+                    break;
+                }
+                default:
+                {
+                    printf("Non-Clifford angle in RX!");
+                    assert(false);
+                }
+            }
+        }
+        __device__ void RY_gate(int i, int mat_i, IdxType)
+        {
+            
+
+
+        }
         __device__ void CX_gate(int i, int ctrl, int qubit)
         {
             uint32_t x_ctrl = x_packed_gpu[ctrl];
@@ -706,10 +778,10 @@ namespace NWQSim
     {
         IdxType g = n_gates;
 
-        int m_index_ctrl, a, b, i, m_index;
+        IdxType m_index_ctrl, a, b, i, m_index;
         OP op_name;
-        int columns = stab_gpu->cols;
-        int packed_rows = stab_gpu->packed_rows;
+        IdxType columns = stab_gpu->cols;
+        IdxType packed_rows = stab_gpu->packed_rows;
 
         for (int k = 0; k < g; k++) 
         {
@@ -731,6 +803,18 @@ namespace NWQSim
 
                 case OP::S:
                     stab_gpu->S_gate(i, m_index);
+                    break;
+
+                case OP::SDG:
+                    stab_gpu->SDG_gate(i, m_index);
+                    break;
+
+                case OP::RX:
+                    stab_gpu->RX_gate(i, m_index, gates_gpu[k].theta);
+                    break;
+                
+                case OP::RY:
+                    stab_gpu->RX_gate(i, m_index, gates_gpu[k].theta);
                     break;
 
                 case OP::CX:
