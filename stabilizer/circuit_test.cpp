@@ -185,19 +185,16 @@ int main(){
 
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
-    circuit->H(0);
-    circuit->S(0);
-    circuit->S(0);
-    circuit->H(0);
-
-    // for(int rounds = 0; rounds < 10001; rounds++)
-    // {
-    //     for(int i = 0; i < n_qubits; i++)
-    //     {
-    //         circuit->H(i);
-    //         S_count++;
-    //     }
-    // }
+    std::string import_file = "";
+    if(import_file != "")
+        appendQASMToCircuit(circuit, import_file);
+    else
+    {
+        circuit->H(0);
+        circuit->S(0);
+        circuit->S(0);
+        circuit->H(0);
+    }
 
     std::string backend = "NVGPU";
     std::string sim_method = "stab";
@@ -220,8 +217,10 @@ int main(){
 
     NWQSim::IdxType gate_count = S_count + H_count + CX_count;
 
+    std::string name;
     std::ostringstream filename;
-    filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << sim_method << "_" << n_qubits << ".txt";
+    if(import_file != "")
+        filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << name << "_" << sim_method << "_" << n_qubits << ".txt";
     std::ofstream outfile(filename.str());
     if (!outfile) {
         std::cerr << "Error opening file: " << filename.str() << std::endl;
