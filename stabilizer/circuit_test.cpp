@@ -176,7 +176,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
 // Create a circuit with 2 qubits
 int main(){
     std::cout << "Starting program" << std::endl;
-    int n_qubits = 64;
+    int n_qubits = 1024;
     int shots = 10;
 
     NWQSim::IdxType S_count = 0;
@@ -185,14 +185,19 @@ int main(){
 
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
-    for(int rounds = 0; rounds < 1000000; rounds++)
-    {
-        for(int i = 0; i < n_qubits; i++)
-        {
-            circuit->S(i);
-            S_count++;
-        }
-    }
+    circuit->H(0);
+    circuit->S(0);
+    circuit->S(0);
+    circuit->H(0);
+
+    // for(int rounds = 0; rounds < 10001; rounds++)
+    // {
+    //     for(int i = 0; i < n_qubits; i++)
+    //     {
+    //         circuit->H(i);
+    //         S_count++;
+    //     }
+    // }
 
     std::string backend = "NVGPU";
     std::string sim_method = "stab";
@@ -205,7 +210,7 @@ int main(){
 
     std::cout << "Starting sim" << std::endl;
     state->sim(circuit, timer);
-    state->print_res_state();
+    //state->print_res_state();
     NWQSim::IdxType* results = state->measure_all(shots);
 
     for(int i = 0; i < shots; i++)
@@ -215,15 +220,21 @@ int main(){
 
     NWQSim::IdxType gate_count = S_count + H_count + CX_count;
 
-    // std::ofstream outfile("/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/sim_bench/test_%s_%lld.txt", sim_method, n_qubits); // Open a file for writing
+    std::ostringstream filename;
+    filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << sim_method << "_" << n_qubits << ".txt";
+    std::ofstream outfile(filename.str());
+    if (!outfile) {
+        std::cerr << "Error opening file: " << filename.str() << std::endl;
+        return;
+    }
 
+    outfile << sim_method << std::endl;
+    outfile << timer << std::endl;
+    outfile << n_qubits << std::endl;
+    outfile << gate_count << std::endl;
+    outfile << S_count << std::endl;
+    outfile << H_count << std::endl;
+    outfile << CX_count << std::endl;
 
-    // outfile << timer << std::endl;
-    // outfile << n_qubits << std::endl;
-    // outfile << gate_count << std::endl;
-    // outfile << S_count << std::endl;
-    // outfile << H_count << std::endl;
-    // outfile << CX_count << std::endl;
-
-    // outfile.close(); // Close the file
+    outfile.close(); // Close the file
 }
