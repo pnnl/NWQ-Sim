@@ -506,7 +506,7 @@ namespace NWQSim
         // }
 
         //Simulate the gates from a circuit in the tableau
-        void sim(std::shared_ptr<NWQSim::Circuit> circuit, double &sim_time) override
+        void sim(std::shared_ptr<Circuit> circuit, double &sim_time) override
         {
             std::vector<Gate> gates = circuit->get_gates();
             assert(circuit->num_qubits() == n);
@@ -632,6 +632,9 @@ namespace NWQSim
         std::vector<std::vector<int>> x;
         std::vector<std::vector<int>> z;
         std::vector<int> r;
+        double scheduler_timer;
+        std::vector<std::vector<Gate>> layered_gates;
+        IdxType num_layers;
         //CPU Arrays
         uint32_t* x_packed_cpu = nullptr;
         uint32_t* z_packed_cpu = nullptr;
@@ -649,6 +652,25 @@ namespace NWQSim
 
         //GPU-side gate instance
         Gate *gates_gpu = nullptr;
+
+        // void circuit_scheduler(std::shared_ptr<Circuit> circuit)
+        // {
+        //     std::vector<IdxType> layer(n, 0);
+        //     std::vector<Gate> gates = circuit.gates();
+        //     layered_gates.resize(n);
+        //     int qubit, ctrl;
+        //     for(IdxType i = 0; i < circuit.num_gates(); i++)
+        //     {
+        //         Gate temp_gate = gates[i];
+        //         qubit = temp_gate.qubit;
+        //         ctrl = temp_gate.ctrl;
+        //         if(layered_gates[qubit]layer[qubit] == nullptr)
+        //             layer_gates = new 
+        //     }
+        //     num_layers = std::max_element(layers.begin(), layers.end());
+
+        //     scheduler_timer;
+        // }
 
         void copy_gates_to_gpu(std::vector<Gate> &cpu_vec)
         {
