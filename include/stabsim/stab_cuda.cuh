@@ -655,17 +655,25 @@ namespace NWQSim
 
         // void circuit_scheduler(std::shared_ptr<Circuit> circuit)
         // {
-        //     std::vector<IdxType> layer(n, 0);
+        //     std::vector<bool> layer(n, 0);
         //     std::vector<Gate> gates = circuit.gates();
-        //     layered_gates.resize(n);
         //     int qubit, ctrl;
         //     for(IdxType i = 0; i < circuit.num_gates(); i++)
         //     {
-        //         Gate temp_gate = gates[i];
-        //         qubit = temp_gate.qubit;
-        //         ctrl = temp_gate.ctrl;
-        //         if(layered_gates[qubit]layer[qubit] == nullptr)
-        //             layer_gates = new 
+        //         if(layer[qubit] || layer[ctrl])
+        //         {
+                    
+        //             std::vector<Gate> newLayer(n, NULL);
+        //             layered_gates[layers][] = gates[i];
+        //             layer(n, 0);
+
+        //         }
+        //         else
+        //         {
+        //             layered_gates[layers][]
+        //         }
+
+
         //     }
         //     num_layers = std::max_element(layers.begin(), layers.end());
 
