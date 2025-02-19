@@ -186,14 +186,14 @@ int main(){
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
     std::string import_file = "";
-    if(import_file != "")
-        appendQASMToCircuit(circuit, import_file);
-    else
-    {
+    // if(import_file != "")
+    //     appendQASMToCircuit(circuit, import_file);
+    // else
+    // {
         for(int i = 0; i < 100001; i++)
             for(int n = 0; n < n_qubits; n++)
                 circuit->H(n);
-    }
+    // }
 
     std::string backend = "NVGPU";
     std::string sim_method = "stab";

@@ -683,13 +683,19 @@ namespace NWQSim
 
         __device__ void H_gate(IdxType i, IdxType mat_i, uint32_t* shared_x, uint32_t* shared_z, uint32_t* shared_r)
         {
+            uint32_t x = shared_x[mat_i];
+            uint32_t z = shared_z[mat_i];
+
             //Phase
-            shared_r[i] ^= (shared_x[mat_i] & shared_z[mat_i]);
+            shared_r[i] ^= (x & z);
 
             //Entry -- swap x and z bits
-            shared_x[mat_i] ^= shared_z[mat_i];
-            shared_z[mat_i] ^= shared_x[mat_i];
-            shared_x[mat_i] ^= shared_z[mat_i];
+            x ^= z;
+            z ^= x;
+            x ^= z;
+
+            shared_x[mat_i] = x;
+            shared_z[mat_i] = z;
         }
         __device__ void S_gate(IdxType i, IdxType mat_i, uint32_t* shared_x, uint32_t* shared_z, uint32_t* shared_r)
         {
