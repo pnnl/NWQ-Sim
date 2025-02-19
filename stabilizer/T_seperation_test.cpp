@@ -467,7 +467,7 @@ int main(){
     // circuit->CX(0, 4);
 
 
-    appendQASMToCircuit(circuit, "/Users/garn195/Project Repositories/NWQ-Sim/include/stabsim/qec_operations/surface_code_dist_3_round_1.qasm");
+    appendQASMToCircuit(circuit, "/people/garn195/NWQ-Sim/stabilizer/qft_test/qft_n18_iter1.qasm");
 
     //Measurement circuit will be filled in the passthrough function
     auto M_circ = std::make_shared<NWQSim::Circuit>(n_qubits);

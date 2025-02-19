@@ -806,7 +806,7 @@ namespace NWQSim
         //     {
         //         uint32_t mask = 1 << k;
         //         //Convert the uint32 matrix index into a bit row index
-        //         int index = (i * packed_bits + x`k); 
+        //         int index = (i * packed_bits + k); 
         //         if((index > rows/2)  && (index < (rows-1)))
         //         {
         //             if(((x & mask) ? 1 : 0))
