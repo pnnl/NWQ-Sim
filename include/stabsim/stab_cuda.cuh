@@ -645,6 +645,7 @@ namespace NWQSim
         uint32_t* r_packed_gpu = nullptr;
 
         IdxType* totalResults = nullptr;
+        std::vector<std::vector<IdxType>> longResults;
 
         //Random
         std::mt19937 rng;
@@ -787,6 +788,96 @@ namespace NWQSim
             x_packed_gpu[qubit] ^= x_ctrl;
             z_packed_gpu[ctrl] ^= z_qubit;
         }
+
+        __device__ void cuda_rowsum(int i, int p)
+        {
+            
+        }
+
+        // __device__ void M_gate(int i, int mat_i, uint32_t& p)
+        // {
+        //     uint32_t x = x_packed_gpu[mat_i];
+        //     uint32_t z = x_packed_gpu[mat_i];
+        //     uint32_t r = x_packed_gpu[i];
+
+
+        //     //Index within a mask for the uint32 value in each thread
+        //     for(int k = 0; k < packed_bits; k++)
+        //     {
+        //         uint32_t mask = 1 << k;
+        //         //Convert the uint32 matrix index into a bit row index
+        //         int index = (i * packed_bits + x`k); 
+        //         if((index > rows/2)  && (index < (rows-1)))
+        //         {
+        //             if(((x & mask) ? 1 : 0))
+        //             {
+        //                 atomicMin(&p, index);
+        //             }
+        //         }
+        //     }
+        //     __syncthreads();
+
+        //     /*Found the first row with x == 1*/
+
+            
+        //     if(p != INT32_MAX) //Deterministic
+        //     {
+        //         //Do everything within a mask -- looping through packed bits in every thread provides every row
+        //         for(int mask = 0; mask < packed_bits; mask++)
+        //         {
+        //             //Convert the uint32 matrix index into a bit row index
+        //             int row_index = (i * packed_bits + mask);
+
+        //             uint32_t mask_bit = 1 << mask;
+
+        //             //Rowsum(row, p) for all rows where x = 1 and row !=p
+        //             if(((x & mask_bit) ? 1 : 0) && (p != row_index) && ((row_index) < rows-1))
+        //             {
+        //                 __syncthreads();
+
+        //                 /*Rowsum(row, p)*/
+        //                 int sum = 0;
+
+        //                 //Sum every element/column in a row
+        //                 for(int j = 0; j < n; j++)
+        //                 {
+        //                     int thread = blockIdx.x * blockDim.x + threadIdx.x;
+        //                     j_index = (thread * columns) + j;
+
+        //                     x_h = x_packed_gpu[j_index];
+        //                     z_h = z_packed_gpu[j_index];
+
+        //                     if(   )
+        //                     {
+        //                         if( && )
+        //                             sum += ((z_h & mask_bit) ? 1 : 0) - ((x_h & mask_bit) ? 1 : 0);
+        //                         else
+        //                             sum += ((z_h & mask_bit) ? 1 : 0) * (2*((x_h & mask_bit) ? 1 : 0)-1);
+        //                     }
+        //                     else if((z & mask) ? 1 : 0)
+        //                         atomicAdd(sum, x[h][j] * (1-2*z[h][j]));
+
+        //                     //XOR x's and z's
+        //                     x_packed_gpu[j_index] = x[i][j] ^ x[h][j];
+        //                     z_packed_gpu[j_index] = z[i][j] ^ z[h][j];
+        //                     __syncthreads();
+        //                 }
+                        
+        //                 atomicAdd(sum, 2*r[j_index] + 2*r[i]);
+        //                 /*End Rowsum(row, p)*/
+
+        //                 __syncthreads();
+        //                 //Set r at row depending on sum result
+        //                 if(sum % 4 == 0)
+        //                     r = r & (0 << mask);
+        //                 else
+        //                     r = r & (1 << mask);
+        //                 /*End Rowsum*/
+        //             }
+        //         }
+        //     }
+        //     else //Random
+        // }
         
     }; //End tableau class
 
@@ -837,6 +928,14 @@ namespace NWQSim
                     m_index_ctrl = (i * columns) + b;
                     stab_gpu->CX_gate(i, m_index_ctrl, m_index);
                     break;
+
+                // case OP::M:
+                //     uint32_t p = INT32_MAX;
+                //     stab_gpu->M_gate(i, m_index, p);
+
+
+                __syncthreads();
+
                 
                 default:
                     printf("Non-Clifford or unrecognized gate: %d\n", op_name);
