@@ -176,7 +176,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
 // Create a circuit with 2 qubits
 int main(){
     std::cout << "Starting program" << std::endl;
-    int n_qubits = 1024;
+    int n_qubits = 256;
     int shots = 10;
 
     NWQSim::IdxType S_count = 0;
@@ -190,10 +190,9 @@ int main(){
         appendQASMToCircuit(circuit, import_file);
     else
     {
-        circuit->H(0);
-        circuit->S(0);
-        circuit->S(0);
-        circuit->H(0);
+        for(int i = 0; i < 100001; i++)
+            for(int n = 0; n < n_qubits; n++)
+                circuit->H(n);
     }
 
     std::string backend = "NVGPU";
