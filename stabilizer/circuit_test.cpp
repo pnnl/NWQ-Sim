@@ -176,7 +176,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
 // Create a circuit with 2 qubits
 int main(){
     std::cout << "Starting program" << std::endl;
-    int n_qubits = 256;
+    int n_qubits = 128;
     int shots = 10;
 
     NWQSim::IdxType S_count = 0;
@@ -216,7 +216,7 @@ int main(){
 
     NWQSim::IdxType gate_count = S_count + H_count + CX_count;
 
-    std::string name;
+    std::string name = "";
     std::ostringstream filename;
     if(import_file != "")
         filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << name << "_" << sim_method << "_" << n_qubits << ".txt";
