@@ -662,21 +662,16 @@ namespace NWQSim
         //     {
         //         if(layer[qubit] || layer[ctrl])
         //         {
-                    
         //             std::vector<Gate> newLayer(n, NULL);
         //             layered_gates[layers][] = gates[i];
         //             layer(n, 0);
-
         //         }
         //         else
         //         {
         //             layered_gates[layers][]
         //         }
-
-
         //     }
         //     num_layers = std::max_element(layers.begin(), layers.end());
-
         //     scheduler_timer;
         // }
 
@@ -727,63 +722,54 @@ namespace NWQSim
             //Entry
             z_packed_gpu[mat_i] ^= x;
         }
-        __device__ void RX_gate(int i, int mat_i, IdxType theta)
+        __device__ void RX_gate(int i, int mat_i, double theta)
         {
-            switch(theta)
+            if(theta == PI/2) //H SDG
             {
-                case PI/2: //H SDG
-                {
-                    uint32_t x = x_packed_gpu[mat_i];
-                    uint32_t z = z_packed_gpu[mat_i];
+                uint32_t x = x_packed_gpu[mat_i];
+                uint32_t z = z_packed_gpu[mat_i];
 
-                    //Phase
-                    r_packed_gpu[i] ^= z;
+                //Phase
+                r_packed_gpu[i] ^= z;
 
-                    //Entry -- swap x and z bits
-                    x ^= z;
-                    z ^= x;
-                    x ^= z;
+                //Entry -- swap x and z bits
+                x ^= z;
+                z ^= x;
+                x ^= z;
 
-                    x_packed_gpu[mat_i] = x;
+                x_packed_gpu[mat_i] = x;
 
-                    //Phase -- pass through the swap to make r_packed_gpu[i] ^= z;
-                    //r_packed_gpu[i] ^= x ^ (x & z_packed_gpu[mat_i]);
+                //Phase -- pass through the swap to make r_packed_gpu[i] ^= z;
+                //r_packed_gpu[i] ^= x ^ (x & z_packed_gpu[mat_i]);
 
-                    //Entry
-                    z_packed_gpu[mat_i] ^= x;
+                //Entry
+                z_packed_gpu[mat_i] ^= x;
+            }
+            else if(theta == -PI/2) //H S
+            {
+                uint32_t x = x_packed_gpu[mat_i];
+                uint32_t z = z_packed_gpu[mat_i];
 
-                    break;
-                }
-                case -PI/2: //H S
-                {
-                    uint32_t x = x_packed_gpu[mat_i];
-                    uint32_t z = z_packed_gpu[mat_i];
+                //Entry -- swap x and z bits
+                x ^= z;
+                z ^= x;
+                x ^= z;
 
-                    //Entry -- swap x and z bits
-                    x ^= z;
-                    z ^= x;
-                    x ^= z;
-
-                    //Entry
-                    x_packed_gpu[mat_i] = x;
-                    z_packed_gpu[mat_i] ^= x;
-                    
-                    break;
-                }
-                case PI: //X
-                {
-                    r_packed_gpu ^= z[mat_i];
-
-                    break;
-                }
-                default:
-                {
-                    printf("Non-Clifford angle in RX!");
-                    assert(false);
-                }
+                //Entry
+                x_packed_gpu[mat_i] = x;
+                z_packed_gpu[mat_i] ^= x;
+            }
+            else if(theta == PI) //X
+            {
+                r_packed_gpu[i] ^= z_packed_gpu[mat_i];
+            }
+            else
+            {
+                printf("Non-Clifford angle in RX!");
+                assert(false);
             }
         }
-        __device__ void RY_gate(int i, int mat_i, IdxType)
+        __device__ void RY_gate(int i, int mat_i, double theta)
         {
             
 
