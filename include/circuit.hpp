@@ -11,6 +11,16 @@
 
 namespace NWQSim
 {
+    struct CircuitMetrics {
+        IdxType depth;
+        IdxType one_q_gates;
+        IdxType two_q_gates;
+        ValType gate_density;
+        ValType retention_lifespan; 
+        ValType measurement_density;
+        ValType entanglement_variance;
+    };
+    
     class Circuit
     {
 
@@ -71,7 +81,7 @@ namespace NWQSim
             return ss.str();
         }
 
-        void print_metrics()
+        CircuitMetrics circuit_metrics()
         {
             // Initialize a vector to track the current depth of each qubit
             std::vector<IdxType> qubit_depth(n_qubits, 0);
@@ -163,6 +173,28 @@ namespace NWQSim
             }
             entanglement_var /= n_qubits;
 
+            // Write to the metrics struct
+            CircuitMetrics metrics;
+            metrics.depth = max_depth;
+            metrics.one_q_gates = one_q_gates;
+            metrics.two_q_gates = two_q_gates;
+            metrics.gate_density = gate_density;
+            metrics.retention_lifespan = retention_lifespan;
+            metrics.measurement_density = measurement_density;
+            metrics.entanglement_variance = entanglement_var;
+            return metrics;
+        }
+
+        void print_metrics()
+        {
+            CircuitMetrics metrics = circuit_metrics();
+            IdxType max_depth = metrics.depth;
+            IdxType one_q_gates = metrics.one_q_gates;
+            IdxType two_q_gates = metrics.two_q_gates;
+            ValType gate_density = metrics.gate_density;
+            ValType retention_lifespan = metrics.retention_lifespan;
+            ValType measurement_density = metrics.measurement_density;
+            ValType entanglement_var = metrics.entanglement_variance;
             // Print the results to the console
             printf("Circuit Depth: %lld; One-qubit Gates: %lld; Two-qubit Gates: %lld; Gate Density: %.4lf; Retention Lifespan: %.4lf; Measurement Density: %.4lf; Entanglement Variance: %.4lf\n\n",
                    max_depth, one_q_gates, two_q_gates, gate_density, retention_lifespan, measurement_density, entanglement_var);
