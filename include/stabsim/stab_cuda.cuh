@@ -529,18 +529,25 @@ namespace NWQSim
             }
 
             //Calculate blocks
-            int numBlocksPerSM;
-            int numThreads = 1024;  //Change 256, 512, 1024, etc
-            int sharedMemSize = 0;
-            cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSM, simulation_kernel_cuda, numThreads, sharedMemSize);
+            // int numBlocksPerSM;
+            // int numThreads = 1024;  //Change 256, 512, 1024, etc
+            // int sharedMemSize = 0;
+            // cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSM, simulation_kernel_cuda, numThreads, sharedMemSize);
 
-            //Scale based on test device SM count (should be like 132 for an h100)
-            int numSMs;
-            cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
+            // //Scale based on test device SM count (should be like 132 for an h100)
+            // int numSMs;
+            // cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
 
-            int numBlocks = numBlocksPerSM * numSMs; //Utilize all SM's
+            // int numBlocks = numBlocksPerSM * numSMs; //Utilize all SM's
 
+            // Number of warps per block (default 4 warps per block, can be tuned)
+            int warps_per_block = 4;
+            int threads_per_block = warps_per_block * 32; // Each warp = 32 threads
 
+            // Ensure each column (qubit) gets a warp
+            int num_blocks = (cols + warps_per_block - 1) / warps_per_block; 
+
+            void *args[] = {&stab_gpu, &gates_gpu, &n_gates, &cols}; // Add 'cols' if needed
 
             void *args[] = {&stab_gpu, &gates_gpu, &n_gates};
 
@@ -557,8 +564,10 @@ namespace NWQSim
             sim_timer.start_timer();
 
             //Launch with cooperative kernel
-            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda, numBlocks, numThreads, args);
+            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda, num_blocks, threads_per_block, args);
             cudaSafeCall(cudaDeviceSynchronize());
+            // cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda, numBlocks, numThreads, args);
+            // cudaSafeCall(cudaDeviceSynchronize());
 
             sim_timer.stop_timer();
             /*End simulate*/
@@ -687,126 +696,128 @@ namespace NWQSim
             cudaSafeCall(cudaMemcpy(gates_gpu, cpu_vec.data(), vec_size, cudaMemcpyHostToDevice));
         }
 
-        __device__ void H_gate(int i, int mat_i)
-        {
-            uint32_t x = x_packed_gpu[mat_i];
-            uint32_t z = z_packed_gpu[mat_i];
-
-            //Phase
-            r_packed_gpu[i] ^= (x & z);
-
-            //Entry -- swap x and z bits
-            x ^= z;
-            z ^= x;
-            x ^= z;
-
-            x_packed_gpu[mat_i] = x;
-            z_packed_gpu[mat_i] = z;
+        __device__ void H_gate_warp(int col) {
+            int row = threadIdx.x & 31;  // Each thread processes one row (0-31)
+            uint32_t mask = (1U << row); // Select corresponding bit in packed row
+        
+            // Load values from packed arrays
+            uint32_t x_val = x_packed_gpu[col];
+            uint32_t z_val = z_packed_gpu[col];
+            uint32_t r_val = r_packed_gpu[col];
+        
+            // Swap X and Z bits in place
+            uint32_t new_x = z_val;
+            uint32_t new_z = x_val;
+        
+            // Adjust the phase bit: `r_new = r ⊕ (X & Z)`
+            r_val ^= (x_val & z_val) & mask;
+        
+            // Store back
+            x_packed_gpu[col] = new_x;
+            z_packed_gpu[col] = new_z;
+            r_packed_gpu[col] = r_val;
         }
-        __device__ void S_gate(int i, int mat_i)
-        {
-            uint32_t x = x_packed_gpu[mat_i];
+        // __device__ void S_gate(int i, int mat_i)
+        // {
+        //     uint32_t x = x_packed_gpu[mat_i];
 
-            //Phase
-            r_packed_gpu[i] ^= (x & z_packed_gpu[mat_i]);
+        //     //Phase
+        //     r_packed_gpu[i] ^= (x & z_packed_gpu[mat_i]);
 
-            //Entry
-            z_packed_gpu[mat_i] ^= x;
-        }
-        __device__ void SDG_gate(int i, int mat_i)
-        {
-            uint32_t x = x_packed_gpu[mat_i];
+        //     //Entry
+        //     z_packed_gpu[mat_i] ^= x;
+        // }
+        // __device__ void SDG_gate(int i, int mat_i)
+        // {
+        //     uint32_t x = x_packed_gpu[mat_i];
 
-            //Phase
-            r_packed_gpu[i] ^= x ^ (x & z_packed_gpu[mat_i]);
+        //     //Phase
+        //     r_packed_gpu[i] ^= x ^ (x & z_packed_gpu[mat_i]);
 
-            //Entry
-            z_packed_gpu[mat_i] ^= x;
-        }
-        __device__ void RX_gate(int i, int mat_i, double theta)
-        {
-            if(theta == PI/2) //H SDG
-            {
-                uint32_t x = x_packed_gpu[mat_i];
-                uint32_t z = z_packed_gpu[mat_i];
+        //     //Entry
+        //     z_packed_gpu[mat_i] ^= x;
+        // }
+        // __device__ void RX_gate(int i, int mat_i, double theta)
+        // {
+        //     if(theta == PI/2) //H SDG
+        //     {
+        //         uint32_t x = x_packed_gpu[mat_i];
+        //         uint32_t z = z_packed_gpu[mat_i];
 
-                //Phase
-                r_packed_gpu[i] ^= z;
+        //         //Phase
+        //         r_packed_gpu[i] ^= z;
 
-                //Entry -- swap x and z bits
-                x ^= z;
-                z ^= x;
-                x ^= z;
+        //         //Entry -- swap x and z bits
+        //         x ^= z;
+        //         z ^= x;
+        //         x ^= z;
 
-                x_packed_gpu[mat_i] = x;
+        //         x_packed_gpu[mat_i] = x;
 
-                //Phase -- pass through the swap to make r_packed_gpu[i] ^= z;
-                //r_packed_gpu[i] ^= x ^ (x & z_packed_gpu[mat_i]);
+        //         //Phase -- pass through the swap to make r_packed_gpu[i] ^= z;
+        //         //r_packed_gpu[i] ^= x ^ (x & z_packed_gpu[mat_i]);
 
-                //Entry
-                z_packed_gpu[mat_i] ^= x;
-            }
-            else if(theta == -PI/2) //H S
-            {
-                uint32_t x = x_packed_gpu[mat_i];
-                uint32_t z = z_packed_gpu[mat_i];
+        //         //Entry
+        //         z_packed_gpu[mat_i] ^= x;
+        //     }
+        //     else if(theta == -PI/2) //H S
+        //     {
+        //         uint32_t x = x_packed_gpu[mat_i];
+        //         uint32_t z = z_packed_gpu[mat_i];
 
-                //Entry -- swap x and z bits
-                x ^= z;
-                z ^= x;
-                x ^= z;
+        //         //Entry -- swap x and z bits
+        //         x ^= z;
+        //         z ^= x;
+        //         x ^= z;
 
-                //Entry
-                x_packed_gpu[mat_i] = x;
-                z_packed_gpu[mat_i] ^= x;
-            }
-            else if(theta == PI) //X
-            {
-                r_packed_gpu[i] ^= z_packed_gpu[mat_i];
-            }
-            else
-            {
-                printf("Non-Clifford angle in RX!");
-                assert(false);
-            }
-        }
-        __device__ void RY_gate(int i, int mat_i, double theta)
-        {
+        //         //Entry
+        //         x_packed_gpu[mat_i] = x;
+        //         z_packed_gpu[mat_i] ^= x;
+        //     }
+        //     else if(theta == PI) //X
+        //     {
+        //         r_packed_gpu[i] ^= z_packed_gpu[mat_i];
+        //     }
+        //     else
+        //     {
+        //         printf("Non-Clifford angle in RX!");
+        //         assert(false);
+        //     }
+        // }
+        // __device__ void RY_gate(int i, int mat_i, double theta)
+        // {
             
 
 
-        }
-        __device__ void CX_gate(int i, int ctrl, int qubit)
-        {
-            uint32_t x_ctrl = x_packed_gpu[ctrl];
-            uint32_t z_qubit = z_packed_gpu[qubit];
+        // }
+        // __device__ void CX_gate(int i, int ctrl, int qubit)
+        // {
+        //     uint32_t x_ctrl = x_packed_gpu[ctrl];
+        //     uint32_t z_qubit = z_packed_gpu[qubit];
 
-            //Phase
-            r_packed_gpu[i] ^= ((x_ctrl & z_qubit) & (x_packed_gpu[qubit]^z_packed_gpu[ctrl]^1));
+        //     //Phase
+        //     r_packed_gpu[i] ^= ((x_ctrl & z_qubit) & (x_packed_gpu[qubit]^z_packed_gpu[ctrl]^1));
 
-            //Entry
-            x_packed_gpu[qubit] ^= x_ctrl;
-            z_packed_gpu[ctrl] ^= z_qubit;
-        }
+        //     //Entry
+        //     x_packed_gpu[qubit] ^= x_ctrl;
+        //     z_packed_gpu[ctrl] ^= z_qubit;
+        // }
 
-        __device__ void cuda_rowsum(int i, int p)
-        {
+        // __device__ void cuda_rowsum(int i, int p)
+        // {
             
-        }
-
+        // }
         // __device__ void M_gate(int i, int mat_i, uint32_t& p)
         // {
         //     uint32_t x = x_packed_gpu[mat_i];
         //     uint32_t z = x_packed_gpu[mat_i];
         //     uint32_t r = x_packed_gpu[i];
-
-
         //     //Index within a mask for the uint32 value in each thread
         //     for(int k = 0; k < packed_bits; k++)
         //     {
         //         uint32_t mask = 1 << k;
         //         //Convert the uint32 matrix index into a bit row index
-        //         int index = (i * packed_bits + k); 
+        //         int index = (i * packed_bits + x`k); 
         //         if((index > rows/2)  && (index < (rows-1)))
         //         {
         //             if(((x & mask) ? 1 : 0))
@@ -816,10 +827,7 @@ namespace NWQSim
         //         }
         //     }
         //     __syncthreads();
-
         //     /*Found the first row with x == 1*/
-
-            
         //     if(p != INT32_MAX) //Deterministic
         //     {
         //         //Do everything within a mask -- looping through packed bits in every thread provides every row
@@ -827,26 +835,20 @@ namespace NWQSim
         //         {
         //             //Convert the uint32 matrix index into a bit row index
         //             int row_index = (i * packed_bits + mask);
-
         //             uint32_t mask_bit = 1 << mask;
-
         //             //Rowsum(row, p) for all rows where x = 1 and row !=p
         //             if(((x & mask_bit) ? 1 : 0) && (p != row_index) && ((row_index) < rows-1))
         //             {
         //                 __syncthreads();
-
         //                 /*Rowsum(row, p)*/
         //                 int sum = 0;
-
         //                 //Sum every element/column in a row
         //                 for(int j = 0; j < n; j++)
         //                 {
         //                     int thread = blockIdx.x * blockDim.x + threadIdx.x;
         //                     j_index = (thread * columns) + j;
-
         //                     x_h = x_packed_gpu[j_index];
         //                     z_h = z_packed_gpu[j_index];
-
         //                     if(   )
         //                     {
         //                         if( && )
@@ -856,16 +858,13 @@ namespace NWQSim
         //                     }
         //                     else if((z & mask) ? 1 : 0)
         //                         atomicAdd(sum, x[h][j] * (1-2*z[h][j]));
-
         //                     //XOR x's and z's
         //                     x_packed_gpu[j_index] = x[i][j] ^ x[h][j];
         //                     z_packed_gpu[j_index] = z[i][j] ^ z[h][j];
         //                     __syncthreads();
-        //                 }
-                        
+        //                 }               
         //                 atomicAdd(sum, 2*r[j_index] + 2*r[i]);
         //                 /*End Rowsum(row, p)*/
-
         //                 __syncthreads();
         //                 //Set r at row depending on sum result
         //                 if(sum % 4 == 0)
@@ -878,70 +877,88 @@ namespace NWQSim
         //     }
         //     else //Random
         // }
-        
     }; //End tableau class
 
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
     {
-        IdxType g = n_gates;
-
-        IdxType m_index_ctrl, a, b, i, m_index;
-        OP op_name;
-        IdxType columns = stab_gpu->cols;
-        IdxType packed_rows = stab_gpu->packed_rows;
-
-        for (int k = 0; k < g; k++) 
-        {
-            i = blockIdx.x * blockDim.x + threadIdx.x;
-            if (i >= packed_rows) return;
-
-            op_name = gates_gpu[k].op_name;
-            a = gates_gpu[k].qubit;
-            b = gates_gpu[k].ctrl;
-
-            //Matrix index for column(qubit) 'a' in the flattened array
-            m_index = (i * columns) + a;
-
-            switch (op_name) 
-            {
+        int warp_id = blockIdx.x * blockDim.y + threadIdx.y; // One warp per qubit column
+        if (warp_id >= stab_gpu->cols) return; // One warp per qubit column
+    
+        int row = threadIdx.x & 31; // Each thread processes one row
+    
+        for (int k = 0; k < n_gates; k++) {
+            OP op_name = gates_gpu[k].op_name;
+            int col_a = gates_gpu[k].qubit;
+    
+            switch (op_name) {
                 case OP::H:
-                    stab_gpu->H_gate(i, m_index);
+                    stab_gpu->H_gate_warp(col_a);
                     break;
-
-                case OP::S:
-                    stab_gpu->S_gate(i, m_index);
-                    break;
-
-                case OP::SDG:
-                    stab_gpu->SDG_gate(i, m_index);
-                    break;
-
-                case OP::RX:
-                    stab_gpu->RX_gate(i, m_index, gates_gpu[k].theta);
-                    break;
-                
-                case OP::RY:
-                    stab_gpu->RX_gate(i, m_index, gates_gpu[k].theta);
-                    break;
-
-                case OP::CX:
-                    m_index_ctrl = (i * columns) + b;
-                    stab_gpu->CX_gate(i, m_index_ctrl, m_index);
-                    break;
-
-                // case OP::M:
-                //     uint32_t p = INT32_MAX;
-                //     stab_gpu->M_gate(i, m_index, p);
-
-
-                __syncthreads();
-
-                
+    
                 default:
-                    printf("Non-Clifford or unrecognized gate: %d\n", op_name);
-                    assert(false);
+                    if (row == 0) printf("Unrecognized gate: %d\n", op_name);
             }
+            __syncthreads(); // Ensure warp synchronization before next gate
         }
+        // IdxType g = n_gates;
+
+        // IdxType m_index_ctrl, a, b, i, m_index;
+        // OP op_name;
+        // IdxType columns = stab_gpu->cols;
+        // IdxType packed_rows = stab_gpu->packed_rows;
+
+        // for (int k = 0; k < g; k++) 
+        // {
+        //     i = blockIdx.x * blockDim.x + threadIdx.x;
+        //     if (i >= packed_rows) return;
+
+        //     op_name = gates_gpu[k].op_name;
+        //     a = gates_gpu[k].qubit;
+        //     b = gates_gpu[k].ctrl;
+
+        //     //Matrix index for column(qubit) 'a' in the flattened array
+        //     m_index = (i * columns) + a;
+
+        //     switch (op_name) 
+        //     {
+        //         case OP::H:
+        //             stab_gpu->H_gate(i, m_index);
+        //             break;
+
+        //         case OP::S:
+        //             stab_gpu->S_gate(i, m_index);
+        //             break;
+
+        //         case OP::SDG:
+        //             stab_gpu->SDG_gate(i, m_index);
+        //             break;
+
+        //         case OP::RX:
+        //             stab_gpu->RX_gate(i, m_index, gates_gpu[k].theta);
+        //             break;
+                
+        //         case OP::RY:
+        //             stab_gpu->RX_gate(i, m_index, gates_gpu[k].theta);
+        //             break;
+
+        //         case OP::CX:
+        //             m_index_ctrl = (i * columns) + b;
+        //             stab_gpu->CX_gate(i, m_index_ctrl, m_index);
+        //             break;
+
+        //         // case OP::M:
+        //         //     uint32_t p = INT32_MAX;
+        //         //     stab_gpu->M_gate(i, m_index, p);
+
+
+        //         __syncthreads();
+
+                
+        //         default:
+        //             printf("Non-Clifford or unrecognized gate: %d\n", op_name);
+        //             assert(false);
+        //     }
+        // }
         // printf("Kernel is done!\n");
     }//end kernel
 } //namespace NWQSim
