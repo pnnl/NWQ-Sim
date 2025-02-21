@@ -7,10 +7,10 @@
 #include <iomanip>
 #include <fstream>
 
-#include "../backendManager.hpp"
-#include "../state.hpp"
-#include "../circuit.hpp"
-#include "../nwq_util.hpp"
+#include "../../include/backendManager.hpp"
+#include "../../include/state.hpp"
+#include "../../include/circuit.hpp"
+#include "../../include/nwq_util.hpp"
 
 namespace NWQSim
 {
@@ -65,7 +65,7 @@ namespace NWQSim
         circuit = new_circ;
     }
 
-    void T_optimize(std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<Circuit>& M_circ, int reps, int n)
+    void T_optimize(std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<Circuit>& M_circ, int n)
     {
         std::vector<std::shared_ptr<QuantumState>> P; //Empty vector of tableaus
         std::string tempStab;
@@ -79,7 +79,7 @@ namespace NWQSim
         P[0]->delete_all_rows();
         P[0]->remove_destabilizers();
         int T_rows = T_tab->get_num_rows();
-        P[0]->add_stabilizer((T_tab->get_stabilizer_line(T_rows-1)).first);
+        P[0]->add_stabilizer((T_tab->get_stabilizer_line(T_rows-1).first), (T_tab->get_stabilizer_line(T_rows-1).second));
 
         bool commutes = false;
 
@@ -101,7 +101,7 @@ namespace NWQSim
                 //If it does, append it to that existing tableau and break;
                 if(P[j]->check_commutation(tempStab))
                 {
-                    P[j]->add_stabilizer(tempStab);
+                    P[j]->add_stabilizer(tempStab, (T_tab->get_stabilizer_line(i)).second);
                     commutes = true;
                     // std::cout <<"Temp stab " << tempStab << " commutes with P" << i << std::endl;
                     break;
@@ -114,7 +114,7 @@ namespace NWQSim
                 P.push_back(newTab);
                 P.back()->delete_all_rows();
                 P.back()->remove_destabilizers();
-                P.back()->add_stabilizer(tempStab);
+                P.back()->add_stabilizer(tempStab, (T_tab->get_stabilizer_line(i)).second);
                 // std::cout <<"Temp stab " << tempStab << " does not commute. New P state ---" << std::endl;
                 // P.back()->print_res_state();
             }
@@ -281,7 +281,7 @@ namespace NWQSim
     void T_passthrough(std::shared_ptr<Circuit>& circuit, std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<Circuit>& M_circ, int reps = 1)
     {
 
-        std::ofstream outfile("/Users/garn195/Project Repositories/NWQ-Sim/include/stabsim/stab_T_bench/qft_n18.txt"); // Open a file for writing
+        std::ofstream outfile("/Users/garn195/Project Repositories/NWQ-Sim/include/stabsim/stab_T_bench/qft_n18_iter1.txt"); // Open a file for writing
 
         
 
@@ -364,15 +364,19 @@ namespace NWQSim
         {
             T_rows = T_tab->get_num_rows();
             if(T_rows)
-                T_optimize(T_tab, M_circ, reps, n);
+                T_optimize(T_tab, M_circ, n);
             else
             {
-                // std::cout <<"T tableau is empty, passthrough done." << std::endl;
+                std::cout << "No T gates to optimize." << std::endl;
                 break;
             }
             //If the number of rows is the same after optimizing, end the optimization
             if(T_rows == (T_tab->get_num_rows()))
+            {
+                std::cout << "T optimization done at " << i << " reps." << std::endl;
                 break;
+            }
+
         }
 
         auto opt_end = std::chrono::high_resolution_clock::now();
