@@ -1747,6 +1747,7 @@ namespace NWQSim
                             }
                         }
                         //A p such that x[p][a] = 1 exists
+                        //Deterministic
                         if(p > -1)
                         {
                             for(int i = 0; i < rows-1; i++)
