@@ -176,7 +176,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
 // Create a circuit with 2 qubits
 int main(){
     std::cout << "Starting program" << std::endl;
-    int n_qubits = 256;
+    int n_qubits = 512;
     int shots = 10;
 
     NWQSim::IdxType S_count = 0;
@@ -197,12 +197,15 @@ int main(){
 
     std::srand(std::time(nullptr));  // Seed random number generator
 
-    for(int i = 0; i < 10000; i++) 
+    for(int i = 0; i < 100000; i++) 
     {
         int num = (std::rand() % (n_qubits-1));
         circuit->H(num);
         circuit->CX(num, num+1);
         circuit->S(num+1);
+        S_count++;
+        H_count++;
+        CX_count++;
     }
 
     std::string backend = "NVGPU";
@@ -238,7 +241,7 @@ int main(){
     outfile << sim_method << std::endl;
     outfile << timer << std::endl;
     outfile << n_qubits << std::endl;
-    outfile << gate_count << std::endl;
+    outfile << circuit << std::endl;
     outfile << S_count << std::endl;
     outfile << H_count << std::endl;
     outfile << CX_count << std::endl;
