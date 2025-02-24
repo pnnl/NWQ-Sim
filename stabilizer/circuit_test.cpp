@@ -208,7 +208,7 @@ int main(){
         CX_count++;
     }
 
-    std::string backend = "NVGPU";
+    std::string backend = "cpu";
     std::string sim_method = "stab";
     double timer = 0;
     
@@ -235,7 +235,6 @@ int main(){
     std::ofstream outfile(filename.str());
     if (!outfile) {
         std::cerr << "Error opening file: " << filename.str() << std::endl;
-        return;
     }
 
     outfile << sim_method << std::endl;
@@ -247,4 +246,6 @@ int main(){
     outfile << CX_count << std::endl;
 
     outfile.close(); // Close the file
+
+    return 0;
 }
