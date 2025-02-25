@@ -26,8 +26,19 @@ int extractQubitIndex(const std::string& qubitStr)
     }
     
 }
+int extractNumQubit(const std::string& qubitStr) 
+{
+    size_t start = qubitStr.find('[');
+    size_t end = qubitStr.find(']');
+    
+    if (start != std::string::npos && end != std::string::npos && start + 1 < end) {
+        return std::stoi(qubitStr.substr(start + 1, end - start - 1));
+    }
+    
+    return -1; // Return -1 if no valid integer is found
+}
 
-void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::string& filename) 
+void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::string& filename, int& n_qubits) 
 {
     std::ifstream file(filename);
     if (!file.is_open()) 
@@ -37,18 +48,27 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
     }
 
     std::string line;
+    int tCount = 0;
     while (std::getline(file, line)) 
     {
         std::string gate;
         int qubit1, qubit2;
 
-        if (line.empty() || line.find("include") != std::string::npos || line.find("gate") != std::string::npos || line.find("barrier") != std::string::npos || line.find("OPENQASM") != std::string::npos || line.find("qreg") != std::string::npos || line.find("creg") != std::string::npos || line.find("#include") != std::string::npos)
+        if (line.empty() || line.find("include") != std::string::npos || line.find("gate") != std::string::npos || line.find("barrier") != std::string::npos || line.find("OPENQASM") != std::string::npos || line.find("creg") != std::string::npos || line.find("#include") != std::string::npos)
             continue;
 
         std::istringstream lineStream(line);
         lineStream >> gate;
-        if(gate == "tdg")
+
+        if(line.find("qreg") != std::string::npos)
         {
+            n_qubits = extractNumQubit(line);
+            circuit->set_num_qubits(n_qubits);
+            // std::cout << n_qubits << std::endl;
+        }
+        else if(gate == "tdg")
+        {
+            tCount++;
             std::string qubitStr;
             lineStream >> qubitStr;
             qubit1 = extractQubitIndex(qubitStr);
@@ -56,7 +76,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->TDG(qubit1);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
         }
         else if(gate == "h")
         {
@@ -67,7 +87,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->H(qubit1);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
         }
         else if(gate == "s")
         {
@@ -78,7 +98,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->S(qubit1);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
         }
         else if(gate == "sdg")
         {
@@ -89,10 +109,12 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->SDG(qubit1);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
         }
         else if(gate == "t")
         {
+            tCount++;
+
             std::string qubitStr;
             lineStream >> qubitStr;
             qubit1 = extractQubitIndex(qubitStr);
@@ -100,9 +122,9 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->T(qubit1);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
         }
-        else if(gate == "measure")
+        else if(gate == "m")
         {
             std::string qubitStr;
             lineStream >> qubitStr;
@@ -111,7 +133,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->M(qubit1);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
         }
         else if(gate == "reset")
         {
@@ -122,7 +144,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->RESET(qubit1);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
         }
         else if(gate == "cx")
         {
@@ -143,7 +165,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             {
                 circuit->CX(qubit1, qubit2);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
         }
         else if(gate == "cxyz")
         {
@@ -166,13 +188,14 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
                 circuit->CY(qubit1, qubit2);
                 circuit->CZ(qubit1, qubit2);
             }
-            std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
+            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
         }
         else
         {
             std::cout << gate << " does not match a gate."; 
         }
     }
+    std::cout << "------\n\n\n TCount: " << tCount << " \n\n\n-----" << std::endl;
 }
 
 
@@ -182,7 +205,9 @@ int main(){
     int n_qubits = 18;
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
-    appendQASMToCircuit(circuit, "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/qft_test/qft_n18_iter1.qasm");
+    std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/qft_n18_iter1.qasm";
+    std::string outFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/stab_T_bench/qft_n18_iter1.txt";
+    appendQASMToCircuit(circuit, inFile, n_qubits);
 
     //Measurement circuit will be filled in the passthrough function
     auto M_circ = std::make_shared<NWQSim::Circuit>(n_qubits);
@@ -198,7 +223,7 @@ int main(){
 
 
     /*Run T passthrough after tableaus have been prepared*/
-    T_passthrough(circuit, T_tab, M_circ, 10);
+    T_passthrough(circuit, T_tab, M_circ, outFile, 10);
 
     /*T Tableau*/
     std::cout << "---- T tableau -----" << std::endl;
@@ -207,6 +232,12 @@ int main(){
 
     /*Measurement Tableau*/
     circuit_reverse(M_circ);
+    // std::vector<NWQSim::Gate> m_gates = M_circ->get_gates();
+    // for(int i = 0; i < m_gates.size(); i++)
+    // {
+    //     // std::cout << m_gates[i].op_name << "(" << m_gates[i].qubit << ")" << std::endl;
+    //     std::cout << m_gates[i].gateToString() << std::endl;
+    // }
 
     //After all M_tab gates and additional Clifford gates from optimization
     //Simulate the M circuit evolution after construction

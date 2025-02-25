@@ -139,6 +139,10 @@ namespace NWQSim
         {
             throw std::runtime_error("Apply Gate Not Implemented");
         }
+        virtual int stabilizer_reps(std::string stab)
+        {
+            throw std::runtime_error("Stabilizer Repetitions Not Implemented");
+        }
 
 
 

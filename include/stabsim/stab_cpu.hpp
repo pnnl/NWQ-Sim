@@ -77,9 +77,9 @@ namespace NWQSim
         {
             rows = 0;
             stabCounts = 0;
-            x.resize(0, std::vector<int>(cols,0));
-            z.resize(0, std::vector<int>(cols,0)); 
-            r.resize(0, 0);   
+            x.resize(rows, std::vector<int>(cols,0));
+            z.resize(rows, std::vector<int>(cols,0)); 
+            r.resize(rows, 0);   
         }
 
         //Remove only the destabilizers for cases where full states aren't necessary
@@ -442,36 +442,54 @@ namespace NWQSim
         }
 
         //Removes all but one repitions of a stabilizer
-        void remove_repetitions(std::string stab, int reps) override
+        //If phase is non zero, that means theres an extra rotation that needs to be added back.
+        //Add back the rotation with a positive or negative rotation depending on the value of phase
+        void remove_repetitions(std::string stab, int phase) override
         {
+            //Remove every stabilizer
             for(int j = 0; j < rows; j++)
             {
                 if((get_stabilizer_line(j).first == stab))
                 {
                     // std::cout << "Removed " << stab << std::endl;
                     remove_stabilizer(j); //decrements rows
-                    reps--;
                     j--;
                 }
-                if(!reps)
-                    break;
             }
+            //if one should be left, add it back
+
+            if(phase == 1)
+                add_stabilizer(stab, 0);
+            else if (phase == -1)
+                add_stabilizer(stab, 1);
         }
 
         //Returns a map of stabilizers and the number of times they ocurr in the tableau
         void stabilizer_count(std::unordered_map<std::string, int>& stab_counts) override
         {
-
             // std::cout << "--- Current state in stab count ---" << std::endl;
             // print_res_state();
             for(int i = 0; i < rows; i++)
             {
-                if(get_stabilizer_line(i).second == 0)
-                    stab_counts[get_stabilizer_line(i).first]++;
-                else
-                    stab_counts[get_stabilizer_line(i).first]--;
+                stab_counts[get_stabilizer_line(i).first]++;
             }
             // std::cout << "--- End current state in stab count ---" << std::endl;
+        }
+        //Counts how many times a given stabilizer occurs
+        int stabilizer_reps(std::string stab) override
+        {
+            int reps = 0;
+            for(int i = 0; i < rows; i++)
+            {
+                if(get_stabilizer_line(i).first == stab)
+                {
+                    if(get_stabilizer_line(i).second == 0)
+                        reps++;
+                    else   
+                        reps--;
+                }
+            }
+            return reps;
         }
 
         //Check every stabilizer of the tableau
@@ -518,10 +536,10 @@ namespace NWQSim
                     product ^= ((x[i][j] & new_z) ^ (z[i][j] & new_x));
                 }
                 if(product > 0) {
-                    return false; //Anti-commutation somewhere in the Pauli string
+                    return false; //Anti-commutation in the Pauli string at row i
                 }
             }
-            return true; //Commutes with all stabilizers
+            return true; //Commutes with all stabilizers in the tableau
         }
         
         //True if pauliString and target row stabilizer commute
@@ -628,46 +646,39 @@ namespace NWQSim
             //Only stabilizer tableau
             else
             {
-                if(check_commutation(pauliString))
+                //Start by adding a row of stabilizers to T
+                stabCounts++;
+                rows++;
+                x.push_back(std::vector<int>(cols,0));
+                z.push_back(std::vector<int>(cols,0));
+                r.push_back(phase_bit);
+                
+                //Stabilizer only addition
+                for(int i = 0; i < cols; i++)
                 {
-                    //Start by adding a row of stabilizers to T
-                    stabCounts++;
-                    rows++;
-                    x.push_back(std::vector<int>(cols,0));
-                    z.push_back(std::vector<int>(cols,0));
-                    r.push_back(phase_bit);
-                    
-                    //Stabilizer only addition
-                    for(int i = 0; i < cols; i++)
+                    switch(pauliString[i])
                     {
-                        switch(pauliString[i])
-                        {
-                            case 'I':
-                                x[rows-1][i] = 0;
-                                z[rows-1][i] = 0;
-                                break;
-                            case 'X':
-                                x[rows-1][i] = 1;
-                                z[rows-1][i] = 0;
-                                break;
-                            case 'Y':   
-                                x[rows-1][i] = 1;
-                                z[rows-1][i] = 1;
-                                r[rows-1] = 1;
-                                break;
-                            case 'Z':
-                                x[rows-1][i] = 0;
-                                z[rows-1][i] = 1;
-                                break;
-                            default:
-                                std::logic_error("Invalid stabilizer");
-                                break;
-                        }
+                        case 'I':
+                            x[rows-1][i] = 0;
+                            z[rows-1][i] = 0;
+                            break;
+                        case 'X':
+                            x[rows-1][i] = 1;
+                            z[rows-1][i] = 0;
+                            break;
+                        case 'Y':   
+                            x[rows-1][i] = 1;
+                            z[rows-1][i] = 1;
+                            r[rows-1] = 1;
+                            break;
+                        case 'Z':
+                            x[rows-1][i] = 0;
+                            z[rows-1][i] = 1;
+                            break;
+                        default:
+                            std::logic_error("Invalid stabilizer");
+                            break;
                     }
-                }
-                else
-                {
-                    std::logic_error("Stabilizer fails commutation check" + pauliString);
                 }
             }
         }
@@ -1577,17 +1588,23 @@ namespace NWQSim
                             for(int i = 0; i < rows-1; i++)
                             {
                                 //Phase
-                                r[i] ^= z[i][a];
+                                r[i] ^= (x[i][a] & z[i][a]);
                                 //Entry -- swap x and z bits
                                 tempVal = x[i][a];
                                 x[i][a] = z[i][a];
                                 z[i][a] = tempVal; 
 
-                                //Phase
-                                //r[i] ^= x[i][a] ^ (x[i][a] & z[i][a]); -- pass through the hadamard entry, becomes r^= z
+                                //Phase -- Equal to Z S or x & !z
+                                r[i] ^= x[i][a] ^ (x[i][a] & z[i][a]);
 
                                 //Entry
                                 z[i][a] ^= x[i][a];
+
+                                r[i] ^= (x[i][a] & z[i][a]);
+                                //Entry -- swap x and z bits
+                                tempVal = x[i][a];
+                                x[i][a] = z[i][a];
+                                z[i][a] = tempVal; 
                             }
                         }
                         //H S
@@ -1595,15 +1612,26 @@ namespace NWQSim
                         {
                             for(int i = 0; i < rows-1; i++)
                             {
-                                //H
+                                //Phase
+                                r[i] ^= (x[i][a] & z[i][a]);
                                 //Entry -- swap x and z bits
                                 tempVal = x[i][a];
                                 x[i][a] = z[i][a];
                                 z[i][a] = tempVal; 
 
                                 //S
+                                //Phase
+                                r[i] ^= (x[i][a] & z[i][a]);
+
                                 //Entry
                                 z[i][a] ^= x[i][a];
+
+                                //Phase
+                                r[i] ^= (x[i][a] & z[i][a]);
+                                //Entry -- swap x and z bits
+                                tempVal = x[i][a];
+                                x[i][a] = z[i][a];
+                                z[i][a] = tempVal; 
                             }
                         }
                         else
@@ -1621,14 +1649,24 @@ namespace NWQSim
                         {
                             for(int i = 0; i < rows-1; i++)
                             {
-                                //Phase
+                                //Phase -- Equal to Z S or x & !z
                                 r[i] ^= x[i][a] ^ (x[i][a] & z[i][a]);
+
+                                //Entry
+                                z[i][a] ^= x[i][a];
+
+                                //Phase
+                                r[i] ^= (x[i][a] & z[i][a]);
                                 //Entry -- swap x and z bits
                                 tempVal = x[i][a];
                                 x[i][a] = z[i][a];
                                 z[i][a] = tempVal; 
 
-                                //r[i] ^= z[i][a]; <- z is passed up through the hadamard and becomes x
+                                //Phase
+                                r[i] ^= (x[i][a] & z[i][a]);
+
+                                //Entry
+                                z[i][a] ^= x[i][a];
                             }
                         }
                         //X H
@@ -1636,12 +1674,24 @@ namespace NWQSim
                         {
                             for(int i = 0; i < rows-1; i++)
                             {
-                                //Phase -- z is added into the r calculation
-                                r[i] ^= z[i][a] ^ (x[i][a] & z[i][a]);
+                                //Phase -- Equal to Z S or x & !z
+                                r[i] ^= (x[i][a] & z[i][a]);
+
+                                //Entry
+                                z[i][a] ^= x[i][a];
+
+                                //Phase
+                                r[i] ^= (x[i][a] & z[i][a]);
                                 //Entry -- swap x and z bits
                                 tempVal = x[i][a];
                                 x[i][a] = z[i][a];
                                 z[i][a] = tempVal; 
+
+                                //Phase
+                                r[i] ^= x[i][a] ^ (x[i][a] & z[i][a]);
+
+                                //Entry
+                                z[i][a] ^= x[i][a];
                             }
                         }
                         else
