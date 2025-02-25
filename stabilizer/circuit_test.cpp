@@ -203,6 +203,9 @@ int main(){
         circuit->H(num);
         circuit->CX(num, num+1);
         circuit->S(num+1);
+        S_count++;
+        H_count++;
+        CX_count++;
     }
 
     std::string backend = "cpu";
@@ -237,7 +240,7 @@ int main(){
     outfile << sim_method << std::endl;
     outfile << timer << std::endl;
     outfile << n_qubits << std::endl;
-    outfile << gate_count << std::endl;
+    outfile << circuit << std::endl;
     outfile << S_count << std::endl;
     outfile << H_count << std::endl;
     outfile << CX_count << std::endl;

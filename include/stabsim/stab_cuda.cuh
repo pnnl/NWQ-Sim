@@ -855,12 +855,11 @@ namespace NWQSim
         int thread_pos = i * stab_gpu->cols;
         int n_qubits = stab_gpu->n;
         int q_indices[n_qubits];
-        // #pragma unroll
+        #pragma unroll
         for(int q = 0; q < n_qubits; q++)
         {
             q_indices[q] = thread_pos + q;
         }
-        
 
         for (int k = 0; k < n_gates; k++) 
         {
@@ -958,7 +957,6 @@ namespace NWQSim
                     //Entry
                     x_arr[q_indices[pos]] = x ^ x_ctrl;
                     z_arr[q_indices[ctrl_pos]] = z ^ z_ctrl;
-
 
                     break;
 
