@@ -471,11 +471,14 @@ namespace NWQSim
                     for(int j = 0; j < rows; j++)
                     {                    
                         //Remove all the stabilizers that repeat
-                        if(get_stabilizer_line(j).first == stabilizer)
+                        if(rows > 0)
                         {
-                            std::cout << "Removed: " << stabilizer << std::endl;
-                            remove_stabilizer(j);
-                            j--;
+                            if(get_stabilizer_line(j).first == stabilizer)
+                            {
+                                std::cout << "Removed: " << stabilizer << " " << get_stabilizer_line(j).second << std::endl;
+                                remove_stabilizer(j);
+                                j--;
+                            }
                         }
                     }
                     //Add back if there were an odd number of rotations left over
@@ -590,7 +593,7 @@ namespace NWQSim
             //Full stabilizer/destabilizer tableau
             if(has_destabilizers)
             {
-                std::cout << "Shouldn't be here for T case" << std::endl;
+                std::cout << "Shouldn't be here for T separation case" << std::endl;
                 //Start by adding a row of destabilizers and stabilizers to T
                 stabCounts++;
                 rows++;

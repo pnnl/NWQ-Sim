@@ -205,8 +205,8 @@ int main(){
     int n_qubits = 4;
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
-    std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/qft_n18_iter1.qasm";
-    std::string outFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/stab_T_bench/qft_n18.iter1.txt";
+    std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/qft_n18_iter2.qasm";
+    std::string outFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/stab_T_bench/qft_n18_iter2.txt";
     appendQASMToCircuit(circuit, inFile, n_qubits);
 
 
@@ -229,8 +229,9 @@ int main(){
     /*Run T passthrough after tableaus have been prepared and measurement operations absorbed*/
     M_tab->sim(M_circ, timer);
     M_tab->remove_destabilizers();
-    // M_tab->print_res_state();
+    M_tab->print_res_state();
     T_passthrough(T_tab, M_tab, outFile, proc_time, 10);
+
 
     //Put the M circuit back in forward time after the new Clifford gates have been appended
     std::cout << "---- M tableau -----" << std::endl;

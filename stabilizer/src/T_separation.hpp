@@ -175,9 +175,9 @@ namespace NWQSim
             std::unordered_map<std::string, std::pair<int, int>> stab_map;
 
             P[i]->stabilizer_count(stab_map);
-            std::cout << "-----" << std::endl;
-            std::cout << "P[" << i << "]" << std::endl;
-            std::cout << "-----" << std::endl;
+            // std::cout << "-----" << std::endl;
+            // std::cout << "P[" << i << "]" << std::endl;
+            // std::cout << "-----" << std::endl;
 
             //For each recurring stabilizer
             for(const auto& pair : stab_map)
@@ -187,7 +187,6 @@ namespace NWQSim
                 //Check first that there is more than one stabilizer and they didn't all cancel out
                 if((abs(num_rotations) > 1))
                 {
-                    std::cout << "Num_rotations: " << num_rotations << std::endl;
                     std::string stabilizer = pair.first;
                     //If there were an odd number of stabilizers remaining, add back the one that doesn't cancel out
 
@@ -195,11 +194,11 @@ namespace NWQSim
                     //8 1/8 gates cancel out
                     //Don't push through the odd number gate that was added back (if there were an odd number of stabilizers)
                     int rotations = num_rotations % 8;
-                    rotations = (rotations/2) * 2;
-                    std::cout << "Rotations: " << rotations << std::endl;
+                    rotations = (rotations/2);
+                    std::cout << "Rotations to push through for " << stabilizer << ": " << rotations << std::endl;
 
                     //Positive rotation gates come out of more positive T rotations than negative
-                    if(rotations > 1)
+                    if(rotations > 0)
                     {
                         //Apply rotation to the measurement tableau for every T gate that didn't cancel earlier
                         for(int num = 0; num < rotations; num++)
@@ -219,6 +218,7 @@ namespace NWQSim
                                     if(!(P[j]->check_row_commutation(stabilizer, k)))
                                     {
                                         P[j]->i_rowsum(k, P_rows);
+                                        // std::cout << "Rowsum done at " << k << std::endl;
                                     }
                                 }
                                 P[j]->remove_stabilizer(P_rows);
@@ -237,13 +237,14 @@ namespace NWQSim
                                 if(!(M->check_row_commutation(stabilizer, k)))
                                 {
                                     M->i_rowsum(k, M_rows);
+                                    // std::cout << "Applying rowsum on M at row " << k << std::endl;
                                 }
                             }
                             M->remove_stabilizer(M_rows);
                         }
                     }
                     //Negative quarter rotation gates that come out of repeated TDG or similar
-                    else if(rotations < -1)
+                    else if(rotations < 0)
                     {
                         //Apply rotation to the measurement tableau for every S gate that didn't cancel earlier
                         for(int num = rotations; num < 0; num++)
@@ -278,6 +279,7 @@ namespace NWQSim
                                 if(!(M->check_row_commutation(stabilizer, k)))
                                 {
                                     M->i_rowsum(k, M_rows);
+                                    // std::cout << "Applying rowsum on M at row " << k << std::endl;
                                 }
                             }
                             M->remove_stabilizer(M_rows);
