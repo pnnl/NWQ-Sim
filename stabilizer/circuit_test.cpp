@@ -199,7 +199,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
 // Create a circuit with 2 qubits
 int main(){
     std::cout << "Starting program" << std::endl;
-    int n_qubits = 2;
+    int n_qubits = 2048;
     int shots = 10;
 
     NWQSim::IdxType S_count = 0;
@@ -208,9 +208,9 @@ int main(){
 
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
-    std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/adder_n10.qasm";
-    if(inFile != "")
-        appendQASMToCircuit(circuit, inFile, n_qubits);
+    // std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/adder_n10.qasm";
+    // if(inFile != "")
+    //     appendQASMToCircuit(circuit, inFile, n_qubits);
 
     // circuit->H(0);
     // circuit->S(0);
@@ -249,7 +249,7 @@ int main(){
     //     CX_count++;
     // }
 
-    std::string backend = "cpu";
+    std::string backend = "nvgpu";
     std::string sim_method = "stab";
     double timer = 0;
     
@@ -281,7 +281,7 @@ int main(){
     outfile << sim_method << std::endl;
     outfile << timer << std::endl;
     outfile << n_qubits << std::endl;
-    outfile << circuit << std::endl;
+    // outfile << circuit << std::endl;
     outfile << S_count << std::endl;
     outfile << H_count << std::endl;
     outfile << CX_count << std::endl;

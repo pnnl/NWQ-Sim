@@ -488,10 +488,10 @@ namespace NWQSim
                     else if((count.second % 2) == -1)
                     {
                         add_stabilizer(stabilizer, 1);
-                        std::cout << "Added: " << stabilizer << " 0" << std::endl;
+                        std::cout << "Added: " << stabilizer << " 1" << std::endl;
                     }
                 }
-                std::cout << std::endl;
+                // std::cout << std::endl;
             }
             // std::cout << "--- End current state in stab count ---" << std::endl;
         }

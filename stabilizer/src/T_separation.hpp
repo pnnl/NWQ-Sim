@@ -169,27 +169,34 @@ namespace NWQSim
         //Push through any repeating stabilizers that may result in Clifford gates
         //Start from the last P, and push right. i.e. for (P1, P2, P3) check P3 for clifford gates first, then P2, then P1. If found in P1, push through P2 and P3.
         for(int i = P.size()-1; i > -1; i--)
+        // for(int i = 0; i < P.size(); i++)
         {
             //Fill in the stabilizer map for repeating eigth rotations and remove repitions
             std::unordered_map<std::string, std::pair<int, int>> stab_map;
 
             P[i]->stabilizer_count(stab_map);
+            std::cout << "-----" << std::endl;
+            std::cout << "P[" << i << "]" << std::endl;
+            std::cout << "-----" << std::endl;
 
             //For each recurring stabilizer
             for(const auto& pair : stab_map)
             {
                 int num_rotations = pair.second.second;
+                
                 //Check first that there is more than one stabilizer and they didn't all cancel out
                 if((abs(num_rotations) > 1))
                 {
+                    std::cout << "Num_rotations: " << num_rotations << std::endl;
                     std::string stabilizer = pair.first;
                     //If there were an odd number of stabilizers remaining, add back the one that doesn't cancel out
 
-                    std::cout << num_rotations << " repetitions of " << stabilizer << std::endl;
+                    // std::cout << num_rotations << " repetitions of " << stabilizer << std::endl;
                     //8 1/8 gates cancel out
                     //Don't push through the odd number gate that was added back (if there were an odd number of stabilizers)
                     int rotations = num_rotations % 8;
                     rotations = (rotations/2) * 2;
+                    std::cout << "Rotations: " << rotations << std::endl;
 
                     //Positive rotation gates come out of more positive T rotations than negative
                     if(rotations > 1)
@@ -199,9 +206,11 @@ namespace NWQSim
                         {
                             //Push an S gate through remaining tableaus in P order (to the right/to the end of the circuit)
                             for(int j = i+1; j < P.size(); j++)
+                            // for(int j = P.size()-1-i; j > 0 ; j--)
                             {
                                 int P_rows = P[j]->get_num_rows();
                                 P[j]->add_stabilizer(stabilizer);
+                                // std::cout << "Added: " << stabilizer << std::endl;
 
                                 //Check the commutation with every line of the tableau
                                 //If a line doesn't commute, rowsum that line with the temp 'S' stabilizer
@@ -213,6 +222,7 @@ namespace NWQSim
                                     }
                                 }
                                 P[j]->remove_stabilizer(P_rows);
+                                // std::cout << "Removed: " << stabilizer << std::endl;
                                 // std::cout <<"Stabilizer removed" << std::endl;
                             }
 
@@ -367,7 +377,8 @@ namespace NWQSim
         IdxType n = M_tab->get_qubits();
 
         std::vector<std::shared_ptr<QuantumState>> P;
-        if(T_tab->get_num_rows())
+        int initial_T_count = T_tab->get_num_rows();
+        if(initial_T_count)
             T_separate(T_tab, P, n);
         int P_rows = 0;
         int P_temp;
@@ -415,17 +426,18 @@ namespace NWQSim
 
 
         //Processing is done, so we can combine into one tableau if needed
-        std::cout << "---- T tableau -----" << std::endl;
+        // std::cout << "---- T tableau -----" << std::endl;
         for(int i = 0; i < P.size(); i++)
         {
-            std::cout << "---- P Tableau: " << i << " -----" << std::endl;
-            P[i]->print_res_state();
+            // std::cout << "---- P Tableau: " << i << " -----" << std::endl;
+            // P[i]->print_res_state();
         }
-        std::cout << "---- End T tableau -----" << std::endl;
+        // std::cout << "---- End T tableau -----" << std::endl;
         T_combine(T_tab, P);
 
         outfile << proc_time.count() / 1000000.0 << std::endl;
         outfile << opt_time.count() / 1000000.0 << std::endl;
+        outfile << initial_T_count << std::endl;
         outfile << T_tab->get_num_rows() << std::endl;
         outfile << rep_print << std::endl;
 
