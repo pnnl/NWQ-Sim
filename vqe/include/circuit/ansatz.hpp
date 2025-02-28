@@ -98,6 +98,7 @@ namespace NWQSim {
                 } else {
                   outstream << ")";
                 }
+                outstream << ")"; // MZ: missing a closing parenthesis
               }
               param_ix++;
             } else {
