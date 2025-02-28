@@ -176,12 +176,12 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
 // Create a circuit with 2 qubits
 int main(){
     std::cout << "Starting program" << std::endl;
-    int n_qubits = 512;
+    int n_qubits = 2048;
     int shots = 10;
 
-    NWQSim::IdxType S_count = 0;
-    NWQSim::IdxType H_count = 0;
-    NWQSim::IdxType CX_count = 0;
+    NWQSim::IdxType S_count = 100000;
+    NWQSim::IdxType H_count = 100000;
+    NWQSim::IdxType CX_count = 100000;
 
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
@@ -203,9 +203,6 @@ int main(){
         circuit->H(num);
         circuit->CX(num, num+1);
         circuit->S(num+1);
-        S_count++;
-        H_count++;
-        CX_count++;
     }
 
     std::string backend = "cpu";
@@ -240,7 +237,6 @@ int main(){
     outfile << sim_method << std::endl;
     outfile << timer << std::endl;
     outfile << n_qubits << std::endl;
-    outfile << circuit << std::endl;
     outfile << S_count << std::endl;
     outfile << H_count << std::endl;
     outfile << CX_count << std::endl;

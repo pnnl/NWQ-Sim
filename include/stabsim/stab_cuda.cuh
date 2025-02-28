@@ -740,98 +740,98 @@ namespace NWQSim
         // }  
     }; //End tableau class
 
-    __device__ void S_gate(int i, int mat_i)
-    {
-        uint32_t x = x_packed_gpu[mat_i];
-        uint32_t z = z_packed_gpu[mat_i];
+    // __device__ void S_gate(int i, int mat_i)
+    // {
+    //     uint32_t x = x_packed_gpu[mat_i];
+    //     uint32_t z = z_packed_gpu[mat_i];
 
-        //Phase
-        r_packed_gpu[i] ^= (x & z);
+    //     //Phase
+    //     r_packed_gpu[i] ^= (x & z);
 
-        //Entry
-        z_packed_gpu[mat_i] = z ^ x;
-    }
-    __device__ void SDG_gate(int i, int mat_i)
-    {
-        uint32_t x = x_packed_gpu[mat_i];
-        uint32_t z = z_packed_gpu[mat_i];
+    //     //Entry
+    //     z_packed_gpu[mat_i] = z ^ x;
+    // }
+    // __device__ void SDG_gate(int i, int mat_i)
+    // {
+    //     uint32_t x = x_packed_gpu[mat_i];
+    //     uint32_t z = z_packed_gpu[mat_i];
 
-        //Phase
-        r_packed_gpu[i] ^= (x ^ (x & z));
+    //     //Phase
+    //     r_packed_gpu[i] ^= (x ^ (x & z));
 
-        //Entry
-        z_packed_gpu[mat_i] = z ^ x;
-    }
-    __device__ void RX_gate(int i, int mat_i, double theta)
-    {
-        if(theta == PI/2) //H SDG
-        {
-            uint32_t x = x_packed_gpu[mat_i];
-            uint32_t z = z_packed_gpu[mat_i];
+    //     //Entry
+    //     z_packed_gpu[mat_i] = z ^ x;
+    // }
+    // __device__ void RX_gate(int i, int mat_i, double theta)
+    // {
+    //     if(theta == PI/2) //H SDG
+    //     {
+    //         uint32_t x = x_packed_gpu[mat_i];
+    //         uint32_t z = z_packed_gpu[mat_i];
 
-            //Phase
-            r_packed_gpu[i] ^= z;
+    //         //Phase
+    //         r_packed_gpu[i] ^= z;
 
-            //Entry -- swap x and z bits
-            x ^= z;
-            z ^= x;
-            x ^= z;
+    //         //Entry -- swap x and z bits
+    //         x ^= z;
+    //         z ^= x;
+    //         x ^= z;
 
-            x_packed_gpu[mat_i] = x;
+    //         x_packed_gpu[mat_i] = x;
 
-            //Phase -- pass through the swap to make r_packed_gpu[i] ^= z;
-            //r_packed_gpu[i] ^= x ^ (x & z_packed_gpu[mat_i]);
+    //         //Phase -- pass through the swap to make r_packed_gpu[i] ^= z;
+    //         //r_packed_gpu[i] ^= x ^ (x & z_packed_gpu[mat_i]);
 
-            //Entry
-            z_packed_gpu[mat_i] = z ^ x;
-        }
-        else if(theta == -PI/2) //H S
-        {
-            uint32_t x = x_packed_gpu[mat_i];
-            uint32_t z = z_packed_gpu[mat_i];
+    //         //Entry
+    //         z_packed_gpu[mat_i] = z ^ x;
+    //     }
+    //     else if(theta == -PI/2) //H S
+    //     {
+    //         uint32_t x = x_packed_gpu[mat_i];
+    //         uint32_t z = z_packed_gpu[mat_i];
 
-            //Entry -- swap x and z bits
-            x ^= z;
-            z ^= x;
-            x ^= z;
+    //         //Entry -- swap x and z bits
+    //         x ^= z;
+    //         z ^= x;
+    //         x ^= z;
 
-            //Entry
-            x_packed_gpu[mat_i] = x;
-            z_packed_gpu[mat_i] ^= x;
-        }
-        else if(theta == PI) //X
-        {
-            r_packed_gpu[i] ^= z_packed_gpu[mat_i];
-        }
-        else
-        {
-            printf("Non-Clifford angle in RX!");
-            assert(false);
-        }
-    }
-    __device__ void RY_gate(int i, int mat_i, double theta)
-    {
+    //         //Entry
+    //         x_packed_gpu[mat_i] = x;
+    //         z_packed_gpu[mat_i] ^= x;
+    //     }
+    //     else if(theta == PI) //X
+    //     {
+    //         r_packed_gpu[i] ^= z_packed_gpu[mat_i];
+    //     }
+    //     else
+    //     {
+    //         printf("Non-Clifford angle in RX!");
+    //         assert(false);
+    //     }
+    // }
+    // __device__ void RY_gate(int i, int mat_i, double theta)
+    // {
         
 
 
-    }
-    __device__ void CX_gate(int i, int ctrl, int qubit)
-    {
-        uint32_t x_ctrl = x_packed_gpu[ctrl];
-        uint32_t z_qubit = z_packed_gpu[qubit];
+    // }
+    // __device__ void CX_gate(int i, int ctrl, int qubit)
+    // {
+    //     uint32_t x_ctrl = x_packed_gpu[ctrl];
+    //     uint32_t z_qubit = z_packed_gpu[qubit];
 
-        //Phase
-        r_packed_gpu[i] ^= ((x_ctrl & z_qubit) & (x_packed_gpu[qubit]^z_packed_gpu[ctrl]^1));
+    //     //Phase
+    //     r_packed_gpu[i] ^= ((x_ctrl & z_qubit) & (x_packed_gpu[qubit]^z_packed_gpu[ctrl]^1));
 
-        //Entry
-        x_packed_gpu[qubit] ^= x_ctrl;
-        z_packed_gpu[ctrl] ^= z_qubit;
-    }
+    //     //Entry
+    //     x_packed_gpu[qubit] ^= x_ctrl;
+    //     z_packed_gpu[ctrl] ^= z_qubit;
+    // }
 
-    __device__ void cuda_rowsum(int i, int p)
-    {
+    // __device__ void cuda_rowsum(int i, int p)
+    // {
         
-    }
+    // }
 
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
     {
@@ -846,15 +846,14 @@ namespace NWQSim
         z_arr = stab_gpu->z_packed_gpu;
         r_arr = stab_gpu->r_packed_gpu;
 
-        IdxType a, b, m_index;
-        uint32_t x, x_b, z, z_b, r, temp;
+        uint32_t x, z;
         OP op_name;
         int pos, ctrl_pos;
 
         //Precompute the possible indices that each thread needs before looping the gates
         int thread_pos = i * stab_gpu->cols;
         int n_qubits = stab_gpu->n;
-        int q_indices[n_qubits];
+        int q_indices[2048];
         #pragma unroll
         for(int q = 0; q < n_qubits; q++)
         {
@@ -902,6 +901,7 @@ namespace NWQSim
                     break;
 
                 case OP::RX:
+                    double theta = gates_gpu[k].theta;
                     if(theta == PI/2) //H SDG
                     {
                         x = x_arr[q_indices[pos]];
@@ -945,11 +945,12 @@ namespace NWQSim
                 //     break;
 
                 case OP::CX:
+
                     x = x_arr[q_indices[pos]];
                     z = z_arr[q_indices[pos]];
 
-                    x_ctrl = x_arr[q_indices[ctrl_pos]];
-                    z_ctrl = z_arr[q_indices[ctrl_pos]];
+                    uint32_t x_ctrl = x_arr[q_indices[ctrl_pos]];
+                    uint32_t z_ctrl = z_arr[q_indices[ctrl_pos]];
 
                     //Phase
                     r_arr[i] ^= ((x_ctrl & z) & (x^z_ctrl^1));
