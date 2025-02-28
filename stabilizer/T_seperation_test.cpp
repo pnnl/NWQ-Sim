@@ -9,7 +9,7 @@
 #include "../include/circuit.hpp"
 #include "../include/nwq_util.hpp"
 
-#include "src/T_seperation.hpp"
+#include "src/T_separation.hpp"
 
 int extractQubitIndex(const std::string& qubitStr) 
 {
@@ -195,22 +195,24 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             std::cout << gate << " does not match a gate."; 
         }
     }
-    std::cout << "------\n\n\n TCount: " << tCount << " \n\n\n-----" << std::endl;
+    std::cout << "------\n\n\n TCount in qasm: " << tCount << " \n\n\n-----" << std::endl;
 }
 
 
 int main(){
 
     /* Small test */
-    int n_qubits = 18;
+    int n_qubits = 4;
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
-    std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/qft_n18_iter1.qasm";
-    std::string outFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/stab_T_bench/qft_n18_iter1.txt";
+    std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/adder_n10.qasm";
+    std::string outFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/stab_T_bench/adder_n10.txt";
     appendQASMToCircuit(circuit, inFile, n_qubits);
+
 
     //Measurement circuit will be filled in the passthrough function
     auto M_circ = std::make_shared<NWQSim::Circuit>(n_qubits);
+
 
     std::string backend = "CPU";
     std::string sim_method = "stab";
@@ -221,28 +223,16 @@ int main(){
     T_tab->delete_all_rows();
     T_tab->remove_destabilizers();
 
-
-    /*Run T passthrough after tableaus have been prepared*/
-    T_passthrough(circuit, T_tab, M_circ, outFile, 10);
-
-    /*T Tableau*/
-    std::cout << "---- T tableau -----" << std::endl;
-    T_tab->print_res_state();
-    /*T Tableau*/
-
-    /*Measurement Tableau*/
-    circuit_reverse(M_circ);
-    // std::vector<NWQSim::Gate> m_gates = M_circ->get_gates();
-    // for(int i = 0; i < m_gates.size(); i++)
-    // {
-    //     // std::cout << m_gates[i].op_name << "(" << m_gates[i].qubit << ")" << std::endl;
-    //     std::cout << m_gates[i].gateToString() << std::endl;
-    // }
-
-    //After all M_tab gates and additional Clifford gates from optimization
-    //Simulate the M circuit evolution after construction
     auto M_tab = BackendManager::create_state(backend, n_qubits, "stab");
+    std::chrono::duration<long long, std::ratio<1, 1000000>> proc_time;
+    T_process(circuit, M_circ, T_tab, proc_time);
+    /*Run T passthrough after tableaus have been prepared and measurement operations absorbed*/
     M_tab->sim(M_circ, timer);
+    M_tab->remove_destabilizers();
+    M_tab->print_res_state();
+    T_passthrough(T_tab, M_tab, outFile, proc_time, 10);
+
+    //Put the M circuit back in forward time after the new Clifford gates have been appended
     std::cout << "---- M tableau -----" << std::endl;
 
     M_tab->print_res_state();

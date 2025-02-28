@@ -82,10 +82,9 @@ namespace NWQSim
                 T_tab->add_stabilizer(stabs[j]);
             }
         }
-
     }
 
-    void T_seperate(std::shared_ptr<QuantumState>& T_tab, std::vector<std::shared_ptr<QuantumState>>& P)
+    void T_separate(std::shared_ptr<QuantumState>& T_tab, std::vector<std::shared_ptr<QuantumState>>& P, int n)
     {
         std::string tempStab;
         int phase;
@@ -123,7 +122,11 @@ namespace NWQSim
                 if(P[j]->check_commutation(tempStab))
                 {
                     if(j == 0)
+                    {
                         P[0]->add_stabilizer(tempStab, phase);
+                        break;
+                    }
+                    //else it commutes and we continue to the next tableau
                 }
                 //If it doesn't add it to the last tableau it commuted with
                 else
@@ -141,15 +144,13 @@ namespace NWQSim
                     //If it didn't commute and we're not on the last tableau, add it to the previous tableau that
                     //it commuted with
                     else
+                    {
                         P[j+1]->add_stabilizer(tempStab, phase);
+                        break;
+                    }
                 }
             }
         }
-        T_tab->delete_all_rows(); //T tableau is processed so it can be deleted
-    }
-
-    void T_optimize(std::vector<std::shared_ptr<QuantumState>>& P, std::shared_ptr<Circuit>& M_circ, int n)
-    {
 
         // // std::cout <<"T tableau splitting finished.\n" << std::endl;
         
@@ -161,139 +162,131 @@ namespace NWQSim
 
         //     P[i]->print_res_state();
         // }
+    }
 
+    void T_optimize(std::vector<std::shared_ptr<QuantumState>>& P, std::shared_ptr<QuantumState>& M, int n)
+    {
         //Push through any repeating stabilizers that may result in Clifford gates
         //Start from the last P, and push right. i.e. for (P1, P2, P3) check P3 for clifford gates first, then P2, then P1. If found in P1, push through P2 and P3.
         for(int i = P.size()-1; i > -1; i--)
         {
-            //Fill in the stabilizer map for repeating eigth rotations
-            std::unordered_map<std::string, int> stab_map;
+            //Fill in the stabilizer map for repeating eigth rotations and remove repitions
+            std::unordered_map<std::string, std::pair<int, int>> stab_map;
+
             P[i]->stabilizer_count(stab_map);
+
             //For each recurring stabilizer
             for(const auto& pair : stab_map)
             {
-                std::string repeated = pair.first;
-
-                //Adds/subtracts the positive and negative rotations
-                int total_counts = P[i]->stabilizer_reps(repeated);
-
-                //Every 2 T rotations is a quarter gate
-                int num_quarter_gates = total_counts/2;
-
-                // // std::cout <<pair.first<< " OCCURS " << pair.second << " TIMES " << std::endl;
-
-                //Remove the repeating stabilizers, but add one back if there is an odd number of gates. 
-                //If there is an extra negative gate, makes sure to add the negative phase.
-                P[i]->remove_repetitions(repeated, total_counts%2);
-
-                //4 S gates is a full rotation around the bloch sphere and cancel out so we might be done
-                num_quarter_gates = num_quarter_gates % 4;
-                //Positive rotation gates come out of more positive T rotations than negative
-                if(num_quarter_gates > 0)
+                int num_rotations = pair.second.second;
+                //Check first that there is more than one stabilizer and they didn't all cancel out
+                if((abs(num_rotations) > 1))
                 {
-                    //Perform the push through routine for every S gate that didn't cancel earlier (up to 3 gates)
-                    for(int gate_num = 0; gate_num < num_quarter_gates; gate_num++)
+                    std::string stabilizer = pair.first;
+                    //If there were an odd number of stabilizers remaining, add back the one that doesn't cancel out
+
+                    std::cout << num_rotations << " repetitions of " << stabilizer << std::endl;
+                    //8 1/8 gates cancel out
+                    //Don't push through the odd number gate that was added back (if there were an odd number of stabilizers)
+                    int rotations = num_rotations % 8;
+                    rotations = (rotations/2) * 2;
+
+                    //Positive rotation gates come out of more positive T rotations than negative
+                    if(rotations > 1)
                     {
-                        //Push an S gate through remaining tableaus in P order (to the right/to the end of the circuit)
-                        for(int j = i; j < P.size(); j++)
+                        //Apply rotation to the measurement tableau for every T gate that didn't cancel earlier
+                        for(int num = 0; num < rotations; num++)
                         {
-                            int P_rows = P[j]->get_num_rows();
-                            P[j]->add_stabilizer(repeated);
+                            //Push an S gate through remaining tableaus in P order (to the right/to the end of the circuit)
+                            for(int j = i+1; j < P.size(); j++)
+                            {
+                                int P_rows = P[j]->get_num_rows();
+                                P[j]->add_stabilizer(stabilizer);
+
+                                //Check the commutation with every line of the tableau
+                                //If a line doesn't commute, rowsum that line with the temp 'S' stabilizer
+                                for(int k = 0; k < P_rows; k++)
+                                {
+                                    if(!(P[j]->check_row_commutation(stabilizer, k)))
+                                    {
+                                        P[j]->i_rowsum(k, P_rows);
+                                    }
+                                }
+                                P[j]->remove_stabilizer(P_rows);
+                                // std::cout <<"Stabilizer removed" << std::endl;
+                            }
+
+                            //Push S gate through the measurement circuit
+                            int M_rows = M->get_num_rows();
+                            M->add_stabilizer(stabilizer);
 
                             //Check the commutation with every line of the tableau
                             //If a line doesn't commute, rowsum that line with the temp 'S' stabilizer
-                            for(int k = 0; k < P_rows; k++)
+                            for(int k = 0; k < M_rows; k++)
                             {
-                                if(!(P[j]->check_row_commutation(repeated, k)))
+                                if(!(M->check_row_commutation(stabilizer, k)))
                                 {
-                                    P[j]->rowsum(k, P_rows);
+                                    M->i_rowsum(k, M_rows);
                                 }
                             }
-                            P[j]->remove_stabilizer(P_rows);
-                            // std::cout <<"Stabilizer removed" << std::endl;
-                        }
-                        //Once all of the repeating stabilizers in a P tableau are pushed through,
-                        //apply S to the measurement tableau.
-                        //The original T gate was applied where z = 1 in the 'S' stabilizer.
-                        for(int col = 0; col < n; col++)
-                        {
-                            if(pair.first[col] == 'Z')
-                            {
-                                M_circ->S(col);
-                            }
-                            else if(pair.first[col] == 'Y')
-                            {
-                                M_circ->RY(PI/2, col);
-                            }
-                            else if(pair.first[col] == 'X')
-                            {
-                                M_circ->RX(PI/2, col);
-                            }
+                            M->remove_stabilizer(M_rows);
                         }
                     }
-                }
-                //Negative quarter rotation gates that come out of repeated TDG or similar
-                else if(num_quarter_gates < 0)
-                {
-                    // std::cout <<"In num sdg gates" << std::endl;
-                    
-                    //Perform the push through routine for every SDG gate that doesn't cancel (1-3 SDG gates)
-                    for(int s_gates = 0; s_gates > num_quarter_gates; s_gates--)
+                    //Negative quarter rotation gates that come out of repeated TDG or similar
+                    else if(rotations < -1)
                     {
-                        //Push an SDG gate through remaining tableaus in P order (to the right/to the end of the circuit)
-                        for(int j = i; j < P.size(); j++)
+                        //Apply rotation to the measurement tableau for every S gate that didn't cancel earlier
+                        for(int num = rotations; num < 0; num++)
                         {
-                            int P_rows = P[j]->get_num_rows();
-                            //SDG
-                            P[j]->add_stabilizer(repeated, 1);
+                            //Push an S gate through remaining tableaus in P order (to the right/to the end of the circuit)
+                            for(int j = i+1; j < P.size(); j++)
+                            {
+                                int P_rows = P[j]->get_num_rows();
+                                P[j]->add_stabilizer(stabilizer, 1);
+
+                                //Check the commutation with every line of the tableau
+                                //If a line doesn't commute, rowsum that line with the temp 'S' stabilizer
+                                for(int k = 0; k < P_rows; k++)
+                                {
+                                    if(!(P[j]->check_row_commutation(stabilizer, k)))
+                                    {
+                                        P[j]->i_rowsum(k, P_rows);
+                                    }
+                                }
+                                P[j]->remove_stabilizer(P_rows);
+                                // std::cout <<"Stabilizer removed" << std::endl;
+                            }
+
+                            //Push S gate through the measurement circuit
+                            int M_rows = M->get_num_rows();
+                            M->add_stabilizer(stabilizer, 1);
 
                             //Check the commutation with every line of the tableau
                             //If a line doesn't commute, rowsum that line with the temp 'S' stabilizer
-                            for(int k = 0; k < P_rows; k++)
+                            for(int k = 0; k < M_rows; k++)
                             {
-                                if(!(P[j]->check_row_commutation(repeated, k)))
+                                if(!(M->check_row_commutation(stabilizer, k)))
                                 {
-                                    P[j]->rowsum(k, P_rows);
+                                    M->i_rowsum(k, M_rows);
                                 }
                             }
-                            P[j]->remove_stabilizer(P_rows);
+                            M->remove_stabilizer(M_rows);
                         }
-                        //Once all of the repeating stabilizers in a P tableau are pushed through,
-                        //apply S to the measurement tableau.
-                        //The original T gate was applied where z = 1 in the 'S' stabilizer.
-                        for(int col = 0; col < n; col++)
-                        {
-                            if(pair.first[col] == 'Z')
-                            {
-                                M_circ->SDG(col);
-                            }
-                            else if(pair.first[col] == 'Y')
-                            {
-                                //Backwards so we apply S first for -pi/2
-                                M_circ->RY(-PI/2, col);
-                            }
-                            else if(pair.first[col] == 'X')
-                            {
-                                M_circ->RX(-PI/2, col);
-                            }
-                        }
-                    }
-                }
+                    } //If there are gates that need to be pushed
+                } //If statement to check if there is more than 1 stabilizer
+            } //End for loop of all stabilizers
+
+            //If removing Clifford gates empties the tableau, then delete the tableau
+            if(P[i]->get_num_rows() == 0)
+            {
+                P.erase(P.begin()+i);
             }
         }
-
     }
 
-
-    //Main compilation function for T pushthrough using tableau simulation
-    void T_passthrough(std::shared_ptr<Circuit>& circuit, std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<Circuit>& M_circ, std::string outFile, int reps = 1)
+    void T_process(std::shared_ptr<Circuit>& circuit, std::shared_ptr<Circuit>& M_circ, std::shared_ptr<QuantumState>& T_tab, std::chrono::duration<long long, std::ratio<1, 1000000>>& proc_time)
     {
-
-        std::ofstream outfile(outFile); // Open a file for writing
-
-        
-        IdxType n = circuit->num_qubits();
-
+        IdxType n = M_circ->num_qubits();
         std::vector<Gate> gates = circuit->get_gates();
         IdxType num_gates = gates.size();
 
@@ -321,7 +314,7 @@ namespace NWQSim
 
                 T_tab->add_stabilizer(new_row);
 
-                std::cout <<"T stab " << new_row << std::endl;
+                // std::cout <<"T stab " << new_row << std::endl;
 
             }
             else if(gate.op_name == OP::TDG)
@@ -337,7 +330,7 @@ namespace NWQSim
 
                 T_tab->add_stabilizer(new_row, 1);
 
-                std::cout <<"TDG stab " << new_row << std::endl;
+                // std::cout <<"TDG stab " << new_row << std::endl;
 
             }
             else if(gate.op_name == OP::S)
@@ -360,51 +353,82 @@ namespace NWQSim
             else
                 std::cerr << "Unsupported gate in T transpilation!" << std::endl;
         }//End for loop of original circuit
-        std::cout << "------\n\n\n TCount: " << T_count << " \n\n\n------" << std::endl;
-
-        T_seperate
-        
+        // std::cout << "------\n\n\n TCount: " << T_count << " \n\n\n------" << std::endl;
         auto proc_end = std::chrono::high_resolution_clock::now();
-        auto proc_time = std::chrono::duration_cast<std::chrono::microseconds>(proc_end - proc_start);
-        
-        auto opt_start = std::chrono::high_resolution_clock::now();
+        proc_time = std::chrono::duration_cast<std::chrono::microseconds>(proc_end - proc_start);
+    }
 
+
+    //Main compilation function for T pushthrough using tableau simulation
+    void T_passthrough(std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<QuantumState>& M_tab, std::string outFile, std::chrono::duration<long long, std::ratio<1, 1000000>> proc_time, int reps = 1)
+    {
+        std::ofstream outfile(outFile); // Open a file for writing
+        
+        IdxType n = M_tab->get_qubits();
+
+        std::vector<std::shared_ptr<QuantumState>> P;
+        if(T_tab->get_num_rows())
+            T_separate(T_tab, P, n);
+        int P_rows = 0;
+        int P_temp;
+        for(int j = 0; j < P.size(); j++)
+        {
+            P_rows+= P[j]->get_num_rows();
+        }
         int rep_print = reps;
 
+        T_tab->delete_all_rows(); //T tableau is processed so it can be deleted for use later
+
+
+        //Start the optimization defined by the number of reps
+        auto opt_start = std::chrono::high_resolution_clock::now();
         for(int i = 0; i < reps; i++)
         {
-            T_rows = T_tab->get_num_rows();
-            std::cout << "------\n\n" << T_rows << "\n\n------" << std::endl;
-            if(T_rows)
-                T_optimize(T_tab, M_circ, n);
+            P_temp = 0;
+            std::cout << "------\n\n Rep: " << i+1 << "\n\n------" << std::endl;
+            if(P_rows)
+                T_optimize(P, M_tab, n);
             else
             {
-                std::cout << "No T gates to optimize." << std::endl;
+                std::cout << "No T gates left to optimize." << std::endl;
                 rep_print = i;
                 break;
             }
-            //If the number of rows is the same after optimizing, end the optimization
-            if(T_rows == (T_tab->get_num_rows()))
+
+            for(int j = 0; j < P.size(); j++)
             {
-                std::cout << "T optimization done at " << i << " reps." << std::endl;
-                rep_print = i;
-                break;
+                P_temp += P[j]->get_num_rows();
             }
 
+            //If the number of rows is the same after optimizing, end the optimization
+            if(P_rows == P_temp)
+            {
+                std::cout << "T optimization done after " << i+1 << " reps." << std::endl;
+                rep_print = i+1;
+                break;
+            }
+            P_rows = P_temp;
         }
-
         auto opt_end = std::chrono::high_resolution_clock::now();
         auto opt_time = std::chrono::duration_cast<std::chrono::microseconds>(opt_end - opt_start);
 
-        outfile << proc_time.count() << std::endl;
-        outfile << opt_time.count() << std::endl;
-        outfile << T_rows << std::endl;
+
+
+        //Processing is done, so we can combine into one tableau if needed
+        std::cout << "---- T tableau -----" << std::endl;
+        for(int i = 0; i < P.size(); i++)
+        {
+            std::cout << "---- P Tableau: " << i << " -----" << std::endl;
+            P[i]->print_res_state();
+        }
+        std::cout << "---- End T tableau -----" << std::endl;
+        T_combine(T_tab, P);
+
+        outfile << proc_time.count() / 1000000.0 << std::endl;
+        outfile << opt_time.count() / 1000000.0 << std::endl;
         outfile << T_tab->get_num_rows() << std::endl;
         outfile << rep_print << std::endl;
-        
-        
-        //Put the M circuit back in forward time after the new Clifford gates have been appended
-        circuit_reverse(M_circ);
+
 
         /*Process is done, M and T have been seperated and returned*/
 

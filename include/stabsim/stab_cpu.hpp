@@ -89,10 +89,13 @@ namespace NWQSim
 
             if(rows > 0)
             {
-                x.erase(x.begin(), x.begin()+rows/2);
-                z.erase(z.begin(), z.begin()+rows/2);
-                r.erase(r.begin(), r.begin()+rows/2);
                 rows = (rows/2);
+                x.erase(x.begin(), x.begin()+rows);
+                x.pop_back();
+                z.erase(z.begin(), z.begin()+rows);
+                z.pop_back();
+                r.erase(r.begin(), r.begin()+rows);
+                r.pop_back();
             }
         }
 
@@ -441,55 +444,56 @@ namespace NWQSim
             return pauliStrings;
         }
 
-        //Removes all but one repitions of a stabilizer
-        //If phase is non zero, that means theres an extra rotation that needs to be added back.
-        //Add back the rotation with a positive or negative rotation depending on the value of phase
-        void remove_repetitions(std::string stab, int phase) override
-        {
-            //Remove every stabilizer
-            for(int j = 0; j < rows; j++)
-            {
-                if((get_stabilizer_line(j).first == stab))
-                {
-                    // std::cout << "Removed " << stab << std::endl;
-                    remove_stabilizer(j); //decrements rows
-                    j--;
-                }
-            }
-            //if one should be left, add it back
-
-            if(phase == 1)
-                add_stabilizer(stab, 0);
-            else if (phase == -1)
-                add_stabilizer(stab, 1);
-        }
-
         //Returns a map of stabilizers and the number of times they ocurr in the tableau
-        void stabilizer_count(std::unordered_map<std::string, int>& stab_counts) override
+        void stabilizer_count(std::unordered_map<std::string, std::pair<int, int>>& stab_counts) override
         {
-            // std::cout << "--- Current state in stab count ---" << std::endl;
-            // print_res_state();
             for(int i = 0; i < rows; i++)
             {
-                stab_counts[get_stabilizer_line(i).first]++;
+                std::pair<std::string, int> stab = get_stabilizer_line(i);
+                std::string stabilizer = stab.first;
+                stab_counts[stabilizer].first++;
+
+                //Keep track of how many +/- rotations for later
+                if(stab.second)
+                    stab_counts[stabilizer].second--;
+                else
+                    stab_counts[stabilizer].second++;
+            }
+            //Go back through and remove excess stabilizers, then add any odd number back
+            for(const auto& [stabilizer, count] : stab_counts)
+            {
+                if(count.first > 1)
+                {
+                    std::cout << "Stabilizer: " << stabilizer << std::endl;
+                    std::cout << "Count.first: " << count.first << std::endl;
+                    std::cout << "Count.second: " << count.first << std::endl;
+
+                    for(int j = 0; j < rows; j++)
+                    {                    
+                        //Remove all the stabilizers that repeat
+                        if(get_stabilizer_line(j).first == stabilizer)
+                        {
+                            std::cout << "Removed: " << stabilizer << std::endl;
+                            remove_stabilizer(j);
+                            j--;
+                        }
+                    }
+                    //Add back if there were an odd number of rotations left over
+                    //T seperation will take care of the rotations
+                    if((count.second % 2) == 1)
+                    {
+                        add_stabilizer(stabilizer, 0);
+                        std::cout << "Added: " << stabilizer << " 0" << std::endl;
+                    }
+                    else if((count.second % 2) == -1)
+                    {
+                        add_stabilizer(stabilizer, 1);
+                        std::cout << "Added: " << stabilizer << " 0" << std::endl;
+                    }
+                }
+                std::cout << std::endl;
             }
             // std::cout << "--- End current state in stab count ---" << std::endl;
-        }
-        //Counts how many times a given stabilizer occurs
-        int stabilizer_reps(std::string stab) override
-        {
-            int reps = 0;
-            for(int i = 0; i < rows; i++)
-            {
-                if(get_stabilizer_line(i).first == stab)
-                {
-                    if(get_stabilizer_line(i).second == 0)
-                        reps++;
-                    else   
-                        reps--;
-                }
-            }
-            return reps;
         }
 
         //Check every stabilizer of the tableau
@@ -587,59 +591,38 @@ namespace NWQSim
             if(has_destabilizers)
             {
                 std::cout << "Shouldn't be here for T case" << std::endl;
-                if(check_commutation(pauliString))
+                //Start by adding a row of destabilizers and stabilizers to T
+                stabCounts++;
+                rows++;
+                x.insert(x.end()-1, std::vector<int>(cols,0));
+                z.insert(z.end()-1, std::vector<int>(cols,0));
+                r.insert(r.end()-1, phase_bit);
+                
+                //Stabilizer and destabilizer addition
+                for(int i = 0; i < pauliString.length(); i++)
                 {
-                    //Start by adding a row of destabilizers and stabilizers to T
-                    stabCounts++;
-                    rows+=2;
-                    x.insert(x.begin() + x.size()/2, std::vector<int>(cols,0));
-                    x.insert(x.end()-1, std::vector<int>(cols,0));
-                    z.insert(z.begin() + z.size()/2, std::vector<int>(cols,0));
-                    z.insert(z.end()-1, std::vector<int>(cols,0));
-                    r.insert(r.begin() + r.size()/2, phase_bit);
-                    r.insert(r.end()-1, phase_bit);
-                    
-                    //Stabilizer and destabilizer addition
-                    for(int i = 0; i < pauliString.length(); i++)
+                    switch(pauliString[i])
                     {
-                        switch(pauliString[i])
-                        {
-                            case 'I':
-                                x[rows-2][i] = 0;
-                                z[rows-2][i] = 0;
-                                x[(rows>>1)-1][i] = 0;
-                                z[(rows>>1)-1][i] = 0;
-                                break;
-                            case 'X':
-                                x[rows-2][i] = 1;
-                                z[rows-2][i] = 0;
-                                x[(rows>>1)-1][i] = 0;
-                                z[(rows>>1)-1][i] = 1;
-                                break;
-                            case 'Y':   
-                                x[rows-2][i] = 1;
-                                z[rows-2][i] = 1;
-                                //make the destabilizer X to anticommute with Y
-                                x[(rows>>1)-1][i] = 1;
-                                z[(rows>>1)-1][i] = 0;
-                                //add an i to the 2 bit phase representation at the stabilizer row
-                                r[rows-1] = (r[rows-1] + 1) % 4;
-                                break;
-                            case 'Z':
-                                x[rows-2][i] = 0;
-                                z[rows-2][i] = 1;
-                                x[(rows>>1)-1][i] = 1;
-                                z[(rows>>1)-1][i] = 0;
-                                break;
-                            default:
-                                std::logic_error("Invalid stabilizer");
-                                break;
-                        }
+                        case 'I':
+                            x[rows-2][i] = 0;
+                            z[rows-2][i] = 0;
+                            break;
+                        case 'X':
+                            x[rows-2][i] = 1;
+                            z[rows-2][i] = 0;
+                            break;
+                        case 'Y':   
+                            x[rows-2][i] = 1;
+                            z[rows-2][i] = 1;
+                            break;
+                        case 'Z':
+                            x[rows-2][i] = 0;
+                            z[rows-2][i] = 1;
+                            break;
+                        default:
+                            std::logic_error("Invalid stabilizer");
+                            break;
                     }
-                }
-                else
-                {
-                    std::logic_error("Stabilizer fails commutation check: " + pauliString);
                 }
             }
 
@@ -653,7 +636,7 @@ namespace NWQSim
                 z.push_back(std::vector<int>(cols,0));
                 r.push_back(phase_bit);
                 
-                //Stabilizer only addition
+                //Stabilizer only addition (no temp row)
                 for(int i = 0; i < cols; i++)
                 {
                     switch(pauliString[i])
@@ -676,7 +659,7 @@ namespace NWQSim
                             z[rows-1][i] = 1;
                             break;
                         default:
-                            std::logic_error("Invalid stabilizer");
+                            std::logic_error("Invalid Pauli");
                             break;
                     }
                 }
@@ -785,7 +768,7 @@ namespace NWQSim
         }
 
         //Sub-process in measurement gates
-        void rowsum(int h, int i) override
+        void rowsum(int h, int i)
         {
             int sum = 0;
             for(int j = 0; j < n; j++)
@@ -806,6 +789,34 @@ namespace NWQSim
                 z[h][j] = z[i][j] ^ z[h][j];
             }
             sum = sum + 2*r[h] + 2*r[i];
+
+            if(sum % 4 == 0)
+                r[h] = 0;
+            else
+                r[h] = 1;
+        } //End rowsum
+
+        void i_rowsum(int h, int i) override
+        {
+            int sum = 0;
+            for(int j = 0; j < n; j++)
+            {
+                //Sum every column in the row
+                if(x[i][j])
+                {
+                    if(z[i][j])
+                        sum += z[h][j] - x[h][j];
+                    else
+                        sum += z[h][j] * (2*x[h][j]-1);
+                }
+                else if(z[i][j])
+                    sum += x[h][j] * (1-2*z[h][j]);
+
+                //XOR x's and z's
+                x[h][j] = x[i][j] ^ x[h][j];
+                z[h][j] = z[i][j] ^ z[h][j];
+            }
+            sum += 1 + 2*r[h] + 2*r[i];
 
             if(sum % 4 == 0)
                 r[h] = 0;
@@ -1582,7 +1593,7 @@ namespace NWQSim
                         break;
                     
                     case OP::RX:
-                        //H SDG
+                        //H SDG H
                         if(gate.theta == PI/2)
                         {
                             for(int i = 0; i < rows-1; i++)
@@ -1710,7 +1721,7 @@ namespace NWQSim
                         for(int i = 0; i < rows-1; i++)
                         {
                             //Phase
-                            r[i] ^= ((x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1));
+                            r[i] = r[i]^ (x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1);
 
                             //Entry
                             x[i][b] ^= x[i][a];
