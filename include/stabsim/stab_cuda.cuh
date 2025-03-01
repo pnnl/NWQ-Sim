@@ -37,6 +37,7 @@ namespace NWQSim
 
     // Simulation kernel runtime
     class STAB_CUDA;
+    __global__ void simulation_kernel_cuda_shared(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates);
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates);
 
     class STAB_CUDA : public QuantumState
@@ -558,6 +559,7 @@ namespace NWQSim
 
             //Launch with cooperative kernel
             cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda, numBlocks, numThreads, args);
+
             cudaSafeCall(cudaDeviceSynchronize());
 
             sim_timer.stop_timer();
@@ -832,11 +834,12 @@ namespace NWQSim
     // {
         
     // }
-
-    __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
+    __global__ void simulation_kernel_cuda_shared(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
     {
         int i = blockIdx.x * blockDim.x + threadIdx.x;
         if (i >= stab_gpu->packed_rows) return;
+
+        int n_qubits = stab_gpu->n;
 
         __shared__ uint32_t* x_arr;
         __shared__ uint32_t* z_arr;
@@ -852,8 +855,148 @@ namespace NWQSim
 
         //Precompute the possible indices that each thread needs before looping the gates
         int thread_pos = i * stab_gpu->cols;
-        int n_qubits = stab_gpu->n;
         int q_indices[2048];
+        #pragma unroll
+        for(int q = 0; q < n_qubits; q++)
+        {
+            q_indices[q] = thread_pos + q;
+        }
+
+        for (int k = 0; k < n_gates; k++) 
+        {
+            op_name = gates_gpu[k].op_name;
+            pos = gates_gpu[k].qubit;
+
+            switch (op_name) 
+            {
+                case OP::H:
+                    x = x_arr[q_indices[pos]];
+                    z = z_arr[q_indices[pos]];
+                    //Phase
+                    r_arr[i] ^= (x & z);
+
+                    //Entry -- swap x and z bits
+                    x_arr[q_indices[pos]] = z;
+                    z_arr[q_indices[pos]] = x;
+                    break;
+
+                case OP::S:
+                    x = x_arr[q_indices[pos]];
+                    z = z_arr[q_indices[pos]];
+
+                    //Phase
+                    r_arr[i] ^= (x & z);
+
+                    //Entry
+                    z_arr[q_indices[pos]] = z ^ x;
+                    break;
+
+                case OP::SDG:
+                    x = x_arr[q_indices[pos]];
+                    z = z_arr[q_indices[pos]];
+
+                    //Phase
+                    r_arr[i] ^= (x ^ (x & z));
+
+                    //Entry
+                    z_arr[q_indices[pos]] = z ^ x;
+                    break;
+
+                case OP::RX:
+                    double theta = gates_gpu[k].theta;
+                    if(theta == PI/2) //H SDG
+                    {
+                        x = x_arr[q_indices[pos]];
+                        z = z_arr[q_indices[pos]];
+
+                        //Phase
+                        r_arr[i] ^= z;
+
+                        //Entry -- swap x and z bits
+                        x_arr[q_indices[pos]] = z;
+
+                        //Phase -- pass through the swap to make r_arr[i] ^= z;
+                        //r_arr[i] ^= x ^ (x & z_arr[mat_i]);
+
+                        //Entry -- z is x after the swap, but doesn't matter here
+                        z_arr[q_indices[pos]] = z ^ x;
+                    }
+                    else if(theta == -PI/2) //H S
+                    {
+                        x = x_arr[q_indices[pos]];
+                        z = z_arr[q_indices[pos]];
+
+                        //Entry -- swap x and z bits
+                        //Entry
+                        x_arr[q_indices[pos]] = z;
+                        z_arr[q_indices[pos]] = z ^ x;
+                    }
+                    else if(theta == PI) //X
+                    {
+                        r_arr[i] ^= z_arr[q_indices[pos]];
+                    }
+                    else
+                    {
+                        printf("Non-Clifford angle in RX!");
+                        assert(false);
+                    }
+                    break;
+                
+                // case OP::RY:
+                //     stab_gpu->RX_gate(i, m_index, gates_gpu[k].theta);
+                //     break;
+
+                case OP::CX:
+
+                    x = x_arr[q_indices[pos]];
+                    z = z_arr[q_indices[pos]];
+
+                    uint32_t x_ctrl = x_arr[q_indices[ctrl_pos]];
+                    uint32_t z_ctrl = z_arr[q_indices[ctrl_pos]];
+
+                    //Phase
+                    r_arr[i] ^= ((x_ctrl & z) & (x^z_ctrl^1));
+
+                    //Entry
+                    x_arr[q_indices[pos]] = x ^ x_ctrl;
+                    z_arr[q_indices[ctrl_pos]] = z ^ z_ctrl;
+
+                    break;
+
+                // case OP::M:
+                //     uint32_t p = INT32_MAX;
+                //     stab_gpu->M_gate(i, m_index, p);
+
+                default:
+                    printf("Non-Clifford or unrecognized gate: %d\n", op_name);
+                    assert(false);
+            }
+            __syncthreads();
+        }
+        // printf("Kernel is done!\n");
+        stab_gpu->x_packed_gpu = x_arr;
+        stab_gpu->z_packed_gpu = z_arr;
+        stab_gpu->r_packed_gpu = r_arr;
+    }//end kernel
+
+    __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
+    {
+        int i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i >= stab_gpu->packed_rows) return;
+
+        int n_qubits = stab_gpu->n;
+
+        uint32_t* x_arr; = stab_gpu->x_packed_gpu;
+        uint32_t* z_arr; = stab_gpu->z_packed_gpu;
+        uint32_t* r_arr; = stab_gpu->r_packed_gpu;
+
+        uint32_t x, z;
+        OP op_name;
+        int pos, ctrl_pos;
+
+        //Precompute the possible indices that each thread needs before looping the gates
+        int thread_pos = i * stab_gpu->cols;
+        int q_indices[16384];
         #pragma unroll
         for(int q = 0; q < n_qubits; q++)
         {
