@@ -198,92 +198,95 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
 
 // Create a circuit with 2 qubits
 int main(){
-    std::cout << "Starting program" << std::endl;
-    int n_qubits = 2048;
-    int n_qubits = 2048;
-    int shots = 10;
-
-    NWQSim::IdxType S_count = 100000;
-    NWQSim::IdxType H_count = 100000;
-    NWQSim::IdxType CX_count = 100000;
-
-    auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
-
-    // std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/adder_n10.qasm";
-    // if(inFile != "")
-    //     appendQASMToCircuit(circuit, inFile, n_qubits);
-
-    // circuit->H(0);
-    // circuit->S(0);
-    // circuit->S(0);
-    // circuit->H(0);
-    // circuit->H(1);
-    // circuit->S(1);
-    // circuit->S(1);
-    // circuit->H(1);
-    // circuit->CX(1,0);
-    // circuit->H(0);
-    // circuit->H(3);
-    // circuit->CX(2,3);
-    // circuit->CX(2,3);
-    // circuit->CX(1,2);
-    // circuit->CX(3,0);
-    // circuit->CX(0,1);
-    // circuit->CX(0,1);
-    // circuit->CX(2,3);
-    // circuit->CX(2,3);
-    // circuit->S(3);
-    // circuit->CX(3,0);
-    // circuit->H(3);
-
-
-    // std::srand(std::time(nullptr));  // Seed random number generator
-
-    for(int i = 0; i < 100000; i++) 
+    std::vector<int> qubit_test = {4, 8, 16, 32, 64, 128, 256, 512, 1028, 2048, 4096, 8192, 16384};
+    for(int i = 0; i < qubit_test.size(); i++)
     {
-        int num = (std::rand() % (n_qubits-1));
-        circuit->H(num);
-        circuit->CX(num, num+1);
-        circuit->S(num+1);
+        std::cout << "Starting program" << std::endl;
+        int n_qubits = qubit_test[i];
+        int shots = 10;
+
+        NWQSim::IdxType S_count = 100000;
+        NWQSim::IdxType H_count = 100000;
+        NWQSim::IdxType CX_count = 100000;
+
+        auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
+
+        // std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/adder_n10.qasm";
+        // if(inFile != "")
+        //     appendQASMToCircuit(circuit, inFile, n_qubits);
+
+        // circuit->H(0);
+        // circuit->S(0);
+        // circuit->S(0);
+        // circuit->H(0);
+        // circuit->H(1);
+        // circuit->S(1);
+        // circuit->S(1);
+        // circuit->H(1);
+        // circuit->CX(1,0);
+        // circuit->H(0);
+        // circuit->H(3);
+        // circuit->CX(2,3);
+        // circuit->CX(2,3);
+        // circuit->CX(1,2);
+        // circuit->CX(3,0);
+        // circuit->CX(0,1);
+        // circuit->CX(0,1);
+        // circuit->CX(2,3);
+        // circuit->CX(2,3);
+        // circuit->S(3);
+        // circuit->CX(3,0);
+        // circuit->H(3);
+
+
+        // std::srand(std::time(nullptr));  // Seed random number generator
+
+        for(int i = 0; i < 100000; i++) 
+        {
+            int num = (std::rand() % (n_qubits-1));
+            circuit->H(num);
+            circuit->CX(num, num+1);
+            circuit->S(num+1);
+        }
+
+        std::string backend = "cpu";
+        std::string sim_method = "stab";
+        double timer = 0;
+        
+        /*Create T and Measurement Tableaus with only stabilizers. T starts empty, M starts as identity.*/
+        std::cout << "Creating state" << std::endl;
+        auto state = BackendManager::create_state(backend, n_qubits, sim_method);
+
+
+        std::cout << "Starting sim" << std::endl;
+        state->sim(circuit, timer);
+        // state->print_res_state();
+        // NWQSim::IdxType* results = state->measure_all(shots);
+
+        // for(int i = 0; i < shots; i++)
+        //     std::cout << "Result " << i << ": " << results[i] << std::endl;
+
+        std::cout << "Sim time: " << timer/1000.0 << "s" << std::endl;
+
+        NWQSim::IdxType gate_count = S_count + H_count + CX_count;
+
+        std::string name = "";
+        std::ostringstream filename;
+        filename << "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/sim_bench/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
+        std::ofstream outfile(filename.str());
+        if (!outfile) {
+            std::cerr << "Error opening file: " << filename.str() << std::endl;
+        }
+
+        outfile << sim_method << std::endl;
+        outfile << timer/1000.0 << std::endl;
+        outfile << n_qubits << std::endl;
+        outfile << S_count << std::endl;
+        outfile << H_count << std::endl;
+        outfile << CX_count << std::endl;
+
+        outfile.close(); // Close the file
     }
-
-    std::string backend = "nvgpu";
-    std::string sim_method = "stab";
-    double timer = 0;
-    
-    /*Create T and Measurement Tableaus with only stabilizers. T starts empty, M starts as identity.*/
-    std::cout << "Creating state" << std::endl;
-    auto state = BackendManager::create_state(backend, n_qubits, sim_method);
-
-
-    std::cout << "Starting sim" << std::endl;
-    state->sim(circuit, timer);
-    state->print_res_state();
-    NWQSim::IdxType* results = state->measure_all(shots);
-
-    for(int i = 0; i < shots; i++)
-        std::cout << "Result " << i << ": " << results[i] << std::endl;
-
-    std::cout << "Sim time: " << timer << "ms" << std::endl;
-
-    NWQSim::IdxType gate_count = S_count + H_count + CX_count;
-
-    std::string name = "";
-    std::ostringstream filename;
-    filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << sim_method << "_" << n_qubits << ".txt";
-    std::ofstream outfile(filename.str());
-    if (!outfile) {
-        std::cerr << "Error opening file: " << filename.str() << std::endl;
-    }
-
-    outfile << sim_method << std::endl;
-    outfile << timer << std::endl;
-    outfile << n_qubits << std::endl;
-    outfile << S_count << std::endl;
-    outfile << H_count << std::endl;
-    outfile << CX_count << std::endl;
-
-    outfile.close(); // Close the file
 
     return 0;
 }
