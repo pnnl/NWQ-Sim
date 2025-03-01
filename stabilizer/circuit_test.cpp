@@ -249,7 +249,7 @@ int main(){
             circuit->S(num+1);
         }
 
-        std::string backend = "cpu";
+        std::string backend = "nvgpu";
         std::string sim_method = "stab";
         double timer = 0;
         
@@ -272,7 +272,7 @@ int main(){
 
         std::string name = "";
         std::ostringstream filename;
-        filename << "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/sim_bench/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
+        filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
         std::ofstream outfile(filename.str());
         if (!outfile) {
             std::cerr << "Error opening file: " << filename.str() << std::endl;
