@@ -205,9 +205,9 @@ int main(){
         int n_qubits = qubit_test[i];
         int shots = 10;
 
-        NWQSim::IdxType S_count = 100000;
-        NWQSim::IdxType H_count = 100000;
-        NWQSim::IdxType CX_count = 100000;
+        // NWQSim::IdxType S_count = 100000;
+        // NWQSim::IdxType H_count = 100000;
+        // NWQSim::IdxType CX_count = 100000;
 
         auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
@@ -243,10 +243,12 @@ int main(){
 
         for(int i = 0; i < 100000; i++) 
         {
-            int num = (std::rand() % (n_qubits-1));
-            circuit->H(num);
-            circuit->CX(num, num+1);
-            circuit->S(num+1);
+            for(int j = 0; j < n_qubits; j++)
+            {
+                circuit->H((std::rand() % (n_qubits-1)));
+                circuit->CX((std::rand() % (n_qubits-1)),(std::rand() % (n_qubits)));
+                circuit->S((std::rand() % (n_qubits-1)));
+            }
         }
 
         std::string backend = "nvgpu";
