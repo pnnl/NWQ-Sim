@@ -243,10 +243,12 @@ int main(){
 
         for(int i = 0; i < 1000000; i++) 
         {
-            int num = (std::rand() % (n_qubits-1));
-            circuit->H(num);
-            circuit->CX(num, num+1);
-            circuit->S(num+1);
+            for(int j = 0; j < n_qubits; j++)
+            {
+                circuit->H((std::rand() % (n_qubits-1)));
+                circuit->CX((std::rand() % (n_qubits-1)),(std::rand() % (n_qubits)));
+                circuit->S((std::rand() % (n_qubits-1)));
+            }
         }
 
         std::string backend = "nvgpu";
