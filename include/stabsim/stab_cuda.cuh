@@ -532,7 +532,7 @@ namespace NWQSim
             //Calculate blocks
             int numBlocksPerSM;
             int numThreads = 1024;  //Change 256, 512, 1024, etc
-            int sharedMemSize = 0;
+            int sharedMemSize = 0; //(packed_rows * cols * sizeof(uint32_t) * 2) + packed_rows * sizeof(uint32_t);
             cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSM, simulation_kernel_cuda, numThreads, sharedMemSize);
 
             //Scale based on test device SM count (should be like 132 for an h100)
@@ -851,89 +851,89 @@ namespace NWQSim
 
         uint32_t x, z;
         OP op_name;
-        int pos, ctrl_pos;
+        int index, ctrl_index;
 
         //Precompute the possible indices that each thread needs before looping the gates
         int thread_pos = i * stab_gpu->cols;
-        int q_indices[2048];
+        int q_indices[32768];
         #pragma unroll
         for(int q = 0; q < n_qubits; q++)
         {
             q_indices[q] = thread_pos + q;
         }
 
-        for (int k = 0; k < n_gates; k++) 
+        for(int k = 0; k < n_gates; k++) 
         {
             op_name = gates_gpu[k].op_name;
-            pos = gates_gpu[k].qubit;
+            index = q_indices[gates_gpu[k].qubit];
 
             switch (op_name) 
             {
                 case OP::H:
-                    x = x_arr[q_indices[pos]];
-                    z = z_arr[q_indices[pos]];
+                    x = x_arr[index];
+                    z = z_arr[index];
                     //Phase
                     r_arr[i] ^= (x & z);
 
                     //Entry -- swap x and z bits
-                    x_arr[q_indices[pos]] = z;
-                    z_arr[q_indices[pos]] = x;
+                    x_arr[index] = z;
+                    z_arr[index] = x;
                     break;
 
                 case OP::S:
-                    x = x_arr[q_indices[pos]];
-                    z = z_arr[q_indices[pos]];
+                    x = x_arr[index];
+                    z = z_arr[index];
 
                     //Phase
                     r_arr[i] ^= (x & z);
 
                     //Entry
-                    z_arr[q_indices[pos]] = z ^ x;
+                    z_arr[index] = z ^ x;
                     break;
 
                 case OP::SDG:
-                    x = x_arr[q_indices[pos]];
-                    z = z_arr[q_indices[pos]];
+                    x = x_arr[index];
+                    z = z_arr[index];
 
                     //Phase
                     r_arr[i] ^= (x ^ (x & z));
 
                     //Entry
-                    z_arr[q_indices[pos]] = z ^ x;
+                    z_arr[index] = z ^ x;
                     break;
 
                 case OP::RX:
                     double theta = gates_gpu[k].theta;
                     if(theta == PI/2) //H SDG
                     {
-                        x = x_arr[q_indices[pos]];
-                        z = z_arr[q_indices[pos]];
+                        x = x_arr[index];
+                        z = z_arr[index];
 
                         //Phase
                         r_arr[i] ^= z;
 
                         //Entry -- swap x and z bits
-                        x_arr[q_indices[pos]] = z;
+                        x_arr[index] = z;
 
                         //Phase -- pass through the swap to make r_arr[i] ^= z;
                         //r_arr[i] ^= x ^ (x & z_arr[mat_i]);
 
                         //Entry -- z is x after the swap, but doesn't matter here
-                        z_arr[q_indices[pos]] = z ^ x;
+                        z_arr[index] = z ^ x;
                     }
                     else if(theta == -PI/2) //H S
                     {
-                        x = x_arr[q_indices[pos]];
-                        z = z_arr[q_indices[pos]];
+                        x = x_arr[index];
+                        z = z_arr[index];
 
                         //Entry -- swap x and z bits
                         //Entry
-                        x_arr[q_indices[pos]] = z;
-                        z_arr[q_indices[pos]] = z ^ x;
+                        x_arr[index] = z;
+                        z_arr[index] = z ^ x;
                     }
                     else if(theta == PI) //X
                     {
-                        r_arr[i] ^= z_arr[q_indices[pos]];
+                        r_arr[i] ^= z_arr[index];
                     }
                     else
                     {
@@ -947,19 +947,20 @@ namespace NWQSim
                 //     break;
 
                 case OP::CX:
+                    int ctrl_index = q_indices[gates_gpu[k].ctrl];
 
-                    x = x_arr[q_indices[pos]];
-                    z = z_arr[q_indices[pos]];
+                    x = x_arr[index];
+                    z = z_arr[index];
 
-                    uint32_t x_ctrl = x_arr[q_indices[ctrl_pos]];
-                    uint32_t z_ctrl = z_arr[q_indices[ctrl_pos]];
+                    uint32_t x_ctrl = x_arr[ctrl_index];
+                    uint32_t z_ctrl = z_arr[ctrl_index];
 
                     //Phase
                     r_arr[i] ^= ((x_ctrl & z) & (x^z_ctrl^1));
 
                     //Entry
-                    x_arr[q_indices[pos]] = x ^ x_ctrl;
-                    z_arr[q_indices[ctrl_pos]] = z ^ z_ctrl;
+                    x_arr[index] = x ^ x_ctrl;
+                    z_arr[ctrl_index] = z ^ z_ctrl;
 
                     break;
 
@@ -971,7 +972,6 @@ namespace NWQSim
                     printf("Non-Clifford or unrecognized gate: %d\n", op_name);
                     assert(false);
             }
-            __syncthreads();
         }
         // printf("Kernel is done!\n");
         stab_gpu->x_packed_gpu = x_arr;
@@ -992,7 +992,7 @@ namespace NWQSim
 
         uint32_t x, z;
         OP op_name;
-        int pos, ctrl_pos;
+        int index, ctrl_index;
 
         //Precompute the possible indices that each thread needs before looping the gates
         int thread_pos = i * stab_gpu->cols;
@@ -1006,75 +1006,75 @@ namespace NWQSim
         for (int k = 0; k < n_gates; k++) 
         {
             op_name = gates_gpu[k].op_name;
-            pos = gates_gpu[k].qubit;
+            index = q_indices[gates_gpu[k].qubit];
 
             switch (op_name) 
             {
                 case OP::H:
-                    x = x_arr[q_indices[pos]];
-                    z = z_arr[q_indices[pos]];
+                    x = x_arr[index];
+                    z = z_arr[index];
                     //Phase
                     r_arr[i] ^= (x & z);
 
                     //Entry -- swap x and z bits
-                    x_arr[q_indices[pos]] = z;
-                    z_arr[q_indices[pos]] = x;
+                    x_arr[index] = z;
+                    z_arr[index] = x;
                     break;
 
                 case OP::S:
-                    x = x_arr[q_indices[pos]];
-                    z = z_arr[q_indices[pos]];
+                    x = x_arr[index];
+                    z = z_arr[index];
 
                     //Phase
                     r_arr[i] ^= (x & z);
 
                     //Entry
-                    z_arr[q_indices[pos]] = z ^ x;
+                    z_arr[index] = z ^ x;
                     break;
 
                 case OP::SDG:
-                    x = x_arr[q_indices[pos]];
-                    z = z_arr[q_indices[pos]];
+                    x = x_arr[index];
+                    z = z_arr[index];
 
                     //Phase
                     r_arr[i] ^= (x ^ (x & z));
 
                     //Entry
-                    z_arr[q_indices[pos]] = z ^ x;
+                    z_arr[index] = z ^ x;
                     break;
 
                 case OP::RX:
                     double theta = gates_gpu[k].theta;
                     if(theta == PI/2) //H SDG
                     {
-                        x = x_arr[q_indices[pos]];
-                        z = z_arr[q_indices[pos]];
+                        x = x_arr[index];
+                        z = z_arr[index];
 
                         //Phase
                         r_arr[i] ^= z;
 
                         //Entry -- swap x and z bits
-                        x_arr[q_indices[pos]] = z;
+                        x_arr[index] = z;
 
                         //Phase -- pass through the swap to make r_arr[i] ^= z;
                         //r_arr[i] ^= x ^ (x & z_arr[mat_i]);
 
                         //Entry -- z is x after the swap, but doesn't matter here
-                        z_arr[q_indices[pos]] = z ^ x;
+                        z_arr[index] = z ^ x;
                     }
                     else if(theta == -PI/2) //H S
                     {
-                        x = x_arr[q_indices[pos]];
-                        z = z_arr[q_indices[pos]];
+                        x = x_arr[index];
+                        z = z_arr[index];
 
                         //Entry -- swap x and z bits
                         //Entry
-                        x_arr[q_indices[pos]] = z;
-                        z_arr[q_indices[pos]] = z ^ x;
+                        x_arr[index] = z;
+                        z_arr[index] = z ^ x;
                     }
                     else if(theta == PI) //X
                     {
-                        r_arr[i] ^= z_arr[q_indices[pos]];
+                        r_arr[i] ^= z_arr[index];
                     }
                     else
                     {
@@ -1088,19 +1088,20 @@ namespace NWQSim
                 //     break;
 
                 case OP::CX:
+                    int ctrl_index = q_indices[gates_gpu[k].ctrl];
 
-                    x = x_arr[q_indices[pos]];
-                    z = z_arr[q_indices[pos]];
+                    x = x_arr[index];
+                    z = z_arr[index];
 
-                    uint32_t x_ctrl = x_arr[q_indices[ctrl_pos]];
-                    uint32_t z_ctrl = z_arr[q_indices[ctrl_pos]];
+                    uint32_t x_ctrl = x_arr[ctrl_index];
+                    uint32_t z_ctrl = z_arr[ctrl_index];
 
                     //Phase
                     r_arr[i] ^= ((x_ctrl & z) & (x^z_ctrl^1));
 
                     //Entry
-                    x_arr[q_indices[pos]] = x ^ x_ctrl;
-                    z_arr[q_indices[ctrl_pos]] = z ^ z_ctrl;
+                    x_arr[index] = x ^ x_ctrl;
+                    z_arr[ctrl_index] = z ^ z_ctrl;
 
                     break;
 
@@ -1112,7 +1113,6 @@ namespace NWQSim
                     printf("Non-Clifford or unrecognized gate: %d\n", op_name);
                     assert(false);
             }
-            __syncthreads();
         }
         // printf("Kernel is done!\n");
         stab_gpu->x_packed_gpu = x_arr;
