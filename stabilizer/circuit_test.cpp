@@ -241,6 +241,15 @@ int main(){
 
         // std::srand(std::time(nullptr));  // Seed random number generator
 
+        // for(int i = 0; i < 100000; i++) 
+        // {
+        //     for(int j = 0; j < n_qubits; j++)
+        //     {
+        //         circuit->H((std::rand() % (n_qubits-1)));
+        //         circuit->CX((std::rand() % (n_qubits-1)),(std::rand() % (n_qubits)));
+        //         circuit->S((std::rand() % (n_qubits-1)));
+        //     }
+        // }
         for(int i = 0; i < 100000; i++) 
         {
             for(int j = 0; j < n_qubits; j++)
