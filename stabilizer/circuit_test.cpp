@@ -198,16 +198,16 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
 
 // Create a circuit with 2 qubits
 int main(){
-    std::vector<int> qubit_test = {4, 8, 16, 32, 64, 128, 256, 512, 1028, 2048, 4096, 8192, 16384};
+    std::vector<int> qubit_test = {65536, 13072, 262144, 524288, 1048576};
     for(int i = 0; i < qubit_test.size(); i++)
     {
         std::cout << "Starting program" << std::endl;
         int n_qubits = qubit_test[i];
         int shots = 10;
 
-        // NWQSim::IdxType S_count = 100000;
-        // NWQSim::IdxType H_count = 100000;
-        // NWQSim::IdxType CX_count = 100000;
+        NWQSim::IdxType S_count = 1000000;
+        NWQSim::IdxType H_count = 1000000;
+        NWQSim::IdxType CX_count = 1000000;
 
         auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
@@ -241,23 +241,11 @@ int main(){
 
         // std::srand(std::time(nullptr));  // Seed random number generator
 
-        // for(int i = 0; i < 100000; i++) 
-        // {
-        //     for(int j = 0; j < n_qubits; j++)
-        //     {
-        //         circuit->H((std::rand() % (n_qubits-1)));
-        //         circuit->CX((std::rand() % (n_qubits-1)),(std::rand() % (n_qubits)));
-        //         circuit->S((std::rand() % (n_qubits-1)));
-        //     }
-        // }
-        for(int i = 0; i < 100000; i++) 
+        for(int i = 0; i < 1000000; i++) 
         {
-            for(int j = 0; j < n_qubits; j++)
-            {
                 circuit->H((std::rand() % (n_qubits-1)));
                 circuit->CX((std::rand() % (n_qubits-1)),(std::rand() % (n_qubits)));
                 circuit->S((std::rand() % (n_qubits-1)));
-            }
         }
 
         std::string backend = "nvgpu";
