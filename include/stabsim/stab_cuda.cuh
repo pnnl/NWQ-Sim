@@ -986,9 +986,9 @@ namespace NWQSim
 
         int n_qubits = stab_gpu->n;
 
-        uint32_t* x_arr; = stab_gpu->x_packed_gpu;
-        uint32_t* z_arr; = stab_gpu->z_packed_gpu;
-        uint32_t* r_arr; = stab_gpu->r_packed_gpu;
+        uint32_t* x_arr = stab_gpu->x_packed_gpu;
+        uint32_t* z_arr = stab_gpu->z_packed_gpu;
+        uint32_t* r_arr = stab_gpu->r_packed_gpu;
 
         uint32_t x, z;
         OP op_name;
