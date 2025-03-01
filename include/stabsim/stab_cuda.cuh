@@ -996,7 +996,7 @@ namespace NWQSim
 
         //Precompute the possible indices that each thread needs before looping the gates
         int thread_pos = i * stab_gpu->cols;
-        int q_indices[16384];
+        int q_indices[32768];
         #pragma unroll
         for(int q = 0; q < n_qubits; q++)
         {

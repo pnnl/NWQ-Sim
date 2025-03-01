@@ -198,7 +198,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
 
 // Create a circuit with 2 qubits
 int main(){
-    std::vector<int> qubit_test = {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384};
+    std::vector<int> qubit_test = {65536, 13072, 262144, 524288, 1048576};
     for(int i = 0; i < qubit_test.size(); i++)
     {
         std::cout << "Starting program" << std::endl;
@@ -260,10 +260,10 @@ int main(){
         std::cout << "Starting sim" << std::endl;
         state->sim(circuit, timer);
         // state->print_res_state();
-        NWQSim::IdxType* results = state->measure_all(shots);
+        // NWQSim::IdxType* results = state->measure_all(shots);
 
-        for(int i = 0; i < shots; i++)
-            std::cout << "Result " << i << ": " << results[i] << std::endl;
+        // for(int i = 0; i < shots; i++)
+        //     std::cout << "Result " << i << ": " << results[i] << std::endl;
 
         std::cout << "Sim time: " << timer/1000.0 << "s" << std::endl;
 
