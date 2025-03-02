@@ -893,7 +893,8 @@ namespace NWQSim
         {
             q_indices[q] = thread_pos + q;
         }
-
+        std::vector<bool> qubit_flag(n_qubits, 0);
+        
         for (int k = 0; k < n_gates; k++) 
         {
             op_name = gates_gpu[k].op_name;
