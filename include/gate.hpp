@@ -346,8 +346,6 @@ namespace NWQSim
         ValType mod_value;
         std::vector<IdxType> mod_qubits;
 
-        Gate() noexcept = default;
-
         Gate(enum OP _op_name,
              IdxType _qubit,
              IdxType _ctrl = -1,

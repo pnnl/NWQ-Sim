@@ -198,16 +198,16 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
 
 // Create a circuit with 2 qubits
 int main(){
-    std::vector<int> qubit_test = {128};
+    std::vector<int> qubit_test = {16384};
     for(int i = 0; i < qubit_test.size(); i++)
     {
         std::cout << "Starting program" << std::endl;
         int n_qubits = qubit_test[i];
         int shots = 10;
 
-        NWQSim::IdxType S_count = 1000000;
-        NWQSim::IdxType H_count = 1000000;
-        NWQSim::IdxType CX_count = 1000000;
+        NWQSim::IdxType S_count = 0;
+        NWQSim::IdxType H_count = 100001;
+        NWQSim::IdxType CX_count = 0;
 
         auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
@@ -248,15 +248,14 @@ int main(){
         //         circuit->S((std::rand() % (n_qubits-1)));
         // }
 
-        std::vector<int> gate_chunks;
+        std::vector<int> gate_chunks (100001, n_qubits);
         
-        for(int j = 0; j < 5001; j++)
+        for(int j = 0; j < 100001; j++)
         {
             for(int k = 0; k < n_qubits; k++)
             {
                 circuit->H(k);
             }
-            gate_chunks.push_back(n_qubits);
         }
 
 
@@ -272,6 +271,8 @@ int main(){
         // std::vector<std::shared_ptr<NWQSim::Circuit>> circuit2D = {circuit, circuit};
 
         std::cout << "Starting sim" << std::endl;
+        // state->sim(circuit, timer);
+
         state->sim2D(circuit, gate_chunks, timer);
         // state->print_res_state();
         NWQSim::IdxType* results = state->measure_all(shots);

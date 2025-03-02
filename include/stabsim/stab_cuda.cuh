@@ -39,7 +39,7 @@ namespace NWQSim
     class STAB_CUDA;
     __global__ void simulation_kernel_cuda_shared(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates);
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates);
-    __global__ void simulation_kernel_cuda2D(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates, int gate_chunk);
+    __global__ void simulation_kernel_cuda2D(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType gate_chunk);
 
 
     class STAB_CUDA : public QuantumState
@@ -611,14 +611,16 @@ namespace NWQSim
 
             //Call the kernel for each set of gates
             IdxType gate_index_sum = 0;
-            int gate_chunk;
+            int gate_chunk_size = 0;
             sim_timer.start_timer();
             for(int i = 0; i < gate_chunks.size(); i++)
             {
-                gate_chunk = gate_chunks[i];
-                gate_index_sum += gate_chunk;
-                // std::cout << "Launching 2D kernel" << std::endl;
-                simulation_kernel_cuda2D<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, &gates_gpu[gate_index_sum], n, gate_chunk);
+                gate_index_sum += gate_chunk_size;
+                gate_chunk_size = gate_chunks[i];
+                // std::cout << "Launching 2D kernel " << num_gates << std::endl;
+                // std::cout << "Gate chunk sie " << gate_chunk_size << std::endl;
+
+                simulation_kernel_cuda2D<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, &gates_gpu[gate_index_sum], gate_chunk_size);
             }
             sim_timer.stop_timer();
             /*End simulate*/
@@ -838,7 +840,7 @@ namespace NWQSim
                 //     break;
 
                 case OP::CX:
-                    int ctrl_index = q_indices[gates_gpu[k].ctrl];
+                    ctrl_index = q_indices[gates_gpu[k].ctrl];
 
                     x = x_arr[index];
                     z = z_arr[index];
@@ -883,7 +885,7 @@ namespace NWQSim
 
         uint32_t x, z;
         OP op_name;
-        int index, ctrl_index;
+        int index;
 
         //Precompute the possible indices that each thread needs before looping the gates
         int thread_pos = i * stab_gpu->cols;
@@ -893,7 +895,6 @@ namespace NWQSim
         {
             q_indices[q] = thread_pos + q;
         }
-        std::vector<bool> qubit_flag(n_qubits, 0);
         
         for (int k = 0; k < n_gates; k++) 
         {
@@ -1009,7 +1010,7 @@ namespace NWQSim
         // printf("Kernel is done!\n");
     }//end kernel
 
-    __global__ void simulation_kernel_cuda2D(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates, int gate_chunk) 
+    __global__ void simulation_kernel_cuda2D(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType gate_chunk) 
     {
         int row = blockIdx.x * blockDim.x + threadIdx.x;  //Index for stabilizers (rows)
         int col = blockIdx.y * blockDim.y + threadIdx.y;  //Index for gates (columns)
@@ -1018,28 +1019,30 @@ namespace NWQSim
 
         if (col >= gate_chunk || gates_gpu[col].op_name == OP::ID) return;  //Check out-of-bounds for gate
 
-        // printf("Inside 2D kernel %d, gate qubit %lld \n", col, gates_gpu[col].qubit);
+        // printf("Inside 2D kernel %d, gate chunk %lld gate qubit %lld \n", col, gate_chunk, gates_gpu[col].qubit);
+        // printf("Gates gpu size %lld \n", (sizeof(gates_gpu)));
 
-        int target = gates_gpu[col].qubit; //Qubit affected by this gate
+
+
+        int target = gates_gpu[col].qubit; //Qubit target
         OP op_name = gates_gpu[col].op_name;  //Operation to perform
         uint32_t* x_arr = stab_gpu->x_packed_gpu;
         uint32_t* z_arr = stab_gpu->z_packed_gpu;
         uint32_t* r_arr = stab_gpu->r_packed_gpu;
 
-        // Calculate the index for this qubit in the packed arrays
+        //Calculate the index for this qubit in the packed arrays
         int index = row * stab_gpu->cols + target;
 
-        // Perform operations for all possible gates, but mask non-relevant ones
-        // Start with the common operation - calculate phase and entry for all gates
+        //Perform operations for all possible gates, but mask non-relevant ones
+        //Start with the common operation - calculate phase and entry for all gates
         uint32_t x = x_arr[index];
         uint32_t z = z_arr[index];
 
-        // Apply the phase to the result array
-        r_arr[row] ^= (x & z);
-
-        // Gate-specific logic - using predication to mask irrelevant operations
+        //Gate-specific logic - using predication to mask irrelevant operations
         if (op_name == OP::H) {
+            // printf("Inside h gate \n");
             // H Gate: Swap x and z
+            r_arr[row] ^= (x & z);
             //Entry -- swap x and z bits
             x_arr[index] = z;
             z_arr[index] = x;
@@ -1047,32 +1050,27 @@ namespace NWQSim
         
         if (op_name == OP::S) {
             // S Gate: Entry (z_arr[index] ^= x_arr[index])
-            z_arr[index] ^= x_arr[index];
+            z_arr[index] = x ^ z;
         }
 
         if (op_name == OP::SDG) {
             // SDG Gate: Phase (x_arr[index] ^ (x_arr[index] & z_arr[index]))
             r_arr[row] ^= x;  // SDG Phase operation
-            z_arr[index] ^= x_arr[index];  // Entry (same as S gate)
+            z_arr[index] = x ^ z;  // Entry (same as S gate)
         }
 
         if (op_name == OP::CX) {
-            // CX Gate: Involves two qubits (control and target)
-            int ctrl_idx = gates_gpu[col].ctrl;  // Control qubit index
-            uint32_t x_ctrl = x_arr[ctrl_idx];
-            uint32_t z_ctrl = z_arr[ctrl_idx];
+            int ctrl_index = row * stab_gpu->cols + gates_gpu[col].ctrl;
 
-            // Phase for CX gate
-            r_arr[row] ^= ((x_ctrl & z) & (x ^ z_ctrl ^ 1));
+            uint32_t x_ctrl = x_arr[ctrl_index];
+            uint32_t z_ctrl = z_arr[ctrl_index];
 
-            // Entry for CX gate
-            x_arr[index] ^= x_ctrl;  // XOR with control qubit's x
-            z_arr[ctrl_idx] ^= z_arr[index];  // XOR with target qubit's z
-        }
+            //Phase
+            r_arr[row] ^= ((x_ctrl & z) & (x^z_ctrl^1));
 
-        // Handle any unrecognized gates (shouldn't happen with valid input)
-        if (op_name == OP::ID) {
-            return;  // Do nothing for identity operation
+            //Entry
+            x_arr[index] = x ^ x_ctrl;
+            z_arr[ctrl_index] = z ^ z_ctrl;
         }
         __syncthreads();
     }
