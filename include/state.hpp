@@ -38,7 +38,11 @@ namespace NWQSim
         virtual void set_seed(IdxType seed) = 0;
 
         virtual void sim(std::shared_ptr<Circuit> circuit, double& time) = 0;
-        virtual void sim2D(std::vector<std::shared_ptr<Circuit>> circuit, double &sim_time) = 0;
+        virtual void sim2D(std::shared_ptr<Circuit> circuit, std::vector<int> gate_chunks, double &sim_time)
+        {
+            throw std::runtime_error("2D Sim Not Implemented");
+        }
+
 
 
         virtual IdxType *get_results() = 0;

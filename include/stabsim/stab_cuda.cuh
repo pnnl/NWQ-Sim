@@ -39,7 +39,7 @@ namespace NWQSim
     class STAB_CUDA;
     __global__ void simulation_kernel_cuda_shared(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates);
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates);
-    __global__ void simulation_kernel_cuda2D(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates) 
+    __global__ void simulation_kernel_cuda2D(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates, int gate_chunk);
 
 
     class STAB_CUDA : public QuantumState
@@ -569,7 +569,7 @@ namespace NWQSim
             //=========================================
         }
         //Simulate the gates from a circuit in the tableau
-        void sim2D(std::vector<std::shared_ptr<Circuit> circuit, double &sim_time) override
+        void sim2D(std::shared_ptr<Circuit> circuit2D, std::vector<int> gate_chunks, double &sim_time) override
         {
             STAB_CUDA *stab_gpu;
             SAFE_ALOC_GPU(stab_gpu, sizeof(STAB_CUDA));
@@ -579,11 +579,6 @@ namespace NWQSim
 
             gpu_timer sim_timer;
 
-            if (Config::PRINT_SIM_TRACE)
-            {
-                printf("STABSim_gpu is running! Using %lld qubits.\n", n);
-            }
-
             //Pack tableau and copy to GPU
             pack_tableau();
             cudaSafeCall(cudaMemcpy(x_packed_gpu, x_packed_cpu, packed_matrix_size,
@@ -592,26 +587,38 @@ namespace NWQSim
                                     cudaMemcpyHostToDevice));
             cudaSafeCall(cudaMemcpy(r_packed_gpu, r_packed_cpu, packed_r_size, cudaMemcpyHostToDevice));
 
+            std::cout << "Data copied" << std::endl;
+
             int threadsPerBlockX = 32; // Number of threads for gates
             int threadsPerBlockY = 32; // Number of threads for columns
             dim3 threadsPerBlock(threadsPerBlockX, threadsPerBlockY);
             dim3 blocksPerGrid((n + threadsPerBlockX - 1) / threadsPerBlockX,
                                 (n + threadsPerBlockY - 1) / threadsPerBlockY);
 
-            for(int i = 0; i < circuit.size(); i++)
-            {
-                2d_gates.push_back(circuit[i]->get_gates());
-            }
-            copy_2d_gates_to_gpu(2d_gates);
-            int n_cols = 2d_gates[0].size();  // Number of columns
+            std::cout << "Blocks calculated" << std::endl;
+
+            std::cout << "Parsing circuit 2D" << std::endl;
+
+            std::vector<Gate> gates2D = circuit2D->get_gates();
+            int num_gates = gates2D.size();
+            copy_gates_to_gpu(gates2D);
 
             /*Simulate*/
-            std::cout << "\n -------------------- \n Simulation starting! \n -------------------- \n" << std::endl;
-            //Call the kernel for each set of gates
-            sim_timer.start_timer();
-            for(int i = 0; i < 2d_gates.size(); i++)
+            if (Config::PRINT_SIM_TRACE)
             {
-                simulation_kernel_cuda_2D<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu[i * n_cols], n);
+                printf("STABSim_gpu is running! Using %lld qubits.\n", n);
+            }
+
+            //Call the kernel for each set of gates
+            IdxType gate_index_sum = 0;
+            int gate_chunk;
+            sim_timer.start_timer();
+            for(int i = 0; i < gate_chunks.size(); i++)
+            {
+                gate_chunk = gate_chunks[i];
+                gate_index_sum += gate_chunk;
+                // std::cout << "Launching 2D kernel" << std::endl;
+                simulation_kernel_cuda2D<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, &gates_gpu[gate_index_sum], n, gate_chunk);
             }
             sim_timer.stop_timer();
             /*End simulate*/
@@ -630,7 +637,7 @@ namespace NWQSim
             {
                 printf("\n============== STAB-Sim ===============\n");
                 printf("n_qubits:%lld, n_gates:%lld, ncpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms\n",
-                       n, n_gates, 1, sim_time, 0.,
+                       n, num_gates, 1, sim_time, 0.,
                        sim_time);
                 printf("=====================================\n");
             }
@@ -704,8 +711,7 @@ namespace NWQSim
 
         //GPU-side gate instance
         Gate *gates_gpu = nullptr;
-        std::vector<std::vector<Gate>> 2d_gates;
-
+        std::vector<std::vector<Gate>> gates2D;
 
         void copy_gates_to_gpu(std::vector<Gate> &cpu_vec)
         {
@@ -716,25 +722,6 @@ namespace NWQSim
             SAFE_FREE_GPU(gates_gpu);
             SAFE_ALOC_GPU(gates_gpu, vec_size);
             cudaSafeCall(cudaMemcpy(gates_gpu, cpu_vec.data(), vec_size, cudaMemcpyHostToDevice));
-        }
-        void copy_2d_gates_to_gpu(std::vector<std::vector<Gate>> &cpu_vec)
-        {
-            size_t total_size = cpu_vec.size() * cpu_vec[0].size();  // Total number of gates
-            std::vector<Gate> flattened_vec;
-            flattened_vec.resize(total_size);
-            
-            size_t index = 0;
-            for (const auto& row : cpu_vec) {
-                std::copy(row.begin(), row.end(), flattened_vec.begin() + index);
-                index += row.size();
-            }
-
-            size_t vec_size = flattened_vec.size() * sizeof(Gate);
-            SAFE_FREE_GPU(gates_gpu);
-            SAFE_ALOC_GPU(gates_gpu, vec_size);
-
-            // Copy the flattened 1D array to GPU
-            cudaSafeCall(cudaMemcpy(gates_gpu, flattened_vec.data(), vec_size, cudaMemcpyHostToDevice));
         }
     }; //End tableau class
 
@@ -1021,17 +1008,19 @@ namespace NWQSim
         // printf("Kernel is done!\n");
     }//end kernel
 
-    __global__ void simulation_kernel_cuda2D(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates) 
+    __global__ void simulation_kernel_cuda2D(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates, int gate_chunk) 
     {
-        int row = blockIdx.x * blockDim.x + threadIdx.x;  // Index for qubits (rows)
-        int col = blockIdx.y * blockDim.y + threadIdx.y;  // Index for gates (columns)
+        int row = blockIdx.x * blockDim.x + threadIdx.x;  //Index for stabilizers (rows)
+        int col = blockIdx.y * blockDim.y + threadIdx.y;  //Index for gates (columns)
 
-        if (row >= stab_gpu->packed_rows) return;  // Check out-of-bounds for qubits
+        if (row >= stab_gpu->packed_rows) return;  //Check out-of-bounds for qubits
 
-        if (col >= n_gates || gates_gpu[col].op_name == OP::ID) return;  // Check invalid gate
+        if (col >= gate_chunk || gates_gpu[col].op_name == OP::ID) return;  //Check out-of-bounds for gate
 
-        int target = gates_gpu[col].qubit; // Qubit affected by this gate
-        OP op_name = gates_gpu[col].op_name;  // Operation to perform
+        // printf("Inside 2D kernel %d, gate qubit %lld \n", col, gates_gpu[col].qubit);
+
+        int target = gates_gpu[col].qubit; //Qubit affected by this gate
+        OP op_name = gates_gpu[col].op_name;  //Operation to perform
         uint32_t* x_arr = stab_gpu->x_packed_gpu;
         uint32_t* z_arr = stab_gpu->z_packed_gpu;
         uint32_t* r_arr = stab_gpu->r_packed_gpu;
@@ -1044,16 +1033,15 @@ namespace NWQSim
         uint32_t x = x_arr[index];
         uint32_t z = z_arr[index];
 
-        // Calculate the phase for all gates (shared operation)
-        uint32_t phase = x & z;
-        
         // Apply the phase to the result array
-        r_arr[row] ^= phase;
+        r_arr[row] ^= (x & z);
 
         // Gate-specific logic - using predication to mask irrelevant operations
         if (op_name == OP::H) {
             // H Gate: Swap x and z
-            swap(x_arr[index], z_arr[index]);
+            //Entry -- swap x and z bits
+            x_arr[index] = z;
+            z_arr[index] = x;
         } 
         
         if (op_name == OP::S) {
@@ -1063,7 +1051,7 @@ namespace NWQSim
 
         if (op_name == OP::SDG) {
             // SDG Gate: Phase (x_arr[index] ^ (x_arr[index] & z_arr[index]))
-            r_arr[row] ^= (x ^ (x & z));  // SDG Phase operation
+            r_arr[row] ^= x;  // SDG Phase operation
             z_arr[index] ^= x_arr[index];  // Entry (same as S gate)
         }
 
@@ -1085,6 +1073,7 @@ namespace NWQSim
         if (op_name == OP::ID) {
             return;  // Do nothing for identity operation
         }
+        __syncthreads();
     }
 } //namespace NWQSim
 

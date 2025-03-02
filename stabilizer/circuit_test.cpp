@@ -198,7 +198,7 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
 
 // Create a circuit with 2 qubits
 int main(){
-    std::vector<int> qubit_test = {65536, 13072, 262144, 524288, 1048576};
+    std::vector<int> qubit_test = {128};
     for(int i = 0; i < qubit_test.size(); i++)
     {
         std::cout << "Starting program" << std::endl;
@@ -241,12 +241,24 @@ int main(){
 
         // std::srand(std::time(nullptr));  // Seed random number generator
 
-        for(int i = 0; i < 1000000; i++) 
+        // for(int j = 0; j < 1000000; j++) 
+        // {
+        //         circuit->H((std::rand() % (n_qubits-1)));
+        //         circuit->CX((std::rand() % (n_qubits-1)),(std::rand() % (n_qubits)));
+        //         circuit->S((std::rand() % (n_qubits-1)));
+        // }
+
+        std::vector<int> gate_chunks;
+        
+        for(int j = 0; j < 5001; j++)
         {
-                circuit->H((std::rand() % (n_qubits-1)));
-                circuit->CX((std::rand() % (n_qubits-1)),(std::rand() % (n_qubits)));
-                circuit->S((std::rand() % (n_qubits-1)));
+            for(int k = 0; k < n_qubits; k++)
+            {
+                circuit->H(k);
+            }
+            gate_chunks.push_back(n_qubits);
         }
+
 
         std::string backend = "nvgpu";
         std::string sim_method = "stab";
@@ -256,14 +268,16 @@ int main(){
         std::cout << "Creating state" << std::endl;
         auto state = BackendManager::create_state(backend, n_qubits, sim_method);
 
+        
+        // std::vector<std::shared_ptr<NWQSim::Circuit>> circuit2D = {circuit, circuit};
 
         std::cout << "Starting sim" << std::endl;
-        state->sim(circuit, timer);
+        state->sim2D(circuit, gate_chunks, timer);
         // state->print_res_state();
-        // NWQSim::IdxType* results = state->measure_all(shots);
+        NWQSim::IdxType* results = state->measure_all(shots);
 
-        // for(int i = 0; i < shots; i++)
-        //     std::cout << "Result " << i << ": " << results[i] << std::endl;
+        for(int i = 0; i < shots; i++)
+            std::cout << "Result " << i << ": " << results[i] << std::endl;
 
         std::cout << "Sim time: " << timer/1000.0 << "s" << std::endl;
 
