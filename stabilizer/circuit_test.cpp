@@ -196,119 +196,119 @@ namespace NWQSim{
         }
         std::cout << "------\n\n\n TCount in qasm: " << tCount << " \n\n\n-----" << std::endl;
     }
+}
 
-    // Create a circuit with 2 qubits
-    int main()
+// Create a circuit with 2 qubits
+int main()
+{
+    std::vector<int> qubit_test = {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384};
+    for(int i = 0; i < qubit_test.size(); i++)
     {
-        std::vector<int> qubit_test = {1024};
-        for(int i = 0; i < qubit_test.size(); i++)
+        std::cout << "Starting program" << std::endl;
+        int n_qubits = qubit_test[i];
+        int shots = 10;
+
+        NWQSim::IdxType S_count = 100000;
+        NWQSim::IdxType H_count = 100000;
+        NWQSim::IdxType CX_count = 100000;
+
+        auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
+
+        // std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/adder_n10.qasm";
+        // if(inFile != "")
+        //     appendQASMToCircuit(circuit, inFile, n_qubits);
+
+        // circuit->H(0);
+        // circuit->S(0);
+        // circuit->S(0);
+        // circuit->H(0);
+        // circuit->H(1);
+        // circuit->S(1);
+        // circuit->S(1);
+        // circuit->H(1);
+        // circuit->CX(1,0);
+        // circuit->H(0);
+        // circuit->H(3);
+        // circuit->CX(2,3);
+        // circuit->CX(2,3);
+        // circuit->CX(1,2);
+        // circuit->CX(3,0);
+        // circuit->CX(0,1);
+        // circuit->CX(0,1);
+        // circuit->CX(2,3);
+        // circuit->CX(2,3);
+        // circuit->S(3);
+        // circuit->CX(3,0);
+        // circuit->H(3);
+
+
+        std::srand(std::time(nullptr));  // Seed random number generator
+
+        for(int j = 0; j < 100000; j++) 
         {
-            std::cout << "Starting program" << std::endl;
-            int n_qubits = qubit_test[i];
-            int shots = 10;
-
-            IdxType S_count = 0;
-            IdxType H_count = 100001;
-            IdxType CX_count = 0;
-
-            auto circuit = std::make_shared<Circuit>(n_qubits);
-
-            // std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/adder_n10.qasm";
-            // if(inFile != "")
-            //     appendQASMToCircuit(circuit, inFile, n_qubits);
-
-            // circuit->H(0);
-            // circuit->S(0);
-            // circuit->S(0);
-            // circuit->H(0);
-            // circuit->H(1);
-            // circuit->S(1);
-            // circuit->S(1);
-            // circuit->H(1);
-            // circuit->CX(1,0);
-            // circuit->H(0);
-            // circuit->H(3);
-            // circuit->CX(2,3);
-            // circuit->CX(2,3);
-            // circuit->CX(1,2);
-            // circuit->CX(3,0);
-            // circuit->CX(0,1);
-            // circuit->CX(0,1);
-            // circuit->CX(2,3);
-            // circuit->CX(2,3);
-            // circuit->S(3);
-            // circuit->CX(3,0);
-            // circuit->H(3);
-
-
-            // std::srand(std::time(nullptr));  // Seed random number generator
-
-            // for(int j = 0; j < 1000000; j++) 
-            // {
-            //         circuit->H((std::rand() % (n_qubits-1)));
-            //         circuit->CX((std::rand() % (n_qubits-1)),(std::rand() % (n_qubits)));
-            //         circuit->S((std::rand() % (n_qubits-1)));
-            // }
-
-            std::vector<int> gate_chunks (100001, n_qubits);
-            std::vector<Gate> gate_layer;
-            for(int k = 0; k < n_qubits; k++)
-            {
-                Gate G(OP::H, k);
-                gate_layer.push_back(G);
-            }
-            std::vector<Gate> full_circuit;
-            for(int j = 0; j < 100001; j++)
-            {
-                full_circuit.insert(full_circuit.end(),gate_layer.begin(),gate_layer.end());
-            }
-            circuit->set_gates(full_circuit);
-
-
-            std::string backend = "nvgpu";
-            std::string sim_method = "stab";
-            double timer = 0;
-            
-            /*Create T and Measurement Tableaus with only stabilizers. T starts empty, M starts as identity.*/
-            std::cout << "Creating state" << std::endl;
-            auto state = BackendManager::create_state(backend, n_qubits, sim_method);
-
-            
-            // std::vector<std::shared_ptr<Circuit>> circuit2D = {circuit, circuit};
-
-            std::cout << "Starting sim" << std::endl;
-            // state->sim(circuit, timer);
-
-            state->sim2D(circuit, gate_chunks, timer);
-            // state->print_res_state();
-            IdxType* results = state->measure_all(shots);
-
-            for(int i = 0; i < shots; i++)
-                std::cout << "Result " << i << ": " << results[i] << std::endl;
-
-            std::cout << "Sim time: " << timer/1000.0 << "s" << std::endl;
-
-            IdxType gate_count = S_count + H_count + CX_count;
-
-            std::string backend = "nvgpu2D";
-            std::string name = "";
-            std::ostringstream filename;
-            filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
-            std::ofstream outfile(filename.str());
-            if (!outfile) {
-                std::cerr << "Error opening file: " << filename.str() << std::endl;
-            }
-
-            outfile << sim_method << std::endl;
-            outfile << timer/1000.0 << std::endl;
-            outfile << n_qubits << std::endl;
-            outfile << S_count << std::endl;
-            outfile << H_count << std::endl;
-            outfile << CX_count << std::endl;
-
-            outfile.close();
+            circuit->H((std::rand() % (n_qubits-1)));
+            circuit->CX((std::rand() % (n_qubits-1)),(std::rand() % (n_qubits)));
+            circuit->S((std::rand() % (n_qubits-1)));
         }
 
-        return 0;
+        // std::vector<int> gate_chunks (100001, n_qubits);
+        // std::vector<NWQSim::Gate> gate_layer;
+        // for(int k = 0; k < n_qubits; k++)
+        // {
+        //     NWQSim::Gate G(NWQSim::OP::H, k);
+        //     gate_layer.push_back(G);
+        // }
+        // std::vector<NWQSim::Gate> full_circuit;
+        // for(int j = 0; j < 100001; j++)
+        // {
+        //     full_circuit.insert(full_circuit.end(),gate_layer.begin(),gate_layer.end());
+        // }
+        // circuit->set_gates(full_circuit);
+
+
+        std::string backend = "nvgpu";
+        std::string sim_method = "stab";
+        double timer = 0;
+        
+        /*Create T and Measurement Tableaus with only stabilizers. T starts empty, M starts as identity.*/
+        std::cout << "Creating state" << std::endl;
+        auto state = BackendManager::create_state(backend, n_qubits, sim_method);
+
+        
+        // std::vector<std::shared_ptr<Circuit>> circuit2D = {circuit, circuit};
+
+        std::cout << "Starting sim" << std::endl;
+
+        state->sim(circuit, timer);
+        // state->sim2D(circuit, gate_chunks, timer);
+        // state->print_res_state();
+        // NWQSim::IdxType* results = state->measure_all(shots);
+
+        // for(int i = 0; i < shots; i++)
+        //     std::cout << "Result " << i << ": " << results[i] << std::endl;
+
+        std::cout << "Sim time: " << timer/1000.0 << "s" << std::endl;
+
+        NWQSim::IdxType gate_count = S_count + H_count + CX_count;
+
+        backend = "nvgpu";
+        std::string name = "";
+        std::ostringstream filename;
+        filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
+        std::ofstream outfile(filename.str());
+        if (!outfile) {
+            std::cerr << "Error opening file: " << filename.str() << std::endl;
+        }
+
+        outfile << sim_method << std::endl;
+        outfile << timer/1000.0 << std::endl;
+        outfile << n_qubits << std::endl;
+        outfile << S_count << std::endl;
+        outfile << H_count << std::endl;
+        outfile << CX_count << std::endl;
+
+        outfile.close();
     }
+
+    return 0;
 }
