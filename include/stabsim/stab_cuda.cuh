@@ -597,11 +597,12 @@ namespace NWQSim
 
             std::cout << "Blocks calculated" << std::endl;
 
-            std::cout << "Parsing circuit 2D" << std::endl;
+           
 
             std::vector<Gate> gates2D = circuit2D->get_gates();
             int num_gates = gates2D.size();
             copy_gates_to_gpu(gates2D);
+            std::cout << "2D circuit parsed" << std::endl;
 
             /*Simulate*/
             if (Config::PRINT_SIM_TRACE)
