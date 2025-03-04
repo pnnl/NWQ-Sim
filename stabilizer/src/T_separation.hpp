@@ -205,7 +205,7 @@ namespace NWQSim
                         {
                             //Push an S gate through remaining tableaus in P order (to the right/to the end of the circuit)
                             for(int j = i+1; j < P.size(); j++)
-                            // for(int j = P.size()-1-i; j > 0 ; j--)
+                            // for(int j = i-1; j > -1 ; j--)
                             {
                                 int P_rows = P[j]->get_num_rows();
                                 P[j]->add_stabilizer(stabilizer);
