@@ -589,15 +589,16 @@ namespace NWQSim
 
             std::cout << "Data copied" << std::endl;
 
-            // int threadsPerBlockX = 32; //Rows
-            // int threadsPerBlockY = 32; //Columns
-            // dim3 threadsPerBlock(threadsPerBlockX, threadsPerBlockY);
-            // dim3 blocksPerGrid((n + threadsPerBlockX - 1) / threadsPerBlockX,
-            //                     (n + threadsPerBlockY - 1) / threadsPerBlockY);
             int minGridSize, blockSize;
             cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda2D, 0, 0);
-            dim3 threadsPerBlock(blockSize);
-            dim3 blocksPerGrid((n + blockSize - 1) / blockSize);
+            int threadsPerBlockX = 16;
+            int threadsPerBlockY = blockSize / threadsPerBlockX; 
+
+            if (threadsPerBlockY > 16) threadsPerBlockY = 16;
+
+            dim3 threadsPerBlock(threadsPerBlockX, threadsPerBlockY);
+            dim3 blocksPerGrid((n + threadsPerBlockX - 1) / threadsPerBlockX,
+                            (n + threadsPerBlockY - 1) / threadsPerBlockY);
 
             std::cout << "Blocks calculated" << std::endl;
 
@@ -1022,7 +1023,7 @@ namespace NWQSim
 
         if (row >= stab_gpu->packed_rows) return;  //Check out-of-bounds for qubits
 
-        if (col >= gate_chunk || gates_gpu[col].op_name == OP::ID) return;  //Check out-of-bounds for gate
+        if (col >= gate_chunk) return;  //Check out-of-bounds for gate
 
         // printf("Inside 2D kernel %d, gate chunk %lld gate qubit %lld \n", col, gate_chunk, gates_gpu[col].qubit);
         // printf("Gates gpu size %lld \n", (sizeof(gates_gpu)));
@@ -1033,7 +1034,6 @@ namespace NWQSim
         OP op_name = gates_gpu[col].op_name;  //Operation to perform
         uint32_t* x_arr = stab_gpu->x_packed_gpu;
         uint32_t* z_arr = stab_gpu->z_packed_gpu;
-        uint32_t* r_arr = stab_gpu->r_packed_gpu;
 
         //Calculate the index for this qubit in the packed arrays
         IdxType index = row * stab_gpu->cols + target;
@@ -1043,35 +1043,33 @@ namespace NWQSim
         uint32_t x = x_arr[index];
         uint32_t z = z_arr[index];
 
-        //Gate-specific logic - using predication to mask irrelevant operations
+        //Gate operations
         if (op_name == OP::H) {
             // printf("Inside h gate \n");
             // H Gate: Swap x and z
-            r_arr[row] ^= (x & z);
+            stab_gpu->r_packed_gpu[row] ^= (x & z);
             //Entry -- swap x and z bits
             x_arr[index] = z;
             z_arr[index] = x;
         } 
-        
-        if (op_name == OP::S) {
-            // S Gate: Entry (z_arr[index] ^= x_arr[index])
+        else if (op_name == OP::S) {
+            //S Gate: Entry (z_arr[index] ^= x_arr[index])
+            stab_gpu->r_packed_gpu[row] ^= (x & z);
             z_arr[index] = x ^ z;
         }
-
-        if (op_name == OP::SDG) {
+        else if (op_name == OP::SDG) {
             // SDG Gate: Phase (x_arr[index] ^ (x_arr[index] & z_arr[index]))
-            r_arr[row] ^= x;  // SDG Phase operation
+            stab_gpu->r_packed_gpu[row] ^= (x ^ (x & z));  // SDG Phase operation
             z_arr[index] = x ^ z;  // Entry (same as S gate)
         }
-
-        if (op_name == OP::CX) {
-            IdxType ctrl_index = row * stab_gpu->cols + gates_gpu[col].ctrl;
+        else if (op_name == OP::CX) {
+            int ctrl_index = row * stab_gpu->cols + gates_gpu[col].ctrl;
 
             uint32_t x_ctrl = x_arr[ctrl_index];
             uint32_t z_ctrl = z_arr[ctrl_index];
 
             //Phase
-            r_arr[row] ^= ((x_ctrl & z) & (x^z_ctrl^1));
+            stab_gpu->r_packed_gpu[row] ^= ((x_ctrl & z) & (x^z_ctrl^1));
 
             //Entry
             x_arr[index] = x ^ x_ctrl;
