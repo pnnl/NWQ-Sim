@@ -1036,7 +1036,7 @@ namespace NWQSim
         uint32_t* r_arr = stab_gpu->r_packed_gpu;
 
         //Calculate the index for this qubit in the packed arrays
-        int index = row * stab_gpu->cols + target;
+        IdxType index = row * stab_gpu->cols + target;
 
         //Perform operations for all possible gates, but mask non-relevant ones
         //Start with the common operation - calculate phase and entry for all gates
@@ -1065,7 +1065,7 @@ namespace NWQSim
         }
 
         if (op_name == OP::CX) {
-            int ctrl_index = row * stab_gpu->cols + gates_gpu[col].ctrl;
+            IdxType ctrl_index = row * stab_gpu->cols + gates_gpu[col].ctrl;
 
             uint32_t x_ctrl = x_arr[ctrl_index];
             uint32_t z_ctrl = z_arr[ctrl_index];
