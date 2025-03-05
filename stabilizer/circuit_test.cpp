@@ -201,7 +201,9 @@ namespace NWQSim{
 // Create a circuit with 2 qubits
 int main()
 {
-    std::vector<int> qubit_test = {4}; //, 1408, 1536, 1664, 1792, 1920, 2048};
+    std::vector<int> qubit_test;//{4, 8, 16, 32, 64, 96, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1152, 1280, 1408, 1536, 1664, 1792, 1920, 2048};
+    for(int i = 1; i < 21; i++)
+        qubit_test.push_back(4608 + i * 128);
     for(int i = 0; i < qubit_test.size(); i++)
     {
         std::cout << "Starting program" << std::endl;
@@ -293,7 +295,7 @@ int main()
 
         NWQSim::IdxType gate_count = S_count + H_count + CX_count;
 
-        backend="nvgpu2D";
+        backend= "nvgpu2D";
         std::string name = "";
         std::ostringstream filename;
         filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
