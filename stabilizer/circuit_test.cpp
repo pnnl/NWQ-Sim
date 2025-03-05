@@ -201,7 +201,7 @@ namespace NWQSim{
 // Create a circuit with 2 qubits
 int main()
 {
-    std::vector<int> qubit_test = {4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048};
+    std::vector<int> qubit_test = {4}; //, 1408, 1536, 1664, 1792, 1920, 2048};
     for(int i = 0; i < qubit_test.size(); i++)
     {
         std::cout << "Starting program" << std::endl;
@@ -302,7 +302,7 @@ int main()
             std::cerr << "Error opening file: " << filename.str() << std::endl;
         }
 
-        outfile << sim_method << std::endl;
+        outfile << "stab2D" << std::endl;
         outfile << timer/1000.0 << std::endl;
         outfile << n_qubits << std::endl;
         outfile << S_count << std::endl;

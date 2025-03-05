@@ -589,11 +589,15 @@ namespace NWQSim
 
             std::cout << "Data copied" << std::endl;
 
-            int threadsPerBlockX = 32; // Number of threads for gates
-            int threadsPerBlockY = 32; // Number of threads for columns
-            dim3 threadsPerBlock(threadsPerBlockX, threadsPerBlockY);
-            dim3 blocksPerGrid((n + threadsPerBlockX - 1) / threadsPerBlockX,
-                                (n + threadsPerBlockY - 1) / threadsPerBlockY);
+            // int threadsPerBlockX = 32; //Rows
+            // int threadsPerBlockY = 32; //Columns
+            // dim3 threadsPerBlock(threadsPerBlockX, threadsPerBlockY);
+            // dim3 blocksPerGrid((n + threadsPerBlockX - 1) / threadsPerBlockX,
+            //                     (n + threadsPerBlockY - 1) / threadsPerBlockY);
+            int minGridSize, blockSize;
+            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda2D, 0, 0);
+            dim3 threadsPerBlock(blockSize);
+            dim3 blocksPerGrid((n + blockSize - 1) / blockSize);
 
             std::cout << "Blocks calculated" << std::endl;
 
