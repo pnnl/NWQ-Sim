@@ -48,6 +48,11 @@ namespace NWQSim
         virtual IdxType *get_results() = 0;
         virtual IdxType measure(IdxType qubit) = 0;
         virtual IdxType *measure_all(IdxType repetition) = 0;
+        virtual IdxType **measure_all_long(IdxType shots = 2048)
+        {
+            throw std::runtime_error("Measure all for results >64 bits not implemented.");
+        }
+
         virtual void set_initial(std::string fpath, std::string format) = 0;
         virtual ValType *get_real() const = 0;
         virtual ValType *get_imag() const = 0;

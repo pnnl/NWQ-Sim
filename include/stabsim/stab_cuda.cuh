@@ -492,6 +492,103 @@ namespace NWQSim
             return totalResults;
         }//End measure_all
 
+        //Provides a bit/shot measurement output without affecting the original tableau
+        IdxType **measure_all_long(IdxType shots = 2048) override
+        {
+            //Each index of shotResults is a possible result from a full measurement, ex. 01100101 in an 8 qubit system
+            //The integer at that i is the number of times that result occured
+            totalResultsLong = new IdxType*[shots];
+            for (size_t i = 0; i < shots; i++) {
+                totalResultsLong[i] = new IdxType[((n+63)/64)]();  //Zero-initialize
+            }
+
+            int half_rows = rows >> 1;
+            
+            std::vector<std::vector<int>> temp_x;
+            std::vector<std::vector<int>> temp_z;
+            std::vector<int> temp_r;
+            for(int shot = 0; shot < shots; shot++)
+            {
+                //Make a copy of the class being measured so many shots can be performed
+                temp_x = x;
+                temp_z = z;
+                temp_r = r;
+                for(int a = 0; a < n; a++)
+                {  
+                    int p = -1;
+                    for(int p_index = half_rows; p_index < rows-1; p_index++)
+                    {  
+                        if(temp_x[p_index][a])
+                        {
+                            p = p_index;
+                            break;
+                        }
+                    }
+                    //A p such that x[p][a] = 1 exists
+                    if(p > -1) //Random
+                    {
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            if((x[i][a]) && (i != p))
+                            {
+                                tempRowsum(i, p, temp_x, temp_z, temp_r);
+                            }
+                        }
+                        temp_x[p-half_rows] = temp_x[p];
+                        temp_z[p-half_rows] = temp_z[p];
+                        //Change all the columns in row p to be 0
+                        for(int i = 0; i < n; i++)
+                        {
+                            temp_x[p][i] = 0;
+                            temp_z[p][i] = 0;                        
+                        }
+
+                        int randomBit = dist(rng);
+                        
+                        if(randomBit)
+                        {
+                            //std::cout << "Random result of 1" << std::endl;
+                            temp_r[p] = 1;
+                        }
+                        else
+                        {
+                            //std::cout << "Random result of 0" << std::endl;
+                            temp_r[p] = 0;
+                        }
+                        temp_z[p][a] = 1;
+
+                        totalResultsLong[shot][a/64] |=  (temp_r[rows-1] << (a%64));
+                        // std::cout << "Random measurement at qubit " << a << " value: " << (temp_r[p] << a) << std::endl;
+                    }
+                    else //Deterministic
+                    {
+                        //Set the scratch space row to be 0
+                        //i is the column indexer in this case
+                        for(int i = 0; i < n; i++)
+                        {
+                            temp_x[rows-1][i] = 0;
+                            temp_z[rows-1][i] = 0;
+                        }
+                        temp_r[rows-1] = 0;
+
+                        //Run rowsum subroutine
+                        for(int i = 0; i < half_rows; i++)
+                        {
+                            if(temp_x[i][a] == 1)
+                            {
+                                //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
+                                tempRowsum(rows-1, i+half_rows, temp_x, temp_z, temp_r);
+                            }
+                        }
+
+                        // std::cout << "Deterministc measurement at qubit " << a << " value: " << (temp_r[rows-1] << a) << std::endl;
+                        totalResultsLong[shot][a/64] |=  (temp_r[rows-1] << (a%64));
+                    } //End if else
+                } //End single shot for all qubits
+            }//End shots
+            return totalResultsLong;
+        }//End measure_all
+
         //Simulate the gates from a circuit in the tableau
         void sim(std::shared_ptr<Circuit> circuit, double &sim_time) override
         {
@@ -711,7 +808,7 @@ namespace NWQSim
         uint32_t* r_packed_gpu = nullptr;
 
         IdxType* totalResults = nullptr;
-        std::vector<std::vector<IdxType>> longResults;
+        IdxType** totalResultsLong = nullptr;
 
         //Random
         std::mt19937 rng;
@@ -1029,7 +1126,7 @@ namespace NWQSim
         // printf("Gates gpu size %lld \n", (sizeof(gates_gpu)));
 
 
-
+77
         int target = gates_gpu[col].qubit; //Qubit target
         OP op_name = gates_gpu[col].op_name;  //Operation to perform
         uint32_t* x_arr = stab_gpu->x_packed_gpu;
