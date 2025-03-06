@@ -37,6 +37,9 @@ namespace NWQSim
 
     // Simulation kernel runtime
     class STAB_CUDA;
+    __global__ void unpack_tableau_kernel(STAB_CUDA* stab_gpu);
+    __global__ void pack_tableau_kernel(STAB_CUDA* stab_gpu);
+    __global__ void simulation_kernel_cuda_bitwise(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates);
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates);
     __global__ void simulation_kernel_cuda2D(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType gate_chunk);
 
@@ -64,7 +67,7 @@ namespace NWQSim
             i_proc = 0;
             cudaSafeCall(cudaSetDevice(i_proc));
 
-            //Space out the vectors
+            //Space out the vectors and initialize identity
             reset_state();
 
             rng.seed(Config::RANDOM_SEED);
@@ -72,16 +75,18 @@ namespace NWQSim
             SAFE_ALOC_HOST(totalResults, sizeof(IdxType));
             memset(totalResults, 0, sizeof(IdxType));
             /*End initialization*/
+
+            SAFE_ALOC_CUDA(gpu_results, sizeof(IdxType));
+
             
             //Allocate the packed data to the GPU side using NVSHMEM and a tempRow for row swapping
             SAFE_ALOC_GPU(x_packed_gpu, packed_matrix_size);
             SAFE_ALOC_GPU(z_packed_gpu, packed_matrix_size);
             SAFE_ALOC_GPU(r_packed_gpu, packed_r_size);
 
-
-            SAFE_ALOC_GPU(x_bit_cpu, bit_matrix_size);
-            SAFE_ALOC_GPU(z_bit_cpu, bit_matrix_size);
-            SAFE_ALOC_GPU(r_bit_cpu, bit_r_size);
+            SAFE_ALOC_HOST(x_bit_cpu, bit_matrix_size);
+            SAFE_ALOC_HOST(z_bit_cpu, bit_matrix_size);
+            SAFE_ALOC_HOST(r_bit_cpu, bit_r_size);
 
             SAFE_ALOC_GPU(x_bit_gpu, bit_matrix_size);
             SAFE_ALOC_GPU(z_bit_gpu, bit_matrix_size);
@@ -92,14 +97,16 @@ namespace NWQSim
 
         ~STAB_CUDA()
         {
-            // Release for CPU side
+            //Release for CPU side
             SAFE_FREE_HOST(totalResults);
 
             SAFE_FREE_HOST_CUDA(x_bit_cpu);
             SAFE_FREE_HOST_CUDA(z_bit_cpu);
             SAFE_FREE_HOST_CUDA(r_bit_cpu);
 
-            //Allocate the packed data to the GPU side using NVSHMEM
+            //Release GPU
+            SAFE_FREE_GPU(gpu_results);
+
             SAFE_FREE_GPU(x_bit_gpu);
             SAFE_FREE_GPU(z_bit_gpu);
             SAFE_FREE_GPU(r_bit_gpu);
@@ -108,55 +115,49 @@ namespace NWQSim
             SAFE_FREE_GPU(r_packed_gpu);
         }
 
-        //Packs down 32 rows in each column and flattens
-        void pack_tableau()
+        //Wrapper function for pack kernel
+        void pack_tableau_gpu() 
         {
-            //print_res_state();
-            //Allocate memory for x_packed_cpu (2D array), but as a flattened 1D array
-            x_packed_cpu = new uint32_t[packed_rows * cols]();
-            z_packed_cpu = new uint32_t[packed_rows * cols]();
-            r_packed_cpu = new uint32_t[packed_rows]();
-            int index;
-            
-            for(int i = 0; i < rows; i++)
-            {
-                mask = i % packed_bits;
-                r_packed_cpu[i/packed_bits] |= r[i] << (mask);
+            cudaSafeCall(cudaMemcpy(x_bit_gpu, x_bit_cpu, bit_matrix_size,
+                                    cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(z_bit_gpu, z_bit_cpu, bit_matrix_size,
+                                    cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(r_bit_gpu, r_bit_cpu, bit_r_size,
+                                    cudaMemcpyHostToDevice));
 
-                for(int j = 0; j < cols; j++)
-                {
-                    //Index conversion
-                    index = ((i/packed_bits) * cols) + j;
+            STAB_CUDA *stab_gpu;
+            SAFE_ALOC_GPU(stab_gpu, sizeof(STAB_CUDA));
+            cudaSafeCall(cudaMemcpy(stab_gpu, this,
+                                    sizeof(STAB_CUDA), cudaMemcpyHostToDevice));
 
-                    x_packed_cpu[index] |= (x[i][j] << (mask));
-                    z_packed_cpu[index] |= (z[i][j] << (mask));
-                }
-            }
+            dim3 blockSize(16, 16);
+            dim3 gridSize((rows + blockSize.x - 1) / blockSize.x, (cols + blockSize.y - 1) / blockSize.y);
 
-            std::cout << "Pack tableau done!" << std::endl;
+            pack_tableau_kernel<<<gridSize, blockSize>>>(stab_gpu);
 
-            //print_packed_state();
+            cudaDeviceSynchronize();
         }
 
-        //Unpacks packed CPU arrays back to bit values
-        void unpack_tableau()
+        void unpack_tableau_gpu() 
         {
-            std::cout << "Unpacking tableau!" << std::endl;
-            int index;
+            STAB_CUDA *stab_gpu;
+            SAFE_ALOC_GPU(stab_gpu, sizeof(STAB_CUDA));
+            cudaSafeCall(cudaMemcpy(stab_gpu, this,
+                                    sizeof(STAB_CUDA), cudaMemcpyHostToDevice));
 
-            for(int i = 0; i < rows; i++)
-            {
-                mask = 1 << (i % packed_bits);
-                r[i] = (r_packed_cpu[i/packed_bits] & mask) ? 1 : 0;
-                for(int j = 0; j < cols; j++)
-                {
-                    //Index conversion
-                    index = (i/packed_bits * cols) + j;
+            dim3 blockSize(16, 16);
+            dim3 gridSize((rows + blockSize.x - 1) / blockSize.x, (cols + blockSize.y - 1) / blockSize.y);
 
-                    x[i][j] = (x_packed_cpu[index] & mask) ? 1 : 0;
-                    z[i][j] = (z_packed_cpu[index] & mask) ? 1 : 0;
-                }
-            }
+            unpack_tableau_kernel<<<gridSize, blockSize>>>(stab_gpu);
+
+            cudaSafeCall(cudaMemcpy(x_bit_cpu, x_bit_gpu, bit_matrix_size,
+                                    cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaMemcpy(z_bit_cpu, z_bit_gpu, bit_matrix_size,
+                                    cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaMemcpy(r_bit_cpu, r_bit_gpu, bit_r_size,
+                                    cudaMemcpyDeviceToHost));
+
+            cudaDeviceSynchronize();
         }
 
         //Prints the tableau including phase
@@ -604,7 +605,7 @@ namespace NWQSim
         }//End measure_all
 
         //Simulate the gates from a circuit in the tableau
-        void sim(std::shared_ptr<Circuit> circuit, double &sim_time) override
+        void sim_bitwise(std::shared_ptr<Circuit> circuit, double &sim_time) override
         {
             STAB_CUDA *stab_gpu;
             SAFE_ALOC_GPU(stab_gpu, sizeof(STAB_CUDA));
@@ -619,13 +620,12 @@ namespace NWQSim
                 printf("STABSim_gpu is running! Using %lld qubits.\n", n);
             }
 
-            //Pack tableau and copy to GPU
-            pack_tableau();
-            cudaSafeCall(cudaMemcpy(x_packed_gpu, x_packed_cpu, packed_matrix_size,
+            //Copy to GPU
+            cudaSafeCall(cudaMemcpy(x_bit_gpu, x_bit_cpu, bit_matrix_size,
                                     cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(z_packed_gpu, z_packed_cpu, packed_matrix_size,
+            cudaSafeCall(cudaMemcpy(z_bit_gpu, z_bit_cpu, bit_matrix_size,
                                     cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(r_packed_gpu, r_packed_cpu, packed_r_size, cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(r_bit_gpu, r_bit_cpu, bit_r_size, cudaMemcpyHostToDevice));
 
             std::vector<Gate> gates = circuit->get_gates();
             //Copy gates to the gpu side
@@ -635,7 +635,7 @@ namespace NWQSim
             int numBlocksPerSM;
             int numThreads = 1024;  //Change 256, 512, 1024, etc
             int sharedMemSize = 0; //(packed_rows * cols * sizeof(uint32_t) * 2) + packed_rows * sizeof(uint32_t);
-            cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSM, simulation_kernel_cuda, numThreads, sharedMemSize);
+            cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSM, simulation_kernel_cuda_bitwise, numThreads, sharedMemSize);
             int numSMs;
             cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
             int numBlocks = numBlocksPerSM * numSMs; //Utilize all SM's
@@ -659,13 +659,11 @@ namespace NWQSim
             cudaCheckError();
 
             //Copy data to the CPU side and unpack
-            cudaSafeCall(cudaMemcpy(x_packed_cpu, x_packed_gpu, packed_matrix_size,
+            cudaSafeCall(cudaMemcpy(x_bit_cpu, x_bit_gpu, bit_matrix_size,
                                     cudaMemcpyDeviceToHost));
-            cudaSafeCall(cudaMemcpy(z_packed_cpu, z_packed_gpu, packed_matrix_size,
+            cudaSafeCall(cudaMemcpy(z_bit_cpu, z_bit_gpu, bit_matrix_size,
                                     cudaMemcpyDeviceToHost));
-            cudaSafeCall(cudaMemcpy(r_packed_cpu, r_packed_gpu, packed_r_size, cudaMemcpyDeviceToHost));
-            unpack_tableau();
-
+            cudaSafeCall(cudaMemcpy(r_bit_cpu, r_bit_gpu, bit_r_size, cudaMemcpyDeviceToHost));
             if (Config::PRINT_SIM_TRACE)
             {
                 printf("\n============== STAB-Sim ===============\n");
@@ -679,93 +677,7 @@ namespace NWQSim
 
             //=========================================
         }
-        //Simulate the gates from a circuit in the tableau
-        void sim2D(std::shared_ptr<Circuit> circuit2D, std::vector<int> gate_chunks, double &sim_time) override
-        {
-            STAB_CUDA *stab_gpu;
-            SAFE_ALOC_GPU(stab_gpu, sizeof(STAB_CUDA));
-            // Copy the simulator instance to GPU
-            cudaSafeCall(cudaMemcpy(stab_gpu, this,
-                                    sizeof(STAB_CUDA), cudaMemcpyHostToDevice));
-
-            gpu_timer sim_timer;
-
-            //Pack tableau and copy to GPU
-            pack_tableau();
-            cudaSafeCall(cudaMemcpy(x_packed_gpu, x_packed_cpu, packed_matrix_size,
-                                    cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(z_packed_gpu, z_packed_cpu, packed_matrix_size,
-                                    cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(r_packed_gpu, r_packed_cpu, packed_r_size, cudaMemcpyHostToDevice));
-
-            std::cout << "Data copied" << std::endl;
-
-            int minGridSize, blockSize;
-            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda2D, 0, 0);
-            int threadsPerBlockX = 16;
-            int threadsPerBlockY = blockSize / threadsPerBlockX; 
-
-            if (threadsPerBlockY > 16) threadsPerBlockY = 16;
-
-            dim3 threadsPerBlock(threadsPerBlockX, threadsPerBlockY);
-            dim3 blocksPerGrid((n + threadsPerBlockX - 1) / threadsPerBlockX,
-                            (n + threadsPerBlockY - 1) / threadsPerBlockY);
-
-            std::cout << "Blocks calculated" << std::endl;
-
-           
-
-            std::vector<Gate> gates2D = circuit2D->get_gates();
-            int num_gates = gates2D.size();
-            copy_gates_to_gpu(gates2D);
-            std::cout << "2D circuit parsed" << std::endl;
-
-            /*Simulate*/
-            if (Config::PRINT_SIM_TRACE)
-            {
-                printf("STABSim_gpu is running! Using %lld qubits.\n", n);
-            }
-
-            //Call the kernel for each set of gates
-            IdxType gate_index_sum = 0;
-            int gate_chunk_size = 0;
-            sim_timer.start_timer();
-            for(int i = 0; i < gate_chunks.size(); i++)
-            {
-                gate_index_sum += gate_chunk_size;
-                gate_chunk_size = gate_chunks[i];
-                // std::cout << "Launching 2D kernel " << num_gates << std::endl;
-                // std::cout << "Gate chunk sie " << gate_chunk_size << std::endl;
-
-                simulation_kernel_cuda2D<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, &gates_gpu[gate_index_sum], gate_chunk_size);
-            }
-            sim_timer.stop_timer();
-            /*End simulate*/
-            sim_time = sim_timer.measure();
-
-            cudaCheckError();
-            //Copy data to the CPU side and unpack
-            cudaSafeCall(cudaMemcpy(x_packed_cpu, x_packed_gpu, packed_matrix_size,
-                                    cudaMemcpyDeviceToHost));
-            cudaSafeCall(cudaMemcpy(z_packed_cpu, z_packed_gpu, packed_matrix_size,
-                                    cudaMemcpyDeviceToHost));
-            cudaSafeCall(cudaMemcpy(r_packed_cpu, r_packed_gpu, packed_r_size, cudaMemcpyDeviceToHost));
-            unpack_tableau();
-
-            if (Config::PRINT_SIM_TRACE)
-            {
-                printf("\n============== STAB-Sim ===============\n");
-                printf("n_qubits:%lld, n_gates:%lld, ncpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms\n",
-                       n, num_gates, 1, sim_time, 0.,
-                       sim_time);
-                printf("=====================================\n");
-            }
-
-            SAFE_FREE_GPU(gates_gpu);
-
-            //=========================================
-        }
-
+    
         IdxType measure(IdxType qubit) override
         {
             throw std::logic_error("measure Not implemented (STAB_CPU)");
@@ -803,23 +715,19 @@ namespace NWQSim
         IdxType rows;
         IdxType packed_rows;
         IdxType cols;
-        int packed_bits;
-        IdxType packed_r_size;
-        IdxType packed_matrix_size;
         IdxType bit_r_size;
         IdxType bit_matrix_size;
 
         std::vector<std::vector<Gate>> layered_gates;
         IdxType num_layers;
         //CPU Arrays
-        uint32_t* x_bit_cpu = nullptr;
-        uint32_t* z_bit_cpu = nullptr;
-        uint32_t* r_bit_cpu = nullptr;
+        uint8_t* x_bit_cpu = nullptr;
+        uint8_t* z_bit_cpu = nullptr;
+        uint8_t* r_bit_cpu = nullptr;
         //GPU Arrays
-        uint32_t* x_bit_gpu = nullptr;
-        uint32_t* z_bit_gpu = nullptr;
-        uint32_t* r_bit_gpu = nullptr;
-
+        uint8_t* x_bit_gpu = nullptr;
+        uint8_t* z_bit_gpu = nullptr;
+        uint8_t* r_bit_gpu = nullptr;
         uint32_t* x_packed_gpu = nullptr;
         uint32_t* z_packed_gpu = nullptr;
         uint32_t* r_packed_gpu = nullptr;
@@ -846,6 +754,200 @@ namespace NWQSim
             cudaSafeCall(cudaMemcpy(gates_gpu, cpu_vec.data(), vec_size, cudaMemcpyHostToDevice));
         }
     }; //End tableau class
+
+    __global__ void pack_tableau_kernel(STAB_CUDA* stab_gpu) 
+    {
+        int rows = stab_gpu->rows;
+        int cols = stab_gpu->cols;
+        int packed_bits = stab_gpu->packed_bits;
+        int packed_rows = stab_gpu->packed_rows;
+        uint32_t* x_packed = stab_gpu->x_packed_gpu;
+        uint32_t* z_packed = stab_gpu->z_packed_gpu;
+        uint32_t* r_packed = stab_gpu->r_packed_gpu;
+        const uint8_t* x = stab_gpu->x_bit_gpu;
+        const uint8_t* z = stab_gpu->z_bit_gpu;
+        const uint8_t* r = stab_gpu->r_bit_gpu;
+
+        int i = blockIdx.x * blockDim.x + threadIdx.x;
+        int j = blockIdx.y * blockDim.y + threadIdx.y;
+
+        if (i >= rows || j >= cols) return;
+
+        int mask = i % packed_bits;
+        int packed_idx = (i / packed_bits) * cols + j;
+
+        atomicOr(&x_packed[packed_idx], (x[i * cols + j] << mask));
+        atomicOr(&z_packed[packed_idx], (z[i * cols + j] << mask));
+
+        if (j == 0) {  //Only first column handles r
+            atomicOr(&r_packed[i / packed_bits], (r[i] << mask));
+        }
+    }
+
+    __global__ void unpack_tableau_kernel(STAB_CUDA* stab_gpu) 
+    {  
+        int rows = stab_gpu->rows;
+        int cols = stab_gpu->cols;
+        int packed_bits = stab_gpu->packed_bits;
+        int packed_rows = stab_gpu->packed_rows;
+        uint32_t* x_packed = stab_gpu->x_packed_gpu;
+        uint32_t* z_packed = stab_gpu->z_packed_gpu;
+        uint32_t* r_packed = stab_gpu->r_packed_gpu;
+        const uint8_t* x = stab_gpu->x_bit_gpu;
+        const uint8_t* z = stab_gpu->z_bit_gpu;
+        const uint8_t* r = stab_gpu->r_bit_gpu;
+        int i = blockIdx.x * blockDim.x + threadIdx.x;
+        int j = blockIdx.y * blockDim.y + threadIdx.y;
+
+        if (i >= rows || j >= cols) return;
+
+        int mask = 1 << (i % packed_bits);
+        int packed_idx = (i / packed_bits) * cols + j;
+
+        x[i * cols + j] = (x_packed[packed_idx] & mask) ? 1 : 0;
+        z[i * cols + j] = (z_packed[packed_idx] & mask) ? 1 : 0;
+
+        if (j == 0) {  // Only first column handles r
+            r[i] = (r_packed[i / packed_bits] & mask) ? 1 : 0;
+        }
+    }
+
+    __global__ void simulation_kernel_cuda_bitwise(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
+    {
+        int i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i >= stab_gpu->rows) return;
+
+        int n_qubits = stab_gpu->n;
+
+        uint32_t* x_arr = stab_gpu->x_bit_gpu;
+        uint32_t* z_arr = stab_gpu->z_bit_gpu;
+        uint32_t* r_arr = stab_gpu->r_bit_gpu;
+
+        uint32_t x, z;
+        OP op_name;
+        int index;
+
+        //Precompute the possible indices that each thread needs before looping the gates
+        int thread_pos = i * stab_gpu->cols;
+        int q_indices[32768];
+        #pragma unroll
+        for(int q = 0; q < n_qubits; q++)
+        {
+            q_indices[q] = thread_pos + q;
+        }
+        
+        for (int k = 0; k < n_gates; k++) 
+        {
+            op_name = gates_gpu[k].op_name;
+            index = q_indices[gates_gpu[k].qubit];
+
+            switch (op_name) 
+            {
+                case OP::H:
+                    x = x_arr[index];
+                    z = z_arr[index];
+                    //Phase
+                    r_arr[i] ^= (x & z);
+
+                    //Entry -- swap x and z bits
+                    x_arr[index] = z;
+                    z_arr[index] = x;
+                    break;
+
+                case OP::S:
+                    x = x_arr[index];
+                    z = z_arr[index];
+
+                    //Phase
+                    r_arr[i] ^= (x & z);
+
+                    //Entry
+                    z_arr[index] = z ^ x;
+                    break;
+
+                case OP::SDG:
+                    x = x_arr[index];
+                    z = z_arr[index];
+
+                    //Phase
+                    r_arr[i] ^= (x ^ (x & z));
+
+                    //Entry
+                    z_arr[index] = z ^ x;
+                    break;
+
+                // case OP::RX:
+                //     double theta = gates_gpu[k].theta;
+                //     if(theta == PI/2) //H SDG
+                //     {
+                //         x = x_arr[index];
+                //         z = z_arr[index];
+
+                //         //Phase
+                //         r_arr[i] ^= z;
+
+                //         //Entry -- swap x and z bits
+                //         x_arr[index] = z;
+
+                //         //Phase -- pass through the swap to make r_arr[i] ^= z;
+                //         //r_arr[i] ^= x ^ (x & z_arr[mat_i]);
+
+                //         //Entry -- z is x after the swap, but doesn't matter here
+                //         z_arr[index] = z ^ x;
+                //     }
+                //     else if(theta == -PI/2) //H S
+                //     {
+                //         x = x_arr[index];
+                //         z = z_arr[index];
+
+                //         //Entry -- swap x and z bits
+                //         //Entry
+                //         x_arr[index] = z;
+                //         z_arr[index] = z ^ x;
+                //     }
+                //     else if(theta == PI) //X
+                //     {
+                //         r_arr[i] ^= z_arr[index];
+                //     }
+                //     else
+                //     {
+                //         printf("Non-Clifford angle in RX!");
+                //         assert(false);
+                //     }
+                //     break;
+                // case OP::RY:
+                //     stab_gpu->RX_gate(i, m_index, gates_gpu[k].theta);
+                //     break;
+
+                case OP::CX:
+                    int ctrl_index = q_indices[gates_gpu[k].ctrl];
+
+                    x = x_arr[index];
+                    z = z_arr[index];
+
+                    uint32_t x_ctrl = x_arr[ctrl_index];
+                    uint32_t z_ctrl = z_arr[ctrl_index];
+
+                    //Phase
+                    r_arr[i] ^= ((x_ctrl & z) & (x^z_ctrl^1));
+
+                    //Entry
+                    x_arr[index] = x ^ x_ctrl;
+                    z_arr[ctrl_index] = z ^ z_ctrl;
+
+                    break;
+
+                // case OP::M:
+                //     uint32_t p = INT32_MAX;
+                //     stab_gpu->M_gate(i, m_index, p);
+
+                default:
+                    printf("Non-Clifford or unrecognized gate: %d\n", op_name);
+                    assert(false);
+            }
+        }
+        // printf("Kernel is done!\n");
+    }//end kernel
 
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
     {

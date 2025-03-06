@@ -284,7 +284,7 @@ int main()
         std::cout << "Starting sim" << std::endl;
 
         // state->sim(circuit, timer);
-        state->sim2D(circuit, gate_chunks, timer);
+        state->sim_bitwise(circuit, timer);
         // state->print_res_state();
         // NWQSim::IdxType* results = state->measure_all(shots);
 
@@ -293,23 +293,23 @@ int main()
 
         std::cout << "Sim time: " << timer/1000.0 << "s" << std::endl;
 
-        NWQSim::IdxType gate_count = S_count + H_count + CX_count;
+        // NWQSim::IdxType gate_count = S_count + H_count + CX_count;
 
-        backend= "nvgpu2D";
-        std::string name = "";
-        std::ostringstream filename;
-        filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
-        std::ofstream outfile(filename.str());
-        if (!outfile) {
-            std::cerr << "Error opening file: " << filename.str() << std::endl;
-        }
+        // backend= "nvgpu2D";
+        // std::string name = "";
+        // std::ostringstream filename;
+        // filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
+        // std::ofstream outfile(filename.str());
+        // if (!outfile) {
+        //     std::cerr << "Error opening file: " << filename.str() << std::endl;
+        // }
 
-        outfile << "stab2D" << std::endl;
-        outfile << timer/1000.0 << std::endl;
-        outfile << n_qubits << std::endl;
-        outfile << S_count << std::endl;
-        outfile << H_count << std::endl;
-        outfile << CX_count << std::endl;
+        // outfile << "stab2D" << std::endl;
+        // outfile << timer/1000.0 << std::endl;
+        // outfile << n_qubits << std::endl;
+        // outfile << S_count << std::endl;
+        // outfile << H_count << std::endl;
+        // outfile << CX_count << std::endl;
 
         outfile.close();
     }

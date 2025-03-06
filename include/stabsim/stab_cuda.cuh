@@ -1125,8 +1125,6 @@ namespace NWQSim
         // printf("Inside 2D kernel %d, gate chunk %lld gate qubit %lld \n", col, gate_chunk, gates_gpu[col].qubit);
         // printf("Gates gpu size %lld \n", (sizeof(gates_gpu)));
 
-
-77
         int target = gates_gpu[col].qubit; //Qubit target
         OP op_name = gates_gpu[col].op_name;  //Operation to perform
         uint32_t* x_arr = stab_gpu->x_packed_gpu;
