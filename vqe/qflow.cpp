@@ -31,10 +31,10 @@ int show_help() {
   // std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
   std::cout << UNDERLINE << "OPTIONAL (Global Minimizer)" << CLOSEUNDERLINE << std::endl;
   std::cout << "-v, --verbose         Print optimization callback on each iteration. Defaults to false." << std::endl;
-  std::cout << "-o, --optimizer       NLOpt optimizer name. Defaults to LN_COBYLA. Other examples are LN_NEWUOA and LD_LBFGS" << std::endl;
+  std::cout << "-o, --optimizer       NLOpt optimizer name. Defaults to LN_COBYLA. Some common optimizers are LN_BOBYQA, LN_NEWUOA, and LD_LBFGS." << std::endl;
   std::cout << "--opt-config          Path to config file for NLOpt optimizer parameters" << std::endl;
-  std::cout << "-lb, --lbound         Optimizer lower bound. Defaults to -2Pi" << std::endl;
-  std::cout << "-ub, --ubound         Optimizer upper bound. Defaults to 2Pi" << std::endl;
+  std::cout << "-lb, --lbound         Optimizer lower bound. Defaults to -Pi" << std::endl;
+  std::cout << "-ub, --ubound         Optimizer upper bound. Defaults to Pi" << std::endl;
   std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--abstol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--maxeval             Maximum number of function evaluations for optimizer. Defaults to 100" << std::endl;
@@ -85,8 +85,8 @@ int parse_args(int argc, char** argv,
   local = false;
   verbose = false;
   symm_level = 0;
-  settings.lbound = -2*PI;
-  settings.ubound = 2*PI;
+  settings.lbound = -PI;
+  settings.ubound = PI;
   pool = NWQSim::VQE::PoolType::Fermionic;
   for (size_t i = 1; i < argc; i++) {
     std::string argname = argv[i];
@@ -209,11 +209,11 @@ void silent_callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::Val
 
 void print_header() {
     std::cout << "\n----- Iteration Summary -----\n" << std::left
-              << std::setw(8) << " Iter."
-              << std::setw(19) << "Objective Value"
+              << std::setw(8) << " Iter"
+              << std::setw(29) << "Objective Value"
               << std::setw(55) << "Parameters (first 5)"
               << std::endl;
-    std::cout << std::string(80, '-') << std::endl;
+    std::cout << std::string(90, '-') << std::endl;
 }
 
 // Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
@@ -223,7 +223,7 @@ void callback_function_simple(const std::vector<NWQSim::ValType>& x, NWQSim::Val
   }
   std::cout << std::left << " "
             << std::setw(7) << iteration
-            << std::setw(19) << std::fixed << std::setprecision(12) << fval;
+            << std::setw(29) << std::fixed << std::setprecision(15) << fval;
   
   std::cout << std::fixed << std::setprecision(6);
   for (size_t i = 0; i < std::min(x.size(), size_t(5)); ++i) {
@@ -280,7 +280,8 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      bool local,
                      bool verbose,
                      double delta,
-                     double eta) {
+                     double eta,
+                     uint64_t symm_level) {  //MZ: add symmetry level for printout info only
   double fval;
   // NWQSim::VQE::Callback callback = verbose ? carriage_return_callback_function: silent_callback_function;
   NWQSim::VQE::Callback callback = verbose ? callback_function_simple: silent_callback_function;
@@ -340,11 +341,13 @@ void optimize_ansatz(const VQEBackendManager& manager,
       if (local) {
         NWQSim::safe_print("Method                 : QFlow + Local Gradient Follower\n");
       } else {
-        NWQSim::safe_print("Method                 : QFlow + Global minimizer\n");
+        NWQSim::safe_print("Method                 : QFlow + Global Minimizer, Symmetry Level = %d\n", symm_level);
       }
       NWQSim::safe_print("Ansatz                 : %s\n", ansatz->getAnsatzName().c_str());  // MZ: don't want to scroll all the way up to see this
       NWQSim::safe_print("# Ham. Pauli Strings   : %lld \n", hamil->num_ops());
-      NWQSim::safe_print("Circuit Stats          : %lld operators, %lld parameters, and %lld Gates\n" , ansatz->numOps(), ansatz->numParams(), ansatz->num_gates()); // MZ: don't want to scroll all the way up to see this
+      NWQSim::safe_print("Operator Stats         : %lld operators, %lld parameters, and %lld Gates\n" , ansatz->numOps(), ansatz->numParams(), ansatz->num_gates()); // MZ: don't want to scroll all the way up to see this
+      NWQSim::CircuitMetrics final_metrics = ansatz -> circuit_metrics();
+      NWQSim::safe_print("Circuit Stats          : %lld depth, %lld 1Q gates, %lld 2Q gates, %.3f gate density\n", final_metrics.depth, final_metrics.one_q_gates, final_metrics.two_q_gates, final_metrics.gate_density);
       std::string ter_rea;
       if (local) {
         ter_rea = "Optimization terminated: "+get_termination_reason_local(state->get_optresult())+"\n";
@@ -430,7 +433,7 @@ int main(int argc, char** argv) {
   ansatz->buildAnsatz();
   std::vector<double> params;
   NWQSim::safe_print("Beginning the loop...\n");
-  optimize_ansatz(manager, backend, amplitudes, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta);
+  optimize_ansatz(manager, backend, amplitudes, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta, symm_level); //MZ: add symmetry level for printout info only
 //   optimize_ansatz(manager, backend, amplitudes, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta);
 #ifdef MPI_ENABLED
   if (backend == "MPI" || backend == "NVGPU_MPI")

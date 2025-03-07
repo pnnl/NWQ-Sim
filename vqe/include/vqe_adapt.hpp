@@ -26,7 +26,8 @@ namespace NWQSim {
         std::vector<IdxType> observable_sizes; // Stores the number of commuting cliques for each commutator  
         size_t num_pauli_terms_total; // MZ: Total number of Pauli terms in the commutator
         size_t num_comm_cliques; // MZ: Total number of commuting cliques
-    public:
+
+    public: 
         size_t get_numpauli() const { return num_pauli_terms_total;}; // MZ
         void set_numpauli(size_t value) { num_pauli_terms_total = value; }; //MZ
         size_t  get_numcomm() const { return num_comm_cliques;}; // MZ
@@ -147,7 +148,7 @@ namespace NWQSim {
             state->set_exp_gate(gradient_measurement[i], gradient_observables[i] + j, commutator_zmasks[i][j], commutator_coeffs[i][j]);
             Measurement circ2 (common, true); // inverse of the measurement circuit $U_M^\dagger$
             gradient_measurement[i]->compose(circ2, qubit_mapping);  // add the inverse
-            cliqueiter++;  
+            cliqueiter++;
           }
         }
         num_comm_cliques = pauli_op_pool.size(); // MZ: Total number of commuting cliques
@@ -208,22 +209,41 @@ namespace NWQSim {
           parameters.push_back(paramval);
           // VQE Optimzation step
           state->optimize(parameters, ene);
+          IdxType num_func_evals = state->get_iteration();
           // Print update
           if (state->get_process_rank() == 0) {
             if (iter == 0) {
               std::cout << "\n----------- Iteration Summary -----------\n" << std::left
-                        << std::setw(8) << " Iter."
-                        << std::setw(17) << "Objective Value"
-                        << std::setw(12) << "Grad. Norm"
-                        << std::setw(55) << "Selected Operator"
+                        << std::setw(8) << " Iter"
+                        << std::setw(27) << "Objective Value"
+                        << std::setw(9) << "# Evals"
+                        << std::setw(11) << "Grad Norm"
+                        << std::setw(13) << "|  Depth"
+                        << std::setw(11) << "#1q Gates"
+                        << std::setw(11) << "#2q Gates"
+                        << std::setw(58) << "|  Selected Operator"
                         << std::endl;
-              std::cout << std::string(95, '-') << std::endl;
+              std::cout << std::string(120, '-') << std::endl;
             }
+            NWQSim::CircuitMetrics metrics = ansatz -> circuit_metrics();
             std::cout << std::left << " "
                       << std::setw(7) << iter
-                      << std::setw(17) << std::fixed << std::setprecision(12) << ene
-                      << std::setw(12) << std::fixed << std::setprecision(8) << grad_norm;
-            std::cout << ansatz->get_operator_string(max_ind) << std::endl;
+                      << std::setw(27) << std::fixed << std::setprecision(14) << ene
+                      << std::setw(9) << std::fixed << num_func_evals
+                      << std::setw(11) << std::scientific << std::setprecision(3) << grad_norm;
+            // Print circuit metrics in scientific notation if they are greater than 1e6
+            const double print_threshold = 1e6;
+            if (metrics.depth > print_threshold) {
+              std::cout << "|  " << std::setw(10) << std::fixed << metrics.depth
+                                << std::setw(11) << std::fixed << metrics.one_q_gates
+                                << std::setw(11) << std::fixed << metrics.two_q_gates;
+            } else {
+              std::cout<< "|  " << std::setw(10) << std::scientific << std::setprecision(3) << metrics.depth
+                              << std::setw(11) << std::scientific << std::setprecision(3) << metrics.one_q_gates
+                              << std::setw(11) << std::scientific << std::setprecision(3) << metrics.two_q_gates;
+            }
+            // Print the selected operator
+            std::cout << "|  " << ansatz->get_operator_string(max_ind) << std::endl;
           }
 
           // If the function value converged, then break

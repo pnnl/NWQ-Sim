@@ -40,7 +40,7 @@ struct VQEParams {
   bool qubit = false;
   IdxType adapt_maxeval = 100;
   ValType adapt_fvaltol = -1; // MZ: original ADAPT-VQE paper only used the gradient norm as the convergence criteria, 
-                              // which is more reasonable as since fvaltol may give false convergence when the same operator is picked conservatively
+                              // which is more reasonable as since fvaltol may give false convergence when the same operator is picked consecutively
   ValType adapt_gradtol = 1e-3;
   IdxType adapt_pool_size = -1;
 
@@ -65,10 +65,10 @@ int show_help() {
   // std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
   std::cout << UNDERLINE << "OPTIONAL (Global Minimizer)" << CLOSEUNDERLINE << std::endl;
   std::cout << "-v, --verbose         Print optimization callback on each VQE iteration. Defaults to false" << std::endl;
-  std::cout << "-o, --optimizer       NLOpt optimizer name. Defaults to LN_COBYLA. Other examples are LN_NEWUOA and LD_LBFGS" << std::endl;
+  std::cout << "-o, --optimizer       NLOpt optimizer name. Defaults to LN_COBYLA. Some common optimizers are LN_BOBYQA, LN_NEWUOA, and LD_LBFGS." << std::endl;
   std::cout << "--opt-config          Path to config file for NLOpt optimizer parameters" << std::endl;
-  std::cout << "-lb, --lbound         Optimizer lower bound. Defaults to -2Pi" << std::endl;
-  std::cout << "-ub, --ubound         Optimizer upper bound. Defaults to 2Pi" << std::endl;  std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
+  std::cout << "-lb, --lbound         Optimizer lower bound. Defaults to -Pi" << std::endl;
+  std::cout << "-ub, --ubound         Optimizer upper bound. Defaults to Pi" << std::endl;  std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--abstol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
   std::cout << "--maxeval             Maximum number of function evaluations for optimizer (only for VQE). Defaults to 100" << std::endl;
   std::cout << "--maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)" << std::endl;
@@ -241,11 +241,11 @@ void silent_callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::Val
 // MZ: sorry, original callback function is too much
 void print_header() {
     std::cout << "\n----- Iteration Summary -----\n" << std::left
-              << std::setw(8) << " Iter."
-              << std::setw(19) << "Objective Value"
+              << std::setw(8) << " Iter"
+              << std::setw(29) << "Objective Value"
               << std::setw(55) << "Parameters (first 5)"
               << std::endl;
-    std::cout << std::string(80, '-') << std::endl;
+    std::cout << std::string(90, '-') << std::endl;
 }
 
 // Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
@@ -255,7 +255,7 @@ void callback_function_simple(const std::vector<NWQSim::ValType>& x, NWQSim::Val
   }
   std::cout << std::left << " "
             << std::setw(7) << iteration
-            << std::setw(19) << std::fixed << std::setprecision(12) << fval;
+            << std::setw(29) << std::fixed << std::setprecision(14) << fval;
   
   std::cout << std::fixed << std::setprecision(6);
   for (size_t i = 0; i < std::min(x.size(), size_t(5)); ++i) {
@@ -440,7 +440,7 @@ int main(int argc, char** argv) {
   }
   ansatz->buildAnsatz();
 
-  NWQSim::safe_print("%lld Gates with %lld parameters\n" ,ansatz->num_gates(), ansatz->numParams());
+  NWQSim::safe_print("Starting with %lld Gates and %lld parameters\n" ,ansatz->num_gates(), ansatz->numParams());
   std::vector<double> x;
   double fval;
   if (params.adapt) {
@@ -477,11 +477,12 @@ int main(int argc, char** argv) {
   if (params.adapt) {
     NWQSim::safe_print("Method                 : ADAPT-VQE\n");
   } else {
-    NWQSim::safe_print("Method                 : VQE\n");
+    NWQSim::safe_print("Method                 : VQE, Symmetry Level = %d\n", params.symm_level);
   }
   NWQSim::safe_print("Ansatz                 : %s\n", ansatz->getAnsatzName().c_str());  // MZ: don't want to scroll all the way up to see this
   NWQSim::safe_print("# Ham. Pauli Strings   : %lld \n", hamil->num_ops()); // MZ: don't want to scroll all the way up to see this
   if (params.adapt) {
+    // MZ: time
     double comm_total_secs = opt_info -> get_comm_duration();
     int comm_hours = static_cast<int>(comm_total_secs) / 3600;
     int comm_minutes = (static_cast<int>(comm_total_secs) % 3600) / 60;
@@ -490,7 +491,9 @@ int main(int argc, char** argv) {
     NWQSim::safe_print("# Pauli Strings (ADAPT): %d\n", opt_info->get_numpauli());
     NWQSim::safe_print("Commutator Time (ADAPT): %d hrs %d mins %.4f secs\n", comm_hours, comm_minutes, comm_seconds);
   }
-    NWQSim::safe_print("Circuit Stats          : %lld operators, %lld parameters, and %lld Gates\n" , ansatz->numOps(), ansatz->numParams(), ansatz->num_gates()); // MZ: don't want to scroll all the way up to see this
+    NWQSim::safe_print("Operator Stats         : %lld operators, %lld parameters, and %lld Gates\n" , ansatz->numOps(), ansatz->numParams(), ansatz->num_gates()); // MZ: don't want to scroll all the way up to see this
+    NWQSim::CircuitMetrics final_metrics = ansatz -> circuit_metrics();
+    NWQSim::safe_print("Circuit Stats          : %lld depth, %lld 1q gates, %lld 2q gates, %.3f gate density\n", final_metrics.depth, final_metrics.one_q_gates, final_metrics.two_q_gates, final_metrics.gate_density);
     std::string ter_rea;
     if (params.adapt) {
       ter_rea = "Optimization terminated: "+get_termination_reason_adapt(opt_info->get_adaptresult())+"\n";
@@ -507,7 +510,11 @@ int main(int argc, char** argv) {
     NWQSim::safe_print("Final objective value  : %.16f\nFinal parameters:\n", fval); 
     for (auto& pair: param_map) {                                                                       
       NWQSim::safe_print("  %s :: %.16f\n", pair.first.c_str(), pair.second);  
-  }                                                                                            
+    }
+    // // MZ: print the QASM3 circuit
+    // if (params.adapt) {
+    //   NWQSim::safe_print( (ansatz->toQASM3()).c_str() );
+    // }
 
 #ifdef MPI_ENABLED
   if (params.backend == "MPI" || params.backend == "NVGPU_MPI")
