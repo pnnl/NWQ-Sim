@@ -57,8 +57,7 @@ namespace NWQSim
             cols = n;
             stabCounts = n;
             packed_bits = 32;
-            packed_rows = (rows + packed_bits - 1) / packed_bits;
-            packed_r_size = packed_rows * sizeof(uint32_t);
+            packed_rows = (rows/32)+1;
             packed_matrix_size = (packed_rows * cols) * sizeof(uint32_t);
             bit_r_size = rows * sizeof(int);
             bit_matrix_size = rows * cols * sizeof(int);
@@ -76,7 +75,7 @@ namespace NWQSim
             memset(totalResults, 0, sizeof(IdxType));
             /*End initialization*/
 
-            SAFE_ALOC_CUDA(gpu_results, sizeof(IdxType));
+            SAFE_ALOC_GPU(gpu_results, sizeof(IdxType));
 
             
             //Allocate the packed data to the GPU side using NVSHMEM and a tempRow for row swapping
@@ -84,9 +83,9 @@ namespace NWQSim
             SAFE_ALOC_GPU(z_packed_gpu, packed_matrix_size);
             SAFE_ALOC_GPU(r_packed_gpu, packed_r_size);
 
-            SAFE_ALOC_HOST(x_bit_cpu, bit_matrix_size);
-            SAFE_ALOC_HOST(z_bit_cpu, bit_matrix_size);
-            SAFE_ALOC_HOST(r_bit_cpu, bit_r_size);
+            SAFE_ALOC_HOST(x, bit_matrix_size);
+            SAFE_ALOC_HOST(z, bit_matrix_size);
+            SAFE_ALOC_HOST(r, bit_r_size);
 
             SAFE_ALOC_GPU(x_bit_gpu, bit_matrix_size);
             SAFE_ALOC_GPU(z_bit_gpu, bit_matrix_size);
@@ -100,9 +99,9 @@ namespace NWQSim
             //Release for CPU side
             SAFE_FREE_HOST(totalResults);
 
-            SAFE_FREE_HOST_CUDA(x_bit_cpu);
-            SAFE_FREE_HOST_CUDA(z_bit_cpu);
-            SAFE_FREE_HOST_CUDA(r_bit_cpu);
+            SAFE_FREE_HOST_CUDA(x);
+            SAFE_FREE_HOST_CUDA(z);
+            SAFE_FREE_HOST_CUDA(r);
 
             //Release GPU
             SAFE_FREE_GPU(gpu_results);
@@ -118,11 +117,11 @@ namespace NWQSim
         //Wrapper function for pack kernel
         void pack_tableau_gpu() 
         {
-            cudaSafeCall(cudaMemcpy(x_bit_gpu, x_bit_cpu, bit_matrix_size,
+            cudaSafeCall(cudaMemcpy(x_bit_gpu, x, bit_matrix_size,
                                     cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(z_bit_gpu, z_bit_cpu, bit_matrix_size,
+            cudaSafeCall(cudaMemcpy(z_bit_gpu, z, bit_matrix_size,
                                     cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(r_bit_gpu, r_bit_cpu, bit_r_size,
+            cudaSafeCall(cudaMemcpy(r_bit_gpu, r, bit_r_size,
                                     cudaMemcpyHostToDevice));
 
             STAB_CUDA *stab_gpu;
@@ -150,11 +149,11 @@ namespace NWQSim
 
             unpack_tableau_kernel<<<gridSize, blockSize>>>(stab_gpu);
 
-            cudaSafeCall(cudaMemcpy(x_bit_cpu, x_bit_gpu, bit_matrix_size,
+            cudaSafeCall(cudaMemcpy(x, x_bit_gpu, bit_matrix_size,
                                     cudaMemcpyDeviceToHost));
-            cudaSafeCall(cudaMemcpy(z_bit_cpu, z_bit_gpu, bit_matrix_size,
+            cudaSafeCall(cudaMemcpy(z, z_bit_gpu, bit_matrix_size,
                                     cudaMemcpyDeviceToHost));
-            cudaSafeCall(cudaMemcpy(r_bit_cpu, r_bit_gpu, bit_r_size,
+            cudaSafeCall(cudaMemcpy(r, r_bit_gpu, bit_r_size,
                                     cudaMemcpyDeviceToHost));
 
             cudaDeviceSynchronize();
@@ -242,7 +241,7 @@ namespace NWQSim
         //resets the tableau to a full identity
         void reset_state() override
         {  
-            //Allocate memory for x_bit_cpu (2D array), but as a flattened 1D array
+            //Allocate memory for x (2D array) as a flattened 1D array
 
             int index;
             
@@ -254,8 +253,6 @@ namespace NWQSim
                 z[index] = 1;
             }
             //print_res_state();
-
-            /*End initialization*/
         }
         
         void set_seed(IdxType s) override
@@ -268,6 +265,7 @@ namespace NWQSim
         {
             for(int i = 0; i < rows; i++)
             {
+
                 if(((i == (rows/2)) || (i == rows-1)))
                 {
                     for(int j = -5; j < (n*2); j++)
@@ -278,12 +276,14 @@ namespace NWQSim
                 }
                 for(int j = 0; j < cols; j++)
                 {
-                    std::cout << x[i][j];
+                    int index = i * cols + j;
+                    std::cout << x[index];
                 }
                 std::cout << " | ";
                 for(int j = 0; j < cols; j++)
                 {
-                    std::cout << z[i][j];
+                    int index = i * cols + j;
+                    std::cout << z[index];
                 }
                 std::cout << "|" << r[i] << std::endl;
             }
@@ -330,8 +330,9 @@ namespace NWQSim
                 stabilizers.clear(); //clear the temporary stabilizers string
                 for(int j = 0; j < cols; j++) //qubits/cols
                 {
-                    x_val = x[i][j];
-                    z_val = z[i][j];
+                    int index = i * cols + j;
+                    x_val = x[index];
+                    z_val = z[index];
                     assert((x_val < 2) && (z_val < 2));
                     if(x_val)
                     {
@@ -359,20 +360,23 @@ namespace NWQSim
             int sum = 0;
             for(int j = 0; j < n; j++)
             {
+                int index_i = i * cols + j;
+                int index_h = h * cols + j;
+
                 //Sum every column in the row
-                if(x[i][j])
+                if(x[index_i])
                 {
-                    if(z[i][j])
-                        sum += z[h][j] - x[h][j];
+                    if(z[index_i])
+                        sum += z[index_h] - x[index_h];
                     else
-                        sum += z[h][j] * (2*x[h][j]-1);
+                        sum += z[index_h] * (2*x[index_h]-1);
                 }
-                else if(z[i][j])
-                    sum += x[h][j] * (1-2*z[h][j]);
+                else if(z[index_i])
+                    sum += x[index_h] * (1-2*z[index_h]);
 
                 //XOR x's and z's
-                x[h][j] = x[i][j] ^ x[h][j];
-                z[h][j] = z[i][j] ^ z[h][j];
+                x[index_h] = x[index_i] ^ x[index_h];
+                z[index_h] = z[index_i] ^ z[index_h];
             }
             sum += 2*r[h] + 2*r[i];
 
@@ -389,20 +393,22 @@ namespace NWQSim
             int sum = 0;
             for(int j = 0; j < n; j++)
             {
+                int index_i = i * cols + j;
+                int index_h = h * cols + j;
                 //Sum every column in the row
-                if(temp_x[i][j])
+                if(temp_x[index_i])
                 {
-                    if(z[i][j])
-                        sum += temp_z[h][j] - temp_x[h][j];
+                    if(temp_z[index_i])
+                        sum += temp_z[index_h] - temp_x[index_h];
                     else
-                        sum += temp_z[h][j] * (2*temp_x[h][j]-1);
+                        sum += temp_z[index_h] * (2*temp_x[index_h]-1);
                 }
-                else if(temp_z[i][j])
-                    sum += temp_x[h][j] * (1-2*temp_z[h][j]);
+                else if(temp_z[index_i])
+                    sum += temp_x[index_h] * (1-2*temp_z[index_h]);
 
                 //XOR x's and z's
-                temp_x[h][j] = temp_x[i][j] ^ temp_x[h][j];
-                temp_z[h][j] = temp_z[i][j] ^ temp_z[h][j];
+                temp_x[index_h] = temp_x[index_i] ^ temp_x[index_h];
+                temp_z[index_h] = temp_z[index_i] ^ temp_z[index_h];
             }
             sum += 2*temp_r[h] + 2*temp_r[i];
 
@@ -422,9 +428,9 @@ namespace NWQSim
 
             int half_rows = rows >> 1;
             
-            std::vector<std::vector<int>> temp_x;
-            std::vector<std::vector<int>> temp_z;
-            std::vector<int> temp_r;
+            uint8_t* temp_x;
+            uint8_t* temp_z;
+            uint8_t* temp_r;
             for(int shot = 0; shot < shots; shot++)
             {
                 //Make a copy of the class being measured so many shots can be performed
@@ -436,7 +442,8 @@ namespace NWQSim
                     int p = -1;
                     for(int p_index = half_rows; p_index < rows-1; p_index++)
                     {  
-                        if(temp_x[p_index][a])
+                        int index = p_index * cols + a;
+                        if(temp_x[index])
                         {
                             p = p_index;
                             break;
@@ -447,11 +454,13 @@ namespace NWQSim
                     {
                         for(int i = 0; i < rows-1; i++)
                         {
+                            int index = i * cols + a;
                             if((x[i][a]) && (i != p))
                             {
                                 tempRowsum(i, p, temp_x, temp_z, temp_r);
                             }
                         }
+                        for(int i = )
                         temp_x[p-half_rows] = temp_x[p];
                         temp_z[p-half_rows] = temp_z[p];
                         //Change all the columns in row p to be 0
@@ -621,11 +630,11 @@ namespace NWQSim
             }
 
             //Copy to GPU
-            cudaSafeCall(cudaMemcpy(x_bit_gpu, x_bit_cpu, bit_matrix_size,
+            cudaSafeCall(cudaMemcpy(x_bit_gpu, x, bit_matrix_size,
                                     cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(z_bit_gpu, z_bit_cpu, bit_matrix_size,
+            cudaSafeCall(cudaMemcpy(z_bit_gpu, z, bit_matrix_size,
                                     cudaMemcpyHostToDevice));
-            cudaSafeCall(cudaMemcpy(r_bit_gpu, r_bit_cpu, bit_r_size, cudaMemcpyHostToDevice));
+            cudaSafeCall(cudaMemcpy(r_bit_gpu, r, bit_r_size, cudaMemcpyHostToDevice));
 
             std::vector<Gate> gates = circuit->get_gates();
             //Copy gates to the gpu side
@@ -659,11 +668,11 @@ namespace NWQSim
             cudaCheckError();
 
             //Copy data to the CPU side and unpack
-            cudaSafeCall(cudaMemcpy(x_bit_cpu, x_bit_gpu, bit_matrix_size,
+            cudaSafeCall(cudaMemcpy(x, x_bit_gpu, bit_matrix_size,
                                     cudaMemcpyDeviceToHost));
-            cudaSafeCall(cudaMemcpy(z_bit_cpu, z_bit_gpu, bit_matrix_size,
+            cudaSafeCall(cudaMemcpy(z, z_bit_gpu, bit_matrix_size,
                                     cudaMemcpyDeviceToHost));
-            cudaSafeCall(cudaMemcpy(r_bit_cpu, r_bit_gpu, bit_r_size, cudaMemcpyDeviceToHost));
+            cudaSafeCall(cudaMemcpy(r, r_bit_gpu, bit_r_size, cudaMemcpyDeviceToHost));
             if (Config::PRINT_SIM_TRACE)
             {
                 printf("\n============== STAB-Sim ===============\n");
@@ -714,16 +723,19 @@ namespace NWQSim
         IdxType mask;
         IdxType rows;
         IdxType packed_rows;
+        int packed_bits;
         IdxType cols;
         IdxType bit_r_size;
         IdxType bit_matrix_size;
+        IdxType packed_r_size;
+        IdxType packed_matrix_size;
 
         std::vector<std::vector<Gate>> layered_gates;
         IdxType num_layers;
         //CPU Arrays
-        uint8_t* x_bit_cpu = nullptr;
-        uint8_t* z_bit_cpu = nullptr;
-        uint8_t* r_bit_cpu = nullptr;
+        uint8_t* x = nullptr;
+        uint8_t* z = nullptr;
+        uint8_t* r = nullptr;
         //GPU Arrays
         uint8_t* x_bit_gpu = nullptr;
         uint8_t* z_bit_gpu = nullptr;
@@ -731,8 +743,13 @@ namespace NWQSim
         uint32_t* x_packed_gpu = nullptr;
         uint32_t* z_packed_gpu = nullptr;
         uint32_t* r_packed_gpu = nullptr;
+        uint32_t* x_packed_cpu = nullptr;
+        uint32_t* z_packed_cpu = nullptr;
+        uint32_t* r_packed_cpu = nullptr;
 
         IdxType* totalResults = nullptr;
+        IdxType* gpu_results = nullptr;
+
         IdxType** totalResultsLong = nullptr;
 
         //Random

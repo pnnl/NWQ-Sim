@@ -201,16 +201,16 @@ namespace NWQSim{
 // Create a circuit with 2 qubits
 int main()
 {
-    std::vector<int> qubit_test;//{4, 8, 16, 32, 64, 96, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1152, 1280, 1408, 1536, 1664, 1792, 1920, 2048};
-    for(int i = 1; i < 21; i++)
-        qubit_test.push_back(4608 + i * 128);
+    std::vector<int> qubit_test = {4};//{4, 8, 16, 32, 64, 96, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1152, 1280, 1408, 1536, 1664, 1792, 1920, 2048};
+    // for(int i = 1; i < 21; i++)
+    //     qubit_test.push_back(4608 + i * 128);
     for(int i = 0; i < qubit_test.size(); i++)
     {
         std::cout << "Starting program" << std::endl;
         int n_qubits = qubit_test[i];
         int shots = 10;
 
-        int rounds = 100000;
+        int rounds = 1;
         NWQSim::IdxType S_count = 0;
         NWQSim::IdxType H_count = rounds * n_qubits;
         NWQSim::IdxType CX_count = 0;
@@ -255,19 +255,24 @@ int main()
             
         std::cout << "Building circuit" << std::endl;
 
-        std::vector<int> gate_chunks (rounds, n_qubits);
-        std::vector<NWQSim::Gate> gate_layer;
-        for(int k = 0; k < n_qubits; k++)
-        {
-            NWQSim::Gate G(NWQSim::OP::H, k);
-            gate_layer.push_back(G);
-        }
-        std::vector<NWQSim::Gate> full_circuit;
-        for(int j = 0; j < rounds; j++)
-        {
-            full_circuit.insert(full_circuit.end(),gate_layer.begin(),gate_layer.end());
-        }
-        circuit->set_gates(full_circuit);
+        // std::vector<int> gate_chunks (rounds, n_qubits);
+        // std::vector<NWQSim::Gate> gate_layer;
+        // for(int k = 0; k < n_qubits; k++)
+        // {
+        //     NWQSim::Gate G(NWQSim::OP::H, k);
+        //     gate_layer.push_back(G);
+        // }
+        // std::vector<NWQSim::Gate> full_circuit;
+        // for(int j = 0; j < rounds; j++)
+        // {
+        //     full_circuit.insert(full_circuit.end(),gate_layer.begin(),gate_layer.end());
+        // }
+        // circuit->set_gates(full_circuit);
+
+        circuit->H(1);
+        circuit->S(1);
+        circuit->S(1);
+        circuit->H(1);
 
 
         std::string backend = "nvgpu";
@@ -311,7 +316,7 @@ int main()
         // outfile << H_count << std::endl;
         // outfile << CX_count << std::endl;
 
-        outfile.close();
+        // outfile.close();
     }
 
     return 0;
