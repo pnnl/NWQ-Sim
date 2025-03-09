@@ -187,26 +187,26 @@ namespace NWQSim {
         }
         bool parity(const PauliOperator& other, ValType& sign) const {
           IdxType mindim = std::min(other.dim, dim);
-          IdxType n_ones = count_ones((xmask & other.zmask) | (zmask & other.xmask));
+          IdxType n_ones = count_ones((xmask & other.zmask) ^ (zmask & other.xmask));
           sign = (n_ones / 2) % 2 ? -1.0 : 1.0;
           return (n_ones % 2) == 0;
           // return parity_xor;
         }
         bool parity(IdxType other_zmask, ValType& sign) const {
-          IdxType n_ones = count_ones((xmask & other_zmask) | zmask );
+          IdxType n_ones = count_ones((xmask & other_zmask) ^ zmask );
           sign = (n_ones / 2) % 2 ? -1.0 : 1.0;
           return (n_ones % 2) == 0;
           // return parity_xor;
         }
         bool parity(const PauliOperator& other) const {
           IdxType mindim = std::min(other.dim, dim);
-          IdxType n_ones = count_ones((xmask & other.zmask) | (zmask & other.xmask));
+          IdxType n_ones = count_ones((xmask & other.zmask) ^ (zmask & other.xmask));
           return (n_ones % 2) == 0;
           // return parity_xor;
         }
         bool isNonTrivial() const { return non_trivial;}
         bool QWC(const PauliOperator& other) const {          
-          return ((xmask & other.zmask) | (zmask & other.xmask)) == 0;
+          return ((xmask & other.zmask) ^ (zmask & other.xmask)) == 0;
         }
         bool GC(const PauliOperator& other) const {
           return parity(other);
@@ -218,7 +218,7 @@ namespace NWQSim {
                  IdxType group_mask, 
                  const std::vector<std::vector<IdxType> >& distances,
                  IdxType tolerance) const {
-          IdxType sympprod = (xmask & other.zmask) | (zmask & other.xmask);
+          IdxType sympprod = (xmask & other.zmask) ^ (zmask & other.xmask);
           IdxType total_anticomm = sympprod | group_mask;
           IdxType n_anticomm_total = 0;
           IdxType n_anticomm = 0;
