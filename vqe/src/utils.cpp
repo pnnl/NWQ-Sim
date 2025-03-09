@@ -92,6 +92,7 @@ void readgraph(std::string fpath, std::vector<std::list<IdxType> >& adj_list) {
   }
 }
 
+/*QWC or GC selected in this function!*/
 void sorted_insertion(const std::vector<PauliOperator>& paulilist, std::list<std::vector<IdxType> >& cliques, bool overlap) {
 std::vector<IdxType> sorted_nodes;
     sorted_nodes.reserve(paulilist.size());
@@ -119,7 +120,7 @@ std::vector<IdxType> sorted_nodes;
             
             bool commutes = true;
             for (auto other: clique) {
-                if (!paulilist[node].QWC(paulilist[other])) {
+                if (!paulilist[node].GC(paulilist[other])) {
                     commutes = false;
                     break;
                 }
@@ -134,7 +135,7 @@ std::vector<IdxType> sorted_nodes;
             for (IdxType other_node: added_already) {
                 bool commutes = true;
                 for (auto resident: clique) {
-                    if (!paulilist[other_node].QWC(paulilist[resident])) {
+                    if (!paulilist[other_node].GC(paulilist[resident])) {
                         commutes = false;
                         break;
                     }
