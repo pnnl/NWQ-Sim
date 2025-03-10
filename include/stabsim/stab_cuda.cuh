@@ -752,6 +752,11 @@ namespace NWQSim
             cudaSafeCall(cudaMemcpy(r_packed_gpu, r_packed_cpu, packed_r_size, cudaMemcpyHostToDevice));
 
             std::cout << "Data copied" << std::endl;
+            
+            std::vector<Gate> gates = circuit->get_gates();
+            //Copy gates to the gpu side
+            copy_gates_to_gpu(gates);
+            IdxType n_gates = gates.size();
 
             int minGridSize, blockSize;
             cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda2D, 0, 0);
