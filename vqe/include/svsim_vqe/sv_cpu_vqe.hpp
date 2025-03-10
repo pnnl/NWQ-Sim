@@ -30,19 +30,21 @@ namespace NWQSim
       virtual void call_simulator() override {      
         reset_state();
         expectation_value = 0;
-        sim(ansatz);
-        sim(measurement);
+        double timer = 0;
+        sim(ansatz, timer);
+        sim(measurement, timer);
         for (auto i: obsvec) {
           expectation_value += i->exp_output;
         }
       };
 
-      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement, bool reset) override {    
+      virtual void call_simulator(std::shared_ptr<Ansatz> _measurement, bool reset) override {  
+        double timer = 0;  
         if (reset) {
           reset_state();
-          sim(ansatz);
+          sim(ansatz, timer);
         }
-        sim(_measurement);
+        sim(_measurement, timer);
       };
       virtual void fill_obslist(IdxType index) override {
         ObservableList*& obs = obsvec[index];

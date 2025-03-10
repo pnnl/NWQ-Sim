@@ -1257,6 +1257,100 @@ namespace NWQSim
         // printf("Kernel is done!\n");
     }//end kernel
 
+    __global__ void simulation_kernel_cuda_bitwise(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
+    {
+        int i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i >= stab_gpu->rows) return;
+
+        int n_qubits = stab_gpu->n;
+
+        uint32_t* x_arr = stab_gpu->x_bit_gpu;
+        uint32_t* z_arr = stab_gpu->z_bit_gpu;
+        uint32_t* r_arr = stab_gpu->r_bit_gpu;
+
+        uint32_t x, z;
+        OP op_name;
+        int index;
+
+        //Precompute the possible indices that each thread needs before looping the gates
+        int thread_pos = i * stab_gpu->cols;
+        int q_indices[32768];
+        #pragma unroll
+        for(int q = 0; q < n_qubits; q++)
+        {
+            q_indices[q] = thread_pos + q;
+        }
+        
+        for (int k = 0; k < n_gates; k++) 
+        {
+            op_name = gates_gpu[k].op_name;
+            index = q_indices[gates_gpu[k].qubit];
+
+            switch (op_name) 
+            {
+                case OP::H:
+                    x = x_arr[index];
+                    z = z_arr[index];
+                    //Phase
+                    r_arr[i] ^= (x & z);
+
+                    //Entry -- swap x and z bits
+                    x_arr[index] = z;
+                    z_arr[index] = x;
+                    break;
+
+                case OP::S:
+                    x = x_arr[index];
+                    z = z_arr[index];
+
+                    //Phase
+                    r_arr[i] ^= (x & z);
+
+                    //Entry
+                    z_arr[index] = z ^ x;
+                    break;
+
+                case OP::SDG:
+                    x = x_arr[index];
+                    z = z_arr[index];
+
+                    //Phase
+                    r_arr[i] ^= (x ^ (x & z));
+
+                    //Entry
+                    z_arr[index] = z ^ x;
+                    break;
+
+                case OP::CX:
+                    int ctrl_index = q_indices[gates_gpu[k].ctrl];
+
+                    x = x_arr[index];
+                    z = z_arr[index];
+
+                    uint32_t x_ctrl = x_arr[ctrl_index];
+                    uint32_t z_ctrl = z_arr[ctrl_index];
+
+                    //Phase
+                    r_arr[i] ^= ((x_ctrl & z) & (x^z_ctrl^1));
+
+                    //Entry
+                    x_arr[index] = x ^ x_ctrl;
+                    z_arr[ctrl_index] = z ^ z_ctrl;
+
+                    break;
+
+                // case OP::M:
+                //     uint32_t p = INT32_MAX;
+                //     stab_gpu->M_gate(i, m_index, p);
+
+                default:
+                    printf("Non-Clifford or unrecognized gate: %d\n", op_name);
+                    assert(false);
+            }
+        }
+        // printf("Kernel is done!\n");
+    }//end kernel
+
     __global__ void simulation_kernel_cuda2D(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType gate_chunk) 
     {
         int row = blockIdx.x * blockDim.x + threadIdx.x;  //Index for stabilizers (rows)

@@ -92,6 +92,7 @@ void readgraph(std::string fpath, std::vector<std::list<IdxType> >& adj_list) {
   }
 }
 
+/*QWC or GC selected in this function!*/
 void sorted_insertion(const std::vector<PauliOperator>& paulilist, std::list<std::vector<IdxType> >& cliques, bool overlap) {
 std::vector<IdxType> sorted_nodes;
     sorted_nodes.reserve(paulilist.size());

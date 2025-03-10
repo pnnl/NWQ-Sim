@@ -195,7 +195,7 @@ namespace NWQSim
                     //Don't push through the odd number gate that was added back (if there were an odd number of stabilizers)
                     int rotations = num_rotations % 8;
                     rotations = (rotations/2);
-                    std::cout << "Rotations to push through for " << stabilizer << ": " << rotations << std::endl;
+                    // std::cout << "Rotations to push through for " << stabilizer << ": " << rotations << std::endl;
 
                     //Positive rotation gates come out of more positive T rotations than negative
                     if(rotations > 0)
@@ -313,57 +313,58 @@ namespace NWQSim
         {
             auto gate = gates[i];
             a = gate.qubit;
-            if(gate.op_name == OP::T)
+            switch(gate.op_name)
             {
-                T_count++;
-                //Create a new Z stabilizer for the T gate
-                std::string new_row = "";
-                for(int i = 0; i < n; i++)
+                case(OP::T):
                 {
-                    new_row.push_back('I');
+                    T_count++;
+                    //Create a new Z stabilizer for the T gate
+                    std::string new_row(n, 'I');
+                    new_row[a] = 'Z';
+
+                    T_tab->add_stabilizer(new_row);
+
+                    // std::cout <<"T stab " << new_row << std::endl;
+                    break;
+
                 }
-                new_row[a] = 'Z';
-
-                T_tab->add_stabilizer(new_row);
-
-                // std::cout <<"T stab " << new_row << std::endl;
-
-            }
-            else if(gate.op_name == OP::TDG)
-            {
-                T_count++;
-                //Create a new Z stabilizer for the T gate
-                std::string new_row = "";
-                for(int i = 0; i < n; i++)
+                case(OP::TDG):
                 {
-                    new_row.push_back('I');
+                    T_count++;
+                    //Create a new Z stabilizer for the TDG gate
+                    std::string new_row(n, 'I');
+                    new_row[a] = 'Z';
+
+                    T_tab->add_stabilizer(new_row, 1); //Phase for TDG
+
+                    // std::cout <<"TDG stab " << new_row << std::endl;
+                    break;
+
                 }
-                new_row[a] = 'Z';
-
-                T_tab->add_stabilizer(new_row, 1);
-
-                // std::cout <<"TDG stab " << new_row << std::endl;
-
-            }
-            else if(gate.op_name == OP::S)
-            {
-                T_tab->apply_gate("S", a);
-                M_circ->S(a);
-            }
-            else if(gate.op_name == OP::H)
-            {
-                T_tab->apply_gate("H", a);
-                M_circ->H(a);
-            }
-            else if(gate.op_name == OP::CX)
-            {
-                a = gate.ctrl;
-                b = gate.qubit;
-                T_tab->apply_gate("CX", a, b);
-                M_circ->CX(a, b);
-            }
-            else
-                std::cerr << "Unsupported gate in T transpilation!" << std::endl;
+                case(OP::S):
+                {
+                    T_tab->apply_gate("S", a);
+                    M_circ->S(a);
+                    break;
+                }
+                case(OP::H):
+                {
+                    T_tab->apply_gate("H", a);
+                    M_circ->H(a);
+                    break;
+                }
+                case(OP::CX):
+                {
+                    a = gate.ctrl;
+                    b = gate.qubit;
+                    T_tab->apply_gate("CX", a, b);
+                    M_circ->CX(a, b);
+                    break;
+                }
+                default:
+                    std::cerr << "Unsupported gate in T transpilation!" << std::endl;
+                    break;
+            }//End Switch
         }//End for loop of original circuit
         // std::cout << "------\n\n\n TCount: " << T_count << " \n\n\n------" << std::endl;
         auto proc_end = std::chrono::high_resolution_clock::now();
@@ -372,9 +373,8 @@ namespace NWQSim
 
 
     //Main compilation function for T pushthrough using tableau simulation
-    void T_passthrough(std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<QuantumState>& M_tab, std::string outFile, std::chrono::duration<long long, std::ratio<1, 1000000>> proc_time, int reps = 1)
+    void T_passthrough(std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<QuantumState>& M_tab, std::ofstream& outfile, std::chrono::duration<long long, std::ratio<1, 1000000>> proc_time, int reps = 1)
     {
-        std::ofstream outfile(outFile); // Open a file for writing
         
         IdxType n = M_tab->get_qubits();
 
@@ -394,25 +394,28 @@ namespace NWQSim
 
 
         //Start the optimization defined by the number of reps
-        auto opt_start = std::chrono::high_resolution_clock::now();
+        std::chrono::microseconds opt_time(0);
         for(int i = 0; i < reps; i++)
         {
             P_temp = 0;
-            std::cout << "------\n\n Rep: " << i+1 << "\n\n------" << std::endl;
+            // std::cout << "------\n\n Rep: " << i+1 << "\n\n------" << std::endl;
             if(P_rows)
+            {
+                auto opt_start = std::chrono::high_resolution_clock::now();
                 T_optimize(P, M_tab, n);
+                auto opt_end = std::chrono::high_resolution_clock::now();
+                opt_time += std::chrono::duration_cast<std::chrono::microseconds>(opt_end - opt_start);
+            }
             else
             {
                 std::cout << "No T gates left to optimize." << std::endl;
                 rep_print = i;
                 break;
             }
-
             for(int j = 0; j < P.size(); j++)
             {
                 P_temp += P[j]->get_num_rows();
             }
-
             //If the number of rows is the same after optimizing, end the optimization
             if(P_rows == P_temp)
             {
@@ -422,8 +425,6 @@ namespace NWQSim
             }
             P_rows = P_temp;
         }
-        auto opt_end = std::chrono::high_resolution_clock::now();
-        auto opt_time = std::chrono::duration_cast<std::chrono::microseconds>(opt_end - opt_start);
 
 
 
@@ -443,9 +444,7 @@ namespace NWQSim
         outfile << T_tab->get_num_rows() << std::endl;
         outfile << rep_print << std::endl;
 
-
         /*Process is done, M and T have been seperated and returned*/
 
-        outfile.close(); // Close the file
     } //End T_passthrough
 }//End namespace

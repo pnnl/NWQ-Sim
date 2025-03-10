@@ -464,9 +464,9 @@ namespace NWQSim
             {
                 if(count.first > 1)
                 {
-                    std::cout << "Stabilizer: " << stabilizer << std::endl;
-                    std::cout << "Count.first: " << count.first << std::endl;
-                    std::cout << "Count.second: " << count.first << std::endl;
+                    // std::cout << "Stabilizer: " << stabilizer << std::endl;
+                    // std::cout << "Count.first: " << count.first << std::endl;
+                    // std::cout << "Count.second: " << count.first << std::endl;
 
                     for(int j = 0; j < rows; j++)
                     {                    
@@ -475,7 +475,7 @@ namespace NWQSim
                         {
                             if(get_stabilizer_line(j).first == stabilizer)
                             {
-                                std::cout << "Removed: " << stabilizer << " " << get_stabilizer_line(j).second << std::endl;
+                                // std::cout << "Removed: " << stabilizer << " " << get_stabilizer_line(j).second << std::endl;
                                 remove_stabilizer(j);
                                 j--;
                             }
@@ -486,12 +486,12 @@ namespace NWQSim
                     if((count.second % 2) == 1)
                     {
                         add_stabilizer(stabilizer, 0);
-                        std::cout << "Added: " << stabilizer << " 0" << std::endl;
+                        // std::cout << "Added: " << stabilizer << " 0" << std::endl;
                     }
                     else if((count.second % 2) == -1)
                     {
                         add_stabilizer(stabilizer, 1);
-                        std::cout << "Added: " << stabilizer << " 1" << std::endl;
+                        // std::cout << "Added: " << stabilizer << " 1" << std::endl;
                     }
                 }
                 // std::cout << std::endl;
@@ -507,8 +507,8 @@ namespace NWQSim
             int new_z;
             int start = 0;
             
-            if(has_destabilizers)
-                start = rows/2;
+            // if(has_destabilizers)
+            //     start = rows/2;
 
             for (int i = start; i < rows; i++) 
             {

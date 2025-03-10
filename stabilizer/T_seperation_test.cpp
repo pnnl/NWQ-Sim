@@ -12,15 +12,19 @@
 #include "src/T_separation.hpp"
 #include "src/qasm_extraction.hpp"
 
+
+
 int main(){
 
     /* Small test */
     int n_qubits = 4;
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
-    std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/qft_n18_iter1.qasm";
-    std::string outFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/stab_T_bench/qft_n18_iter1.txt";
+    std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/adder_n4.qasm";
+    std::string outFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/stab_T_bench/adder_n4.txt";
+    std::ofstream outfile(outFile); // Open a file for writing
     appendQASMToCircuit(circuit, inFile, n_qubits);
+    NWQSim::IdxType total_gates = (circuit->get_gates()).size();
 
 
     //Measurement circuit will be filled in the passthrough function
@@ -43,7 +47,7 @@ int main(){
     M_tab->sim(M_circ, timer);
     M_tab->remove_destabilizers();
     M_tab->print_res_state();
-    T_passthrough(T_tab, M_tab, outFile, proc_time, 10);
+    T_passthrough(T_tab, M_tab, outfile, proc_time, 10);
 
 
     //Put the M circuit back in forward time after the new Clifford gates have been appended
@@ -53,7 +57,8 @@ int main(){
     std::cout << "M tableau measurement results: " << (M_tab->measure_all(10))[0] << std::endl;
     /*Measurement Tableau*/
 
-
+    outfile << total_gates << std::endl;
+    outfile.close(); // Close the file
 
     return 0;
 }
