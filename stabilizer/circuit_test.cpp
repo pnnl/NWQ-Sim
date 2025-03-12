@@ -289,7 +289,7 @@ int main()
         std::cout << "Starting sim" << std::endl;
 
         // state->sim(circuit, timer);
-        state->sim_bitwise(circuit, timer);
+        state->sim(circuit, timer);
         // state->print_res_state();
         // NWQSim::IdxType* results = state->measure_all(shots);
 

@@ -42,7 +42,7 @@ namespace NWQSim
         {
             throw std::runtime_error("2D Sim Not Implemented");
         }
-        virtual void sim_bitwise(std::shared_ptr<Circuit> circuit, double &sim_time)
+        virtual void simBitwise(std::shared_ptr<Circuit> circuit, double &sim_time)
         {
             throw std::runtime_error("Bitwise Sim Not Implemented");
         }

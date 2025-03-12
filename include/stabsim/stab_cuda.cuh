@@ -100,9 +100,9 @@ namespace NWQSim
             SAFE_FREE_GPU(x_packed_gpu);
             SAFE_FREE_GPU(z_packed_gpu);
             SAFE_FREE_GPU(r_packed_gpu);
-            SAFE_ALOC_GPU(x_bit_gpu);
-            SAFE_ALOC_GPU(z_bit_gpu);
-            SAFE_ALOC_GPU(r_bit_gpu);
+            SAFE_FREE_GPU(x_bit_gpu);
+            SAFE_FREE_GPU(z_bit_gpu);
+            SAFE_FREE_GPU(r_bit_gpu);
         }
 
         //Packs down 32 rows in each column and flattens
@@ -752,6 +752,11 @@ namespace NWQSim
             cudaSafeCall(cudaMemcpy(r_packed_gpu, r_packed_cpu, packed_r_size, cudaMemcpyHostToDevice));
 
             std::cout << "Data copied" << std::endl;
+            
+            std::vector<Gate> gates = circuit->get_gates();
+            //Copy gates to the gpu side
+            copy_gates_to_gpu(gates);
+            IdxType n_gates = gates.size();
 
             int minGridSize, blockSize;
             cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda2D, 0, 0);
@@ -881,7 +886,7 @@ namespace NWQSim
             {
                 printf("\n============== STAB-Sim ===============\n");
                 printf("n_qubits:%lld, n_gates:%lld, ncpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms\n",
-                       n, num_gates, 1, sim_time, 0.,
+                       n, n_gates, 1, sim_time, 0.,
                        sim_time);
                 printf("=====================================\n");
             }
