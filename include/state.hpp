@@ -119,6 +119,10 @@ namespace NWQSim
         {
             throw std::runtime_error("Stabilizer Count Not Implemented");
         }
+        virtual void add_stabilizer_bits(std::vector<int> new_x, std::vector<int> new_z, int phase_bit = 0)
+        {
+            throw std::runtime_error("Add Stabilizer Not Implemented");
+        }
         virtual bool check_commutation(std::string& pauliString)
         {
             throw std::runtime_error("Check Commutation Not Implemented");

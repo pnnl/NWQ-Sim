@@ -669,6 +669,15 @@ namespace NWQSim
             }
         }
 
+        void add_stabilizer_bits(std::vector<int> new_x, std::vector<int> new_z, int phase_bit = 0) override
+        {
+            stabCounts++;
+            rows++;
+            x.push_back(new_x);
+            z.push_back(new_z);
+            r.push_back(phase_bit);
+        }
+
         //Replaces a stabilizer pauli string at some row in the Tableau. Useful for initializing a
         //new Tableau in a for loop without circuit initialization
         void replace_stabilizer(std::string pauliString, int stabPos) override

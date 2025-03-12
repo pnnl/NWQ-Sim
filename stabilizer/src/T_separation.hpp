@@ -188,8 +188,7 @@ namespace NWQSim
                 if((abs(num_rotations) > 1))
                 {
                     std::string stabilizer = pair.first;
-                    //If there were an odd number of stabilizers remaining, add back the one that doesn't cancel out
-
+                    
                     // std::cout << num_rotations << " repetitions of " << stabilizer << std::endl;
                     //8 1/8 gates cancel out
                     //Don't push through the odd number gate that was added back (if there were an odd number of stabilizers)
@@ -306,12 +305,14 @@ namespace NWQSim
         int b; //control
         int T_count = 0;
         int T_rows = 0;
+        // std::vector<int> temp_x(n, 0);
+        // std::vector<int> temp_z(n, 0);
 
         auto proc_start = std::chrono::high_resolution_clock::now();
         //As we loop through the circuit, keep track of the status of T
         for(int i = num_gates-1; i > -1; i--)
         {
-            auto gate = gates[i];
+            Gate gate = gates[i];
             a = gate.qubit;
             switch(gate.op_name)
             {
@@ -323,6 +324,11 @@ namespace NWQSim
                     new_row[a] = 'Z';
 
                     T_tab->add_stabilizer(new_row);
+
+                    // temp_z[a] = 1;
+                    // T_tab->add_stabilizer_bits(temp_x, temp_z, 0);
+                    // temp_z[a] = 0;
+
 
                     // std::cout <<"T stab " << new_row << std::endl;
                     break;
@@ -336,6 +342,10 @@ namespace NWQSim
                     new_row[a] = 'Z';
 
                     T_tab->add_stabilizer(new_row, 1); //Phase for TDG
+
+                    // temp_z[a] = 1;
+                    // T_tab->add_stabilizer_bits(temp_x, temp_z, 1);
+                    // temp_z[a] = 0;
 
                     // std::cout <<"TDG stab " << new_row << std::endl;
                     break;

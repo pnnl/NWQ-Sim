@@ -20,8 +20,8 @@ int main(){
     int n_qubits = 4;
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
-    std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/adder_n4.qasm";
-    std::string outFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/stab_T_bench/adder_n4.txt";
+    std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/qft_n18_iter2.qasm";
+    std::string outFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/stab_T_bench/qft_n18_iter2.txt";
     std::ofstream outfile(outFile); // Open a file for writing
     appendQASMToCircuit(circuit, inFile, n_qubits);
     NWQSim::IdxType total_gates = (circuit->get_gates()).size();
@@ -62,4 +62,3 @@ int main(){
 
     return 0;
 }
- 
