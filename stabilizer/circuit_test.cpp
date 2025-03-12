@@ -273,6 +273,7 @@ int main()
         circuit->S(1);
         circuit->S(1);
         circuit->H(1);
+        circuit->M(1);
 
 
         std::string backend = "nvgpu";
@@ -290,7 +291,7 @@ int main()
 
         // state->sim(circuit, timer);
         state->sim(circuit, timer);
-        // state->print_res_state();
+        state->print_res_state();
         // NWQSim::IdxType* results = state->measure_all(shots);
 
         // for(int i = 0; i < shots; i++)
