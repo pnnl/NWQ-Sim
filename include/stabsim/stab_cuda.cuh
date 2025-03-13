@@ -22,6 +22,7 @@
 #include <assert.h>
 #include <cuda_runtime_api.h>
 #include <cooperative_groups.h>
+#include <curand_kernel.h>
 #include <iostream>
 #include <cuda.h>
 #include <memory>
@@ -74,10 +75,6 @@ namespace NWQSim
 
             SAFE_ALOC_HOST(singleResultHost, sizeof(IdxType));
             SAFE_ALOC_GPU(singleResultGPU, sizeof(IdxType));
-            cudaMemcpy(singleResultGPU, singleResultHost, sizeof(IdxType), cudaMemcpyHostToDevice);
-
-            SAFE_ALOC_HOST(totalResults, sizeof(IdxType));
-            memset(totalResults, 0, sizeof(IdxType));
             /*End initialization*/
             
             //Allocate the packed data to the GPU side using NVSHMEM and a tempRow for row swapping
@@ -833,11 +830,18 @@ namespace NWQSim
             //Copy the simulator instance to GPU
             cudaSafeCall(cudaMemcpy(stab_gpu, this,
                                     sizeof(STAB_CUDA), cudaMemcpyHostToDevice));
-
+            
             gpu_timer sim_timer;
 
             //Copy bit data to GPU
             copy_bits_to_gpu();
+            singleResultHost = 0;
+            cudaMemcpy(&singleResultHost, &singleResultGPU, sizeof(IdxType), cudaMemcpyDeviceToHost);
+
+            
+            cudaMalloc(&row_sum, rows * sizeof(uint32_t));
+            cudaMemset(row_sum, 0, rows * sizeof(uint32_t));
+
 
             std::cout << "Data copied" << std::endl;
 
@@ -882,7 +886,7 @@ namespace NWQSim
             cudaCheckError();
             //Copy data to the CPU side and unpack
             copy_bits_from_gpu();
-            cudaMemcpy(singleResultHost, singleResultGPU, sizeof(IdxType), cudaMemcpyDeviceToHost);
+            cudaMemcpy(&singleResultHost, &singleResultGPU, sizeof(IdxType), cudaMemcpyDeviceToHost);
 
 
             if (Config::PRINT_SIM_TRACE)
@@ -958,8 +962,11 @@ namespace NWQSim
         uint32_t* x_bit_gpu = nullptr;
         uint32_t* z_bit_gpu = nullptr;
         uint32_t* r_bit_gpu = nullptr;
+        int* row_sum = nullptr;
 
-        IdxType singleResult;
+        IdxType singleResultHost;
+        IdxType singleResultGPU;
+
         IdxType* totalResults = nullptr;
         IdxType** totalResultsLong = nullptr;
 
@@ -1266,14 +1273,15 @@ namespace NWQSim
         // printf("Kernel is done!\n");
     }//end kernel
 
+    __device__ int p_shared;
     __global__ void simulation_kernel_cuda_bitwise(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
     {
-        int row = blockIdx.x * blockDim.x + threadIdx.x;
-        int col = blockIdx.y * blockDim.y + threadIdx.y;
+        int i = blockIdx.x * blockDim.x + threadIdx.x;
+        int j = blockIdx.y * blockDim.y + threadIdx.y;
         int rows = stab_gpu->rows;
         int cols = stab_gpu->cols;
-        if (row >= rows) return;
-        if (col >= cols) return;
+        if(i >= rows) return;
+        if(j >= cols) return;
 
 
         int n_qubits = stab_gpu->n;
@@ -1287,7 +1295,7 @@ namespace NWQSim
         int index;
 
         //Precompute the possible indices that each thread needs before looping the gates
-        int thread_pos = row * cols;
+        int thread_pos = i * cols;
         int q_indices[32768];
         #pragma unroll
         for(int q = 0; q < n_qubits; q++)
@@ -1306,7 +1314,7 @@ namespace NWQSim
                     x = x_arr[index];
                     z = z_arr[index];
                     //Phase
-                    r_arr[row] ^= (x & z);
+                    r_arr[i] ^= (x & z);
 
                     //Entry -- swap x and z bits
                     x_arr[index] = z;
@@ -1318,7 +1326,7 @@ namespace NWQSim
                     z = z_arr[index];
 
                     //Phase
-                    r_arr[row] ^= (x & z);
+                    r_arr[i] ^= (x & z);
 
                     //Entry
                     z_arr[index] = z ^ x;
@@ -1329,7 +1337,7 @@ namespace NWQSim
                     z = z_arr[index];
 
                     //Phase
-                    r_arr[row] ^= (x ^ (x & z));
+                    r_arr[i] ^= (x ^ (x & z));
 
                     //Entry
                     z_arr[index] = z ^ x;
@@ -1345,7 +1353,7 @@ namespace NWQSim
                     uint32_t z_ctrl = z_arr[ctrl_index];
 
                     //Phase
-                    r_arr[row] ^= ((x_ctrl & z) & (x^z_ctrl^1));
+                    r_arr[i] ^= ((x_ctrl & z) & (x^z_ctrl^1));
 
                     //Entry
                     x_arr[index] = x ^ x_ctrl;
@@ -1355,174 +1363,180 @@ namespace NWQSim
 
                 case OP::M:
                 {
-                    __shared__ int p_shared;
-                    if (threadIdx.x == 0) 
-                        p_shared = rows+1;
-                    
-                    __syncthreads();
+                    int a = gates_gpu[k].qubit;
 
-                    int p = -1;
-                    if(row >= (rows/ 2))
-                        if(x[index] > 0)
-                            p = row;
-
-                    if (p != -1)
-                        atomicMin(&p_shared, p);
-
-                    __syncthreads();
-
-                    //Deterministic
-                    if(p_shared > -1)
+                    if(threadIdx.x == 0 && threadIdx.y == 0 )
                     {
-                        if(x[index] && (row != p_shared))
+                        printf("Entering OP::M\n");
+                    }
+
+                    __syncthreads();
+
+                    int p = rows+1;
+                    if((i >= (rows/2)) && (x_arr[index] > 0))
+                        p = i;
+
+                    __syncthreads();
+
+                    atomicMin(&p_shared, p);
+
+                    __syncthreads();
+
+                    if(p_shared != rows+1)
+                    {
+                        if(threadIdx.x == 0 && threadIdx.y == 0)
+                        {
+                            printf("Random\n");
+                        }
+                        __syncthreads();
+
+                        if(x_arr[index] && (i != p_shared))
                         {
                             //Start Rowsum
 
-                            __shared__ int row_sum[1024]; //Adjust for number of rows
-
-                            row_sum[row] = 0;
-                            __syncthreads();
-
-                            int row_col_index = (row * cols) + col;
-                            int p_index = (p_shared * cols) + col;
-                            if (x[index] && (row != p_shared)) 
+                            int row_col_index = (i * cols) + j;
+                            int p_index = (p_shared * cols) + j;
+                            if (x_arr[index] && (i != p_shared)) 
                             {
                                 int local_sum = 0;
 
-                                if (x[p_index]) 
+                                if (x_arr[p_index]) 
                                 {
-                                    if (z[p_index])
-                                        local_sum = z[row_col_index] - x[row_col_index];
+                                    if (z_arr[p_index])
+                                        local_sum = z_arr[row_col_index] - x_arr[row_col_index];
                                     else
-                                        local_sum = z[row_col_index] * (2 * x[row_col_index] - 1);
+                                        local_sum = z_arr[row_col_index] * (2 * x_arr[row_col_index] - 1);
                                 } 
-                                else if (z[p_index]) 
+                                else if (z_arr[p_index]) 
                                 {
-                                    local_sum = x[row_col_index] * (1 - 2 * z[row_col_index]);
+                                    local_sum = x_arr[row_col_index] * (1 - 2 * z_arr[row_col_index]);
                                 }
 
-                                local_sum += 2 * r[p_shared] + 2 * r[row];
+                                local_sum += 2 * r_arr[p_shared] + 2 * r_arr[i];
 
-                                atomicAdd(&row_sum[row], local_sum);
+                                atomicAdd(&stab_gpu->row_sum[i], local_sum);
                             }
-                            __syncthreads();
 
-                            r[row] = (row_sum[row] % 4 == 0) ? 0 : 1;
+                            r_arr[i] = (stab_gpu->row_sum[i] % 4 == 0) ? 0 : 1;
 
                             //End Rowsum
                         }
                         __syncthreads();
 
-                        if(row == p_shared)
+                        if(i == p_shared)
                         {
                             //Set every column of the destab of row p to the stab of row p
-                            int row_index = (row * cols) + col;
-                            int destab_index = ((row-(row/2)) * cols) + col;
-                            x[destab_index] = x[row_index];    
-                            z[destab_index] = z[row_index];
-                            x[row_index] = 0;
-                            z[row_index] = 0;  
+                            int row_index = (i * cols) + j;
+                            int destab_index = ((i-(i/2)) * cols) + j;
+                            x_arr[destab_index] = x_arr[row_index];    
+                            z_arr[destab_index] = z_arr[row_index];
+                            x_arr[row_index] = 0;
+                            z_arr[row_index] = 0;  
 
-                            curandState state;
-                            int seed = 1234;
-                            curand_init(seed, row, 0, &state);
-                            
-                            //Generate a random bit (0 or 1)
-                            int randomBit = curand(&state) & 1;
-
-                            if(randomBit)
+                            if(j == 0)
                             {
-                                //std::cout << "Random result of 1" << std::endl;
-                                r[p] = 1;
-                            }
-                            else
-                            {
-                                //std::cout << "Random result of 0" << std::endl;
-                                r[p] = 0;
-                            }
-                            int a = gates_gpu[k].qubit;
-                            z[(p_shared * cols) + a] = 1;
-                            stab_gpu->singleResult += r[p_shared] << a;
+                                curandState state;
+                                int seed = 1234;
+                                curand_init(seed, i, 0, &state);
+                                
+                                //Generate a random bit (0 or 1)
+                                int randomBit = curand(&state) & 1;
 
-                            printf("Random measurement at qubit %d value: %d", a, (r[p_shared] << a));
+                                if(randomBit)
+                                {
+                                    //std::cout << "Random result of 1" << std::endl;
+                                    r_arr[p_shared] = 1;
+                                }
+                                else
+                                {
+                                    //std::cout << "Random result of 0" << std::endl;
+                                    r_arr[p_shared] = 0;
+                                }
+                                z_arr[(p_shared * cols) + a] = 1; 
+                                stab_gpu->singleResultGPU += r_arr[p_shared] << a;
+                                printf("Random measurement at qubit %d value: %d", a, (r_arr[p_shared] << a));
+                            }
                         }
                         __syncthreads();
                     }
                     else
                     {
-                        //Set the scratch space row to be 0
-                        //i is the column indexer in this case
-                        // for(int i = 0; i < n; i++)
-                        // {
-                        //     x[rows-1][i] = 0;
-                        //     z[rows-1][i] = 0;
-                        // }
-                        // r[rows-1] = 0;
-                        if(row == rows-1)
+                        if(threadIdx.x == 0 && threadIdx.y == 0)
                         {
-                            int row_col_index = (row * cols) + col;
-                            x[row_col_index] = 0;
-                            z[row_col_index] = 0;
-                            r[row] = 0;
+                            printf("Random\n");
+                        }
+
+                        if(i == rows-1 && j == rows-1)
+                        {
+                            int row_col_index = (i * cols) + j;
+                            x_arr[row_col_index] = 0;
+                            z_arr[row_col_index] = 0;
+                            r_arr[i] = 0;
                         }
                         __syncthreads();
 
-                        //Run rowsum subroutine
-                        // for(int i = 0; i < half_rows; i++)
-                        // {
-                        if((row < rows/2) && (x[(row * cols) + col] == 1))
+                        if((i < rows/2) && (x_arr[(i * cols) + j] == 1))
                         {
                             //Start Rowsum
                             
-                            __shared__ int row_sum[1024]; //Adjust for number of rows
 
-                            row_sum[row] = 0;
-                            __syncthreads();
+                            stab_gpu->row_sum[i] = 0;
 
-                            int row_col_index = (row * cols) + col;
-                            int p_index = (p_shared * cols) + col;
-                            if (x[index] && (row != p_shared)) 
+                            int row_col_index = (i * cols) + j;
+                            int p_index = (p_shared * cols) + j;
+                            if (x_arr[index] && (i != p_shared)) 
                             {
                                 int local_sum = 0;
 
-                                if (x[p_index]) 
+                                if (x_arr[p_index]) 
                                 {
-                                    if (z[p_index])
-                                        local_sum = z[row_col_index] - x[row_col_index];
+                                    if (z_arr[p_index])
+                                        local_sum = z_arr[row_col_index] - x_arr[row_col_index];
                                     else
-                                        local_sum = z[row_col_index] * (2 * x[row_col_index] - 1);
+                                        local_sum = z_arr[row_col_index] * (2 * x_arr[row_col_index] - 1);
                                 } 
-                                else if (z[p_index]) 
+                                else if (z_arr[p_index]) 
                                 {
-                                    local_sum = x[row_col_index] * (1 - 2 * z[row_col_index]);
+                                    local_sum = x_arr[row_col_index] * (1 - 2 * z_arr[row_col_index]);
                                 }
 
-                                local_sum += 2 * r[p_shared] + 2 * r[row];
+                                local_sum += 2 * r_arr[p_shared] + 2 * r_arr[i];
 
-                                atomicAdd(&row_sum[row], local_sum);
+                                atomicAdd(&stab_gpu->row_sum[i], local_sum);
                             }
-                            __syncthreads();
 
-                            r[row] = (row_sum[row] % 4 == 0) ? 0 : 1;
+                            r_arr[i] = (stab_gpu->row_sum[i] % 4 == 0) ? 0 : 1;
 
                             //End Rowsum
                         }
-                        stab_gpu->singleResult += r[p_shared] << a;
-
-                        printf("Deterministic measurement at qubit %d value: %d", a, (r[p_shared] << a));
+                        __syncthreads();
+                        if(i == p_shared && j == p_shared)
+                        {
+                            stab_gpu->singleResultGPU += r_arr[p_shared] << a;
+                            printf("Deterministic measurement at qubit %d value: %d", a, (r_arr[p_shared] << a));
+                        }
                     }
+                    
+                    __syncthreads();
+
                     break;
                 }
 
                 case OP::RESET:
-                    for(int i = 0; i < rows-1; i++)
+                    int row_col_index = (i * cols) + j;
+                    if((i/2) == j)
                     {
-                        x[i][a] = 0;
-                        z[i][a] = 0;
+                        int row_col_index_z = ((i+n_qubits) * cols) + j;
+                        x_arr[row_col_index] = 1;
+                        z_arr[row_col_index_z] = 1;
+                        r_arr[i] = 0;
+                        r_arr[i/2] = 0;
                     }
-                    x[a][a] = 1;
-                    z[a+n][a] = 1;
-                    r[a] = 0;
+                    else
+                    {
+                        x_arr[row_col_index] = 0;
+                        z_arr[row_col_index] = 0;
+                    }
                     break;
 
                 default:
