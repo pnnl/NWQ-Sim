@@ -220,29 +220,6 @@ int main()
         // if(inFile != "")
         //     appendQASMToCircuit(circuit, inFile, n_qubits);
 
-        // circuit->H(0);
-        // circuit->S(0);
-        // circuit->S(0);
-        // circuit->H(0);
-        // circuit->H(1);
-        // circuit->S(1);
-        // circuit->S(1);
-        // circuit->H(1);
-        // circuit->CX(1,0);
-        // circuit->H(0);
-        // circuit->H(3);
-        // circuit->CX(2,3);
-        // circuit->CX(2,3);
-        // circuit->CX(1,2);
-        // circuit->CX(3,0);
-        // circuit->CX(0,1);
-        // circuit->CX(0,1);
-        // circuit->CX(2,3);
-        // circuit->CX(2,3);
-        // circuit->S(3);
-        // circuit->CX(3,0);
-        // circuit->H(3);
-
 
         // std::srand(std::time(nullptr));  // Seed random number generator
 
