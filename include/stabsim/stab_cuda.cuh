@@ -1295,18 +1295,18 @@ namespace NWQSim
         int index;
 
         //Precompute the possible indices that each thread needs before looping the gates
-        int thread_pos = i * cols;
-        int q_indices[32768];
-        #pragma unroll
-        for(int q = 0; q < n_qubits; q++)
-        {
-            q_indices[q] = thread_pos + q;
-        }
+        // int thread_pos = i * cols;
+        // int q_indices[32768];
+        // #pragma unroll
+        // for(int q = 0; q < n_qubits; q++)
+        // {
+        //     q_indices[q] = thread_pos + q;
+        // }
         
         for (int k = 0; k < n_gates; k++) 
         {
             op_name = gates_gpu[k].op_name;
-            index = q_indices[gates_gpu[k].qubit];
+            index = i * cols + gates_gpu[k].qubit;
 
             switch (op_name) 
             {
@@ -1344,7 +1344,7 @@ namespace NWQSim
                     break;
 
                 case OP::CX:
-                    int ctrl_index = q_indices[gates_gpu[k].ctrl];
+                    int ctrl_index = i * cols + gates_gpu[k].ctrl;
 
                     x = x_arr[index];
                     z = z_arr[index];
@@ -1368,6 +1368,7 @@ namespace NWQSim
                     if(threadIdx.x == 0 && threadIdx.y == 0 )
                     {
                         printf("Entering OP::M\n");
+                        p_shared = rows+1;
                     }
 
                     __syncthreads();
@@ -1379,6 +1380,11 @@ namespace NWQSim
                     __syncthreads();
 
                     atomicMin(&p_shared, p);
+
+                    if(threadIdx.x == 0 && threadIdx.y == 0 )
+                    {
+                        printf("p = %d\n", p_shared);
+                    }
 
                     __syncthreads();
 
@@ -1393,11 +1399,10 @@ namespace NWQSim
                         if(x_arr[index] && (i != p_shared))
                         {
                             //Start Rowsum
-
-                            int row_col_index = (i * cols) + j;
-                            int p_index = (p_shared * cols) + j;
                             if (x_arr[index] && (i != p_shared)) 
                             {
+                                int row_col_index = (i * cols) + j;
+                                int p_index = (p_shared * cols) + j;
                                 int local_sum = 0;
 
                                 if (x_arr[p_index]) 
