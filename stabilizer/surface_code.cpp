@@ -62,13 +62,6 @@ void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
 
 int main()
 {
-
-
-
-    // Main Circuit
-    measure_x_stabilizers();
-    measure_z_stabilizers();
-
     int n_qubits;
     int shots = 10;
 
@@ -77,6 +70,9 @@ int main()
     NWQSim::IdxType H_count = rounds * n_qubits;
     NWQSim::IdxType CX_count = 0;
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
+    // Main Circuit
+    measure_x_stabilizers(circuit, rounds);
+    measure_z_stabilizers(circuit, rounds);
 
     std::string backend = "nvgpu";
     std::string sim_method = "stab";

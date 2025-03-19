@@ -250,8 +250,18 @@ int main()
         circuit->S(1);
         circuit->S(1);
         circuit->H(1);
-        circuit->H(3);
+        circuit->H(2);
+        circuit->S(2);
+        circuit->S(2);
+        circuit->H(2);
+        circuit->CX(2,3);
         circuit->M(0);
+        circuit->M(2);
+        circuit->M(3);
+        circuit->M(1);
+        circuit->H(1);
+        circuit->M(1);
+
 
         std::string backend = "nvgpu";
         std::string sim_method = "stab";
@@ -264,7 +274,7 @@ int main()
         
         // std::vector<std::shared_ptr<Circuit>> circuit2D = {circuit, circuit};
 
-        std::cout << "Starting sim" << std::endl;
+        std::cout << "Starting sim bitwise" << std::endl;
 
         // state->sim(circuit, timer);
         state->simBitwise(circuit, timer);
