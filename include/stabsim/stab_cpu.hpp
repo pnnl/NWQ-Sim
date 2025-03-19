@@ -807,7 +807,7 @@ namespace NWQSim
             else
                 r[h] = 1;
 
-            std::cout << "r[" << h << "] = " << r[h] << std::endl;
+            // std::cout << "r[" << h << "] = " << r[h] << std::endl;
         } //End rowsum
 
         void i_rowsum(int h, int i) override
@@ -1919,18 +1919,17 @@ namespace NWQSim
                                 break;
                             }
                         }
-                        std::cout << "p = " << p << std::endl;
+                        // std::cout << "p = " << p << std::endl;
                         //A p such that x[p][a] = 1 exists
                         //Random
                         if(p > -1)
                         {
                             for(int i = 0; i < rows-1; i++)
                             {
-                                std::cout << "x = " << x[i][a] << std::endl;
+                                // std::cout << "x = " << x[i][a] << std::endl;
                                 if((x[i][a]) && (i != p))
                                 {
                                     rowsum(i, p);
-                                    std::cout << "rowsum called in random" << std::endl;
                                 }
                             }
                             
@@ -1959,7 +1958,7 @@ namespace NWQSim
                             z[p][a] = 1;
 
                             totalResults[0] += r[p] << a;
-                            std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
+                            // std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
                         }
                         //Deterministic
                         else
@@ -1982,7 +1981,7 @@ namespace NWQSim
                                     rowsum(rows-1, i+half_rows);
                                 }
                             }
-                            std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
+                            // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
                             totalResults[0] += r[rows-1] << a;
                         }
                         break;
