@@ -21,14 +21,15 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+
 if (NOT XACC_DIR)
   set(XACC_DIR "$ENV{HOME}/.xacc")
 endif()
 
 # Find required packages
 find_package(CUDAToolkit)
-find_package(MPI)
 find_package(OpenMP)
+find_package(MPI)
 find_package(XACC QUIET)
 find_package(HIP QUIET)
 
@@ -144,6 +145,8 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 # Subdirectories
 # add_subdirectory(qasm)
 add_subdirectory(stabilizer)
+set(CMAKE_CUDA_ARCHITECTURES 80 90)
+
 
 if (EXISTS "${PROJECT_SOURCE_DIR}/vqe/nlopt/CMakeLists.txt")
     add_subdirectory(vqe)

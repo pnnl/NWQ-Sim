@@ -220,29 +220,6 @@ int main()
         // if(inFile != "")
         //     appendQASMToCircuit(circuit, inFile, n_qubits);
 
-        // circuit->H(0);
-        // circuit->S(0);
-        // circuit->S(0);
-        // circuit->H(0);
-        // circuit->H(1);
-        // circuit->S(1);
-        // circuit->S(1);
-        // circuit->H(1);
-        // circuit->CX(1,0);
-        // circuit->H(0);
-        // circuit->H(3);
-        // circuit->CX(2,3);
-        // circuit->CX(2,3);
-        // circuit->CX(1,2);
-        // circuit->CX(3,0);
-        // circuit->CX(0,1);
-        // circuit->CX(0,1);
-        // circuit->CX(2,3);
-        // circuit->CX(2,3);
-        // circuit->S(3);
-        // circuit->CX(3,0);
-        // circuit->H(3);
-
 
         // std::srand(std::time(nullptr));  // Seed random number generator
 
@@ -273,8 +250,17 @@ int main()
         circuit->S(1);
         circuit->S(1);
         circuit->H(1);
-        circuit->H(3);
+        circuit->H(2);
+        circuit->S(2);
+        circuit->S(2);
+        circuit->H(2);
+        circuit->CX(2,3);
         circuit->M(0);
+        circuit->M(2);
+        circuit->M(3);
+        circuit->M(1);
+        circuit->H(1);
+        circuit->M(1);
 
 
         std::string backend = "nvgpu";
@@ -288,7 +274,7 @@ int main()
         
         // std::vector<std::shared_ptr<Circuit>> circuit2D = {circuit, circuit};
 
-        std::cout << "Starting sim" << std::endl;
+        std::cout << "Starting sim bitwise" << std::endl;
 
         // state->sim(circuit, timer);
         state->simBitwise(circuit, timer);
