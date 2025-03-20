@@ -62,7 +62,7 @@ void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
 
 int main()
 {
-    int distance = 2;
+    int distance = 10;
     int n_qubits = 2 * pow(distance, 2) + 1;
     int shots = 10;
     int rounds = 1000;
@@ -75,7 +75,7 @@ int main()
         measure_z_stabilizers(circuit, distance);
     }
 
-    std::string backend = "cpu";
+    std::string backend = "nvgpu";
     std::string sim_method = "stab";
     double timer = 0;
     
@@ -89,7 +89,19 @@ int main()
     std::cout << "Starting sim" << std::endl;
 
     // state->sim(circuit, timer);
-    state->sim(circuit, timer);
-    state->print_res_state();
+    state->simBitwise(circuit, timer);
+    // state->print_res_state();
+
+
+    std::ostringstream filename;
+    filename << "/people/garn195/NWQ-Sim/stabilizer/surface_code_test/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
+    std::ofstream outfile(filename.str());
+    if (!outfile) {
+        std::cerr << "Error opening file: " << filename.str() << std::endl;
+    }
+
+    outfile << "stab" << std::endl;
+    outfile << timer/1000.0 << std::endl;
+    outfile << n_qubits << std::endl;
     return 0;
 }

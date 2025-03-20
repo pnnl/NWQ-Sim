@@ -27,6 +27,17 @@
 #include <cuda.h>
 #include <memory>
 
+
+
+#define CHECK_CUDA_CALL(call) \
+    { \
+        cudaError_t err = call; \
+        if (err != cudaSuccess) { \
+            printf("CUDA Error: %s (code %d) at %s:%d\n", cudaGetErrorString(err), err, __FILE__, __LINE__); \
+            exit(EXIT_FAILURE); \
+        } \
+    }
+
 #ifdef FP64_TC_AVAILABLE
 #include <mma.h>
 #endif
@@ -73,8 +84,8 @@ namespace NWQSim
             rng.seed(Config::RANDOM_SEED);
             dist = std::uniform_int_distribution<int>(0,1);
 
-            SAFE_ALOC_HOST(singleResultHost, sizeof(IdxType));
-            SAFE_ALOC_GPU(singleResultGPU, sizeof(IdxType));
+            SAFE_ALOC_HOST(singleResultHost, n*sizeof(IdxType));
+            SAFE_ALOC_GPU(singleResultGPU, n*sizeof(IdxType));
             /*End initialization*/
             
             //Allocate the packed data to the GPU side using NVSHMEM and a tempRow for row swapping
@@ -467,6 +478,10 @@ namespace NWQSim
                 temp_r[h] = 1;
         } //End rowsum
 
+        IdxType *getSingleResult() override{
+            return singleResultHost;
+        }
+
         //Provides a bit/shot measurement output without affecting the original tableau
         IdxType *measure_all(IdxType shots = 2048) override
         {
@@ -836,8 +851,8 @@ namespace NWQSim
 
             //Copy bit data to GPU
             copy_bits_to_gpu();
-            singleResultHost = 0;
-            cudaMemcpy(&singleResultHost, &singleResultGPU, sizeof(IdxType), cudaMemcpyHostToDevice);
+            singleResultHost = new IdxType[n]();
+            cudaMemcpy(singleResultHost, singleResultGPU, n*sizeof(IdxType), cudaMemcpyHostToDevice);
 
             SAFE_ALOC_GPU(p_shared, sizeof(int));
             cudaMemset(p_shared, 0, sizeof(int));
@@ -854,8 +869,14 @@ namespace NWQSim
             copy_gates_to_gpu(gates);
             IdxType n_gates = gates.size();
 
+            cudaDeviceProp prop;
+            cudaGetDeviceProperties(&prop, 0);
+            printf("Max grid size: (%d, %d, %d)\n", prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2]);
+            printf("Max threads per block: %d\n", prop.maxThreadsPerBlock);
+
+
             int minGridSize, blockSize;
-            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda_bitwise, 0, 0);
+            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda_bitwise, sizeof(uint32_t) + sizeof(int), 0);
             int threadsPerBlockX = 16;
             int threadsPerBlockY = 16;
 
@@ -864,8 +885,9 @@ namespace NWQSim
                    (cols + threadsPerBlockY - 1) / threadsPerBlockY);
 
             std::cout << "Blocks calculated" << std::endl;
+            std::cout << "X = "  << blocksPerGrid.x << std::endl;
+            std::cout << "Y = "  << blocksPerGrid.y << std::endl;
 
-        
             /*Simulate*/
             if (Config::PRINT_SIM_TRACE)
             {
@@ -879,7 +901,10 @@ namespace NWQSim
             sim_timer.start_timer();
 
             //Launch with cooperative kernel
-            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args);
+            // cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args);
+            simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
+
+            // CHECK_CUDA_CALL(cudaPeekAtLastError());
             cudaSafeCall(cudaDeviceSynchronize());
 
             sim_timer.stop_timer();
@@ -889,7 +914,7 @@ namespace NWQSim
             cudaCheckError();
             //Copy data to the CPU side and unpack
             copy_bits_from_gpu();
-            cudaMemcpy(&singleResultHost, &singleResultGPU, sizeof(IdxType), cudaMemcpyDeviceToHost);
+            cudaMemcpy(singleResultHost, singleResultGPU, sizeof(IdxType), cudaMemcpyDeviceToHost);
 
 
             if (Config::PRINT_SIM_TRACE)
@@ -969,8 +994,8 @@ namespace NWQSim
         uint32_t* row_sum_gpu = nullptr;
         int* p_shared;
 
-        IdxType singleResultHost;
-        IdxType singleResultGPU;
+        IdxType* singleResultHost;
+        IdxType* singleResultGPU;
 
         IdxType* totalResults = nullptr;
         IdxType** totalResultsLong = nullptr;
@@ -1294,7 +1319,13 @@ namespace NWQSim
         uint32_t x, z;
         OP op_name;
         int index;
+
+        //Initialize shared memory (per block)
+        __shared__ uint32_t local_p_shared;
+        __shared__ int half_row;
+
         
+        // printf("Starting for loop!! \n\n");
         for (int k = 0; k < n_gates; k++) 
         {
             op_name = gates_gpu[k].op_name;
@@ -1316,6 +1347,8 @@ namespace NWQSim
                     //Entry -- swap x and z bits
                     x_arr[index] = z;
                     z_arr[index] = x;
+                    printf("H\n\n");
+
                     break;
 
                 case OP::S:
@@ -1368,18 +1401,16 @@ namespace NWQSim
                 {
                     uint32_t* row_sum = stab_gpu->row_sum_gpu;
 
-                    //Initialize shared memory (per block)
-                    __shared__ uint32_t local_p_shared;
+                    
 
                     // Reset `p_shared` in the first thread of the first block
                     if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
                         *(stab_gpu->p_shared) = rows;
+                        //Initialize shared memory
+                        local_p_shared = rows;
                     }
 
                     __syncthreads();
-
-                    //Initialize shared memory
-                    local_p_shared = rows;
 
                     int p = rows;
                     if ((i >= (rows / 2)) && (x_arr[index] > 0)){
@@ -1397,16 +1428,15 @@ namespace NWQSim
                     __syncthreads();
 
                     //Debugging output
-                    if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y == 0)
-                        printf("p_shared = %d\n", *(stab_gpu->p_shared));
+                    // if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y == 0)
+                    //     printf("p_shared = %d\n", *(stab_gpu->p_shared));
                     
                     
                     int p_shared = *(stab_gpu->p_shared);
 
-                    __shared__ int half_row;
                     if (threadIdx.x == 0 && threadIdx.y == 0)
                     {
-                        printf("p_shared cache = %d\n", p_shared);
+                        // printf("p_shared cache = %d\n", p_shared);
                         half_row = rows/2;
                     }
 
@@ -1415,10 +1445,11 @@ namespace NWQSim
                     if(p_shared != rows)
                     {
                         row_sum[i] = 0;
-                        if(threadIdx.x == 0 && threadIdx.y == 0)
-                        {
-                            printf("Random\n");
-                        }
+                        //Debugging
+                        // if(threadIdx.x == 0 && threadIdx.y == 0)
+                        // {
+                        //     printf("Random\n");
+                        // }
                         __syncthreads();
 
                         if((i < scratch_row) && (i != p_shared))
@@ -1466,7 +1497,6 @@ namespace NWQSim
                             z_arr[destab_index] = z_arr[row_index];
                             x_arr[row_index] = 0;
                             z_arr[row_index] = 0; 
-                            // printf("Did u do this?\n"); 
 
                             if(j == 0)
                             {
@@ -1488,18 +1518,18 @@ namespace NWQSim
                                     r_arr[p_shared] = 0;
                                 }
                                 z_arr[(p_shared * cols) + a] = 1; 
-                                stab_gpu->singleResultGPU += r_arr[p_shared] << a;
-                                printf("Random measurement at qubit %d value: %d", a, (r_arr[p_shared] << a));
+                                stab_gpu->singleResultGPU[a] = r_arr[p_shared];
+                                // printf("Random measurement at qubit %d value: %d", a, (r_arr[p_shared] << a));
                             }
                         }
                         __syncthreads();
                     }
                     else
                     {
-                        if(threadIdx.x == 0 && threadIdx.y == 0)
-                        {
-                            printf("Deterministic\n");
-                        }
+                        // if(threadIdx.x == 0 && threadIdx.y == 0)
+                        // {
+                        //     printf("Deterministic\n");
+                        // }
 
                         //Set the scratch row to 0
                         if(i == 0)
@@ -1598,9 +1628,9 @@ namespace NWQSim
 
                         if(i == 0 && j == 0)
                         {
-                            (stab_gpu->singleResultGPU) += r_arr[scratch_row] << a;
-                            printf("Deterministic measurement at qubit %d value: %d\n", 
-                                a, (r_arr[scratch_row] << a));
+                            stab_gpu->singleResultGPU[a] = r_arr[scratch_row];
+                            // printf("Deterministic measurement at qubit %d value: %d\n", 
+                                // a, (r_arr[scratch_row] << a));
                         }
                         __syncthreads();
                     }

@@ -201,7 +201,7 @@ namespace NWQSim{
 // Create a circuit with 2 qubits
 int main()
 {
-    std::vector<int> qubit_test = {4};//{4, 8, 16, 32, 64, 96, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1152, 1280, 1408, 1536, 1664, 1792, 1920, 2048};
+    std::vector<int> qubit_test = {200};//{4, 8, 16, 32, 64, 96, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1152, 1280, 1408, 1536, 1664, 1792, 1920, 2048};
     // for(int i = 1; i < 21; i++)
     //     qubit_test.push_back(4608 + i * 128);
     for(int i = 0; i < qubit_test.size(); i++)
@@ -246,21 +246,9 @@ int main()
         // }
         // circuit->set_gates(full_circuit);
 
-        circuit->H(1);
-        circuit->S(1);
-        circuit->S(1);
-        circuit->H(1);
-        circuit->H(2);
-        circuit->S(2);
-        circuit->S(2);
-        circuit->H(2);
-        circuit->CX(2,3);
-        circuit->M(0);
-        circuit->M(2);
-        circuit->M(3);
-        circuit->M(1);
-        circuit->H(1);
-        circuit->M(1);
+        // circuit->H(1);
+        circuit->H(199);
+
 
 
         std::string backend = "nvgpu";
@@ -278,11 +266,11 @@ int main()
 
         // state->sim(circuit, timer);
         state->simBitwise(circuit, timer);
-        state->print_res_state();
-        // NWQSim::IdxType* results = state->measure_all(shots);
+        // state->print_res_state();
+        NWQSim::IdxType *results = state->getSingleResult();
 
-        // for(int i = 0; i < shots; i++)
-        //     std::cout << "Result " << i << ": " << results[i] << std::endl;
+        for(int i = 0; i < n_qubits; i++)
+            std::cout << "Result " << i << ": " << results[i] << std::endl;
 
         std::cout << "Sim time: " << timer/1000.0 << "s" << std::endl;
 
