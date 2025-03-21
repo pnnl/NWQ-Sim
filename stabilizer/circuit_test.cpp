@@ -223,12 +223,12 @@ int main()
 
         // std::srand(std::time(nullptr));  // Seed random number generator
 
-        // for(int j = 0; j < 100000; j++) 
-        // {
-        //     circuit->H((std::rand() % (n_qubits-1)));
-        //     circuit->CX((std::rand() % (n_qubits-1)),(std::rand() % (n_qubits)));
-        //     circuit->S((std::rand() % (n_qubits-1)));
-        // }
+        for(int j = 0; j < 100000; j++) 
+        {
+            circuit->H((std::rand() % (n_qubits-1)));
+            circuit->CX((std::rand() % (n_qubits-1)),(std::rand() % (n_qubits)));
+            circuit->S((std::rand() % (n_qubits-1)));
+        }
             
         std::cout << "Building circuit" << std::endl;
 
@@ -247,7 +247,7 @@ int main()
         // circuit->set_gates(full_circuit);
 
         // circuit->H(1);
-        circuit->H(199);
+        // circuit->H(199);
 
 
 
@@ -265,32 +265,32 @@ int main()
         std::cout << "Starting sim bitwise" << std::endl;
 
         // state->sim(circuit, timer);
-        state->simBitwise(circuit, timer);
+        state->sim(circuit, timer);
         // state->print_res_state();
-        NWQSim::IdxType *results = state->getSingleResult();
+        // NWQSim::IdxType *results = state->getSingleResult();
 
-        for(int i = 0; i < n_qubits; i++)
-            std::cout << "Result " << i << ": " << results[i] << std::endl;
+        // for(int i = 0; i < n_qubits; i++)
+        //     std::cout << "Result " << i << ": " << results[i] << std::endl;
 
         std::cout << "Sim time: " << timer/1000.0 << "s" << std::endl;
 
         // NWQSim::IdxType gate_count = S_count + H_count + CX_count;
 
-        // backend= "nvgpu2D";
-        // std::string name = "";
-        // std::ostringstream filename;
-        // filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
-        // std::ofstream outfile(filename.str());
-        // if (!outfile) {
-        //     std::cerr << "Error opening file: " << filename.str() << std::endl;
-        // }
+        backend= "nvgpu";
+        std::string name = "";
+        std::ostringstream filename;
+        filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
+        std::ofstream outfile(filename.str());
+        if (!outfile) {
+            std::cerr << "Error opening file: " << filename.str() << std::endl;
+        }
 
-        // outfile << "stab2D" << std::endl;
-        // outfile << timer/1000.0 << std::endl;
-        // outfile << n_qubits << std::endl;
-        // outfile << S_count << std::endl;
-        // outfile << H_count << std::endl;
-        // outfile << CX_count << std::endl;
+        outfile << "nvgpu" << std::endl;
+        outfile << timer/1000.0 << std::endl;
+        outfile << n_qubits << std::endl;
+        outfile << S_count << std::endl;
+        outfile << H_count << std::endl;
+        outfile << CX_count << std::endl;
 
         // outfile.close();
     }

@@ -851,9 +851,10 @@ namespace NWQSim
 
             //Copy bit data to GPU
             copy_bits_to_gpu();
-            singleResultHost = new IdxType[n]();
-            cudaMemcpy(singleResultHost, singleResultGPU, n*sizeof(IdxType), cudaMemcpyHostToDevice);
 
+            //Global variables for the kernel
+            singleResultHost = new IdxType[n]();
+            cudaMemcpy(singleResultGPU, singleResultHost, n*sizeof(IdxType), cudaMemcpyHostToDevice);
             SAFE_ALOC_GPU(p_shared, sizeof(int));
             cudaMemset(p_shared, 0, sizeof(int));
             cudaMemcpy(&(stab_gpu->p_shared), &p_shared, sizeof(int*), cudaMemcpyHostToDevice);
@@ -876,7 +877,7 @@ namespace NWQSim
 
 
             int minGridSize, blockSize;
-            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda_bitwise, sizeof(uint32_t) + sizeof(int), 0);
+            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda_bitwise, 0, 0);
             int threadsPerBlockX = 16;
             int threadsPerBlockY = 16;
 
@@ -893,6 +894,13 @@ namespace NWQSim
             {
                 printf("STABSim_gpu is running! Using %lld qubits.\n", n);
             }
+            if (!stab_gpu || !gates_gpu) {
+                std::cerr << "ERROR: NULL argument detected in kernel launch!" << std::endl;
+                return;
+            }
+            std::cout << "stab_gpu: " << stab_gpu << std::endl;
+            std::cout << "gates_gpu: " << gates_gpu << std::endl;
+            std::cout << "n_gates: " << n_gates << std::endl;
 
             void *args[] = {&stab_gpu, &gates_gpu, &n_gates};
 
@@ -901,13 +909,13 @@ namespace NWQSim
             sim_timer.start_timer();
 
             //Launch with cooperative kernel
-            // cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args);
+            //cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args);
             simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
 
-            // CHECK_CUDA_CALL(cudaPeekAtLastError());
-            cudaSafeCall(cudaDeviceSynchronize());
-
             sim_timer.stop_timer();
+
+            CHECK_CUDA_CALL(cudaPeekAtLastError());
+            cudaSafeCall(cudaDeviceSynchronize());
             /*End simulate*/
             sim_time = sim_timer.measure();
 
@@ -1182,17 +1190,17 @@ namespace NWQSim
 
         //Precompute the possible indices that each thread needs before looping the gates
         int thread_pos = i * stab_gpu->cols;
-        int q_indices[32768];
-        #pragma unroll
-        for(int q = 0; q < n_qubits; q++)
-        {
-            q_indices[q] = thread_pos + q;
-        }
+        // int q_indices[32768];
+        // #pragma unroll
+        // for(int q = 0; q < n_qubits; q++)
+        // {
+        //     q_indices[q] = thread_pos + q;
+        // }
         
         for (int k = 0; k < n_gates; k++) 
         {
             op_name = gates_gpu[k].op_name;
-            index = q_indices[gates_gpu[k].qubit];
+            index = thread_pos + gates_gpu[k].qubit;
 
             switch (op_name) 
             {
@@ -1274,7 +1282,7 @@ namespace NWQSim
                 //     break;
 
                 case OP::CX:
-                    int ctrl_index = q_indices[gates_gpu[k].ctrl];
+                    int ctrl_index = thread_pos + gates_gpu[k].ctrl;
 
                     x = x_arr[index];
                     z = z_arr[index];
@@ -1312,150 +1320,129 @@ namespace NWQSim
         if(i >= rows-1) return;
         if(j >= cols) return;
 
+        int half_row = rows/2;
+        int scratch_row = rows-1;
+
         int n_qubits = stab_gpu->n;
         uint32_t* x_arr = stab_gpu->x_bit_gpu;
         uint32_t* z_arr = stab_gpu->z_bit_gpu;
         uint32_t* r_arr = stab_gpu->r_bit_gpu;
-        uint32_t x, z;
+        uint32_t x_index, z_index;
         OP op_name;
         int index;
 
-        //Initialize shared memory (per block)
-        __shared__ uint32_t local_p_shared;
-        __shared__ int half_row;
+        //Initialize shared memory (per block) and rowsum
+        extern __shared__ uint32_t shared_mem[];
+        uint32_t* row_sum = stab_gpu->row_sum_gpu;
+        __shared__ uint32_t p_shared;
+        __shared__ uint32_t global_min_p;
 
-        
-        // printf("Starting for loop!! \n\n");
         for (int k = 0; k < n_gates; k++) 
         {
             op_name = gates_gpu[k].op_name;
             int a = gates_gpu[k].qubit;
             index = i * cols + a;
             
-            __syncthreads();
-
             switch (op_name) 
             {
                 case OP::H:
-                    if(j > 0) break;
+                    if(j != a) break;
 
-                    x = x_arr[index];
-                    z = z_arr[index];
+                    x_index = x_arr[index];
+                    z_index = z_arr[index];
                     //Phase
-                    r_arr[i] ^= (x & z);
+                    r_arr[i] ^= (x_index & z_index);
 
                     //Entry -- swap x and z bits
-                    x_arr[index] = z;
-                    z_arr[index] = x;
-                    printf("H\n\n");
+                    x_arr[index] = z_index;
+                    z_arr[index] = x_index;
+                    // printf("H\n\n");
 
                     break;
 
                 case OP::S:
-                    if(j > 0) break;
+                    if(j != a) break;
 
-                    x = x_arr[index];
-                    z = z_arr[index];
+                    x_index = x_arr[index];
+                    z_index = z_arr[index];
 
                     //Phase
-                    r_arr[i] ^= (x & z);
+                    r_arr[i] ^= (x_index & z_index);
 
                     //Entry
-                    z_arr[index] = z ^ x;
+                    z_arr[index] = z_index ^ x_index;
                     break;
 
                 case OP::SDG:
-                    if(j > 0) break;
+                    if(j != a) break;
 
-                    x = x_arr[index];
-                    z = z_arr[index];
+                    x_index = x_arr[index];
+                    z_index = z_arr[index];
 
                     //Phase
-                    r_arr[i] ^= (x ^ (x & z));
+                    r_arr[i] ^= (x_index ^ (x_index & z_index));
 
                     //Entry
-                    z_arr[index] = z ^ x;
+                    z_arr[index] = z_index ^ x_index;
                     break;
 
                 case OP::CX:
-                    if(j > 0) break;
+                    if(j != a) break;
 
                     int ctrl_index = i * cols + gates_gpu[k].ctrl;
 
-                    x = x_arr[index];
-                    z = z_arr[index];
+                    x_index = x_arr[index];
+                    z_index = z_arr[index];
 
                     uint32_t x_ctrl = x_arr[ctrl_index];
                     uint32_t z_ctrl = z_arr[ctrl_index];
 
                     //Phase
-                    r_arr[i] ^= ((x_ctrl & z) & (x^z_ctrl^1));
+                    r_arr[i] ^= ((x_ctrl & z_index) & (x_index^z_ctrl^1));
 
                     //Entry
-                    x_arr[index] = x ^ x_ctrl;
-                    z_arr[ctrl_index] = z ^ z_ctrl;
+                    x_arr[index] = x_index ^ x_ctrl;
+                    z_arr[ctrl_index] = z_index ^ z_ctrl;
 
                     break;
 
                 case OP::M:
                 {
-                    uint32_t* row_sum = stab_gpu->row_sum_gpu;
-
-                    
-
-                    // Reset `p_shared` in the first thread of the first block
-                    if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
-                        *(stab_gpu->p_shared) = rows;
-                        //Initialize shared memory
-                        local_p_shared = rows;
+                
+                    if(threadIdx.x == 0 && threadIdx.y == 0) {
+                        p_shared = rows; //In-block
+                        if (blockIdx.x == 0 && blockIdx.y == 0) {
+                            global_min_p = rows; //All blocks
+                        }
                     }
 
-                    __syncthreads();
-
+                    x_index = x_arr[index];
                     int p = rows;
-                    if ((i >= (rows / 2)) && (x_arr[index] > 0)){
+                    if (i >= scratch_row && x_index) {
                         p = i;
                     }
-                        
-                    // Reduce within the block
-                    atomicMin(&local_p_shared, p);
+                    
+                    //Block-level reduction for min(p)
+                    atomicMin(&p_shared, p);
                     __syncthreads();
 
-                    //First thread of the block writes to global memory
-                    if (threadIdx.x == 0 && threadIdx.y == 0)
-                        atomicMin((stab_gpu->p_shared), local_p_shared);
-
-                    __syncthreads();
-
-                    //Debugging output
-                    // if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y == 0)
-                    //     printf("p_shared = %d\n", *(stab_gpu->p_shared));
-                    
-                    
-                    int p_shared = *(stab_gpu->p_shared);
-
-                    if (threadIdx.x == 0 && threadIdx.y == 0)
-                    {
-                        // printf("p_shared cache = %d\n", p_shared);
-                        half_row = rows/2;
+                    //First thread in the block finds the min between all blocks
+                    if (threadIdx.x == 0 && threadIdx.y == 0) {
+                        atomicMin(&global_min_p, p_shared);
                     }
+                    __syncthreads();
 
-                    int scratch_row = rows-1;
+                    int p_final = global_min_p;
+
 
                     if(p_shared != rows)
                     {
-                        row_sum[i] = 0;
-                        //Debugging
-                        // if(threadIdx.x == 0 && threadIdx.y == 0)
-                        // {
-                        //     printf("Random\n");
-                        // }
-                        __syncthreads();
-
                         if((i < scratch_row) && (i != p_shared))
                         {
+                            if(j == 0)
+                                row_sum[i] = 0;
                             //Start Rowsum
-                            if(x_arr[index]) 
+                            if(x_index) 
                             {
                                 int row_col_index = (i * cols) + j;
                                 int p_index = (p_shared * cols) + j;
@@ -1484,8 +1471,8 @@ namespace NWQSim
                             //End Rowsum
                         }
                         
-                        //syncthreads so that x and z at the destabilizer index aren't updated before
-                        //rowsum is done
+                        //syncthreads so that x and z at the destabilizer index aren't updated
+                        //before rowsum is done
                         __syncthreads();
 
                         if(i == p_shared)
@@ -1503,20 +1490,9 @@ namespace NWQSim
                                 curandState state;
                                 int seed = 1234;
                                 curand_init(seed, i, 0, &state);
-                                
-                                //Generate a random bit (0 or 1)
-                                int randomBit = curand(&state) & 1;
 
-                                if(randomBit)
-                                {
-                                    //std::cout << "Random result of 1" << std::endl;
-                                    r_arr[p_shared] = 1;
-                                }
-                                else
-                                {
-                                    //std::cout << "Random result of 0" << std::endl;
-                                    r_arr[p_shared] = 0;
-                                }
+                                r_arr[p_shared] = curand(&state) & 1;
+
                                 z_arr[(p_shared * cols) + a] = 1; 
                                 stab_gpu->singleResultGPU[a] = r_arr[p_shared];
                                 // printf("Random measurement at qubit %d value: %d", a, (r_arr[p_shared] << a));
@@ -1542,26 +1518,18 @@ namespace NWQSim
                                 r_arr[i] = 0;
                             }
                         }
+
                         __syncthreads();
-                        
 
                         if((i < half_row))
                         {
-                            //printf("Entering row/2 for loop\n");
-                            if((x_arr[index] == 1))
-                            {
-                                //printf("x_arr[i] = %d \n", x_arr[(i * cols) + a]);
-                                //Start Rowsum
 
-                                // Over every column (j)
-                                // printf("rows = %d \n", rows);
-                                // printf("i = %d \n", i);
-                                // printf("j = %d \n", j);
-                                // printf("row_sum[i] = %d \n", row_sum[i]);
-
-                                //Initialize the sums from all rows we're interested in to 0
+                            //Initialize the sums from all rows we're interested in to 0
+                            if(j == 0)
                                 row_sum[i] = 0;
 
+                            if((x_index))
+                            {
                                 int last_row = (scratch_row * cols) + j;
                                 int stab_row = ((i+(half_row)) * cols) + j;
                                 int local_sum = 0;             
@@ -1581,9 +1549,6 @@ namespace NWQSim
                                     local_sum = x_arr[last_row] * (1 - 2 * z_arr[last_row]);
                                     // printf("Col_val in %d = %d \n", i, col_val);
                                 }
-
-                                // printf("x_arr = %d \n", x_arr[last_row]);
-                                // printf("z_arr = %d \n", z_arr[last_row]);
                                
 
                                 x_arr[last_row] ^= x_arr[stab_row];
@@ -1601,17 +1566,17 @@ namespace NWQSim
                                 //End Rowsum
                             }
                         }
+
+                        //Sync so that the scratch row can be used sequentially
                         __syncthreads();
 
-                        // printf("Done parallelized sums\n");
-
-                        //Sequentially update the r bit of the scratch row
+                        //Sequential update of the r bit of the scratch row
                         if(i == 0 && j == 0)   
                         {   
                             for(int k = 0; k < half_row; k++)
                             {
                                 int destab_row = (k * cols) + a;
-                                if(x_arr[destab_row] == 1)
+                                if(x_arr[destab_row])
                                 {
                                     //printf("x_arr = %d\n", x_arr[destab_row]);
                                     row_sum[k] += 2 * r_arr[scratch_row];
@@ -1634,6 +1599,9 @@ namespace NWQSim
                         }
                         __syncthreads();
                     }
+
+                    // printf("Done measurement at qubit %d", a);
+
                     break;
                 }
 
