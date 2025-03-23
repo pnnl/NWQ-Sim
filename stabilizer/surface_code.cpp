@@ -65,7 +65,7 @@ int main()
     // for(int d = 1; d < 51; d+=2)
     // {
     int distance = 10;
-    int n_qubits = 355;
+    int n_qubits = 33;
     int shots = 10;
     int rounds = 2;
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);

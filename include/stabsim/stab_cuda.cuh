@@ -927,8 +927,8 @@ namespace NWQSim
             sim_timer.start_timer();
 
             //Launch with cooperative kernel to sync the grid
-            // cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args);
-            simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
+            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args);
+            // simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
 
             sim_timer.stop_timer();
 
@@ -1332,7 +1332,7 @@ namespace NWQSim
     __device__ uint32_t global_min_p;
     __global__ void simulation_kernel_cuda_bitwise(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
     {
-        // cg::grid_group grid = cg::this_grid();
+        cg::grid_group grid = cg::this_grid();
         int i = blockIdx.x * blockDim.x + threadIdx.x;
         int j = blockIdx.y * blockDim.y + threadIdx.y;
         int rows = stab_gpu->rows;
@@ -1361,7 +1361,7 @@ namespace NWQSim
         {
             a = gates_gpu[k].qubit;
             index = i * cols + a;
-            // grid.sync();
+            grid.sync();
             
             switch(gates_gpu[k].op_name) 
             {
