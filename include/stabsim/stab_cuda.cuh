@@ -1343,7 +1343,6 @@ namespace NWQSim
         int half_row = rows/2;
         int scratch_row = rows-1;
 
-        int n_qubits = stab_gpu->n;
         uint32_t* x_arr = stab_gpu->x_bit_gpu;
         uint32_t* z_arr = stab_gpu->z_bit_gpu;
         uint32_t* r_arr = stab_gpu->r_bit_gpu;
@@ -1357,13 +1356,12 @@ namespace NWQSim
         int* row_sum = stab_gpu->row_sum_gpu;
         __shared__ uint32_t p_shared;
 
-        for (int k = 0; k < n_gates; k++) 
+        for(int gate = 0; gate < n_gates; gate++) 
         {
-            a = gates_gpu[k].qubit;
-            index = i * cols + a;
+            index = i * cols + gates_gpu[gate].qubit;
             grid.sync();
             
-            switch(gates_gpu[k].op_name) 
+            switch(gates_gpu[gate].op_name) 
             {
                 case OP::H:
                     if(j != 0) break;
@@ -1409,7 +1407,7 @@ namespace NWQSim
                 case OP::CX:
                     if(j != 0) break;
 
-                    int ctrl_index = i * cols + gates_gpu[k].ctrl;
+                    int ctrl_index = i * cols + gates_gpu[gate].ctrl;
 
                     x_index = x_arr[index];
                     z_index = z_arr[index];
@@ -1499,9 +1497,9 @@ namespace NWQSim
                         if(i == p_shared)
                         {
                             //Set every column of the destab of row p to the stab of row p
-                            int destab_index = ((i-(half_row)) * cols) + j;
-                            x_arr[destab_index] = x_arr[row_col_index];    
-                            z_arr[destab_index] = z_arr[row_col_index];
+                            index = ((i-(half_row)) * cols) + j;
+                            x_arr[index] = x_arr[row_col_index];    
+                            z_arr[index] = z_arr[row_col_index];
                             x_arr[row_col_index] = 0;
                             z_arr[row_col_index] = 0; 
 
@@ -1509,8 +1507,8 @@ namespace NWQSim
                             {
                                 r_arr[p_shared] = curand(&state) & 1;
 
-                                z_arr[(p_shared * cols) + a] = 1; 
-                                stab_gpu->singleResultGPU[a] = r_arr[p_shared];
+                                z_arr[(p_shared * cols) + gates_gpu[gate].qubit] = 1; 
+                                stab_gpu->singleResultGPU[gates_gpu[gate].qubit] = r_arr[p_shared];
                                 // printf("Random measurement at qubit %d value: %d", a, (r_arr[p_shared] << a));
                             }
                         }
@@ -1584,14 +1582,14 @@ namespace NWQSim
 
                         //Sync so that the scratch row can be used sequentially
                         // __syncthreads();
+                        // grid.sync();
 
                         //Sequential update of the r bit of the scratch row
                         if(i == 0 && j == 0)   
                         {   
                             for(int k = 0; k < half_row; k++)
                             {
-                                int destab_row = (k * cols) + a;
-                                if(x_arr[destab_row])
+                                if(x_arr[(k * cols) + a])
                                 {
                                     //printf("x_arr = %d\n", x_arr[destab_row]);
                                     row_sum[k] += 2 * r_arr[scratch_row];
@@ -1613,7 +1611,7 @@ namespace NWQSim
                             // printf("Qubit %d\n", a);
                             // printf("Result %d\n", r_arr[scratch_row]);
 
-                            stab_gpu->singleResultGPU[a] = r_arr[scratch_row];          
+                            stab_gpu->singleResultGPU[gates_gpu[gate].qubit] = r_arr[scratch_row];          
                         }       
                     }
 
@@ -1621,30 +1619,30 @@ namespace NWQSim
                     // if(i == 0 && j == 0)
                     // {
                     //     printf("Deterministic measurement at qubit %d value: %d\n", 
-                    //                 a, stab_gpu->singleResultGPU[a]);
+                    //                 a, stab_gpu->singleResultGPU[gates_gpu[gate].qubit]);
                     // }
                     break;
                 }
 
                 case OP::RESET:
-                    int row_col_index = (i * cols) + j;
+                    index = (i * cols) + j;
                     if((i/2) == j)
                     {
-                        int row_col_index_z = ((i+n_qubits) * cols) + j;
-                        x_arr[row_col_index] = 1;
+                        int row_col_index_z = ((i+stab_gpu->n) * cols) + j;
+                        x_arr[index] = 1;
                         z_arr[row_col_index_z] = 1;
                         r_arr[i] = 0;
                         r_arr[i/2] = 0;
                     }
                     else
                     {
-                        x_arr[row_col_index] = 0;
-                        z_arr[row_col_index] = 0;
+                        x_arr[index] = 0;
+                        z_arr[index] = 0;
                     }
                     break;
 
                 default:
-                    printf("Non-Clifford or unrecognized gate: %d\n", gates_gpu[k].op_name);
+                    printf("Non-Clifford or unrecognized gate: %d\n", gates_gpu[gate].op_name);
                     assert(false);
             }
         }

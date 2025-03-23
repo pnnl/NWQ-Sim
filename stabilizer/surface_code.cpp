@@ -84,12 +84,13 @@ int main()
             circuit->S(n);
             circuit->H(n);
         }
-    }
-
-    for(int n = 0; n < n_qubits; n++)
+        for(int n = 0; n < n_qubits; n++)
     {
         circuit->M(n);
     }
+    }
+
+    
 
     std::string backend = "nvgpu";
     std::string sim_method = "stab";
