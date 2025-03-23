@@ -859,8 +859,8 @@ namespace NWQSim
             SAFE_ALOC_GPU(p_shared, sizeof(int));
             cudaMemset(p_shared, 0, sizeof(int));
             cudaMemcpy(&(stab_gpu->p_shared), &p_shared, sizeof(int*), cudaMemcpyHostToDevice);
-            SAFE_ALOC_GPU(row_sum_gpu, rows * sizeof(uint32_t));
-            cudaMemset(row_sum_gpu, 0, rows * sizeof(uint32_t));
+            SAFE_ALOC_GPU(row_sum_gpu, rows * sizeof(int));
+            cudaMemset(row_sum_gpu, 0, rows * sizeof(int));
             cudaMemcpy(&(stab_gpu->row_sum_gpu), &row_sum_gpu, sizeof(uint32_t*), cudaMemcpyHostToDevice);
 
 
@@ -873,30 +873,30 @@ namespace NWQSim
 
             cudaDeviceProp prop;
             cudaGetDeviceProperties(&prop, 0);
-
+            printf("Max grid size: (%d, %d, %d)\n", prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2]);
+            printf("Max threads per block: %d\n", prop.maxThreadsPerBlock);
             printf("Device Name: %s\n", prop.name);
-            printf("Max Grid Size (XYZ): %d x %d x %d\n", 
-                prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2]);
-
             printf("Max Blocks per Multiprocessor: %d\n", prop.maxThreadsPerMultiProcessor);
             printf("Number of SMs: %d\n", prop.multiProcessorCount);
 
             int maxBlocks;
             cudaOccupancyMaxActiveBlocksPerMultiprocessor(
                 &maxBlocks, /* out: max active blocks */
-                (void*)myKernel, /* kernel */
-                256, /* threads per block */
-                0 /* shared memory per block */
+                (void*)simulation_kernel_cuda_bitwise, /* kernel */
+                32*16, /* threads per block */
+                2*sizeof(uint32_t) /* shared memory per block */
             );
 
             printf("Max active blocks per SM: %d\n", maxBlocks);
             printf("Total max cooperative blocks: %d\n", maxBlocks * prop.multiProcessorCount);
-
+            cudaFuncAttributes attr;
+            cudaFuncGetAttributes(&attr, simulation_kernel_cuda_bitwise);
+            printf("Registers per thread: %d\n", attr.numRegs);
 
 
             int minGridSize, blockSize;
-            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda_bitwise, 0, 0);
-            int threadsPerBlockX = 16;
+            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda_bitwise, 2*sizeof(uint32_t), 0);
+            int threadsPerBlockX = 32;
             int threadsPerBlockY = 16;
 
             dim3 threadsPerBlock(threadsPerBlockX, threadsPerBlockY);
@@ -927,8 +927,8 @@ namespace NWQSim
             sim_timer.start_timer();
 
             //Launch with cooperative kernel to sync the grid
-            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args);
-            // simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
+            // cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args);
+            simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
 
             sim_timer.stop_timer();
 
@@ -1017,7 +1017,7 @@ namespace NWQSim
         uint32_t* z_bit_gpu = nullptr;
         uint32_t* r_bit_gpu = nullptr;
 
-        uint32_t* row_sum_gpu = nullptr;
+        int* row_sum_gpu = nullptr;
         int* p_shared;
 
         int* singleResultHost;
@@ -1329,9 +1329,10 @@ namespace NWQSim
         // printf("Kernel is done!\n");
     }//end kernel
 
+    __device__ uint32_t global_min_p;
     __global__ void simulation_kernel_cuda_bitwise(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
     {
-        cg::grid_group grid = cg::this_grid();
+        // cg::grid_group grid = cg::this_grid();
         int i = blockIdx.x * blockDim.x + threadIdx.x;
         int j = blockIdx.y * blockDim.y + threadIdx.y;
         int rows = stab_gpu->rows;
@@ -1347,23 +1348,22 @@ namespace NWQSim
         uint32_t* z_arr = stab_gpu->z_bit_gpu;
         uint32_t* r_arr = stab_gpu->r_bit_gpu;
         uint32_t x_index, z_index;
-        OP op_name;
-        int index;
+        int index, a;
+
+        curandState state;
+        curand_init(1234, i, 0, &state);
 
         //Initialize shared memory (per block) and rowsum
-        extern __shared__ uint32_t shared_mem[];
-        uint32_t* row_sum = stab_gpu->row_sum_gpu;
+        int* row_sum = stab_gpu->row_sum_gpu;
         __shared__ uint32_t p_shared;
-        __shared__ uint32_t global_min_p;
 
         for (int k = 0; k < n_gates; k++) 
         {
-            op_name = gates_gpu[k].op_name;
-            int a = gates_gpu[k].qubit;
+            a = gates_gpu[k].qubit;
             index = i * cols + a;
-            grid.sync();
+            // grid.sync();
             
-            switch (op_name) 
+            switch(gates_gpu[k].op_name) 
             {
                 case OP::H:
                     if(j != 0) break;
@@ -1446,17 +1446,19 @@ namespace NWQSim
                     atomicMin(&p_shared, p);
                     // __syncthreads();
 
-                    //First thread in the block finds the min between all blocks
+                    //First thread in the block finds min(p) between all blocks
                     if (threadIdx.x == 0 && threadIdx.y == 0) {
                         atomicMin(&global_min_p, p_shared);
                     }
-                    // __syncthreads();
 
-                    int p_final = global_min_p;
+                    // grid.sync();
 
+                    p_shared = global_min_p;
 
                     if(p_shared != rows)
                     {
+                        int row_col_index = (i * cols) + j;
+
                         if((i < scratch_row) && (i != p_shared))
                         {
                             if(j == 0)
@@ -1464,7 +1466,6 @@ namespace NWQSim
                             //Start Rowsum
                             if(x_index) 
                             {
-                                int row_col_index = (i * cols) + j;
                                 int p_index = (p_shared * cols) + j;
                                 int local_sum = 0;
 
@@ -1498,19 +1499,14 @@ namespace NWQSim
                         if(i == p_shared)
                         {
                             //Set every column of the destab of row p to the stab of row p
-                            int row_index = (i * cols) + j;
                             int destab_index = ((i-(half_row)) * cols) + j;
-                            x_arr[destab_index] = x_arr[row_index];    
-                            z_arr[destab_index] = z_arr[row_index];
-                            x_arr[row_index] = 0;
-                            z_arr[row_index] = 0; 
+                            x_arr[destab_index] = x_arr[row_col_index];    
+                            z_arr[destab_index] = z_arr[row_col_index];
+                            x_arr[row_col_index] = 0;
+                            z_arr[row_col_index] = 0; 
 
                             if(j == 0)
                             {
-                                curandState state;
-                                int seed = 1234;
-                                curand_init(seed, i, 0, &state);
-
                                 r_arr[p_shared] = curand(&state) & 1;
 
                                 z_arr[(p_shared * cols) + a] = 1; 
@@ -1530,9 +1526,8 @@ namespace NWQSim
                         //Set the scratch row to 0
                         if(i == 0)
                         {
-                            int row_col_index = (scratch_row * cols) + j;
-                            x_arr[row_col_index] = 0;
-                            z_arr[row_col_index] = 0;
+                            x_arr[(scratch_row * cols) + j] = 0;
+                            z_arr[(scratch_row * cols) + j] = 0;
                             if(j == 0)
                             {
                                 r_arr[scratch_row] = 0;
@@ -1628,7 +1623,6 @@ namespace NWQSim
                     //     printf("Deterministic measurement at qubit %d value: %d\n", 
                     //                 a, stab_gpu->singleResultGPU[a]);
                     // }
-
                     break;
                 }
 
@@ -1650,7 +1644,7 @@ namespace NWQSim
                     break;
 
                 default:
-                    printf("Non-Clifford or unrecognized gate: %d\n", op_name);
+                    printf("Non-Clifford or unrecognized gate: %d\n", gates_gpu[k].op_name);
                     assert(false);
             }
         }
