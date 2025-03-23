@@ -800,7 +800,9 @@ namespace NWQSim
                 x[h][j] = x[i][j] ^ x[h][j];
                 z[h][j] = z[i][j] ^ z[h][j];
             }
-            sum = sum + 2*r[h] + 2*r[i];
+            sum += 2*r[i];
+            std::cout << "Sum before last row: " << sum << std::endl;
+            sum += 2*r[h];
 
             if(sum % 4 == 0)
                 r[h] = 0;
