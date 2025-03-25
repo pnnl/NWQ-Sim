@@ -65,9 +65,9 @@ int main()
     // for(int d = 1; d < 51; d+=2)
     // {
     int distance = 10;
-    int n_qubits = 33;
+    int n_qubits = 200;
     int shots = 10;
-    int rounds = 2;
+    int rounds = 1;
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
     
     //Add surface code routines to the circuit
@@ -85,9 +85,9 @@ int main()
             circuit->H(n);
         }
         for(int n = 0; n < n_qubits; n++)
-    {
+        {
         circuit->M(n);
-    }
+        }
     }
 
     
