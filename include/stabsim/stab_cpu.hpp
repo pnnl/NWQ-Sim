@@ -800,6 +800,12 @@ namespace NWQSim
                 x[h][j] = x[i][j] ^ x[h][j];
                 z[h][j] = z[i][j] ^ z[h][j];
             }
+
+            sum += 2*r[i];
+            std::cout << "Sum before last row: " << sum << std::endl;
+            std::cout << "r[" << h << "]" <<  " before if = " <<  r[h] << std::endl;
+            sum += 2*r[h];
+            std::cout << "Sum after add: " << sum << std::endl;
             sum += 2*r[i];
             std::cout << "Sum before last row: " << sum << std::endl;
             sum += 2*r[h];
@@ -809,7 +815,9 @@ namespace NWQSim
             else
                 r[h] = 1;
 
-            // std::cout << "r[" << h << "] = " << r[h] << std::endl;
+            std::cout << "r[" << h << "]" <<  " after if = " <<  r[h] << std::endl;
+
+
         } //End rowsum
 
         void i_rowsum(int h, int i) override
@@ -1979,11 +1987,13 @@ namespace NWQSim
                             {
                                 if(x[i][a] == 1)
                                 {
-                                    //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
+                                    std::cout << "r[" << rows-1 << "] before = " << r[rows-1] << std::endl;
                                     rowsum(rows-1, i+half_rows);
+                                    std::cout << "r[" << rows-1 << "] after = " << r[rows-1] << std::endl;
+
                                 }
                             }
-                            // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
+                            std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
                             totalResults[0] += r[rows-1] << a;
                         }
                         break;

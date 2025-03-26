@@ -3,4 +3,3 @@ stab
 1
 10
 3
-a100_shared
