@@ -806,6 +806,9 @@ namespace NWQSim
             std::cout << "r[" << h << "]" <<  " before if = " <<  r[h] << std::endl;
             sum += 2*r[h];
             std::cout << "Sum after add: " << sum << std::endl;
+            sum += 2*r[i];
+            std::cout << "Sum before last row: " << sum << std::endl;
+            sum += 2*r[h];
 
             if(sum % 4 == 0)
                 r[h] = 0;

@@ -73,8 +73,8 @@ int main()
     //Add surface code routines to the circuit
     for(int i = 0; i < rounds; i++)
     {
-        // measure_x_stabilizers(circuit, distance);
-        // measure_z_stabilizers(circuit, distance);
+        measure_x_stabilizers(circuit, distance);
+        measure_z_stabilizers(circuit, distance);
 
         // Test for desync
         // for(int n = 0; n < n_qubits; n++)
@@ -100,29 +100,26 @@ int main()
 
     std::cout << "Starting sim" << std::endl;
 
-    state->sim(circuit, timer);
-    // state->simBitwise(circuit, timer);
-    state->print_res_state();
-    NWQSim::IdxType *results = state->measure_all(shots);
-
-    for(int i = 0; i < shots; i++)
-        std::cout << "Result " << i << ": " << results[i] << std::endl;
+    // state->sim(circuit, timer);
+    state->simBitwise(circuit, timer);
+    // state->print_res_state();
 
 
-    // std::ostringstream filename;
-    // filename << "/people/garn195/NWQ-Sim/stabilizer/surface_code_test/" << backend << "_" << sim_method << "_" << distance << ".txt";
-    // std::ofstream outfile(filename.str());
-    // if (!outfile) {
-    //     std::cerr << "Error opening file: " << filename.str() << std::endl;
-    // }
+    std::ostringstream filename;
+    filename << "/people/garn195/NWQ-Sim/stabilizer/surface_code_test/" << backend << "_" << sim_method << "_" << distance << ".txt";
+    std::ofstream outfile(filename.str());
+    if (!outfile) {
+        std::cerr << "Error opening file: " << filename.str() << std::endl;
+    }
 
-    // outfile << "cpu" << std::endl;
-    // outfile << timer/1000.0 << std::endl;
-    // outfile << distance << std::endl;
-    // outfile << rounds << std::endl;
-    // outfile << n_qubits << std::endl;
+    outfile << "stab" << std::endl;
+    outfile << timer/1000.0 << std::endl;
+    outfile << distance << std::endl;
+    outfile << rounds << std::endl;
+    outfile << n_qubits << std::endl;
+    outfile << "a100_shared" << std::endl;
     
-    // }
+    }
 
     return 0;
 }

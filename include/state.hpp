@@ -57,7 +57,7 @@ namespace NWQSim
         {
             throw std::runtime_error("Measure all for results >64 bits not implemented.");
         }
-        virtual IdxType *getSingleResult()
+        virtual uint8_t *getSingleResult()
         {
             throw std::runtime_error("Single results for >64 qubits not supported on this backend.");
         }
