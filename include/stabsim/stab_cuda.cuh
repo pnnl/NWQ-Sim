@@ -874,20 +874,38 @@ namespace NWQSim
             cudaGetDeviceProperties(&prop, 0);
             printf("Max grid size: (%d, %d, %d)\n", prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2]);
             printf("Max threads per block: %d\n", prop.maxThreadsPerBlock);
+            printf("Device Name: %s\n", prop.name);
+            printf("Max Blocks per Multiprocessor: %d\n", prop.maxThreadsPerMultiProcessor);
+            printf("Number of SMs: %d\n", prop.multiProcessorCount);
+
+            int maxBlocks;
+            cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+                &maxBlocks, /* out: max active blocks */
+                (void*)simulation_kernel_cuda_bitwise, /* kernel */
+                16*16, /* threads per block */
+                3*sizeof(int) /* shared memory per block */
+            );
+
+            printf("Max active blocks per SM: %d\n", maxBlocks);
+            printf("Total max cooperative blocks: %d\n", maxBlocks * prop.multiProcessorCount);
+            cudaFuncAttributes attr;
+            cudaFuncGetAttributes(&attr, simulation_kernel_cuda_bitwise);
+            printf("Registers per thread: %d\n", attr.numRegs);
 
 
             int minGridSize, blockSize;
-            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda_bitwise, sizeof(uint32_t) + sizeof(int), 0);
+            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda_bitwise, 3* sizeof(int), 0);
+            printf("Max block size: %d\n", blockSize);
             int threadsPerBlockX = 16;
             int threadsPerBlockY = 16;
 
             dim3 threadsPerBlock(threadsPerBlockX, threadsPerBlockY);
-            dim3 blocksPerGrid((rows + threadsPerBlockX - 1) / threadsPerBlockX,
+            dim3 blocksPerGrid((rows - 1 + threadsPerBlockX - 1) / threadsPerBlockX,
                    (cols + threadsPerBlockY - 1) / threadsPerBlockY);
 
             std::cout << "Blocks calculated" << std::endl;
-            std::cout << "X = "  << blocksPerGrid.x << std::endl;
-            std::cout << "Y = "  << blocksPerGrid.y << std::endl;
+            std::cout << "X blocks = "  << blocksPerGrid.x << std::endl;
+            std::cout << "Y blocks = "  << blocksPerGrid.y << std::endl;
 
             /*Simulate*/
             if (Config::PRINT_SIM_TRACE)
@@ -902,7 +920,7 @@ namespace NWQSim
             sim_timer.start_timer();
 
             //Launch with cooperative kernel
-            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args);
+            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args, 3* sizeof(int));
             // simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
 
             // CHECK_CUDA_CALL(cudaPeekAtLastError());
@@ -1362,7 +1380,7 @@ namespace NWQSim
                     //Entry -- swap x and z bits
                     x_arr[index] = z;
                     z_arr[index] = x;
-                    if(i == 0) printf("H\n\n");
+                    // if(i == 0) printf("H\n\n");
 
                     break;
 
@@ -1377,7 +1395,7 @@ namespace NWQSim
 
                     //Entry
                     z_arr[index] = z ^ x;
-                    if(i == 0) printf("S\n\n");
+                    // if(i == 0) printf("S\n\n");
                     break;
 
                 case OP::SDG:
@@ -1440,19 +1458,21 @@ namespace NWQSim
                     //Reduce within blocks (only threads in the same block need to be caught up)
                     __syncthreads();
                     atomicMin(&local_p_shared, p);
-
+                    if(i == 0 && j == 0)
+                        printf("Shared reduced\n");
                     
                     //Reduce across all blocks (all blocks need to be caught up)
                     grid.sync();
                     if (threadIdx.x == 0 && threadIdx.y == 0)
                         atomicMin(&p_shared, local_p_shared);
-
+                    if(i == 0 && j == 0)
+                        printf("Global reduced\n");
                     // __syncthreads();
-                    // grid.sync();
+                    grid.sync();
 
                     //Debugging output
-                    if (i == 0 && j == 0)
-                        printf("p_shared = %d\n", p_shared);
+                    // if (i == 0 && j == 0)
+                    //     printf("p_shared = %d\n", p_shared);
 
                     //If no p among the stabilizers is found, the measurement will be random
                     if(p_shared != rows)
@@ -1529,16 +1549,16 @@ namespace NWQSim
                                 z_arr[(p_shared * cols) + a] = 1; 
 
                                 stab_gpu->singleResultGPU[a] = randomBit;
-                                // printf("Random measurement at qubit %d value: %d", a, (r_arr[p_shared] << a));
+                                printf("Random done %d\n ", stab_gpu->singleResultGPU[a]);
                             }
                         }
                     }
                     else
                     {
-                        if(i == 0 && j== 0)
-                        {
-                            printf("Deterministic\n");
-                        }
+                        // if(i == 0 && j== 0)
+                        // {
+                        //     printf("Deterministic\n");
+                        // }
 
                         //Set the scratch row to 0
                         if(i == 0)
@@ -1548,7 +1568,7 @@ namespace NWQSim
                             z_arr[row_col_index] = 0;
                             if(j == 0)
                             {
-                                r_arr[i] = 0;
+                                r_arr[scratch_row] = 0;
                             }
                         }
 
