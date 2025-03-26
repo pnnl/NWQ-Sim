@@ -45,6 +45,7 @@
 namespace NWQSim
 {
     using namespace cooperative_groups;
+    namespace cg = cooperative_groups;
     using namespace std;
 
     // Simulation kernel runtime
@@ -854,9 +855,9 @@ namespace NWQSim
             singleResultHost = new int[n]();
             cudaMemcpy(singleResultHost, singleResultGPU, n*sizeof(int), cudaMemcpyHostToDevice);
 
-            SAFE_ALOC_GPU(p_shared, sizeof(int));
-            cudaMemset(p_shared, 0, sizeof(int));
-            cudaMemcpy(&(stab_gpu->p_shared), &p_shared, sizeof(int*), cudaMemcpyHostToDevice);
+            // SAFE_ALOC_GPU(p_shared, sizeof(int));
+            // cudaMemset(p_shared, 0, sizeof(int));
+            // cudaMemcpy(&(stab_gpu->p_shared), &p_shared, sizeof(int*), cudaMemcpyHostToDevice);
             SAFE_ALOC_GPU(row_sum_gpu, rows * sizeof(uint32_t));
             cudaMemset(row_sum_gpu, 0, rows * sizeof(uint32_t));
             cudaMemcpy(&(stab_gpu->row_sum_gpu), &row_sum_gpu, sizeof(uint32_t*), cudaMemcpyHostToDevice);
@@ -901,8 +902,8 @@ namespace NWQSim
             sim_timer.start_timer();
 
             //Launch with cooperative kernel
-            // cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args);
-            simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
+            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args);
+            // simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
 
             // CHECK_CUDA_CALL(cudaPeekAtLastError());
             cudaSafeCall(cudaDeviceSynchronize());
@@ -992,7 +993,7 @@ namespace NWQSim
         uint32_t* r_bit_gpu = nullptr;
 
         uint32_t* row_sum_gpu = nullptr;
-        int* p_shared;
+        // int* p_shared;
 
         int* singleResultHost;
         int* singleResultGPU;
@@ -1303,8 +1304,10 @@ namespace NWQSim
         // printf("Kernel is done!\n");
     }//end kernel
 
+    __device__ int p_shared;
     __global__ void simulation_kernel_cuda_bitwise(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
     {
+        cg::grid_group grid = cg::this_grid();
         int i = blockIdx.x * blockDim.x + threadIdx.x;
         int j = blockIdx.y * blockDim.y + threadIdx.y;
         int rows = stab_gpu->rows;
@@ -1321,8 +1324,10 @@ namespace NWQSim
         int index;
 
         //Initialize shared memory (per block)
-        __shared__ uint32_t local_p_shared;
+        __shared__ int local_p_shared;
         __shared__ int half_row;
+        if (threadIdx.x == 0 && threadIdx.y == 0)
+            half_row = rows/2;
 
         
         // printf("Starting for loop!! \n\n");
@@ -1332,7 +1337,7 @@ namespace NWQSim
             int a = gates_gpu[k].qubit;
             index = i * cols + a;
             
-            __syncthreads();
+            grid.sync();
 
             switch (op_name) 
             {
@@ -1347,7 +1352,7 @@ namespace NWQSim
                     //Entry -- swap x and z bits
                     x_arr[index] = z;
                     z_arr[index] = x;
-                    // printf("H\n\n");
+                    if(i == 0) printf("H\n\n");
 
                     break;
 
@@ -1362,6 +1367,7 @@ namespace NWQSim
 
                     //Entry
                     z_arr[index] = z ^ x;
+                    if(i == 0) printf("S\n\n");
                     break;
 
                 case OP::SDG:
@@ -1401,44 +1407,43 @@ namespace NWQSim
                 {
                     uint32_t* row_sum = stab_gpu->row_sum_gpu;
 
-                    
-
-                    // Reset `p_shared` in the first thread of the first block
-                    if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
-                        *(stab_gpu->p_shared) = rows;
+                    //Reset p_shared in the first thread of the first block
+                    if (threadIdx.x == 0 && threadIdx.y == 0)
+                    {
                         //Initialize shared memory
                         local_p_shared = rows;
+                        if(blockIdx.x == 0 && blockIdx.y == 0) 
+                        {
+                            printf("M\n\n");
+                            //Initialize global memory
+                            p_shared = rows;
+                        }
                     }
 
-                    __syncthreads();
+                    grid.sync();
 
+                    //Initialize thread memory
                     int p = rows;
-                    if ((i >= (rows / 2)) && (x_arr[index] > 0)){
+                    if((i >= (rows / 2)) && (x_arr[index] > 0))
                         p = i;
-                    }
                         
                     // Reduce within the block
                     atomicMin(&local_p_shared, p);
-                    __syncthreads();
+
+                    // __syncthreads();
+                    grid.sync();
 
                     //First thread of the block writes to global memory
                     if (threadIdx.x == 0 && threadIdx.y == 0)
-                        atomicMin((stab_gpu->p_shared), local_p_shared);
+                        atomicMin(&p_shared, local_p_shared);
 
-                    __syncthreads();
+                    // __syncthreads();
+                    grid.sync();
 
                     //Debugging output
-                    // if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0 && blockIdx.y == 0)
-                    //     printf("p_shared = %d\n", *(stab_gpu->p_shared));
+                    if (i == 0 && j == 0)
+                        printf("p_shared = %d\n", p_shared);
                     
-                    
-                    int p_shared = *(stab_gpu->p_shared);
-
-                    if (threadIdx.x == 0 && threadIdx.y == 0)
-                    {
-                        // printf("p_shared cache = %d\n", p_shared);
-                        half_row = rows/2;
-                    }
 
                     int scratch_row = rows-1;
 
@@ -1446,11 +1451,11 @@ namespace NWQSim
                     {
                         row_sum[i] = 0;
                         //Debugging
-                        // if(threadIdx.x == 0 && threadIdx.y == 0)
-                        // {
-                        //     printf("Random\n");
-                        // }
-                        __syncthreads();
+                        if(i == 0 && j== 0)
+                        {
+                            printf("Random\n");
+                        }
+                        grid.sync();
 
                         if((i < scratch_row) && (i != p_shared))
                         {
@@ -1486,7 +1491,7 @@ namespace NWQSim
                         
                         //syncthreads so that x and z at the destabilizer index aren't updated before
                         //rowsum is done
-                        __syncthreads();
+                        grid.sync();
 
                         if(i == p_shared)
                         {
@@ -1522,14 +1527,13 @@ namespace NWQSim
                                 // printf("Random measurement at qubit %d value: %d", a, (r_arr[p_shared] << a));
                             }
                         }
-                        __syncthreads();
                     }
                     else
                     {
-                        // if(threadIdx.x == 0 && threadIdx.y == 0)
-                        // {
-                        //     printf("Deterministic\n");
-                        // }
+                        if(i == 0 && j== 0)
+                        {
+                            printf("Deterministic\n");
+                        }
 
                         //Set the scratch row to 0
                         if(i == 0)
@@ -1542,7 +1546,7 @@ namespace NWQSim
                                 r_arr[i] = 0;
                             }
                         }
-                        __syncthreads();
+                        grid.sync();
                         
 
                         if((i < half_row))
@@ -1601,7 +1605,7 @@ namespace NWQSim
                                 //End Rowsum
                             }
                         }
-                        __syncthreads();
+                        grid.sync();
 
                         // printf("Done parallelized sums\n");
 
@@ -1622,7 +1626,7 @@ namespace NWQSim
                                 }
                             }
                         }
-                        __syncthreads();
+                        grid.sync();
 
                         // printf("Done sequential update\n");
 
@@ -1632,7 +1636,6 @@ namespace NWQSim
                             // printf("Deterministic measurement at qubit %d value: %d\n", 
                                 // a, (r_arr[scratch_row] << a));
                         }
-                        __syncthreads();
                     }
                     break;
                 }
