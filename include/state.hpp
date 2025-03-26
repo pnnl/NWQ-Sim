@@ -46,6 +46,10 @@ namespace NWQSim
         {
             throw std::runtime_error("Bitwise Sim Not Implemented");
         }
+        virtual void simBitwise1D(std::shared_ptr<Circuit> circuit, double &sim_time)
+        {
+            throw std::runtime_error("Bitwise Sim Not Implemented");
+        }
 
 
 
@@ -57,7 +61,7 @@ namespace NWQSim
         {
             throw std::runtime_error("Measure all for results >64 bits not implemented.");
         }
-        virtual uint8_t *getSingleResult()
+        virtual int *getSingleResult()
         {
             throw std::runtime_error("Single results for >64 qubits not supported on this backend.");
         }
