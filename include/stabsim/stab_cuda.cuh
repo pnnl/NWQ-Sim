@@ -1326,8 +1326,18 @@ namespace NWQSim
         //Initialize shared memory (per block)
         __shared__ int local_p_shared;
         __shared__ int half_row;
+        __shared__ int scratch_row;
         if (threadIdx.x == 0 && threadIdx.y == 0)
+        {
             half_row = rows/2;
+            scratch_row = rows-1;
+        }
+        curandState state;
+        if(j == 0)
+        {
+            int seed = 1234;
+            curand_init(seed, i, 0, &state);
+        }
 
         
         // printf("Starting for loop!! \n\n");
@@ -1419,46 +1429,44 @@ namespace NWQSim
                             p_shared = rows;
                         }
                     }
-
-                    grid.sync();
+                    
 
                     //Initialize thread memory
                     int p = rows;
-                    if((i >= (rows / 2)) && (x_arr[index] > 0))
+                    if((i >= (half_row)) && (x_arr[index] > 0))
                         p = i;
                         
-                    // Reduce within the block
+                    
+                    //Reduce within blocks (only threads in the same block need to be caught up)
+                    __syncthreads();
                     atomicMin(&local_p_shared, p);
 
-                    // __syncthreads();
+                    
+                    //Reduce across all blocks (all blocks need to be caught up)
                     grid.sync();
-
-                    //First thread of the block writes to global memory
                     if (threadIdx.x == 0 && threadIdx.y == 0)
                         atomicMin(&p_shared, local_p_shared);
 
                     // __syncthreads();
-                    grid.sync();
+                    // grid.sync();
 
                     //Debugging output
                     if (i == 0 && j == 0)
                         printf("p_shared = %d\n", p_shared);
-                    
 
-                    int scratch_row = rows-1;
-
+                    //If no p among the stabilizers is found, the measurement will be random
                     if(p_shared != rows)
                     {
-                        row_sum[i] = 0;
                         //Debugging
                         if(i == 0 && j== 0)
                         {
                             printf("Random\n");
                         }
-                        grid.sync();
 
-                        if((i < scratch_row) && (i != p_shared))
+                        if(i != p_shared)
                         {
+                            //Set every rowsum we might use to be 0
+                            row_sum[i] = 0;
                             //Start Rowsum
                             if(x_arr[index]) 
                             {
@@ -1481,17 +1489,22 @@ namespace NWQSim
 
                                 local_sum += 2 * r_arr[p_shared] + 2 * r_arr[i];
 
-                                atomicAdd(&row_sum[i], local_sum);
-
-                                if(j == 0)
-                                    r_arr[i] = (row_sum[i] % 4) ? 1 : 0;
+                                atomicAdd(&row_sum[i], local_sum);                              
                             }
                             //End Rowsum
                         }
-                        
-                        //syncthreads so that x and z at the destabilizer index aren't updated before
-                        //rowsum is done
+
+                        //Syncthreads so that x and z at the destabilizer index 
+                        //aren't updated before rowsum is done. Also let atomicAdd finish.
                         grid.sync();
+
+                        if(i != p_shared)
+                        {
+                            if(x_arr[index] && j == 0) 
+                            {
+                                r_arr[i] = (row_sum[i] % 4) ? 1 : 0;
+                            }
+                        }
 
                         if(i == p_shared)
                         {
@@ -1505,25 +1518,17 @@ namespace NWQSim
 
                             if(j == 0)
                             {
-                                curandState state;
-                                int seed = 1234;
-                                curand_init(seed, i, 0, &state);
                                 
                                 //Generate a random bit (0 or 1)
                                 int randomBit = curand(&state) & 1;
 
-                                if(randomBit)
-                                {
-                                    //std::cout << "Random result of 1" << std::endl;
-                                    r_arr[p_shared] = 1;
-                                }
-                                else
-                                {
-                                    //std::cout << "Random result of 0" << std::endl;
-                                    r_arr[p_shared] = 0;
-                                }
+                                r_arr[p_shared] = randomBit;
+                                printf("Random measurement at qubit %d value: %d\n", a, randomBit);
+
+                                //Update z to reflect z measurement
                                 z_arr[(p_shared * cols) + a] = 1; 
-                                stab_gpu->singleResultGPU[a] = r_arr[p_shared];
+
+                                stab_gpu->singleResultGPU[a] = randomBit;
                                 // printf("Random measurement at qubit %d value: %d", a, (r_arr[p_shared] << a));
                             }
                         }
@@ -1546,13 +1551,15 @@ namespace NWQSim
                                 r_arr[i] = 0;
                             }
                         }
+
+                        //Wait for the scratch row to be reset before proceeding
                         grid.sync();
                         
 
                         if((i < half_row))
                         {
                             //printf("Entering row/2 for loop\n");
-                            if((x_arr[index] == 1))
+                            if(x_arr[index])
                             {
                                 //printf("x_arr[i] = %d \n", x_arr[(i * cols) + a]);
                                 //Start Rowsum

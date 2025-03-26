@@ -62,7 +62,7 @@ void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
 
 int main()
 {
-    for(int d = 1; d < 4; d+=2)
+    for(int d = 3; d < 4; d+=2)
     {
     int distance = d;
     int n_qubits = 2 * pow(distance, 2) + 1;
@@ -79,9 +79,6 @@ int main()
         // Test for desync
         for(int n = 0; n < n_qubits; n++)
         {
-            circuit->H(n);
-            circuit->S(n);
-            circuit->S(n);
             circuit->H(n);
             circuit->M(n);
         }
