@@ -105,7 +105,7 @@ int main()
 
     // state->sim(circuit, timer);
     state->simBitwise(circuit, timer);
-    // state->print_res_state();
+    state->print_res_state();
     // NWQSim::IdxType *results = state->measure_all(shots);
     // for(int i = 0; i < shots; i++)
     //     std::cout << "Result " << i << ": " << results[i] << std::endl;

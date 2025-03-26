@@ -857,10 +857,9 @@ namespace NWQSim
             //Global variables for the kernel
             singleResultHost = new int[n]();
             cudaMemcpy(singleResultGPU, singleResultHost, n*sizeof(int), cudaMemcpyHostToDevice);
-            SAFE_ALOC_GPU(row_sum_gpu, rows * sizeof(int));
-            cudaMemset(row_sum_gpu, 0, rows * sizeof(int));
+                        SAFE_ALOC_GPU(row_sum_gpu, rows * sizeof(uint32_t));
+            cudaMemset(row_sum_gpu, 0, rows * sizeof(uint32_t));
             cudaMemcpy(&(stab_gpu->row_sum_gpu), &row_sum_gpu, sizeof(uint32_t*), cudaMemcpyHostToDevice);
-
 
             std::cout << "Data copied" << std::endl;
 
@@ -882,7 +881,7 @@ namespace NWQSim
                 &maxBlocks, /* out: max active blocks */
                 (void*)simulation_kernel_cuda_bitwise, /* kernel */
                 32*16, /* threads per block */
-                2*sizeof(uint32_t) /* shared memory per block */
+                2*sizeof(int) /* shared memory per block */
             );
 
             printf("Max active blocks per SM: %d\n", maxBlocks);
@@ -893,8 +892,8 @@ namespace NWQSim
 
 
             int minGridSize, blockSize;
-            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda_bitwise, 2*sizeof(uint32_t), 0);
-            int threadsPerBlockX = 32;
+            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda_bitwise, 2*sizeof(int), 0);
+            int threadsPerBlockX = 16;
             int threadsPerBlockY = 16;
 
             dim3 threadsPerBlock(threadsPerBlockX, threadsPerBlockY);
@@ -925,8 +924,8 @@ namespace NWQSim
             sim_timer.start_timer();
 
             //Launch with cooperative kernel to sync the grid
-            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args);
-            // simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
+            // cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args);
+            simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
 
             sim_timer.stop_timer();
 
@@ -951,6 +950,8 @@ namespace NWQSim
             }
 
             SAFE_FREE_GPU(gates_gpu);
+            SAFE_FREE_GPU(singleResultGPU);
+            SAFE_FREE_GPU(stab_gpu);
 
             //=========================================
         }
@@ -1039,8 +1040,8 @@ namespace NWQSim
             sim_timer.start_timer();
 
             //Launch with cooperative kernel to sync the grid
-            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise, blocksPerGrid, threadsPerBlock, args);
-            // simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
+            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda_bitwise1D, blocksPerGrid, threadsPerBlock, args);
+            // simulation_kernel_cuda_bitwise1D<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
 
             sim_timer.stop_timer();
 
@@ -1129,7 +1130,7 @@ namespace NWQSim
         uint32_t* z_bit_gpu = nullptr;
         uint32_t* r_bit_gpu = nullptr;
 
-        int* row_sum_gpu = nullptr;
+        uint32_t* row_sum_gpu = nullptr;
 
         int* singleResultHost;
         int* singleResultGPU;
@@ -1298,7 +1299,7 @@ namespace NWQSim
     __device__ int global_min_p;
     __global__ void simulation_kernel_cuda_bitwise(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
     {
-        cg::grid_group grid = cg::this_grid();
+        // cg::grid_group grid = cg::this_grid();
         int i = blockIdx.x * blockDim.x + threadIdx.x;
         int j = blockIdx.y * blockDim.y + threadIdx.y;
         int rows = stab_gpu->rows;
@@ -1316,13 +1317,13 @@ namespace NWQSim
         int index, a;
 
         //Initialize shared memory (per block) and rowsum
-        int* row_sum = stab_gpu->row_sum_gpu;
         __shared__ int p_shared;
 
         for(int gate = 0; gate < n_gates; gate++) 
         {
             index = i * cols + gates_gpu[gate].qubit;
-            grid.sync();
+            // grid.sync();
+            __syncthreads();
             
             switch(gates_gpu[gate].op_name) 
             {
@@ -1389,7 +1390,8 @@ namespace NWQSim
 
                 case OP::M:
                 {
-                
+                    uint32_t* row_sum = stab_gpu->row_sum_gpu;
+
                     if(threadIdx.x == 0 && threadIdx.y == 0) {
                         p_shared = rows; //In-block
                         if (blockIdx.x == 0 && blockIdx.y == 0) {
@@ -1412,7 +1414,9 @@ namespace NWQSim
                         atomicMin(&global_min_p, p_shared);
                     }
 
-                    grid.sync();
+                    // grid.sync();
+                    __syncthreads();
+
 
                     p_shared = global_min_p;
 
@@ -1422,8 +1426,7 @@ namespace NWQSim
 
                         if((i < scratch_row) && (i != p_shared))
                         {
-                            if(j == 0)
-                                row_sum[i] = 0;
+                            
                             //Start Rowsum
                             if(x_val) 
                             {
@@ -1446,7 +1449,7 @@ namespace NWQSim
                                 local_sum += 2 * r_arr[p_shared] + 2 * r_arr[i];
 
                                 atomicAdd(&row_sum[i], local_sum);
-
+                                __syncthreads();
                                 if(j == 0)
                                     r_arr[i] = (row_sum[i] % 4) ? 1 : 0;
                             }
@@ -1492,7 +1495,9 @@ namespace NWQSim
                             }
                         }
 
-                        grid.sync();
+                        // grid.sync();
+                        __syncthreads();
+
 
                         if(i < half_row)
                         {
@@ -1509,9 +1514,11 @@ namespace NWQSim
                             }
                         }
 
-                        grid.sync();
+                        // grid.sync();
+                        __syncthreads();
 
-                        if(i == 0)
+
+                        if(i == 0 && j == 0)
                         {
                             // printf("Qubit %d\n", a);
                             // printf("Result %d\n", r_arr[scratch_row]);
@@ -1543,7 +1550,7 @@ namespace NWQSim
             }
         }
 
-        grid.sync();
+        // grid.sync();
 
         // if(i == 0)
         // {
