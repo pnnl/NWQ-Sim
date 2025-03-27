@@ -879,7 +879,8 @@ namespace NWQSim
             );
 
             printf("Max active blocks per SM: %d\n", maxBlocks);
-            printf("Total max cooperative blocks: %d\n", maxBlocks * prop.multiProcessorCount);
+            maxBlocks = prop.multiProcessorCount;
+            printf("Total max cooperative blocks: %d\n", maxBlocks);
             cudaFuncAttributes attr;
             cudaFuncGetAttributes(&attr, simulation_kernel_cuda_bitwise);
             printf("Registers per thread: %d\n", attr.numRegs);
@@ -891,7 +892,7 @@ namespace NWQSim
             int threadsPerBlockX = 1024;
 
             dim3 threadsPerBlock(threadsPerBlockX);
-            dim3 blocksPerGrid((rows - 1 + threadsPerBlockX - 1) / threadsPerBlockX);
+            dim3 blocksPerGrid(maxBlocks);
 
             std::cout << "Blocks calculated" << std::endl;
             std::cout << "X blocks = "  << blocksPerGrid.x << std::endl;
@@ -1183,6 +1184,9 @@ namespace NWQSim
         uint32_t x, z;
         OP op_name;
         int index;
+        int a;
+        int p;
+        int local_sum;
 
         //Initialize shared memory (per block)
         __shared__ int local_p_shared;
@@ -1202,7 +1206,7 @@ namespace NWQSim
         for (int k = 0; k < n_gates; k++) 
         {
             op_name = gates_gpu[k].op_name;
-            int a = gates_gpu[k].qubit;
+            a = gates_gpu[k].qubit;
             index = i * cols + a;
             
             grid.sync();
@@ -1265,8 +1269,6 @@ namespace NWQSim
 
                 case OP::M:
                 {
-                    // uint32_t* row_sum = stab_gpu->row_sum_gpu;
-
                     //Reset p_shared in the first thread of the first block
                     if(threadIdx.x == 0)
                     {
@@ -1282,19 +1284,20 @@ namespace NWQSim
                     
 
                     //Initialize thread memory
-                    int p = rows;
+                    p = rows;
                     if((i >= (half_row)) && (x_arr[index] > 0))
                         p = i;
                         
                     
                     //Reduce within a block
-                    __syncthreads(); 
+                    // __syncthreads(); 
                     atomicMin(&local_p_shared, p);
                     // if(i == 0 && j == 0)
                     //     printf("Shared reduced\n");
                     
                     //Reduce across all blocks (all blocks need to be caught up)
-                    grid.sync();
+                    // grid.sync();
+                    __syncthreads();
                     if (threadIdx.x == 0)
                         atomicMin(&p_shared, local_p_shared);
                     // if(i == 0 && j == 0)
@@ -1321,37 +1324,32 @@ namespace NWQSim
                                 {
                                     row_sum = 0;
 
-                                    int k_row = (k * cols) + i;
-                                    int p_row = ((p_shared + (half_row)) * cols) + i;
-                                    int local_sum = 0;             
+                                    index = (k * cols) + i;
+                                    p = ((p_shared + (half_row)) * cols) + i;
+                                    local_sum = 0;             
 
-                                    if (x_arr[k_row] && z_arr[k_row]) 
+                                    if (x_arr[index] && z_arr[index]) 
                                     {
-                                        local_sum = z_arr[p_row] - x_arr[p_row];
+                                        local_sum = z_arr[p] - x_arr[p];
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
-                                    if (x_arr[k_row] && !z_arr[k_row]) 
+                                    if (x_arr[index] && !z_arr[index]) 
                                     {
-                                        local_sum = z_arr[p_row] * (2 * x_arr[p_row] - 1);
+                                        local_sum = z_arr[p] * (2 * x_arr[p] - 1);
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
-                                    if (!x_arr[k_row] && z_arr[k_row]) 
+                                    if (!x_arr[index] && z_arr[index]) 
                                     {
-                                        local_sum = x_arr[p_row] * (1 - 2 * z_arr[p_row]);
+                                        local_sum = x_arr[p] * (1 - 2 * z_arr[p]);
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
 
-                                    // printf("x_arr = %d \n", x_arr[last_row]);
-                                    // printf("z_arr = %d \n", z_arr[last_row]);
-                                
-
-                                    x_arr[k_row] ^= x_arr[p_row];
-                                    z_arr[k_row] ^= z_arr[p_row];
+                                    x_arr[index] ^= x_arr[p];
+                                    z_arr[index] ^= z_arr[p];
 
                                     //Add all of the columns together for a given row
                                     atomicAdd(&row_sum, local_sum);
                                 }
-
 
                                 if(i == 0)
                                 {
@@ -1373,33 +1371,29 @@ namespace NWQSim
                         if(i < half_row)
                         {
                             //Set every column of the destab of row p to the stab of row p
-                            int row_index = (p_shared * cols) + i;
-                            int destab_index = ((p_shared-(half_row)) * cols) + i;
-                            x_arr[destab_index] = x_arr[row_index];    
-                            z_arr[destab_index] = z_arr[row_index];
-                            x_arr[row_index] = 0;
-                            z_arr[row_index] = 0; 
+                            index = (p_shared * cols) + i;
+                            p = ((p_shared-(half_row)) * cols) + i;
+                            x_arr[p] = x_arr[index];    
+                            z_arr[p] = z_arr[index];
+                            x_arr[index] = 0;
+                            z_arr[index] = 0; 
+                        }
+                        if(i == half_row)
+                        {
+                            //Generate a random bit (0 or 1)
+                            r_arr[p_shared] = curand(&state) & 1;
+                            // printf("Random measurement at qubit %d value: %d\n", a, randomBit);
 
-                            if(i == 0)
-                            {
-                                
-                                //Generate a random bit (0 or 1)
-                                int randomBit = curand(&state) & 1;
+                            //Update z to reflect z measurement
+                            z_arr[(p_shared * cols) + a] = 1; 
 
-                                r_arr[p_shared] = randomBit;
-                                // printf("Random measurement at qubit %d value: %d\n", a, randomBit);
-
-                                //Update z to reflect z measurement
-                                z_arr[(p_shared * cols) + a] = 1; 
-
-                                stab_gpu->singleResultGPU[a] = randomBit;
-                                // printf("Random done %d\n ", stab_gpu->singleResultGPU[a]);
-                            }
+                            stab_gpu->singleResultGPU[a] = r_arr[p_shared];
+                            // printf("Random done %d\n ", stab_gpu->singleResultGPU[a]);
                         }
                     }
                     else
                     {
-                        // if(i == 0 && j== 0)
+                        // if(i == 0)
                         // {
                         //     printf("Deterministic\n");
                         // }
@@ -1410,10 +1404,10 @@ namespace NWQSim
                             a = (scratch_row * cols) + i;
                             x_arr[a] = 0;
                             z_arr[a] = 0;
-                            if(i == 0)
-                            {
-                                r_arr[scratch_row] = 0;
-                            }
+                        }
+                        if(i == half_row)
+                        {
+                            r_arr[scratch_row] = 0;
                         }
 
                         //Wait for the scratch row to be reset before proceeding
@@ -1439,33 +1433,33 @@ namespace NWQSim
                                 if(i < half_row)
                                 {
                                     row_sum = 0;
+                                    p = (scratch_row * cols) + i;
+                                    index = ((k+(half_row)) * cols) + i;
+                                    local_sum = 0;            
+                                    x = x_arr[index];
+                                    z = z_arr[index];
 
-                                    int last_row = (scratch_row * cols) + i;
-                                    int stab_row = ((k+(half_row)) * cols) + i;
-                                    int local_sum = 0;             
-
-                                    if (x_arr[stab_row] && z_arr[stab_row]) 
+                                    if (x && z) 
                                     {
-                                        local_sum = z_arr[last_row] - x_arr[last_row];
+                                        local_sum = z_arr[p] - x_arr[p];
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
-                                    if (x_arr[stab_row] && !z_arr[stab_row]) 
+                                    if (x && !z) 
                                     {
-                                        local_sum = z_arr[last_row] * (2 * x_arr[last_row] - 1);
+                                        local_sum = z_arr[p] * (2 * x_arr[p] - 1);
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
-                                    if (!x_arr[stab_row] && z_arr[stab_row]) 
+                                    if (!x && z) 
                                     {
-                                        local_sum = x_arr[last_row] * (1 - 2 * z_arr[last_row]);
+                                        local_sum = x_arr[p] * (1 - 2 * z_arr[p]);
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
 
                                     // printf("x_arr = %d \n", x_arr[last_row]);
                                     // printf("z_arr = %d \n", z_arr[last_row]);
                                 
-
-                                    x_arr[last_row] ^= x_arr[stab_row];
-                                    z_arr[last_row] ^= z_arr[stab_row];
+                                    atomicXor(&x_arr[p], x);
+                                    atomicXor(&z_arr[p], z);
 
                                     //Add all of the columns together for a given row
                                     atomicAdd(&row_sum, local_sum);
@@ -1482,9 +1476,8 @@ namespace NWQSim
                                         r_arr[scratch_row] = 0;
                                     //printf("row_sum[%d] = %d\n", i, row_sum[i]);
                                 }
-                                //End Rowsum
                             }
-                        }
+                        } //End Rowsum
 
                         grid.sync();
 
