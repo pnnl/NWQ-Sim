@@ -1183,6 +1183,7 @@ namespace NWQSim
         uint32_t x, z;
         OP op_name;
         int index;
+        int local_sum;
 
         //Initialize shared memory (per block)
         __shared__ int local_p_shared;
@@ -1320,10 +1321,9 @@ namespace NWQSim
                                 if(i < half_row)
                                 {
                                     row_sum = 0;
-
                                     int k_row = (k * cols) + i;
                                     int p_row = ((p_shared + (half_row)) * cols) + i;
-                                    int local_sum = 0;             
+                                    local_sum = 0;             
 
                                     if (x_arr[k_row] && z_arr[k_row]) 
                                     {
@@ -1344,9 +1344,8 @@ namespace NWQSim
                                     // printf("x_arr = %d \n", x_arr[last_row]);
                                     // printf("z_arr = %d \n", z_arr[last_row]);
                                 
-
-                                    x_arr[k_row] ^= x_arr[p_row];
-                                    z_arr[k_row] ^= z_arr[p_row];
+                                    atomicXor(&x_arr[k_row], x_arr[p_row]);
+                                    atomicXor(&z_arr[k_row], z_arr[p_row]);
 
                                     //Add all of the columns together for a given row
                                     atomicAdd(&row_sum, local_sum);
@@ -1442,7 +1441,7 @@ namespace NWQSim
 
                                     int last_row = (scratch_row * cols) + i;
                                     int stab_row = ((k+(half_row)) * cols) + i;
-                                    int local_sum = 0;             
+                                    local_sum = 0;             
 
                                     if (x_arr[stab_row] && z_arr[stab_row]) 
                                     {
@@ -1459,13 +1458,9 @@ namespace NWQSim
                                         local_sum = x_arr[last_row] * (1 - 2 * z_arr[last_row]);
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
-
-                                    // printf("x_arr = %d \n", x_arr[last_row]);
-                                    // printf("z_arr = %d \n", z_arr[last_row]);
                                 
-
-                                    x_arr[last_row] ^= x_arr[stab_row];
-                                    z_arr[last_row] ^= z_arr[stab_row];
+                                    atomicXor(&x_arr[last_row], x_arr[stab_row]);
+                                    atomicXor(&z_arr[last_row], z_arr[stab_row]);
 
                                     //Add all of the columns together for a given row
                                     atomicAdd(&row_sum, local_sum);
