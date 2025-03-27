@@ -1442,7 +1442,7 @@ namespace NWQSim
                         local_p_shared = rows;
                         if(blockIdx.x == 0 && blockIdx.y == 0) 
                         {
-                            printf("M\n\n");
+                            // printf("M\n\n");
                             //Initialize global memory
                             p_shared = rows;
                         }
@@ -1458,15 +1458,15 @@ namespace NWQSim
                     //Reduce within blocks (only threads in the same block need to be caught up)
                     __syncthreads();
                     atomicMin(&local_p_shared, p);
-                    if(i == 0 && j == 0)
-                        printf("Shared reduced\n");
+                    // if(i == 0 && j == 0)
+                    //     printf("Shared reduced\n");
                     
                     //Reduce across all blocks (all blocks need to be caught up)
                     grid.sync();
                     if (threadIdx.x == 0 && threadIdx.y == 0)
                         atomicMin(&p_shared, local_p_shared);
-                    if(i == 0 && j == 0)
-                        printf("Global reduced\n");
+                    // if(i == 0 && j == 0)
+                    //     printf("Global reduced\n");
                     // __syncthreads();
                     grid.sync();
 
@@ -1478,10 +1478,10 @@ namespace NWQSim
                     if(p_shared != rows)
                     {
                         //Debugging
-                        if(i == 0 && j== 0)
-                        {
-                            printf("Random\n");
-                        }
+                        // if(i == 0 && j== 0)
+                        // {
+                        //     printf("Random\n");
+                        // }
 
                         if(i != p_shared)
                         {
@@ -1543,13 +1543,13 @@ namespace NWQSim
                                 int randomBit = curand(&state) & 1;
 
                                 r_arr[p_shared] = randomBit;
-                                printf("Random measurement at qubit %d value: %d\n", a, randomBit);
+                                // printf("Random measurement at qubit %d value: %d\n", a, randomBit);
 
                                 //Update z to reflect z measurement
                                 z_arr[(p_shared * cols) + a] = 1; 
 
                                 stab_gpu->singleResultGPU[a] = randomBit;
-                                printf("Random done %d\n ", stab_gpu->singleResultGPU[a]);
+                                // printf("Random done %d\n ", stab_gpu->singleResultGPU[a]);
                             }
                         }
                     }
@@ -1563,9 +1563,9 @@ namespace NWQSim
                         //Set the scratch row to 0
                         if(i == 0)
                         {
-                            int row_col_index = (scratch_row * cols) + j;
-                            x_arr[row_col_index] = 0;
-                            z_arr[row_col_index] = 0;
+                            a = (scratch_row * cols) + j;
+                            x_arr[a] = 0;
+                            z_arr[a] = 0;
                             if(j == 0)
                             {
                                 r_arr[scratch_row] = 0;
@@ -1575,93 +1575,33 @@ namespace NWQSim
                         //Wait for the scratch row to be reset before proceeding
                         grid.sync();
                         
-
-                        if((i < half_row))
+                        //Reduced rowsum on the scratch row (essentially just updates from every stabilizer r)
+                        if((i >= half_row))
                         {
-                            //printf("Entering row/2 for loop\n");
                             if(x_arr[index])
                             {
-                                //printf("x_arr[i] = %d \n", x_arr[(i * cols) + a]);
-                                //Start Rowsum
+                                index = (i * cols) + j;
+                                a = (scratch_row * cols) + j;
 
-                                // Over every column (j)
-                                // printf("rows = %d \n", rows);
-                                // printf("i = %d \n", i);
-                                // printf("j = %d \n", j);
-                                // printf("row_sum[i] = %d \n", row_sum[i]);
+                                atomicXor(&x_arr[a], x_arr[index]);
+                                atomicXor(&z_arr[a], z_arr[index]);
 
-                                //Initialize the sums from all rows we're interested in to 0
-                                row_sum[i] = 0;
-
-                                int last_row = (scratch_row * cols) + j;
-                                int stab_row = ((i+(half_row)) * cols) + j;
-                                int local_sum = 0;             
-
-                                if (x_arr[stab_row] && z_arr[stab_row]) 
-                                {
-                                    local_sum = z_arr[last_row] - x_arr[last_row];
-                                    // printf("Col_val in %d = %d \n", i, col_val);
-                                }
-                                if (x_arr[stab_row] && !z_arr[stab_row]) 
-                                {
-                                    local_sum = z_arr[last_row] * (2 * x_arr[last_row] - 1);
-                                    // printf("Col_val in %d = %d \n", i, col_val);
-                                }
-                                if (!x_arr[stab_row] && z_arr[stab_row]) 
-                                {
-                                    local_sum = x_arr[last_row] * (1 - 2 * z_arr[last_row]);
-                                    // printf("Col_val in %d = %d \n", i, col_val);
-                                }
-
-                                // printf("x_arr = %d \n", x_arr[last_row]);
-                                // printf("z_arr = %d \n", z_arr[last_row]);
-                               
-
-                                x_arr[last_row] ^= x_arr[stab_row];
-                                z_arr[last_row] ^= z_arr[stab_row];
-
-                                //Add all of the columns together for a given row
-                                atomicAdd(&row_sum[i], local_sum);
-
-                                //Add the stabilizer r value to the corresponding row sum
+                                //Update the scratch row based on the stabilizer row contribution
                                 if(j == 0)
                                 {
-                                    row_sum[i] += 2*r_arr[i+(half_row)];
-                                    //printf("row_sum[%d] = %d\n", i, row_sum[i]);
+                                    atomicXor(&r_arr[scratch_row], r_arr[i]);
                                 }
                                 //End Rowsum
                             }
                         }
+
                         grid.sync();
-
-                        // printf("Done parallelized sums\n");
-
-                        //Sequentially update the r bit of the scratch row
-                        if(i == 0 && j == 0)   
-                        {   
-                            for(int k = 0; k < half_row; k++)
-                            {
-                                int destab_row = (k * cols) + a;
-                                if(x_arr[destab_row] == 1)
-                                {
-                                    //printf("x_arr = %d\n", x_arr[destab_row]);
-                                    row_sum[k] += 2 * r_arr[scratch_row];
-                                    if(row_sum[k] % 4)
-                                        r_arr[scratch_row] = 1;
-                                    else
-                                        r_arr[scratch_row] = 0;
-                                }
-                            }
-                        }
-                        grid.sync();
-
-                        // printf("Done sequential update\n");
 
                         if(i == 0 && j == 0)
                         {
                             stab_gpu->singleResultGPU[a] = r_arr[scratch_row];
                             // printf("Deterministic measurement at qubit %d value: %d\n", 
-                                // a, (r_arr[scratch_row] << a));
+                            //     a, r_arr[scratch_row]);
                         }
                     }
                     break;
