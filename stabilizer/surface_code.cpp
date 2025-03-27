@@ -62,12 +62,12 @@ void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
 
 int main()
 {
-    for(int d = 1; d < 13; d+=2)
+    for(int d = 15; d < 20; d+=2)
     {
     int distance = d;
     int n_qubits = 2 * pow(distance, 2) + 1;
     int shots = 10;
-    int rounds = 10;
+    int rounds = 1000;
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
     
     //Add surface code routines to the circuit
