@@ -1454,9 +1454,6 @@ namespace NWQSim
                                         local_sum = x_arr[p] * (1 - 2 * z_arr[p]);
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
-
-                                    // printf("x_arr = %d \n", x_arr[last_row]);
-                                    // printf("z_arr = %d \n", z_arr[last_row]);
                                 
                                     atomicXor(&x_arr[p], x);
                                     atomicXor(&z_arr[p], z);
