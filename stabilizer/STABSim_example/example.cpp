@@ -70,6 +70,10 @@ int main()
         circuit -> S(63);
         circuit -> S(63);
         circuit -> H(63);
+        
+        auto circuit2 = std::make_shared<NWQSim::Circuit>(n_qubits);
+        circuit2 -> M(63);
+
 
 
         /*For STAB_GPU-Sim2D, independent gates should be user defined by gate chunks.
@@ -95,10 +99,22 @@ int main()
         /*Once a 'state' obejct has been created with the appropriate backend, qubit size, and sim method, its time to simulate*/
         /*For most sim_methods including 1D stabilizer parallelization, use sim(circuit, timer); 
         For parallelized stabilizers and gates on STABSim, use sim2D(circuit, gate_chunks,timer);*/
-        // state->sim(circuit, timer);
-        state->sim(circuit, timer);
+        state->sim2D(circuit, gate_chunks, timer);
+        /*Note that measurements are not independent. The same state can be updated with
+        new circuits, for example, to perform measurement operations.*/
+        state->sim(circuit2, timer);
+
+        /*Or simulate all at once, although without gate-parallelization*/
+        //circuit->M(63);
+        //state->sim(circuit, timer);
+
 
         std::cout << "Simulation complete" << std::endl;
+
+        /*Gather the intermediate measurement results. Returns bit values,
+        useful for when results are too large to be packed into IdxType(long long int)*/
+        int* single_results = state->getSingleResult();
+
 
         /*View the tableau of a stabilizer simulation by calling state->print_res_state();*/
         // state->print_res_state();
