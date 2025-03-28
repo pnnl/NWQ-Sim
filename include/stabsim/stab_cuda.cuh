@@ -1339,6 +1339,7 @@ namespace NWQSim
         uint32_t* z_arr = stab_gpu->z_bit_gpu;
         uint32_t* r_arr = stab_gpu->r_bit_gpu;
         uint32_t x, z;
+        uint32_t local_sum;
         OP op_name;
         int index;
         int p;
@@ -1352,6 +1353,7 @@ namespace NWQSim
         {
             half_row = rows/2;
             scratch_row = rows-1;
+            local_p_shared = scratch_row;
         }
 
         
@@ -1595,13 +1597,13 @@ namespace NWQSim
                                 // printf("i = %d \n", i);
                                 // printf("j = %d \n", j);
                                 // printf("row_sum[i] = %d \n", row_sum[i]);
+                                row_sum_single = 0;
 
                                 if(i < half_row && j == 0) //Using i as columns
                                 {
                                     //Initialize the sums from all rows we're interested in to 0
-                                    row_sum_single = 0;
                                     index = ((k+(half_row)) * cols) + i;
-                                    uint32_t local_sum = 0;            
+                                    local_sum = 0;            
                                     x = x_arr[index];
                                     z = z_arr[index];
 
