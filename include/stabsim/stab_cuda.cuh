@@ -874,7 +874,7 @@ namespace NWQSim
             cudaOccupancyMaxActiveBlocksPerMultiprocessor(
                 &maxBlocks, /* out: max active blocks */
                 (void*)simulation_kernel_cuda_bitwise, /* kernel */
-                2048, /* threads per block */
+                1024, /* threads per block */
                 3*sizeof(int) /* shared memory per block */
             );
 
