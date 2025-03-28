@@ -874,7 +874,7 @@ namespace NWQSim
             cudaOccupancyMaxActiveBlocksPerMultiprocessor(
                 &maxBlocks, /* out: max active blocks */
                 (void*)simulation_kernel_cuda_bitwise, /* kernel */
-                1024, /* threads per block */
+                512, /* threads per block */
                 3*sizeof(int) /* shared memory per block */
             );
 
@@ -892,7 +892,7 @@ namespace NWQSim
             int threadsPerBlockX = 1024;
 
             dim3 threadsPerBlock(threadsPerBlockX);
-            dim3 blocksPerGrid(maxBlocks);
+            dim3 blocksPerGrid((rows-1 + threadsPerBlockX - 1) / threadsPerBlockX);
 
             std::cout << "Blocks calculated" << std::endl;
             std::cout << "X blocks = "  << blocksPerGrid.x << std::endl;
@@ -1186,20 +1186,18 @@ namespace NWQSim
         int index;
         int a;
         int p;
-        int local_sum;
+        uint32_t local_sum;
 
         //Initialize shared memory (per block)
         __shared__ int local_p_shared;
         __shared__ int half_row;
         __shared__ int scratch_row;
-        if (threadIdx.x == 0)
+        if(threadIdx.x == 0)
         {
             half_row = rows/2;
             scratch_row = rows-1;
         }
-        curandState state;
-        int seed = 1234;
-        curand_init(seed, i, 0, &state);
+        
 
         
         // printf("Starting for loop!! \n\n");
@@ -1223,7 +1221,6 @@ namespace NWQSim
                     x_arr[index] = z;
                     z_arr[index] = x;
                     // if(i == 0) printf("H\n\n");
-
                     break;
 
                 case OP::S:
@@ -1290,14 +1287,14 @@ namespace NWQSim
                         
                     
                     //Reduce within a block
-                    // __syncthreads(); 
+                    grid.sync();
                     atomicMin(&local_p_shared, p);
                     // if(i == 0 && j == 0)
                     //     printf("Shared reduced\n");
                     
                     //Reduce across all blocks (all blocks need to be caught up)
-                    // grid.sync();
-                    __syncthreads();
+                    grid.sync();
+                    // __syncthreads();
                     if (threadIdx.x == 0)
                         atomicMin(&p_shared, local_p_shared);
                     // if(i == 0 && j == 0)
@@ -1306,7 +1303,7 @@ namespace NWQSim
                     grid.sync();
 
                     //Debugging output
-                    // if (i == 0 && j == 0)
+                    // if (i == 0)
                     //     printf("p_shared = %d\n", p_shared);
 
                     //If no p among the stabilizers is found, the measurement will be random
@@ -1322,8 +1319,9 @@ namespace NWQSim
                                 //Using i as columns
                                 if(i < half_row)
                                 {
-                                    row_sum = 0;
-
+                                    if(i == 0)
+                                        row_sum = 0;
+                                    grid.sync();
                                     index = (k * cols) + i;
                                     p = ((p_shared + (half_row)) * cols) + i;
                                     local_sum = 0;             
@@ -1331,26 +1329,30 @@ namespace NWQSim
                                     if (x_arr[p] && z_arr[p]) 
                                     {
                                         local_sum = z_arr[index] - x_arr[index];
+                                        x_arr[index] ^= x_arr[p];
+                                        z_arr[index] ^= z_arr[p];
+                                        atomicAdd(&row_sum, local_sum);
+
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
                                     if (x_arr[p] && !z_arr[p]) 
                                     {
                                         local_sum = z_arr[index] * (2 * x_arr[index] - 1);
+                                        x_arr[index] ^= x_arr[p];
+                                        atomicAdd(&row_sum, local_sum);
+
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
                                     if (!x_arr[p] && z_arr[p]) 
                                     {
                                         local_sum = x_arr[index] * (1 - 2 * z_arr[index]);
+                                        z_arr[index] ^= z_arr[p];
+                                        atomicAdd(&row_sum, local_sum);
+
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
-
-                                    x_arr[index] ^= x_arr[p];
-                                    z_arr[index] ^= z_arr[p];
-
-                                    //Add all of the columns together for a given row
-                                    atomicAdd(&row_sum, local_sum);
                                 }
-
+                                grid.sync();
                                 if(i == 0)
                                 {
                                     //Add the stabilizer r value to the corresponding row sum
@@ -1360,7 +1362,7 @@ namespace NWQSim
                                         r_arr[k] = 1;
                                     else
                                         r_arr[k] = 0;
-                                    //printf("row_sum[%d] = %d\n", i, row_sum[i]);
+                                    // printf("row_sum[%d] = %d\n", i, row_sum);
                                 }
                                 //End Rowsum
                             }
@@ -1381,8 +1383,11 @@ namespace NWQSim
                         if(i == half_row)
                         {
                             //Generate a random bit (0 or 1)
+                            curandState state;
+                            int seed = 1234;
+                            curand_init(seed, i, 0, &state);
                             r_arr[p_shared] = curand(&state) & 1;
-                            // printf("Random measurement at qubit %d value: %d\n", a, randomBit);
+                            // printf("Random measurement at qubit %d value: %d\n", a, r_arr[p_shared]);
 
                             //Update z to reflect z measurement
                             z_arr[(p_shared * cols) + a] = 1; 
@@ -1401,9 +1406,9 @@ namespace NWQSim
                         //Set the scratch row to 0
                         if(i < half_row)
                         {
-                            a = (scratch_row * cols) + i;
-                            x_arr[a] = 0;
-                            z_arr[a] = 0;
+                            index = (scratch_row * cols) + i;
+                            x_arr[index] = 0;
+                            z_arr[index] = 0;
                         }
                         if(i == half_row)
                         {
@@ -1430,11 +1435,13 @@ namespace NWQSim
 
                                 //Initialize the sums from all rows we're interested in to 0
                                 //Using i as columns
-                                if(i < half_row)
+                                if(i < n_qubits)
                                 {
-                                    row_sum = 0;
+                                    if(i == 0)
+                                        row_sum = 0;
+                                    grid.sync();
                                     p = (scratch_row * cols) + i;
-                                    index = ((k+(half_row)) * cols) + i;
+                                    index = ((k+(n_qubits)) * cols) + i;
                                     local_sum = 0;            
                                     x = x_arr[index];
                                     z = z_arr[index];
@@ -1461,7 +1468,7 @@ namespace NWQSim
                                     //Add all of the columns together for a given row
                                     atomicAdd(&row_sum, local_sum);
                                 }
-                                // grid.sync();
+                                grid.sync();
                                 if(i == 0)
                                 {
                                     //Add the stabilizer r value to the corresponding row sum
@@ -1471,7 +1478,7 @@ namespace NWQSim
                                         r_arr[scratch_row] = 1;
                                     else
                                         r_arr[scratch_row] = 0;
-                                    //printf("row_sum[%d] = %d\n", i, row_sum[i]);
+                                    // printf("row_sum[%d] = %d\n", i, row_sum);
                                 }
                             }
                         } //End Rowsum
