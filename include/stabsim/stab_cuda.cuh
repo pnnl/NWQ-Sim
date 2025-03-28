@@ -882,7 +882,7 @@ namespace NWQSim
             cudaOccupancyMaxActiveBlocksPerMultiprocessor(
                 &maxBlocks, /* out: max active blocks */
                 (void*)simulation_kernel_cuda_bitwise, /* kernel */
-                16*16, /* threads per block */
+                32*32, /* threads per block */
                 3*sizeof(int) /* shared memory per block */
             );
 
@@ -1323,7 +1323,7 @@ namespace NWQSim
     }//end kernel
 
     __device__ int p_shared;
-    __device__ unsigned int row_sum_single;
+    __device__ uint32_t row_sum_single;
     __global__ void simulation_kernel_cuda_bitwise(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
     {
         cg::grid_group grid = cg::this_grid();
@@ -1477,7 +1477,7 @@ namespace NWQSim
                         // {
                         //     printf("Random\n");
                         // }
-                        int summable = x_arr[index];
+                        uint32_t summable = x_arr[index];
                         if(i != p_shared)
                         {
                             //Set every rowsum we might use to be 0
@@ -1577,9 +1577,6 @@ namespace NWQSim
                         {
                             r_arr[scratch_row] = 0;
                         }
-
-                        //Wait for the scratch row to be reset before proceeding
-                        grid.sync();
                     
                         //Rowsum for all rows < n. Since we're updating and using row p in sequence,
                         //the rowsum needs to be sequential
@@ -1604,32 +1601,34 @@ namespace NWQSim
                                     //Initialize the sums from all rows we're interested in to 0
                                     row_sum_single = 0;
                                     index = ((k+(half_row)) * cols) + i;
-                                    unsigned int local_sum = 0;            
+                                    uint32_t local_sum = 0;            
                                     x = x_arr[index];
                                     z = z_arr[index];
 
                                     if(x && z) 
                                     {
                                         local_sum = z_arr[p] - x_arr[p];
+                                        //xor the scratch row index with every x and z
+                                        atomicXor(&x_arr[p], x);
+                                        atomicXor(&z_arr[p], z);
+                                        //Add all of the columns together for a given row sum
+                                        atomicAdd(&row_sum_single, local_sum);
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
                                     if(x && !z) 
                                     {
                                         local_sum = z_arr[p] * (2 * x_arr[p] - 1);
+                                        atomicXor(&x_arr[p], x);
+                                        atomicAdd(&row_sum_single, local_sum);
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
                                     if(!x && z) 
                                     {
                                         local_sum = x_arr[p] * (1 - 2 * z_arr[p]);
+                                        atomicXor(&z_arr[p], z);
+                                        atomicAdd(&row_sum_single, local_sum);
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
-                                
-                                    //xor the scratch row index with every x and z
-                                    atomicXor(&x_arr[p], x);
-                                    atomicXor(&z_arr[p], z);
-
-                                    //Add all of the columns together for a given row sum
-                                    atomicAdd(&row_sum_single, local_sum);
                                 }
 
                                 grid.sync();
