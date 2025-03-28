@@ -62,7 +62,7 @@ void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
 
 int main()
 {
-    for(int d = 3; d < 4; d+=2)
+    for(int d = 0; d < 16; d+=2)
     {
     int distance = d;
     int n_qubits = 2 * pow(distance, 2) + 1;
@@ -109,7 +109,7 @@ int main()
 
     // state->sim(circuit, timer);
     state->simBitwise(circuit, timer);
-    state->print_res_state();
+    // state->print_res_state();
     // NWQSim::IdxType *results = state->measure_all(shots);
     // for(int i = 0; i < shots; i++)
     //     std::cout << "Result " << i << ": " << results[i] << std::endl;
