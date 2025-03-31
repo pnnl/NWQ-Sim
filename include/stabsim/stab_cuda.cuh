@@ -696,13 +696,13 @@ namespace NWQSim
 
             int minGridSize, blockSize;
             cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda2D, 0, 0);
-            int threadsPerBlockX = 16;
+            int threadsPerBlockX = 32;
             int threadsPerBlockY = blockSize / threadsPerBlockX; 
 
             if (threadsPerBlockY > 16) threadsPerBlockY = 16;
 
             dim3 threadsPerBlock(threadsPerBlockX, threadsPerBlockY);
-            dim3 blocksPerGrid((n + threadsPerBlockX - 1) / threadsPerBlockX,
+            dim3 blocksPerGrid((rows - 1 + threadsPerBlockX - 1) / threadsPerBlockX,
                             (n + threadsPerBlockY - 1) / threadsPerBlockY);
 
             std::cout << "Blocks calculated" << std::endl;

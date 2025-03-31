@@ -39,7 +39,7 @@ void measure_x_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, std::shared
         int j = ancilla % grid_size;
         if (i+1 < grid_size)
         {
-            circui2D->CX(ancilla, qubit_index(i+1, j, grid_size));
+            circuit2D->CX(ancilla, qubit_index(i+1, j, grid_size));
             gate_chunks.back()++;
         }
     }
@@ -82,10 +82,10 @@ void measure_x_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, std::shared
     }
 
     
-    // Measure all ancillas
-    for (int ancilla : ancillas) {
-        circuit->M(ancilla);
-    }
+    // // Measure all ancillas
+    // for (int ancilla : ancillas) {
+    //     circuit->M(ancilla);
+    // }
 }
 
 // Z stabilizer measurements (alternating plaquettes)
@@ -145,10 +145,10 @@ void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, std::shared
         }
     }
     
-    // Measure all ancillas
-    for (int ancilla : ancillas) {
-        circuit->M(ancilla);
-    }
+    // // Measure all ancillas
+    // for (int ancilla : ancillas) {
+    //     circuit->M(ancilla);
+    // }
 }
 
 
@@ -176,20 +176,23 @@ int main()
     for(int i = 0; i < rounds; i++)
     {
         measure_x_stabilizers(circuit, circuit2D, gate_chunks, distance);
-        state->sim2D(circuit2D, gate_chunks, timer)
-        state->sim2D(circuit, gate_chunks, timer)
-        circuit->clear();
+        state->sim2D(circuit2D, gate_chunks, timer);
+        // state->sim(circuit, timer);
+
+        // circuit->clear();
         circuit2D->clear();
 
         gate_chunks.clear();
+
 
         measure_z_stabilizers(circuit, circuit2D, gate_chunks, distance);
-        state->sim2D(circuit2D, gate_chunks, timer)
-        state->sim2D(circuit, gate_chunks, timer)
-        circuit->clear();
+        state->sim2D(circuit2D, gate_chunks, timer);
+        // state->sim(circuit, timer);
+        // circuit->clear();
         circuit2D->clear();
 
         gate_chunks.clear();
+
 
 
         // Test for desync
@@ -216,7 +219,7 @@ int main()
 
 
     std::ostringstream filename;
-    filename << "/people/garn195/NWQ-Sim/stabilizer/surface_code_test/" << backend << "2D_" << sim_method << "_" << distance << ".txt";
+    filename << "/people/garn195/NWQ-Sim/stabilizer/initialize_code/" << backend << "2D_" << sim_method << "_" << distance << ".txt";
     std::ofstream outfile(filename.str());
     if (!outfile) {
         std::cerr << "Error opening file: " << filename.str() << std::endl;
