@@ -736,7 +736,7 @@ namespace NWQSim
             }
             sim_timer.stop_timer();
             /*End simulate*/
-            sim_time = sim_timer.measure();
+            sim_time += sim_timer.measure();
 
             cudaCheckError();
             //Copy data to the CPU side and unpack
@@ -843,12 +843,11 @@ namespace NWQSim
             cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda, blocksPerGrid, threadsPerBlock, args, 3* sizeof(int));
             // simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
 
+            sim_timer.stop_timer();
             // CHECK_CUDA_CALL(cudaPeekAtLastError());
             cudaSafeCall(cudaDeviceSynchronize());
-
-            sim_timer.stop_timer();
             /*End simulate*/
-            sim_time = sim_timer.measure();
+            sim_time += sim_timer.measure();
 
             cudaCheckError();
             //Copy data to the CPU side and unpack
@@ -1350,18 +1349,21 @@ namespace NWQSim
             //Entry -- swap x and z bits
             x_arr[index] = z;
             z_arr[index] = x;
+            return;
         } 
-        else if (op_name == OP::S) {
+        if (op_name == OP::S) {
             //S Gate: Entry (z_arr[index] ^= x_arr[index])
             stab_gpu->r_packed_gpu[row] ^= (x & z);
             z_arr[index] = x ^ z;
+            return;
         }
-        else if (op_name == OP::SDG) {
+        if (op_name == OP::SDG) {
             // SDG Gate: Phase (x_arr[index] ^ (x_arr[index] & z_arr[index]))
             stab_gpu->r_packed_gpu[row] ^= (x ^ (x & z));  // SDG Phase operation
             z_arr[index] = x ^ z;  // Entry (same as S gate)
+            return;
         }
-        else if (op_name == OP::CX) {
+        if (op_name == OP::CX) {
             int ctrl_index = row * stab_gpu->cols + gates_gpu[col].ctrl;
 
             uint32_t x_ctrl = x_arr[ctrl_index];
@@ -1373,6 +1375,21 @@ namespace NWQSim
             //Entry
             x_arr[index] = x ^ x_ctrl;
             z_arr[ctrl_index] = z ^ z_ctrl;
+            return;
+        }
+        if (op_name == OP::RESET) {
+            x_arr[index] = 0;
+            z_arr[index] = 0;
+            if(row == (target/32))
+            {   
+                x_arr[index] ^= (1U << (target%32));
+                stab_gpu->r_packed_gpu[row] &= ~(1U << (target % 32));
+            }
+            if(row == ((2*target)/32))
+                z_arr[index] ^= (1U << ((2*target)%32));
+
+
+            return;
         }
     }
 } //namespace NWQSim
