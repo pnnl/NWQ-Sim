@@ -145,6 +145,7 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 # Subdirectories
 # add_subdirectory(qasm)
 add_subdirectory(stabilizer)
+
 set(CMAKE_CUDA_ARCHITECTURES 80 90)
 
 
