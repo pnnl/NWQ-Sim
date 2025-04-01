@@ -62,7 +62,7 @@ void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
 
 int main()
 {
-    for(int d = 3; d < 4; d+=2)
+    for(int d = 101; d < 116; d+=2)
     {
     int distance = d;
     int n_qubits = 2 * pow(distance, 2) + 1;
@@ -116,7 +116,7 @@ int main()
 
 
     std::ostringstream filename;
-    filename << "/people/garn195/NWQ-Sim/stabilizer/surface_code_test/" << backend << "2D_" << sim_method << "_" << distance << ".txt";
+    filename << "/people/garn195/NWQ-Sim/stabilizer/surface_code_test/" << backend << "_" << sim_method << "_" << distance << ".txt";
     std::ofstream outfile(filename.str());
     if (!outfile) {
         std::cerr << "Error opening file: " << filename.str() << std::endl;
