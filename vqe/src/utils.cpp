@@ -120,7 +120,7 @@ std::vector<IdxType> sorted_nodes;
             
             bool commutes = true;
             for (auto other: clique) {
-                if (!paulilist[node].QWC(paulilist[other])) {
+                if (!paulilist[node].GC(paulilist[other])) {
                     commutes = false;
                     break;
                 }
@@ -135,7 +135,7 @@ std::vector<IdxType> sorted_nodes;
             for (IdxType other_node: added_already) {
                 bool commutes = true;
                 for (auto resident: clique) {
-                    if (!paulilist[other_node].QWC(paulilist[resident])) {
+                    if (!paulilist[other_node].GC(paulilist[resident])) {
                         commutes = false;
                         break;
                     }
