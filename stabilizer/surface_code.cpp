@@ -116,7 +116,7 @@ int main()
 
 
     std::ostringstream filename;
-    filename << "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/surface_code_test/" << backend << "_" << sim_method << "_" << distance << ".txt";
+    filename << "/people/garn195/NWQ-Sim/stabilizer/surface_code_hpc/" << backend << "_" << sim_method << "_" << distance << ".txt";
     std::ofstream outfile(filename.str());
     if (!outfile) {
         std::cerr << "Error opening file: " << filename.str() << std::endl;
