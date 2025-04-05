@@ -43,7 +43,7 @@ for d in range(1, 100, 2):
     simulator = AerSimulator(method="stabilizer")
     
     start = time.perf_counter()
-    simulator.run(circuit).result()
+    simulator.run(circuit)
     end = time.perf_counter()
     
     filename = f"/people/garn195/NWQ-Sim/stabilizer/surface_code_hpc/qiskit_{distance}.txt"

@@ -202,16 +202,16 @@ namespace NWQSim{
 int main()
 {
 
-    std::vector<int> qubit_test = {2048};// = {4, 8, 16, 32, 64, 96, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1152, 1280, 1408, 1536, 1664, 1792, 1920, 2048, };
-    // for(int i = 1; i < 101; i++)
-    //     qubit_test.push_back(i * 128);
+    std::vector<int> qubit_test;
+    for(int i = 2; i < 16; i*2)
+        qubit_test.push_back(i);
     for(int i = 0; i < qubit_test.size(); i++)
     {
         std::cout << "Starting program" << std::endl;
         int n_qubits = qubit_test[i];
         int shots = 10;
 
-        int rounds = 100;
+        int rounds = 1;
         NWQSim::IdxType S_count = 0;
         NWQSim::IdxType H_count = rounds * n_qubits;
         NWQSim::IdxType CX_count = 0;
@@ -224,35 +224,16 @@ int main()
 
         // std::srand(std::time(nullptr));  // Seed random number generator
 
-        // for(int j = 0; j < 100000; j++) 
-        // {
-        //     circuit->H((std::rand() % (n_qubits-1)));
-        //     circuit->CX((std::rand() % (n_qubits-1)),(std::rand() % (n_qubits)));
-        //     circuit->S((std::rand() % (n_qubits-1)));
-        // }
-            
         std::cout << "Building circuit" << std::endl;
-
-        std::vector<int> gate_chunks (rounds, n_qubits);
-        std::vector<NWQSim::Gate> gate_layer;
-        for(int k = 0; k < n_qubits; k++)
+        for(int j = 0; j < i; j++) 
         {
-            NWQSim::Gate G(NWQSim::OP::H, k);
-            gate_layer.push_back(G);
+            int target = (std::rand() % (n_qubits));
+            circuit->H((std::rand() % (n_qubits)));
+            circuit->CX((std::rand() % (n_qubits-1)),(std::rand() % (n_qubits)));
+            circuit->S((std::rand() % (n_qubits-1)));
         }
-        std::vector<NWQSim::Gate> full_circuit;
-        for(int j = 0; j < rounds; j++)
-        {
-            full_circuit.insert(full_circuit.end(),gate_layer.begin(),gate_layer.end());
-        }
-        circuit->set_gates(full_circuit);
 
-        // circuit->H(1);
-        // circuit->H(199);
-
-
-
-        std::string backend = "nvgpu";
+        std::string backend = "cpu";
         std::string sim_method = "stab";
         double timer = 0;
         
@@ -265,8 +246,8 @@ int main()
 
         std::cout << "Starting sim bitwise" << std::endl;
 
-        // state->sim(circuit, timer);
-        state->sim2D(circuit, gate_chunks, timer);
+        state->sim(circuit, timer);
+        // state->sim2D(circuit, gate_chunks, timer);
         // state->print_res_state();
         // NWQSim::IdxType *results = state->getSingleResult();
 
@@ -277,7 +258,7 @@ int main()
 
         // NWQSim::IdxType gate_count = S_count + H_count + CX_count;
 
-        backend= "nvgpu2D";
+        backend= "cpu";
         std::string name = "";
         std::ostringstream filename;
         filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
@@ -286,12 +267,9 @@ int main()
             std::cerr << "Error opening file: " << filename.str() << std::endl;
         }
 
-        outfile << "nvgpu" << std::endl;
+        outfile << "cpu" << std::endl;
         outfile << timer/1000.0 << std::endl;
         outfile << n_qubits << std::endl;
-        outfile << S_count << std::endl;
-        outfile << H_count << std::endl;
-        outfile << CX_count << std::endl;
 
         // outfile.close();
     }
