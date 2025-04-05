@@ -1,4 +1,4 @@
-from qiskit import QuantumCircuit, transpile
+from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
 import time
 

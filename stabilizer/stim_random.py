@@ -8,20 +8,19 @@ def benchmark_stim(n_qubits):
         n_repeats = each
 
         for _ in range(n_repeats):
-            cntrl = random.randint(0, each - 1)
-            gate = random.randint(0, 1)
-            if gate:
-                circuit.append("H", [cntrl])
-            else:
-                circuit.append("S", [cntrl])
+            for cntrl in range(n_repeats):
+                gate = random.randint(0, 1)
+                if gate:
+                    circuit.append_operation("H", [cntrl])
+                else:
+                    circuit.append_operation("S", [cntrl])
 
-            target = random.randint(0, each - 2)
-            if target == cntrl:
-                target += 1
+                target = random.randint(0, each - 2)
+                if target == cntrl:
+                    target += 1  # ensure target != control
 
-            circuit.append("CX", [cntrl, target])
-
-            circuit.append("M", [random.randint(0, each - 1)])
+                circuit.append_operation("CX", [cntrl, target])
+                circuit.append_operation("M", [target])
 
         simulator = stim.TableauSimulator()
 

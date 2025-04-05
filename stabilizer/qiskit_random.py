@@ -6,24 +6,25 @@ from qiskit_aer import AerSimulator
 
 def benchmark_qiskit(n_qubits):
     for each in n_qubits:
-        circuit = QuantumCircuit(each)
+        circuit = QuantumCircuit(each, each)
         n_repeats = each
 
         for _ in range(n_repeats):
-            cntrl = random.randint(0, each-1)
-            gate = random.randint(0, 1)
-            if gate:
-                circuit.h(cntrl)
-            else:
-                circuit.s(cntrl)
-        
-            target = random.randint(0, each - 2)
-            if target >= cntrl:
-                target += 1
+            for cntrl in range(n_repeats):
+                gate = random.randint(0, 1)
+                if gate:
+                    circuit.h(cntrl)
+                else:
+                    circuit.s(cntrl)
+            
+                target = random.randint(0, each - 2)
+                if target == cntrl:
+                    target += 1
 
-            circuit.cx(cntrl, target)
+                circuit.cx(cntrl, target)
 
-            circuit.measure(random.randint(0, each-1)) 
+                
+                circuit.measure(target, target) 
         
         simulator = AerSimulator(method='stabilizer')
 
@@ -41,7 +42,7 @@ def benchmark_qiskit(n_qubits):
 
 qubit_test = []
 i = 2
-while i < 16:
+while i < pow(2, 15):
     qubit_test.append(i)
     i *= 2
 benchmark_qiskit(qubit_test)

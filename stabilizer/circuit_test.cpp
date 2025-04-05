@@ -223,7 +223,6 @@ int main()
 
 
         std::mt19937 rng(std::random_device{}());
-        std::uniform_int_distribution<int> dist_cntrl(0, n_qubits - 1);     
         std::uniform_int_distribution<int> dist_target(0, n_qubits - 2);      
         std::uniform_int_distribution<int> dist_bit(0, 1);      
 
@@ -232,18 +231,20 @@ int main()
         std::cout << "Building circuit" << std::endl;
         for(int j = 0; j < qubit_test[i]; j++) 
         {
-            int cntrl = dist_cntrl(rng);
-            int gate = dist_bit(rng);
-            if(gate)
-                circuit->H(cntrl);
-            else
-                circuit->S(cntrl);
-            
-            int target = dist_target(rng);
-            if(target == cntrl)
-                target++;
-            circuit->CX(cntrl, target);
-            circuit->M(dist_cntrl(rng));
+            for(int cntrl = 0; cntrl < qubit_test[i]; cntrl++) 
+            {
+                int gate = dist_bit(rng);
+                if(gate)
+                    circuit->H(cntrl);
+                else
+                    circuit->S(cntrl);
+                
+                int target = dist_target(rng);
+                if(target == cntrl)
+                    target++;
+                circuit->CX(cntrl, target);
+                circuit->M(target);
+            }
         }
 
         std::string backend = "nvgpu";
