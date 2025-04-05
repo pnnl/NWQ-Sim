@@ -861,7 +861,7 @@ namespace NWQSim
                 printf("n_qubits:%lld, n_gates:%lld, ncpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms\n",
                        n, n_gates, 1, sim_time, 0.,
                        sim_time);
-                printf("=====================================\n");
+                printf("=====================================\n\n\n");
             }
 
             SAFE_FREE_GPU(gates_gpu);

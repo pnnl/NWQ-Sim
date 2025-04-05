@@ -16,7 +16,7 @@ def benchmark_stim(n_qubits):
                 circuit.append("S", [cntrl])
 
             target = random.randint(0, each - 2)
-            if target >= cntrl:
+            if target == cntrl:
                 target += 1
 
             circuit.append("CX", [cntrl, target])

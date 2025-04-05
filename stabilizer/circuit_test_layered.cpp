@@ -211,9 +211,9 @@ int main()
         int n_qubits = qubit_test[i];
         int shots = 10;
 
-        int rounds = 1;
+        int layers = qubit_test[i];
         NWQSim::IdxType S_count = 0;
-        NWQSim::IdxType H_count = rounds * n_qubits;
+        NWQSim::IdxType H_count = 0;
         NWQSim::IdxType CX_count = 0;
         auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
@@ -221,6 +221,7 @@ int main()
         // if(inFile != "")
         //     appendQASMToCircuit(circuit, inFile, n_qubits);
 
+        std::vector<int> circuit_chunks;
 
         std::mt19937 rng(std::random_device{}());
         std::uniform_int_distribution<int> dist_cntrl(0, n_qubits - 1);     
@@ -230,20 +231,41 @@ int main()
    
 
         std::cout << "Building circuit" << std::endl;
-        for(int j = 0; j < qubit_test[i]; j++) 
+        for(int k = 0; k < layers; k++)
         {
-            int cntrl = dist_cntrl(rng);
-            int gate = dist_bit(rng);
-            if(gate)
-                circuit->H(cntrl);
-            else
-                circuit->S(cntrl);
-            
-            int target = dist_target(rng);
-            if(target == cntrl)
-                target++;
-            circuit->CX(cntrl, target);
-            circuit->M(dist_cntrl(rng));
+            circuit_chunks.push_back(0);
+            for(int j = 0; j < qubit_test[i]; j++) 
+            {
+                circuit->H(j);
+                circuit_chunks.back()++;
+            }
+            circuit_chunks.push_back(0);
+            for(int j = 0; j < qubit_test[i]; j++) 
+            {
+                int rand = dist_bit(rng);
+                if(rand)
+                {
+                    circuit->S(j);
+                    circuit_chunks.back()++;
+                }
+            }
+            circuit_chunks.push_back(0);
+            for(int j = 0; j < qubit_test[i]; j++) 
+            {
+                int rand = dist_bit(rng);
+                if(rand)
+                {
+                    circuit->M(j);
+                    circuit_chunks.back()++;
+                }
+            }
+            circuit_chunks.push_back(0);
+            for(int j = 0; j < qubit_test[i]; j++) 
+            {
+                circuit->RESET(j);
+                circuit_chunks.back()++;
+            }
+            circuit_chunks.push_back(0);
         }
 
         std::string backend = "nvgpu";
