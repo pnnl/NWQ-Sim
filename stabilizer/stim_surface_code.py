@@ -3,7 +3,7 @@ import time
 import random
 import numpy as np
 
-for d in range(97, 121, 2):
+for d in range(103, 117, 2):
     circuit = stim.Circuit()
 
     distance = d
@@ -53,7 +53,7 @@ for d in range(97, 121, 2):
     end = time.perf_counter()
 
 
-    filename = "/people/garn195/NWQ-Sim/stabilizer/surface_code_hpc/stim_"+ (str)(distance) + ".txt"
+    filename = "/people/garn195/NWQ-Sim/stabilizer/surface_code_data/stim_"+ (str)(distance) + ".txt"
     with open(filename, "w") as file:
         file.write("stim\n")
         file.write((str)(end-start)+"\n")
