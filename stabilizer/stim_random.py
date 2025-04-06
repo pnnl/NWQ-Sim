@@ -8,19 +8,19 @@ def benchmark_stim(n_qubits):
         n_repeats = 1000
 
         for _ in range(n_repeats):
-            for cntrl in range(each):
-                gate = random.randint(0, 1)
-                if gate:
-                    circuit.append_operation("H", [cntrl])
-                else:
-                    circuit.append_operation("S", [cntrl])
+            cntrl = random.randint(0, each-1)
+            gate = random.randint(0, 1)
+            if gate:
+                circuit.append_operation("H", [cntrl])
+            else:
+                circuit.append_operation("S", [cntrl])
 
-                target = random.randint(0, each - 2)
-                if target == cntrl:
-                    target += 1 
+            target = random.randint(0, each - 2)
+            if target == cntrl:
+                target += 1 
 
-                circuit.append_operation("CX", [cntrl, target])
-                circuit.append_operation("M", [target])
+            circuit.append_operation("CX", [cntrl, target])
+            circuit.append_operation("M", [target])
 
         simulator = stim.TableauSimulator()
 
@@ -30,7 +30,7 @@ def benchmark_stim(n_qubits):
 
         print("Time", end - start)
 
-        filename = f"/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/sim_bench/stim_{each}.txt"
+        filename = f"/people/garn195/NWQ-Sim/stabilizer/sim_bench/stim_{each}.txt"
         with open(filename, "w") as file:
             file.write("stim\n")
             file.write(f"{end - start}\n")
@@ -38,7 +38,7 @@ def benchmark_stim(n_qubits):
 
 qubit_test = []
 i = 2
-while i < pow(2,15):
+while i < pow(2,20):
     qubit_test.append(i)
     i *= 2
 benchmark_stim(qubit_test)

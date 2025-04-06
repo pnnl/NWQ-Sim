@@ -32,7 +32,7 @@
 #define CHECK_CUDA_CALL(call) \
     { \
         cudaError_t err = call; \
-        if (err != cudaSuccess) { \
+        if(err != cudaSuccess) { \
             printf("CUDA Error: %s (code %d) at %s:%d\n", cudaGetErrorString(err), err, __FILE__, __LINE__); \
             exit(EXIT_FAILURE); \
         } \
@@ -169,12 +169,12 @@ namespace NWQSim
         
         void copy_bits_to_gpu()
         {
-            int index;
+            IdxType index;
 
             uint32_t* temp_r_bit = new uint32_t[rows];       
             uint32_t* temp_x_bit = new uint32_t[rows * cols];    
             uint32_t* temp_z_bit = new uint32_t[rows * cols];   
-
+            
             for (int i = 0; i < rows; i++)
             {
                 temp_r_bit[i] = r[i];
@@ -198,7 +198,7 @@ namespace NWQSim
 
         void copy_bits_from_gpu()
         {
-            int index;
+            IdxType index;
 
             uint32_t* temp_r_bit = new uint32_t[rows];
             uint32_t* temp_x_bit = new uint32_t[rows * cols];
@@ -207,6 +207,7 @@ namespace NWQSim
             cudaMemcpy(temp_r_bit, r_bit_gpu, rows * sizeof(uint32_t), cudaMemcpyDeviceToHost);
             cudaMemcpy(temp_x_bit, x_bit_gpu, rows * cols * sizeof(uint32_t), cudaMemcpyDeviceToHost);
             cudaMemcpy(temp_z_bit, z_bit_gpu, rows * cols * sizeof(uint32_t), cudaMemcpyDeviceToHost);
+            
 
             for (int i = 0; i < rows; i++)
             {
@@ -261,7 +262,7 @@ namespace NWQSim
 
         // Function to check CUDA errors
         void checkCudaError(cudaError_t error, const char* message) {
-            if (error != cudaSuccess) {
+            if(error != cudaSuccess) {
                 fprintf(stderr, "CUDA Error: %s: %s\n", message, cudaGetErrorString(error));
                 exit(EXIT_FAILURE);
             }
@@ -278,7 +279,7 @@ namespace NWQSim
         //         T f0 = X[(blockIdx.x * WARP_SIZE + i) * width + blockIdx.y * WARP_SIZE + laneid];
         //         //rotate anticlockwise for Col packing
         //         unsigned r0 = __brev(__ballot(f0> = 0));
-        //         if (laneid == i ) 
+        //         if(laneid == i ) 
         //             Bval = r0;
         //     }
         //     B[blockIdx.y * height + blockIdx.x * WARP_SIZE + laneid] = Bval;
@@ -288,11 +289,11 @@ namespace NWQSim
         //     int laneId = threadIdx.x; // Warp lane ID
         //     int blockRow = blockIdx.x * 32; // Block row start
         //     int blockCol = blockIdx.y * 32; // Block column start
-        //     if (blockRow + laneId < height) {
+        //     if(blockRow + laneId < height) {
         //         unsigned packed = 0;
         //         for (int i = 0; i < 32; ++i) {
         //             int colIdx = blockCol + i;
-        //             if (colIdx < width) {
+        //             if(colIdx < width) {
         //                 int bit = input[(blockRow + laneId) * width + colIdx];
         //                 packed |= (bit > 0 ? 1 : 0) << (31 - i);
         //             }
@@ -699,7 +700,7 @@ namespace NWQSim
             int threadsPerBlockX = 32;
             int threadsPerBlockY = blockSize / threadsPerBlockX; 
 
-            if (threadsPerBlockY > 16) threadsPerBlockY = 16;
+            if(threadsPerBlockY > 16) threadsPerBlockY = 16;
 
             dim3 threadsPerBlock(threadsPerBlockX, threadsPerBlockY);
             dim3 blocksPerGrid((rows - 1 + threadsPerBlockX - 1) / threadsPerBlockX,
@@ -715,7 +716,7 @@ namespace NWQSim
             std::cout << "2D circuit parsed" << std::endl;
 
             /*Simulate*/
-            if (Config::PRINT_SIM_TRACE)
+            if(Config::PRINT_SIM_TRACE)
             {
                 printf("STABSim_gpu is running! Using %lld qubits.\n", n);
             }
@@ -747,7 +748,7 @@ namespace NWQSim
             cudaSafeCall(cudaMemcpy(r_packed_cpu, r_packed_gpu, packed_r_size, cudaMemcpyDeviceToHost));
             unpack_tableau();
 
-            if (Config::PRINT_SIM_TRACE)
+            if(Config::PRINT_SIM_TRACE)
             {
                 printf("\n============== STAB-Sim ===============\n");
                 printf("n_qubits:%lld, n_gates:%lld, ncpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms\n",
@@ -820,7 +821,7 @@ namespace NWQSim
 
             if(blocksPerGrid > maxBlocks)
             {
-                fprintf(stderr, "Error: Attempting to launch more than %d blocks (more than 1 block per SM)\n", maxBlocks);
+                fprintf(stderr, "Error: Attempting to launch more blocks than can fit on the GPU. Cooperative kernel requires 1 block per SM.\n", maxBlocks);
                 exit(EXIT_FAILURE);  // Exit the program if more than 1 block per SM is attempted
             }
 
@@ -828,7 +829,7 @@ namespace NWQSim
             std::cout << "X blocks = "  << blocksPerGrid << std::endl;
 
             /*Simulate*/
-            if (Config::PRINT_SIM_TRACE)
+            if(Config::PRINT_SIM_TRACE)
             {
                 printf("STABSim_gpu is running! Using %lld qubits.\n", n);
             }
@@ -855,7 +856,7 @@ namespace NWQSim
             cudaMemcpy(singleResultHost, singleResultGPU, n*sizeof(int), cudaMemcpyDeviceToHost);
 
 
-            if (Config::PRINT_SIM_TRACE)
+            if(Config::PRINT_SIM_TRACE)
             {
                 printf("\n============== STAB-Sim ===============\n");
                 printf("n_qubits:%lld, n_gates:%lld, ncpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms\n",
@@ -965,8 +966,8 @@ namespace NWQSim
     {
         cg::grid_group grid = cg::this_grid();
         int i = blockIdx.x * blockDim.x + threadIdx.x;
-        int rows = stab_gpu->rows;
-        int cols = stab_gpu->cols;
+        IdxType rows = stab_gpu->rows;
+        IdxType cols = stab_gpu->cols;
         if(i >= rows-1) return;
 
         int n_qubits = stab_gpu->n;
@@ -975,7 +976,8 @@ namespace NWQSim
         uint32_t* r_arr = stab_gpu->r_bit_gpu;
         uint32_t x, z;
         OP op_name;
-        int index;
+        IdxType index;
+        IdxType row_col_index;
         int a;
         int p;
         uint32_t local_sum;
@@ -1043,20 +1045,20 @@ namespace NWQSim
                     break;
 
                 case OP::CX:
-                    int ctrl_index = i * cols + gates_gpu[k].ctrl;
+                    row_col_index = i * cols + gates_gpu[k].ctrl;
 
                     x = x_arr[index];
                     z = z_arr[index];
 
-                    uint32_t x_ctrl = x_arr[ctrl_index];
-                    uint32_t z_ctrl = z_arr[ctrl_index];
+                    uint32_t x_ctrl = x_arr[row_col_index];
+                    uint32_t z_ctrl = z_arr[row_col_index];
 
                     //Phase
                     r_arr[i] ^= ((x_ctrl & z) & (x^z_ctrl^1));
 
                     //Entry
                     x_arr[index] = x ^ x_ctrl;
-                    z_arr[ctrl_index] = z ^ z_ctrl;
+                    z_arr[row_col_index] = z ^ z_ctrl;
 
                     break;
 
@@ -1090,7 +1092,7 @@ namespace NWQSim
                     //Reduce across all blocks (all blocks need to be caught up)
                     grid.sync();
                     // __syncthreads();
-                    if (threadIdx.x == 0)
+                    if(threadIdx.x == 0)
                         atomicMin(&p_shared, local_p_shared);
                     // if(i == 0 && j == 0)
                     //     printf("Global reduced\n");
@@ -1098,7 +1100,7 @@ namespace NWQSim
                     grid.sync();
 
                     //Debugging output
-                    // if (i == 0)
+                    // if(i == 0)
                     //     printf("p_shared = %d\n", p_shared);
 
                     //If no p among the stabilizers is found, the measurement will be random
@@ -1113,16 +1115,16 @@ namespace NWQSim
                                 //Initialize the sums from all rows we're interested in to 0
                                 //Using i as columns
                                 if(i == 0)
-                                        row_sum = 0;
+                                    row_sum = 0;
                                 grid.sync();
                                 if(i < half_row)
                                 {
                                     index = (k * cols) + i;
-                                    p = (p_shared * cols) + i;
-                                    x = x_arr[p];
-                                    z = z_arr[p];
+                                    row_col_index = (p_shared * cols) + i;
+                                    x = x_arr[row_col_index];
+                                    z = z_arr[row_col_index];
 
-                                    if (x && z) 
+                                    if(x && z) 
                                     {
                                         atomicAdd(&row_sum, z_arr[index] - x_arr[index]);
                                         x_arr[index] ^= x;
@@ -1130,14 +1132,14 @@ namespace NWQSim
 
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
-                                    if (x && !z) 
+                                    if(x && !z) 
                                     {
                                         atomicAdd(&row_sum, z_arr[index] * (2 * x_arr[index] - 1));
                                         x_arr[index] ^= x;
 
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
-                                    if (!x && z) 
+                                    if(!x && z) 
                                     {
                                         atomicAdd(&row_sum, x_arr[index] * (1 - 2 * z_arr[index]));
                                         z_arr[index] ^= z;
@@ -1169,9 +1171,9 @@ namespace NWQSim
                         {
                             //Set every column of the destab of row p to the stab of row p
                             index = (p_shared * cols) + i;
-                            p = ((p_shared-(half_row)) * cols) + i;
-                            x_arr[p] = x_arr[index];    
-                            z_arr[p] = z_arr[index];
+                            row_col_index = ((p_shared-(half_row)) * cols) + i;
+                            x_arr[row_col_index] = x_arr[index];    
+                            z_arr[row_col_index] = z_arr[index];
                             x_arr[index] = 0;
                             z_arr[index] = 0; 
                         }
@@ -1234,30 +1236,30 @@ namespace NWQSim
                                 }
                                 if(i < cols)
                                 {
-                                    p = (scratch_row * cols) + i;
+                                    row_col_index = (scratch_row * cols) + i;
                                     index = ((k+(n_qubits)) * cols) + i;
                                     local_sum = 0;            
                                     x = x_arr[index];
                                     z = z_arr[index];
 
-                                    if (x && z) 
+                                    if(x && z) 
                                     {
-                                        local_sum = z_arr[p] - x_arr[p];
-                                        x_arr[p] ^= x;
-                                        z_arr[p] ^= z;
+                                        local_sum = z_arr[row_col_index] - x_arr[row_col_index];
+                                        x_arr[row_col_index] ^= x;
+                                        z_arr[row_col_index] ^= z;
 
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
-                                    if (x && !z) 
+                                    if(x && !z) 
                                     {
-                                        local_sum = z_arr[p] * (2 * x_arr[p] - 1);
-                                        x_arr[p] ^= x;
+                                        local_sum = z_arr[row_col_index] * (2 * x_arr[row_col_index] - 1);
+                                        x_arr[row_col_index] ^= x;
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
-                                    if (!x && z) 
+                                    if(!x && z) 
                                     {
-                                        local_sum = x_arr[p] * (1 - 2 * z_arr[p]);
-                                        z_arr[p] ^= z;
+                                        local_sum = x_arr[row_col_index] * (1 - 2 * z_arr[row_col_index]);
+                                        z_arr[row_col_index] ^= z;
                                         // printf("Col_val in %d = %d \n", i, col_val);
                                     }
                                 
@@ -1292,18 +1294,19 @@ namespace NWQSim
                 case OP::RESET:
                     for(int j = 0; j < cols; j++)
                     {
-                        int row_col_index = (i * cols) + j;
+                        index = (i * cols) + j;
                         if((i/2) == j)
                         {
-                            x_arr[row_col_index] = 1;
-                            z_arr[((i+n_qubits) * cols) + j] = 1;
+                            row_col_index = ((i+n_qubits) * cols) + j;
+                            x_arr[index] = 1;
+                            z_arr[row_col_index] = 1;
                             r_arr[i] = 0;
                             r_arr[i/2] = 0;
                         }
                         else
                         {
-                            x_arr[row_col_index] = 0;
-                            z_arr[row_col_index] = 0;
+                            x_arr[index] = 0;
+                            z_arr[index] = 0;
                         }
                     }
                     break;
@@ -1321,9 +1324,9 @@ namespace NWQSim
         int row = blockIdx.x * blockDim.x + threadIdx.x;  //Index for stabilizers (rows)
         int col = blockIdx.y * blockDim.y + threadIdx.y;  //Index for gates (columns)
 
-        if (row >= stab_gpu->packed_rows) return;  //Check out-of-bounds for qubits
+        if(row >= stab_gpu->packed_rows) return;  //Check out-of-bounds for qubits
 
-        if (col >= gate_chunk) return;  //Check out-of-bounds for gate
+        if(col >= gate_chunk) return;  //Check out-of-bounds for gate
 
         // printf("Inside 2D kernel %d, gate chunk %lld gate qubit %lld \n", col, gate_chunk, gates_gpu[col].qubit);
         // printf("Gates gpu size %lld \n", (sizeof(gates_gpu)));
@@ -1342,7 +1345,7 @@ namespace NWQSim
         uint32_t z = z_arr[index];
 
         //Gate operations
-        if (op_name == OP::H) {
+        if(op_name == OP::H) {
             // printf("Inside h gate \n");
             // H Gate: Swap x and z
             stab_gpu->r_packed_gpu[row] ^= (x & z);
@@ -1351,19 +1354,19 @@ namespace NWQSim
             z_arr[index] = x;
             return;
         } 
-        if (op_name == OP::S) {
+        if(op_name == OP::S) {
             //S Gate: Entry (z_arr[index] ^= x_arr[index])
             stab_gpu->r_packed_gpu[row] ^= (x & z);
             z_arr[index] = x ^ z;
             return;
         }
-        if (op_name == OP::SDG) {
+        if(op_name == OP::SDG) {
             // SDG Gate: Phase (x_arr[index] ^ (x_arr[index] & z_arr[index]))
             stab_gpu->r_packed_gpu[row] ^= (x ^ (x & z));  // SDG Phase operation
             z_arr[index] = x ^ z;  // Entry (same as S gate)
             return;
         }
-        if (op_name == OP::CX) {
+        if(op_name == OP::CX) {
             int ctrl_index = row * stab_gpu->cols + gates_gpu[col].ctrl;
 
             uint32_t x_ctrl = x_arr[ctrl_index];
@@ -1377,7 +1380,7 @@ namespace NWQSim
             z_arr[ctrl_index] = z ^ z_ctrl;
             return;
         }
-        if (op_name == OP::RESET) {
+        if(op_name == OP::RESET) {
             x_arr[index] = 0;
             z_arr[index] = 0;
             if(row == (target/32))

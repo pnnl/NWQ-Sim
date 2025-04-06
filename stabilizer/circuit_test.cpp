@@ -203,18 +203,12 @@ int main()
 {
 
     std::vector<int> qubit_test;
-    for(int i = 2; i < pow(2,15); i*=2)
+    for(int i = 2; i < pow(2,20); i*=2)
         qubit_test.push_back(i);
     for(int i = 0; i < qubit_test.size(); i++)
     {
         std::cout << "Starting program" << std::endl;
         int n_qubits = qubit_test[i];
-        int shots = 10;
-
-        int rounds = 1;
-        NWQSim::IdxType S_count = 0;
-        NWQSim::IdxType H_count = rounds * n_qubits;
-        NWQSim::IdxType CX_count = 0;
         auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
         // std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/adder_n10.qasm";
@@ -223,28 +217,28 @@ int main()
 
 
         std::mt19937 rng(std::random_device{}());
-        std::uniform_int_distribution<int> dist_target(0, n_qubits - 2);      
+        std::uniform_int_distribution<int> dist_cntrl(0, n_qubits - 1);      
+        std::uniform_int_distribution<int> dist_target(0, n_qubits - 2);     
         std::uniform_int_distribution<int> dist_bit(0, 1);      
 
    
 
         std::cout << "Building circuit" << std::endl;
-        for(int j = 0; j < qubit_test[i]; j++) 
+        for(int j = 0; j < 1000; j++) 
         {
-            for(int cntrl = 0; cntrl < qubit_test[i]; cntrl++) 
-            {
-                int gate = dist_bit(rng);
-                if(gate)
-                    circuit->H(cntrl);
-                else
-                    circuit->S(cntrl);
-                
-                int target = dist_target(rng);
-                if(target == cntrl)
-                    target++;
-                circuit->CX(cntrl, target);
-                circuit->M(target);
-            }
+            int cntrl = dist_cntrl(rng);
+            int gate = dist_bit(rng);
+            if(gate)
+                circuit->H(cntrl);
+            else
+                circuit->S(cntrl);
+            
+            int target = dist_target(rng);
+            if(target == cntrl)
+                target++;
+            circuit->CX(cntrl, target);
+            circuit->M(target);
+
         }
 
         std::string backend = "nvgpu";
