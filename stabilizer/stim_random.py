@@ -5,10 +5,10 @@ import random
 def benchmark_stim(n_qubits):
     for each in n_qubits:
         circuit = stim.Circuit()
-        n_repeats = each
+        n_repeats = 1000
 
         for _ in range(n_repeats):
-            for cntrl in range(n_repeats):
+            for cntrl in range(each):
                 gate = random.randint(0, 1)
                 if gate:
                     circuit.append_operation("H", [cntrl])
@@ -17,7 +17,7 @@ def benchmark_stim(n_qubits):
 
                 target = random.randint(0, each - 2)
                 if target == cntrl:
-                    target += 1  # ensure target != control
+                    target += 1 
 
                 circuit.append_operation("CX", [cntrl, target])
                 circuit.append_operation("M", [target])
@@ -38,8 +38,8 @@ def benchmark_stim(n_qubits):
 
 qubit_test = []
 i = 2
-while i < 16:
+while i < pow(2,15):
     qubit_test.append(i)
     i *= 2
-
 benchmark_stim(qubit_test)
+
