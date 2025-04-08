@@ -139,7 +139,9 @@ int main(int argc, char **argv)
                 {
                     safe_print("Benchmark %d fidelity: %.4f Failed!\n", benchmark_index, fidelity);
                     passed = false;
-                }
+                } else{
+		    safe_print("Benchmark %d fidelity: %.4f Passed!\n", benchmark_index, fidelity);
+		}
             }
             if (passed)
                 safe_print("All benchmarks passed!\n");
@@ -257,13 +259,13 @@ ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, s
     stringstream ss_file, ss_result;
     if (is_basis)
     {
-        ss_file << "../data/benchmarks_basis/circuits/" << index << ".qasm";
-        ss_result << "../data/benchmarks_basis/results/" << index << "_result.txt";
+        ss_file << "../../data/benchmarks_basis/circuits/" << index << ".qasm";
+        ss_result << "../../data/benchmarks_basis/results/" << index << "_result.txt";
     }
     else
     {
-        ss_file << "../data/benchmarks/circuits/" << index << ".qasm";
-        ss_result << "../data/benchmarks/results/" << index << "_result.txt";
+        ss_file << "../../data/benchmarks/circuits/" << index << ".qasm";
+        ss_result << "../../data/benchmarks/results/" << index << "_result.txt";
     }
     ifstream resultFile(ss_result.str().c_str());
     if (!resultFile)
