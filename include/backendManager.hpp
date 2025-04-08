@@ -5,6 +5,7 @@
 
 #include "svsim/sv_cpu.hpp"
 #include "dmsim/dm_cpu.hpp"
+#include "tnsim/tn_cpu.hpp"
 
 #ifdef OMP_ENABLED
 #include "svsim/sv_omp.hpp"
