@@ -80,8 +80,10 @@ public:
         {
             if (simulator_method == "SV")
                 return std::make_shared<NWQSim::SV_CPU>(numQubits);
-            else
+            else if (simulator_method == "DM")
                 return std::make_shared<NWQSim::DM_CPU>(numQubits);
+	    else
+		return std::make_shared<NWQSim::TN_CPU>(numQubits);
         }
 
 #ifdef OMP_ENABLED
