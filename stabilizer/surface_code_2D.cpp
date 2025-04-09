@@ -212,24 +212,13 @@ int main()
         int shots = 10;
 
         int layers = n_qubits;
-        NWQSim::IdxType S_count = 0;
-        NWQSim::IdxType H_count = 0;
-        NWQSim::IdxType CX_count = 0;
         auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
         auto m_circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
-
-
-        // std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/adder_n10.qasm";
-        // if(inFile != "")
-        //     appendQASMToCircuit(circuit, inFile, n_qubits);
-
 
         std::mt19937 rng(std::random_device{}());
         std::uniform_int_distribution<int> dist_cntrl(0, 19);     
         std::uniform_int_distribution<int> dist_target(0, n_qubits - 2);      
         std::uniform_int_distribution<int> dist_bit(0, 1);      
-
-   
 
         std::cout << "Building circuit" << std::endl;
 
@@ -241,61 +230,32 @@ int main()
         std::cout << "Creating state" << std::endl;
         auto state = BackendManager::create_state(backend, n_qubits, sim_method);
 
-        std::vector<int> circuit_chunks;
         for(int k = 0; k < layers; k++)
         {
-            circuit_chunks.push_back(0);
             for(int j = 0; j < qubit_test[i]; j++) 
             {
                 int rand = dist_bit(rng);
                 if(rand)
-                {
                     circuit->H(j);
-                    circuit_chunks.back()++;
-                }
-            }
-            circuit_chunks.push_back(0);
-            for(int j = 0; j < qubit_test[i]; j++) 
-            {
-                int rand = dist_bit(rng);
-                if(rand)
-                {
+                else
                     circuit->S(j);
-                    circuit_chunks.back()++;
-                }
             }
-            circuit_chunks.push_back(0);
+            int target = dist_target(rng);  
+            circuit->CX(target, target+1);
             for(int j = 0; j < qubit_test[i]; j++) 
             {
-                int rand = dist_bit(rng);
-                if(rand)
+                int rand = dist_cntrl(rng);     
+                if(rand == 0)
                 {
-                    circuit->RESET(j);
+                    circuit->M(j);
                 }
-                circuit_chunks.back()++;
             }
         }
-        state->sim2D(circuit, circuit_chunks, timer);
-        for(int j = 0; j < qubit_test[i]; j++) 
-        {
-            int rand = dist_cntrl(rng);     
-            if(rand == 0)
-            {
-                m_circuit->M(j);
-            }
-        }
-        state->sim(m_circuit, timer);
 
-        // state->sim2D(circuit, gate_chunks, timer);
-        // state->print_res_state();
-        // NWQSim::IdxType *results = state->getSingleResult();
 
-        // for(int i = 0; i < n_qubits; i++)
-        //     std::cout << "Result " << i << ": " << results[i] << std::endl;
+        state->sim(circuit, timer);
 
         std::cout << "Sim time: " << timer/1000.0 << "s" << std::endl;
-
-        // NWQSim::IdxType gate_count = S_count + H_count + CX_count;
 
         std::string name = "";
         std::ostringstream filename;
@@ -309,7 +269,7 @@ int main()
         outfile << timer/1000.0 << std::endl;
         outfile << n_qubits << std::endl;
 
-        // outfile.close();
+        outfile.close();
     }
 
     return 0;

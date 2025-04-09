@@ -1,45 +1,51 @@
 import stim
 import time
 import random
+import os
 
-def benchmark_stim(n_qubits):
-    for each in n_qubits:
+def benchmark_stim(qubit_test):
+    for n_qubits in qubit_test:
+        print(f"\nStarting program for {n_qubits} qubits")
+        layers = n_qubits
         circuit = stim.Circuit()
-        n_repeats = 1000
+        rng = random.Random()
 
-        for _ in range(n_repeats):
-            cntrl = random.randint(0, each-1)
-            gate = random.randint(0, 1)
-            if gate:
-                circuit.append_operation("H", [cntrl])
-            else:
-                circuit.append_operation("S", [cntrl])
+        for k in range(layers):
+            for j in range(n_qubits):
+                if rng.randint(0, 1):
+                    circuit.append("H", [j])
+                else:
+                    circuit.append("S", [j])
 
-            target = random.randint(0, each - 2)
-            if target == cntrl:
-                target += 1 
+            if n_qubits > 1:
+                target = rng.randint(0, n_qubits - 2)
+                circuit.append("CX", [target, target + 1])
 
-            circuit.append_operation("CX", [cntrl, target])
-            circuit.append_operation("M", [target])
+            for j in range(n_qubits):
+                if rng.randint(0, 19) == 0:
+                    circuit.append("M", [j])
 
         simulator = stim.TableauSimulator()
 
         start = time.perf_counter()
         simulator.do_circuit(circuit)
         end = time.perf_counter()
+        elapsed = end - start
 
-        print("Time", end - start)
+        print(f"Time: {elapsed:.6f} seconds")
 
-        filename = f"/people/garn195/NWQ-Sim/stabilizer/sim_bench/stim_{each}.txt"
-        with open(filename, "w") as file:
-            file.write("stim\n")
-            file.write(f"{end - start}\n")
-            file.write(f"{each}\n")
+        output_dir = "/people/garn195/NWQ-Sim/stabilizer/sim_bench"
+        os.makedirs(output_dir, exist_ok=True)
+        filename = os.path.join(output_dir, f"stim_{n_qubits}.txt")
+        with open(filename, "w") as f:
+            f.write("stim\n")
+            f.write(f"{elapsed}\n")
+            f.write(f"{n_qubits}\n")
 
 qubit_test = []
 i = 2
-while i < pow(2,20):
+while i < 2**20:
     qubit_test.append(i)
     i *= 2
-benchmark_stim(qubit_test)
 
+benchmark_stim(qubit_test)
