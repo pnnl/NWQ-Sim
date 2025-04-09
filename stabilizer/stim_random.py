@@ -1,39 +1,42 @@
 import stim
-import time
 import random
+import time
 import os
+import math
 
 def benchmark_stim(qubit_test):
     for n_qubits in qubit_test:
-        print(f"\nStarting program for {n_qubits} qubits")
-        layers = n_qubits
+        layers = (int) (math.log2(n_qubits))
         circuit = stim.Circuit()
-        rng = random.Random()
 
-        for k in range(layers):
-            for j in range(n_qubits):
-                if rng.randint(0, 1):
+        half = n_qubits // 2
+        for _ in range(layers):
+            for j in range(half):
+                # Random H or S
+                if random.getrandbits(1):
                     circuit.append("H", [j])
                 else:
                     circuit.append("S", [j])
 
-            if n_qubits > 1:
-                target = rng.randint(0, n_qubits - 2)
-                circuit.append("CX", [target, target + 1])
+                # Entangle with CX
+                circuit.append("CX", [j, j + half])
 
-            for j in range(n_qubits):
-                if rng.randint(0, 19) == 0:
-                    circuit.append("M", [j])
+                # 20% chance of measurement
+                if random.random() < 0.2:
+                    circuit.append("M", [j+half])
 
+        # Optionally: final measurements
+        # circuit.append("M", range(n_qubits))
         simulator = stim.TableauSimulator()
-
         start = time.perf_counter()
         simulator.do_circuit(circuit)
         end = time.perf_counter()
         elapsed = end - start
 
-        print(f"Time: {elapsed:.6f} seconds")
+        print(n_qubits)
+        print(f"Stim Time: {elapsed:.6f} seconds")
 
+        # Output
         output_dir = "/people/garn195/NWQ-Sim/stabilizer/sim_bench"
         os.makedirs(output_dir, exist_ok=True)
         filename = os.path.join(output_dir, f"stim_{n_qubits}.txt")
@@ -43,8 +46,8 @@ def benchmark_stim(qubit_test):
             f.write(f"{n_qubits}\n")
 
 qubit_test = []
-i = 2
-while i < 2**20:
+i = 2**16
+while i < (1 << 21):
     qubit_test.append(i)
     i *= 2
 

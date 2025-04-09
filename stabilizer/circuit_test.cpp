@@ -197,74 +197,58 @@ namespace NWQSim{
         std::cout << "------\n\n\n TCount in qasm: " << tCount << " \n\n\n-----" << std::endl;
     }
 }
-
-// Create a circuit with 2 qubits
 int main()
 {
 
     std::vector<int> qubit_test;
-    for(int i = 2; i < pow(2,20); i*=2)
+    for(int i = pow(2,10); i < pow(i, 21); i*=2)
         qubit_test.push_back(i);
     for(int i = 0; i < qubit_test.size(); i++)
     {
         std::cout << "Starting program" << std::endl;
         int n_qubits = qubit_test[i];
+        int shots = 10;
+
+        int layers = std::log2(n_qubits);
         auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
-
-        // std::string inFile = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/T_transpilation_test/adder_n10.qasm";
-        // if(inFile != "")
-        //     appendQASMToCircuit(circuit, inFile, n_qubits);
-
-
-        std::mt19937 rng(std::random_device{}());
-        std::uniform_int_distribution<int> dist_cntrl(0, n_qubits - 1);      
-        std::uniform_int_distribution<int> dist_target(0, n_qubits - 2);     
-        std::uniform_int_distribution<int> dist_bit(0, 1);      
-
-   
+        auto m_circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
         std::cout << "Building circuit" << std::endl;
-        for(int j = 0; j < 1000; j++) 
-        {
-            int cntrl = dist_cntrl(rng);
-            int gate = dist_bit(rng);
-            if(gate)
-                circuit->H(cntrl);
-            else
-                circuit->S(cntrl);
-            
-            int target = dist_target(rng);
-            if(target == cntrl)
-                target++;
-            circuit->CX(cntrl, target);
-            circuit->M(target);
-
-        }
 
         std::string backend = "nvgpu";
         std::string sim_method = "stab";
         double timer = 0;
         
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> dis(0, 1);
+        std::uniform_real_distribution<> prob(0.0, 1.0);
+
         /*Create T and Measurement Tableaus with only stabilizers. T starts empty, M starts as identity.*/
         std::cout << "Creating state" << std::endl;
         auto state = BackendManager::create_state(backend, n_qubits, sim_method);
 
-        
-        // std::vector<std::shared_ptr<Circuit>> circuit2D = {circuit, circuit};
+        for(int k = 0; k < layers; k++)
+        {
+            int half_qubit = qubit_test[i]/2;
+            for(int j = 0; j < half_qubit; j++) 
+            {
+                if (dis(gen))
+                    circuit->H(j);
+                else
+                    circuit->S(j);
 
-        std::cout << "Starting sim bitwise" << std::endl;
+                circuit->CX(j, j+half_qubit);
+                
+                if (prob(gen) < 0.2)
+                    circuit->M(j+half_qubit);
+            }    
+        }
+
 
         state->sim(circuit, timer);
-        // state->sim2D(circuit, gate_chunks, timer);
-        // state->print_res_state();
-        // NWQSim::IdxType *results = state->getSingleResult();
-
-        // for(int i = 0; i < n_qubits; i++)
-        //     std::cout << "Result " << i << ": " << results[i] << std::endl;
 
         std::cout << "Sim time: " << timer/1000.0 << "s" << std::endl;
-
-        // NWQSim::IdxType gate_count = S_count + H_count + CX_count;
 
         std::string name = "";
         std::ostringstream filename;
@@ -278,7 +262,7 @@ int main()
         outfile << timer/1000.0 << std::endl;
         outfile << n_qubits << std::endl;
 
-        // outfile.close();
+        outfile.close();
     }
 
     return 0;

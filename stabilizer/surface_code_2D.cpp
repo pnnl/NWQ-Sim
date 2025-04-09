@@ -197,13 +197,11 @@ namespace NWQSim{
         std::cout << "------\n\n\n TCount in qasm: " << tCount << " \n\n\n-----" << std::endl;
     }
 }
-
-// Create a circuit with 2 qubits
 int main()
 {
 
     std::vector<int> qubit_test;
-    for(int i = 2; i < pow(2,15); i*=2)
+    for(int i = 2; i < pow(i, 21); i*=2)
         qubit_test.push_back(i);
     for(int i = 0; i < qubit_test.size(); i++)
     {
@@ -211,14 +209,9 @@ int main()
         int n_qubits = qubit_test[i];
         int shots = 10;
 
-        int layers = n_qubits;
+        int layers = (n_qubits/10)+1;
         auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
         auto m_circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
-
-        std::mt19937 rng(std::random_device{}());
-        std::uniform_int_distribution<int> dist_cntrl(0, 19);     
-        std::uniform_int_distribution<int> dist_target(0, n_qubits - 2);      
-        std::uniform_int_distribution<int> dist_bit(0, 1);      
 
         std::cout << "Building circuit" << std::endl;
 
@@ -232,24 +225,20 @@ int main()
 
         for(int k = 0; k < layers; k++)
         {
-            for(int j = 0; j < qubit_test[i]; j++) 
+            int half_qubit = qubit_test[i]/2;
+            for(int j = 0; j < half_qubit; j++) 
             {
-                int rand = dist_bit(rng);
-                if(rand)
+                if(j%2)
                     circuit->H(j);
                 else
                     circuit->S(j);
+                circuit->CX(j, j+half_qubit);
             }
-            int target = dist_target(rng);  
-            circuit->CX(target, target+1);
-            for(int j = 0; j < qubit_test[i]; j++) 
-            {
-                int rand = dist_cntrl(rng);     
-                if(rand == 0)
-                {
-                    circuit->M(j);
-                }
-            }
+
+        }
+        for(int k = 0; k < n_qubits; k++)
+        {
+            circuit->M(k);
         }
 
 
@@ -259,7 +248,7 @@ int main()
 
         std::string name = "";
         std::ostringstream filename;
-        filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench_layered/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
+        filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench_sparse_m/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
         std::ofstream outfile(filename.str());
         if (!outfile) {
             std::cerr << "Error opening file: " << filename.str() << std::endl;

@@ -1007,6 +1007,8 @@ namespace NWQSim
             
             grid.sync();
 
+            
+
             switch (op_name) 
             {
                 case OP::H:

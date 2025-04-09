@@ -1,41 +1,46 @@
 import random
 import time
 import os
+import math
 
 from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
 
 def benchmark_qiskit(qubit_test):
+    simulator = AerSimulator(method='stabilizer')  # Init once
+
     for n_qubits in qubit_test:
-        layers = n_qubits
-        rng = random.Random()
+        layers = (int) (math.log2(n_qubits))
         qc = QuantumCircuit(n_qubits, n_qubits)
 
         for _ in range(layers):
-            for j in range(n_qubits):
-                if rng.randint(0, 1):
+            half = n_qubits // 2
+            for j in range(half):
+                # Fast random Clifford layer (only S or H)
+                gate = random.getrandbits(1)
+                if gate:
                     qc.h(j)
                 else:
                     qc.s(j)
 
-            if n_qubits > 1:
-                target = rng.randint(0, n_qubits - 2)
-                qc.cx(target, target + 1)
+                # CX entanglement
+                qc.cx(j, j + half)
 
-            for j in range(n_qubits):
-                if rng.randint(0, 19) == 0:
-                    qc.measure(j, j)
+                # 20% chance of measurement
+                if random.random() < 0.2:
+                    qc.measure(j+half, j+half)
 
-        simulator = AerSimulator(method='stabilizer')
+        # Optional: measure remaining qubits once at end
+        # qc.measure_all()
 
         start = time.perf_counter()
-        result = simulator.run(qc).result()
+        simulator.run(qc).result()
         end = time.perf_counter()
         elapsed = end - start
 
+        print(n_qubits)
         print(f"Time: {elapsed:.6f} seconds")
 
-        # Write results to file
         output_dir = "/people/garn195/NWQ-Sim/stabilizer/sim_bench"
         os.makedirs(output_dir, exist_ok=True)
         filename = os.path.join(output_dir, f"qiskit_{n_qubits}.txt")
@@ -45,8 +50,8 @@ def benchmark_qiskit(qubit_test):
             f.write(f"{n_qubits}\n")
 
 qubit_test = []
-i = 2
-while i < 2**20:
+i = 2**10
+while i < (1 << 21):  # same as pow(2, 15)
     qubit_test.append(i)
     i *= 2
 
