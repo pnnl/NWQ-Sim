@@ -201,8 +201,8 @@ int main()
 {
 
     std::vector<int> qubit_test;
-    for(int i = pow(2,10); i < pow(i, 21); i*=2)
-        qubit_test.push_back(i);
+    for(int i = 4; i < 200; i+=4)
+        qubit_test.push_back(pow(i,2));
     for(int i = 0; i < qubit_test.size(); i++)
     {
         std::cout << "Starting program" << std::endl;

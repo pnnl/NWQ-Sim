@@ -46,9 +46,9 @@ def benchmark_stim(qubit_test):
             f.write(f"{n_qubits}\n")
 
 qubit_test = []
-i = 2**16
-while i < (1 << 21):
-    qubit_test.append(i)
-    i *= 2
+i = 4
+while i < 200:
+    qubit_test.append(pow(i,2))
+    i +=4
 
 benchmark_stim(qubit_test)

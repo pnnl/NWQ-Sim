@@ -50,9 +50,9 @@ def benchmark_qiskit(qubit_test):
             f.write(f"{n_qubits}\n")
 
 qubit_test = []
-i = 2**10
-while i < (1 << 21):  # same as pow(2, 15)
-    qubit_test.append(i)
-    i *= 2
+i = 4
+while i < 200:
+    qubit_test.append(pow(i,2))
+    i +=4
 
 benchmark_qiskit(qubit_test)
