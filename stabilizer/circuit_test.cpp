@@ -215,7 +215,7 @@ int main()
 
         std::cout << "Building circuit" << std::endl;
 
-        std::string backend = "nvgpu";
+        std::string backend = "cpu";
         std::string sim_method = "stab";
         double timer = 0;
         
