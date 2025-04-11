@@ -211,8 +211,6 @@ int main()
 
         int layers = std::log2(n_qubits);
         auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
-        auto m_circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
-
         std::cout << "Building circuit" << std::endl;
 
         std::string backend = "cpu";

@@ -1980,8 +1980,6 @@ namespace NWQSim
                                 if(x[i][a] == 1)
                                 {
                                     rowsum(rows-1, i+half_rows);
-
-
                                 }
                             }
                             // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
