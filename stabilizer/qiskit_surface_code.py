@@ -12,9 +12,9 @@ def create_surface_code_circuit(distance, rounds):
     for _ in range(rounds):
         for i in range(distance):
             for j in range(distance):
-                if (i + j) % 2 == 1:
+                if ((i%2 == 1) and (j%2 == 0)):
                     ancilla = q(i, j)
-                    data_neighbors = [(i+1, j), (i, j+1), (i-1, j), (i, j-1)]
+                    data_neighbors = [(i+1, j), (i-1, j)]
                     data_neighbors = [q(x, y) for x, y in data_neighbors if 0 <= x < grid_size and 0 <= y < grid_size]
                     
                     circuit.h(ancilla)
@@ -25,9 +25,9 @@ def create_surface_code_circuit(distance, rounds):
         
         for i in range(distance):
             for j in range(distance):
-                if (i + j) % 2 == 0:
+                if ((i%2 == 0) and (j%2 == 1)):
                     ancilla = q(i, j)
-                    data_neighbors = [(i+1, j), (i, j+1), (i-1, j), (i, j-1)]
+                    data_neighbors = [(i, j+1), (i, j-1)]
                     data_neighbors = [q(x, y) for x, y in data_neighbors if 0 <= x < grid_size and 0 <= y < grid_size]
                     
                     for data in data_neighbors:
@@ -36,7 +36,7 @@ def create_surface_code_circuit(distance, rounds):
     
     return circuit
 
-for d in range(1, 100, 2):
+for d in range(3, 100, 2):
     distance = d
     rounds = 1
     circuit = create_surface_code_circuit(distance, rounds)

@@ -1,7 +1,7 @@
-Circuit,T Gates,Opt T Gates,T Ratio
-Adder (4),4,4,1.0
-Adder (10),88,32,0.36
-Mult (15),144,42,0.29
-Mult (45),1512,396,0.26
-"QFT (18, 1)",1677,1333,0.79
-"QFT (18, 2)",14383,11463,0.8
+Circuit,T Gates,T Rotations,T Ratio
+Adder (4),4,4,1.0x
+Adder (10),88,32,2.75x
+Mult (15),144,42,3.43x
+Mult (45),1512,396,3.82x
+"QFT (18, 1)",1677,1333,1.26x
+"QFT (18, 2)",14383,11463,1.25x

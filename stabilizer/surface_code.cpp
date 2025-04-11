@@ -20,40 +20,35 @@ void measure_x_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
     
     for (int i = 0; i < distance; i++) {
         for (int j = 0; j < distance; j++) {
-            if ((i + j) % 2 == 1) { // X-stabilizer condition
+            if ((i%2 == 1) && (j%2 == 0))
+            {
                 int ancilla = qubit_index(i, j, grid_size);
                 
-                circuit->H(ancilla);  // Prepare ancilla in |+>
+                circuit->H(ancilla); 
 
-                // Apply CNOTs with data neighbors
                 if (i+1 < grid_size) circuit->CX(ancilla, qubit_index(i+1, j, grid_size));
-                if (j+1 < grid_size) circuit->CX(ancilla, qubit_index(i, j+1, grid_size));
                 if (i-1 >= 0) circuit->CX(ancilla, qubit_index(i-1, j, grid_size));
-                if (j-1 >= 0) circuit->CX(ancilla, qubit_index(i, j-1, grid_size));
 
-                circuit->H(ancilla);  // Convert back to computational basis
-                circuit->M(ancilla);  // Measure stabilizer
+                circuit->H(ancilla); 
+                circuit->M(ancilla); 
             }
         }
     }
 }
 
-// Z stabilizer measurements (alternating plaquettes)
 void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distance) {
     int grid_size = distance + 1;
     
     for (int i = 0; i < distance; i++) {
         for (int j = 0; j < distance; j++) {
-            if ((i + j) % 2 == 0) { // Z-stabilizer condition
+            if ((i%2 == 0) && (j%2 == 1))
+            {
                 int ancilla = qubit_index(i, j, grid_size);
 
-                // Apply CNOTs with data neighbors
-                if (i+1 < grid_size) circuit->CX(qubit_index(i+1, j, grid_size), ancilla);
                 if (j+1 < grid_size) circuit->CX(qubit_index(i, j+1, grid_size), ancilla);
-                if (i-1 >= 0) circuit->CX(qubit_index(i-1, j, grid_size), ancilla);
                 if (j-1 >= 0) circuit->CX(qubit_index(i, j-1, grid_size), ancilla);
 
-                circuit->M(ancilla);  // Measure stabilizer
+                circuit->M(ancilla); 
             }
         }
     }
