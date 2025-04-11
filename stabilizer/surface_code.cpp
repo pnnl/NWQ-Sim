@@ -16,10 +16,10 @@ inline int qubit_index(int i, int j, int grid_size) {
 
 // X stabilizer measurements (alternating plaquettes)
 void measure_x_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distance) {
-    int grid_size = distance + 1;
+    int grid_size = (2 * distance) - 1;
     
-    for (int i = 0; i < distance; i++) {
-        for (int j = 0; j < distance; j++) {
+    for (int i = 0; i < grid_size; i++) {
+        for (int j = 0; j < grid_size; j++) {
             if ((i%2 == 1) && (j%2 == 0))
             {
                 int ancilla = qubit_index(i, j, grid_size);
@@ -28,6 +28,8 @@ void measure_x_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
 
                 if (i+1 < grid_size) circuit->CX(ancilla, qubit_index(i+1, j, grid_size));
                 if (i-1 >= 0) circuit->CX(ancilla, qubit_index(i-1, j, grid_size));
+                if (j+1 < grid_size) circuit->CX(ancilla, qubit_index(i, j+1, grid_size));
+                if (j-1 >= 0) circuit->CX(ancilla, qubit_index(i, j-1, grid_size));
 
                 circuit->H(ancilla); 
                 circuit->M(ancilla); 
@@ -37,16 +39,18 @@ void measure_x_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
 }
 
 void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distance) {
-    int grid_size = distance + 1;
+    int grid_size = (2 * distance) - 1;
     
-    for (int i = 0; i < distance; i++) {
-        for (int j = 0; j < distance; j++) {
+    for (int i = 0; i < grid_size; i++) {
+        for (int j = 0; j < grid_size; j++) {
             if ((i%2 == 0) && (j%2 == 1))
             {
                 int ancilla = qubit_index(i, j, grid_size);
 
                 if (j+1 < grid_size) circuit->CX(qubit_index(i, j+1, grid_size), ancilla);
                 if (j-1 >= 0) circuit->CX(qubit_index(i, j-1, grid_size), ancilla);
+                if (i+1 < grid_size) circuit->CX(qubit_index(i+1, j, grid_size), ancilla);
+                if (i-1 >= 0) circuit->CX(qubit_index(i-1, j, grid_size), ancilla);
 
                 circuit->M(ancilla); 
             }
@@ -57,10 +61,10 @@ void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
 
 int main()
 {
-    for(int d = 3; d < 150; d+=2)
+    for(int d = 3; d < 152; d+=2)
     {
     int distance = d;
-    int n_qubits = 2 * pow(distance, 2) + 1;
+    int n_qubits = pow((2 * distance) - 1, 2);
     int shots = 10;
     int rounds = 1;
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
@@ -89,7 +93,7 @@ int main()
 
     
 
-    std::string backend = "nvgpu";
+    std::string backend = "cpu";
     std::string sim_method = "stab";
     double timer = 0;
     
@@ -111,13 +115,13 @@ int main()
 
 
     std::ostringstream filename;
-    filename << "/people/garn195/NWQ-Sim/stabilizer/surface_code_data/" << backend << "_" << sim_method << "_" << distance << ".txt";
+    filename << "/people/garn195/NWQ-Sim/stabilizer/fowler_surface_code/" << backend << "_" << sim_method << "_" << distance << ".txt";
     std::ofstream outfile(filename.str());
     if (!outfile) {
         std::cerr << "Error opening file: " << filename.str() << std::endl;
     }
 
-    outfile << "nvgpu" << std::endl;
+    outfile << "cpu" << std::endl;
     outfile << timer/1000.0 << std::endl;
     outfile << distance << std::endl;
     outfile << rounds << std::endl;
