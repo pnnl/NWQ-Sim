@@ -201,7 +201,7 @@ int main()
 {
 
     std::vector<int> qubit_test;
-    for(int i = 4; i < 200; i+=4)
+    for(int i = 160; i < 200; i+=4)
         qubit_test.push_back(pow(i,2));
     for(int i = 0; i < qubit_test.size(); i++)
     {
@@ -213,7 +213,7 @@ int main()
         auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
         std::cout << "Building circuit" << std::endl;
 
-        std::string backend = "cpu";
+        std::string backend = "nvgpu";
         std::string sim_method = "stab";
         double timer = 0;
         
