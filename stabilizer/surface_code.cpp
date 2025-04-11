@@ -61,7 +61,7 @@ void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
 
 int main()
 {
-    for(int d = 101; d < 152; d+=2)
+    for(int d = 81; d < 153; d+=2)
     {
     int distance = d;
     int n_qubits = pow((2 * distance) - 1, 2);
@@ -74,26 +74,10 @@ int main()
     {
         measure_x_stabilizers(circuit, distance);
         measure_z_stabilizers(circuit, distance);
-
-        // Test for desync
-        // for(int n = 0; n < n_qubits; n+=2)
-        // {
-        //     circuit->H(n);
-        //     circuit->S(n);
-        //     circuit->S(n);
-        //     circuit->H(n);
-        //     circuit->M(n);
-        // }
-        // for(int n = 1; n < n_qubits; n+=2)
-        // {
-        //     circuit->H(n);
-        //     circuit->M(n);
-        // }
     }
 
     
-
-    std::string backend = "nvgpu";
+    std::string backend = "cpu";
     std::string sim_method = "stab";
     double timer = 0;
     
@@ -121,7 +105,7 @@ int main()
         std::cerr << "Error opening file: " << filename.str() << std::endl;
     }
 
-    outfile << "nvgpu" << std::endl;
+    outfile << "cpu" << std::endl;
     outfile << timer/1000.0 << std::endl;
     outfile << distance << std::endl;
     outfile << rounds << std::endl;
