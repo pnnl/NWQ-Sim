@@ -1,0 +1,7 @@
+Circuit,T Layers,Opt T Layers,T Layer Ratio
+Adder (4),1,1,1.0
+Mult (15),8,8,1.0
+Adder (10),10,7,1.43
+Mult (45),128,128,1.0
+"QFT (18, 1)",869,869,1.0
+"QFT (18, 2)",4311,4311,1.0

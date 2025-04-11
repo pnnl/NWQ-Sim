@@ -250,7 +250,7 @@ int main()
 
         std::string name = "";
         std::ostringstream filename;
-        filename << "/people/garn195/NWQ-Sim/stabilizer/sim_bench/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
+        filename << "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/surface_code_laptop/" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
         std::ofstream outfile(filename.str());
         if (!outfile) {
             std::cerr << "Error opening file: " << filename.str() << std::endl;

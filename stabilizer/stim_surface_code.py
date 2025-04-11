@@ -3,7 +3,7 @@ import time
 import random
 import numpy as np
 
-for d in range(103, 117, 2):
+for d in range(3, 151, 2):
     circuit = stim.Circuit()
 
     distance = d
@@ -18,9 +18,9 @@ for d in range(103, 117, 2):
 
     for i in range(distance):
         for j in range(distance):
-            if (i + j) % 2 == 1:
+            if ((i%2 == 1) and (j%2 == 0)):
                 ancilla = q(i, j)
-                data_neighbors = [q(i+1, j), q(i, j+1), q(i-1, j), q(i, j-1)]
+                data_neighbors = [q(i+1, j), q(i-1, j)]
                 data_neighbors = [n for n in data_neighbors if 0 <= n < grid_size**2]
 
                 circuit.append("H", [ancilla])
@@ -31,21 +31,14 @@ for d in range(103, 117, 2):
 
     for i in range(distance):
         for j in range(distance):
-            if (i + j) % 2 == 0: 
+            if ((i%2 == 0) and (j%2 == 1)):
                 ancilla = q(i, j)
-                data_neighbors = [q(i+1, j), q(i, j+1), q(i-1, j), q(i, j-1)]
+                data_neighbors = [q(i, j+1), q(i, j-1)]
                 data_neighbors = [n for n in data_neighbors if 0 <= n < grid_size**2]
 
                 for data in data_neighbors:
                     circuit.append("CX", [data, ancilla])
                 circuit.append("M", [ancilla])
-
-    #Inject an X error on a data qubit
-    #circuit.append("X_ERROR(0.1)", [q(1, 1)]) 
-
-    # samples = circuit.sample(num_samples=5)
-    # print("\n Measurement Samples:")
-    # print(len(circuit))
 
     simulator = stim.TableauSimulator()
     start = time.perf_counter()
