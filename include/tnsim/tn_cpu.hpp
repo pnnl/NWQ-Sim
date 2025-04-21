@@ -18,6 +18,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include "../../../itensor/itensor/all.h"
+
 namespace NWQSim
 {
     class TN_CPU : public QuantumState
