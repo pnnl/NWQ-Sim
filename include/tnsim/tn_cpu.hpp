@@ -45,7 +45,7 @@ namespace NWQSim
         
         void reset_state() override
         {
-	    psi_full_fill(0.0);
+	    psi_full_.fill(0.0);
 
 	    std::vector<long> idx(n_qubits,1);
 	    psi_full_.set(idx, 1.0);
@@ -80,9 +80,9 @@ namespace NWQSim
     	    for (auto const& g : gates)
     	    {
     	        if(g.op_name==OP::C1)
-    		        apply_one_site(g);
+    		        one_qubit_gate(g);
     		    else if(g.op_name==OP::C2)
-    		        apply_two_site(g);
+    		        two_qubit_gate(g);
             }
     	}
 
@@ -103,7 +103,7 @@ namespace NWQSim
 
             const IdxType nstates = IdxType(1) << n_qubits;
 
-            std::vector<double> probs(nstates);
+            std::vector<ValType> probs(nstates);
             std::vector<itensor::IndexVal> iv(n_qubits);
 
             for(IdxType s = 0; s < nstates; ++s)
@@ -161,7 +161,7 @@ namespace NWQSim
         // CPU memory usage
         ValType cpu_mem;
 
-        void one_qubit_gate(const GateRecord& g)
+        void one_qubit_gate(const SVGate& g)
         {
             // itensor starts at 1
             int site = g.qubit + 1
@@ -177,7 +177,7 @@ namespace NWQSim
             psi_full_.noPrime();
         }
 
-        void two_qubit_gate(const GateRecord& g)
+        void two_qubit_gate(const SVGate& g)
         {
             int i1 = g.ctrl + 1, i2 = g.qubit + 1;
             auto I1 = sites_(i1), I2 = sites_(i2);
