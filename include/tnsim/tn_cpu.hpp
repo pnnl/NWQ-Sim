@@ -35,11 +35,18 @@ namespace NWQSim
             n_cpu = 1;
 
             rng.seed(Config::RANDOM_SEED);
+
+	    sites_ = itensor::SpinHalf(n_qubits)
+	    psi_full_ = itensor::ITensor(sites_);
+
         }
         
         void reset_state() override
         {
-            throw std::runtime_error("Not implemented");
+	    psi_full_fill(0.0);
+
+	    std::vector<long> idx(n_qubits,1);
+	    psi_full_.set(idx, 1.0);
 	}
 
         void set_seed(IdxType seed) override
@@ -59,7 +66,7 @@ namespace NWQSim
 
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
-            throw std::runtime_error("Not implemented");
+
 	}
 
         IdxType *get_results() override
