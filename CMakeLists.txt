@@ -79,6 +79,27 @@ else()
 endif()
 
 
+# Link Itensor
+set(ITENSOR_ROOT "/global/homes/d/dogskep/JonForkNWQ-Sim/itensor"
+    CACHE PATH "Path to external ITensor installation")
+
+include_directories("${ITENSOR_ROOT}")
+
+# ————————————————————————————————————————————————————————————————
+# Create an IMPORTED target for the external ITensor library
+add_library(itensor_ext STATIC IMPORTED)
+set_target_properties(itensor_ext PROPERTIES
+  IMPORTED_LOCATION "${ITENSOR_ROOT}/lib/libitensor.a"
+  INTERFACE_INCLUDE_DIRECTORIES "${ITENSOR_ROOT}"
+)
+
+# Point to the Cray LibSci install (discover via module show / $LD_LIBRARY_PATH)
+set(CRAY_LIBSCI_ROOT "/opt/cray/pe/libsci/24.07.0/NVIDIA/23.3/x86_64")
+
+# Add its lib/ directory so that -lsci_nvidia_mpi_mp and -lsci_nvidia_mp resolve
+link_directories("${CRAY_LIBSCI_ROOT}/lib")
+# ————————————————————————————————————————————————————————————————
+
 if(XACC_FOUND)
     set(xacc_found_str "TRUE")
 else()
