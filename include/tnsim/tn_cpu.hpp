@@ -35,9 +35,11 @@ namespace NWQSim
             n_cpu = 1;
 
             rng.seed(Config::RANDOM_SEED);
-
-	    sites_ = itensor::SpinHalf(n_qubits)
-	    psi_full_ = itensor::ITensor(sites_);
+            
+            // contains the indices
+    	    sites_ = itensor::SpinHalf(n_qubits);
+            // Rank {s1, s2, ... s3}
+	        psi_full_ = itensor::ITensor(sites_);
 
         }
         
@@ -106,8 +108,28 @@ namespace NWQSim
 
             for(IdxType s = 0; s < nstates; ++s)
             {
+                
+                IdxType tmp = s;
+                for(int q = 0; q < n_qubits; ++q)
+                {
+                    auto bit = tmp & 1;
+                    tmp >> = 1;
 
+                    iv[q] = sites_(q+1)(bit+1);
+                }
+
+                auto amp = itensor::elt(psi_full_, iv);
+                probs[s] = std::norm(amp);
             }
+            
+            std::discrete_distribution<IdxType> dist(probs.begin(), probs.end());
+
+            for(IdxType rep = 0; rep < repetition; ++rep)
+            {
+                results[rep] = dist(rng)
+            }
+
+            return results;
         }
 
         virtual ValType get_exp_z(const std::vector<size_t> &in_bits) override
