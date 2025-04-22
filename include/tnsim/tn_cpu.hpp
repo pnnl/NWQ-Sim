@@ -47,7 +47,7 @@ namespace NWQSim
 
 	    std::vector<long> idx(n_qubits,1);
 	    psi_full_.set(idx, 1.0);
-	}
+    	}
 
         void set_seed(IdxType seed) override
         {
@@ -57,17 +57,32 @@ namespace NWQSim
         virtual void set_initial(std::string fpath, std::string format) override
         {
             throw std::runtime_error("Not implemented");
-	}
+    	}
 
         virtual void dump_res_state(std::string outpath) override
         {
             throw std::runtime_error("Not implemented");
-	};
+    	}
 
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
-
-	}
+    	    // initialize the state
+    	    reset_state();
+    
+    	    // temporarily use the fuse gates from sv_sim ToDo: Make a tn_fuse circuits that returns gates
+    	    
+    	    assert(circuit->num_qubits()==n_qubits);
+    	    auto gates = fuse_circuit_sv(circuit);
+    
+    	    // apply all of the gates one by one 
+    	    for (auto const& g : gates)
+    	    {
+    	        if(g.op_name==OP::C1)
+    		        apply_one_site(g);
+    		    else if(g.op_name==OP::C2)
+    		        apply_two_site(g);
+            }
+    	}
 
         IdxType *get_results() override
         {
@@ -81,7 +96,18 @@ namespace NWQSim
 
         IdxType *measure_all(IdxType repetition) override
         {
-            throw std::runtime_error("Not implemented");
+            SAFE_FREE_HOST(results);
+            SAFE_ALOC_HOST(results, sizeof(IdxType)*repetition);
+
+            const IdxType nstates = IdxType(1) << n_qubits;
+
+            std::vector<double> probs(nstates);
+            std::vector<itensor::IndexVal> iv(n_qubits);
+
+            for(IdxType s = 0; s < nstates; ++s)
+            {
+
+            }
         }
 
         virtual ValType get_exp_z(const std::vector<size_t> &in_bits) override
@@ -112,6 +138,36 @@ namespace NWQSim
 
         // CPU memory usage
         ValType cpu_mem;
+
+        void one_qubit_gate(const GateRecord& g)
+        {
+            // itensor starts at 1
+            int site = g.qubit + 1
+            auto I = sites_(site), Ip = prime(I);
+
+            // itensor builds tensors by naming indices 
+            // gate tensor
+            itensor::ITensor G(I, Ip);
+            
+            // ToDo: Fill in the gate from the sv gate
+            
+            psi_full_ = psi_full_ * G;
+            psi_full_.noPrime();
+        }
+
+        void two_qubit_gate(const GateRecord& g)
+        {
+            int i1 = g.ctrl + 1, i2 = g.qubit + 1;
+            auto I1 = sites_(i1), I2 = sites_(i2);
+            auto Ip1 = prime(I1), Ip2 = prime(I2);
+
+            itensor::ITensor G(I1, I2, Ip1, Ip2);
+
+            // ToDo: Fill in the gate from the sv gate
+            
+            psi_full_ = psi_full_ * G;
+            psi_full_.noPrime();
+        }
     };
 
 } // namespace NWQSim
