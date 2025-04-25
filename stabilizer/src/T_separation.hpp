@@ -248,7 +248,7 @@ namespace NWQSim
                         //Apply rotation to the measurement tableau for every S gate that didn't cancel earlier
                         for(int num = rotations; num < 0; num++)
                         {
-                            //Push an S gate through remaining tableaus in P order (to the right/to the end of the circuit)
+                            //Push an Sdg gate through remaining tableaus in P order (to the right/to the end of the circuit)
                             for(int j = i+1; j < P.size(); j++)
                             {
                                 int P_rows = P[j]->get_num_rows();
@@ -267,7 +267,7 @@ namespace NWQSim
                                 // std::cout <<"Stabilizer removed" << std::endl;
                             }
 
-                            //Push S gate through the measurement circuit
+                            //Push SDG gate through the measurement circuit
                             int M_rows = M->get_num_rows();
                             M->add_stabilizer(stabilizer, 1);
 
@@ -442,8 +442,8 @@ namespace NWQSim
         // std::cout << "---- T tableau -----" << std::endl;
         for(int i = 0; i < P.size(); i++)
         {
-            // std::cout << "---- P Tableau: " << i << " -----" << std::endl;
-            // P[i]->print_res_state();
+            std::cout << "---- P Tableau: " << i << " -----" << std::endl;
+            P[i]->print_res_state();
         }
         // std::cout << "---- End T tableau -----" << std::endl;
         T_combine(T_tab, P);

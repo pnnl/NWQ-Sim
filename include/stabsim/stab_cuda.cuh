@@ -52,6 +52,7 @@ namespace NWQSim
     class STAB_CUDA;
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates, int seed = 0);
     __global__ void simulation_kernel_cuda2D(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType gate_chunk);
+    __global__ void pauli_frame_sim(int* m_results, Gate* gates_gpu, IdxType n_gates, int n, int shots, int* x_frame, int* z_frame);
 
     class STAB_CUDA : public QuantumState
     {
@@ -869,6 +870,16 @@ namespace NWQSim
 
             //=========================================
         }
+        void sample()
+        {
+            int* d_x_frame;
+            int* d_z_frame;
+            cudaMalloc(&d_x_frame, n * sizeof(int));
+            cudaMalloc(&d_z_frame, n * sizeof(int));
+
+            void* args[] = {&m_results, &gates_gpu, &n_gates, &n, &d_x_frame, &d_z_frame};
+            cudaLaunchCooperativeKernel((void*)pauli_frame_sim, gridDim, blockDim, args);
+        }
 
         IdxType measure(IdxType qubit) override
         {
@@ -1020,7 +1031,6 @@ namespace NWQSim
                     //Entry -- swap x and z bits
                     x_arr[index] = z;
                     z_arr[index] = x;
-                    // if(i == 0) printf("H\n\n");
                     break;
 
                 case OP::S:
@@ -1131,22 +1141,16 @@ namespace NWQSim
                                         atomicAdd(&row_sum, z_arr[index] - x_arr[index]);
                                         x_arr[index] ^= x;
                                         z_arr[index] ^= z;
-
-                                        // printf("Col_val in %d = %d \n", i, col_val);
                                     }
                                     if(x && !z) 
                                     {
                                         atomicAdd(&row_sum, z_arr[index] * (2 * x_arr[index] - 1));
                                         x_arr[index] ^= x;
-
-                                        // printf("Col_val in %d = %d \n", i, col_val);
                                     }
                                     if(!x && z) 
                                     {
                                         atomicAdd(&row_sum, x_arr[index] * (1 - 2 * z_arr[index]));
                                         z_arr[index] ^= z;
-
-                                        // printf("Col_val in %d = %d \n", i, col_val);
                                     }
                                 }
 
@@ -1397,6 +1401,62 @@ namespace NWQSim
             return;
         }
     }
+
+    __global__ void pauli_frame_sim(int* m_results, Gate* gates_gpu, IdxType n_gates, int n, int shots)
+    {
+        cg::grid_group grid = cg::this_grid();
+        int i = blockIdx.x * blockDim.x + threadIdx.x;
+        IdxType rows = stab_gpu->rows;
+        IdxType cols = stab_gpu->cols;
+        if(i >= shots) return;
+        int x_frame[n](0);
+        int z_frame[n](0);
+        int r = 0;
+
+        OP op_name;
+
+        curandState state;
+        curand_init(1234, i, 0, &state);
+        
+        for (int k = 0; k < n_gates; k++) 
+        {
+            op_name = gates_gpu[k].op_name;
+            a = gates_gpu[k].qubit;
+            
+            grid.sync();
+
+            switch (op_name) 
+            {
+                case OP::H:
+                    int p = (x_frame[a] << 1) | z_frame[a];
+
+                    r ^= (p == 3);
+                    x_frame[a] = (p == 1);
+                    z_frame[a] = (p == 2); 
+
+                    break;
+
+                case OP::S:
+                    int p = (x_frame[a] << 1) | z_frame[a];
+
+                    r ^= (p == 3);
+                    z_frame[a] = !(p == 3);
+
+                    
+                    break;
+
+                case OP::CX:
+                    int cntrl = gates_gpu[k].cntrl;
+                    z_frame[cntrl] ^= z_frame[a];
+                    x_frame[a] ^= x_frame[cntrl];
+
+                    break;
+
+                case OP::M:
+            }
+        }
+    }
+
 } //namespace NWQSim
 
 //#endif

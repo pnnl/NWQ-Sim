@@ -12,19 +12,24 @@
 
 int extractQubitIndex(const std::string& qubitStr) 
 {
-    std::regex qubitRegex("q\\w*\\[(\\d+)\\]");
+    std::regex qubitRegex(R"((\w+)\[(\d+)\])");  // match format like qregless[0]
     std::smatch match;
-    if (std::regex_search(qubitStr, match, qubitRegex) && match.size() > 1) 
+    if (std::regex_search(qubitStr, match, qubitRegex) && match.size() >= 3) 
     {
-        return std::stoi(match.str(1));
+        try {
+            return std::stoi(match.str(2));  // Get the number inside the brackets
+        } catch (const std::exception& e) {
+            std::cerr << "Error parsing qubit index from: " << qubitStr << " - " << e.what() << std::endl;
+            return -1;
+        }
     }
     else
     {
-        std::cerr << "Gate called but no qubit index!" << std::endl;
+        std::cerr << "Gate called but no qubit index! String: " << qubitStr << std::endl;
         return -1;
     }
-    
 }
+
 int extractNumQubit(const std::string& qubitStr) 
 {
     size_t start = qubitStr.find('[');
@@ -59,11 +64,11 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
         std::istringstream lineStream(line);
         lineStream >> gate;
 
-        if(line.find("qreg") != std::string::npos)
+        if(line.find("qreg ") != std::string::npos)
         {
             n_qubits = extractNumQubit(line);
             circuit->set_num_qubits(n_qubits);
-            // std::cout << n_qubits << std::endl;
+            std::cout << n_qubits << std::endl;
         }
         else if(gate == "tdg")
         {
