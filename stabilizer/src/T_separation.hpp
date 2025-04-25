@@ -445,14 +445,16 @@ namespace NWQSim
             std::cout << "---- P Tableau: " << i << " -----" << std::endl;
             P[i]->print_res_state();
         }
+        int layers = P.size();
         // std::cout << "---- End T tableau -----" << std::endl;
         T_combine(T_tab, P);
 
-        outfile << proc_time.count() / 1000000.0 << std::endl;
-        outfile << opt_time.count() / 1000000.0 << std::endl;
-        outfile << initial_T_count << std::endl;
-        outfile << T_tab->get_num_rows() << std::endl;
-        outfile << rep_print << std::endl;
+        outfile << "Processing time: " << proc_time.count() / 1000000.0 << std::endl;
+        outfile << "Optimization time: " << opt_time.count() / 1000000.0 << std::endl;
+        outfile << "Intial T count: " << initial_T_count << std::endl;
+        outfile << "Optimized T count: " << T_tab->get_num_rows() << std::endl;
+        outfile << "Optimized layers: " << layers << std::endl;
+        outfile << "Repetitions to optimize: " << rep_print << std::endl;
 
         /*Process is done, M and T have been seperated and returned*/
 

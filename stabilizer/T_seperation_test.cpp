@@ -18,8 +18,8 @@ namespace fs = std::filesystem;
 
 int main()
 {
-    std::string inputFolder = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/QFT_T_transpilation_test";//Input folder path
-    std::string outputFolder = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/QFT_transpilation_data";//Output folder path
+    std::string inputFolder = "/people/garn195/NWQ-Sim/stabilizer/qft_sk";//Input folder path
+    std::string outputFolder = "/people/garn195/NWQ-Sim/stabilizer/QFT_transpilation_data";//Output folder path
 
     // Create the output folder if it doesn't exist
     fs::create_directories(outputFolder);
@@ -29,11 +29,9 @@ int main()
     {
         if (entry.is_regular_file()) 
         {
-            // Get the input file path and filename
             fs::path inputPath = entry.path();
             std::string filename = inputPath.filename().string();
 
-            // Build the output file path using the same filename
             fs::path outputPath = fs::path(outputFolder) / (inputPath.stem().string() + ".txt");
 
             // Open the input and output files
@@ -77,16 +75,16 @@ int main()
 
 
             //Put the M circuit back in forward time after the new Clifford gates have been appended
-            // std::cout << "---- T tableau -----" << std::endl;
+            std::cout << "---- T tableau -----" << std::endl;
 
             // T_tab->print_res_state();
             std::cout << "---- M tableau -----" << std::endl;
 
-            M_tab->print_res_state();
+            // M_tab->print_res_state();
             // std::cout << "M tableau measurement results: " << (M_tab->measure_all(10))[0] << std::endl;
             /*Measurement Tableau*/
 
-            outfile << total_gates << std::endl;
+            outfile << "Total gates: " << total_gates << std::endl;
             outfile.close(); // Close the file
 
 
