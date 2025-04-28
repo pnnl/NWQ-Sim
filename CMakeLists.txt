@@ -31,6 +31,8 @@ find_package(MPI)
 find_package(OpenMP)
 find_package(XACC QUIET)
 find_package(HIP QUIET)
+find_package(LAPACK)
+find_package(BLAS)
 
 set(ma_enable "N/A") 
 if(CUDAToolkit_FOUND)
@@ -80,24 +82,24 @@ endif()
 
 
 # Link Itensor
-set(ITENSOR_ROOT "/global/homes/d/dogskep/JonForkNWQ-Sim/itensor"
+set(ITENSOR_ROOT "/Users/jon/Softwares/ITensor"
     CACHE PATH "Path to external ITensor installation")
 
 include_directories("${ITENSOR_ROOT}")
 
 # ————————————————————————————————————————————————————————————————
 # Create an IMPORTED target for the external ITensor library
-add_library(itensor_ext STATIC IMPORTED)
-set_target_properties(itensor_ext PROPERTIES
+add_library(itensor STATIC IMPORTED)
+set_target_properties(itensor PROPERTIES
   IMPORTED_LOCATION "${ITENSOR_ROOT}/lib/libitensor.a"
   INTERFACE_INCLUDE_DIRECTORIES "${ITENSOR_ROOT}"
 )
 
 # Point to the Cray LibSci install (discover via module show / $LD_LIBRARY_PATH)
-set(CRAY_LIBSCI_ROOT "/opt/cray/pe/libsci/24.07.0/NVIDIA/23.3/x86_64")
+#set(CRAY_LIBSCI_ROOT "/opt/cray/pe/libsci/24.07.0/NVIDIA/23.3/x86_64")
 
 # Add its lib/ directory so that -lsci_nvidia_mpi_mp and -lsci_nvidia_mp resolve
-link_directories("${CRAY_LIBSCI_ROOT}/lib")
+#link_directories("${CRAY_LIBSCI_ROOT}/lib")
 # ————————————————————————————————————————————————————————————————
 
 if(XACC_FOUND)

@@ -44,16 +44,16 @@ endif()
 # Link ITensor and Cray LibSci BLAS/LAPACK
 target_link_libraries(nwq_qasm
   PRIVATE
-    itensor_ext         # imported ITensor library
-    sci_nvidia_mpi_mp   # Cray LibSci MPI+OpenMP BLAS/LAPACK
-    sci_nvidia_mp       # Cray LibSci OpenMP‑only BLAS/LAPACK
+    itensor         # imported ITensor library
+    BLAS
+    LAPACK
 )
 
 target_link_libraries(test_itensor
   PRIVATE
-    itensor_ext
-    sci_nvidia_mpi_mp
-    sci_nvidia_mp
+    itensor
+    BLAS
+    LAPACK
 )
 # —————————————————————————————————————————————————————
 
