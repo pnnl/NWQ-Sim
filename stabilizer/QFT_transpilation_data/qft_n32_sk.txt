@@ -1,7 +1,0 @@
-Processing time: 0.002349
-Optimization time: 0
-Intial T count: 0
-Optimized T count: 0
-Optimized layers: 0
-Repetitions to optimize: 0
-1072

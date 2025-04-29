@@ -383,7 +383,7 @@ namespace NWQSim
 
 
     //Main compilation function for T pushthrough using tableau simulation
-    void T_passthrough(std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<QuantumState>& M_tab, std::ofstream& outfile, std::chrono::duration<long long, std::ratio<1, 1000000>> proc_time, int reps = 1)
+    void T_passthrough(std::shared_ptr<QuantumState>& T_tab, std::shared_ptr<QuantumState>& M_tab, std::ofstream& outfile, std::chrono::duration<long long, std::ratio<1, 1000000>> proc_time, std::string file_name, int reps = 1)
     {
         
         IdxType n = M_tab->get_qubits();
@@ -440,12 +440,35 @@ namespace NWQSim
 
         //Processing is done, so we can combine into one tableau if needed
         // std::cout << "---- T tableau -----" << std::endl;
+        int layers = P.size();
+        std::ofstream stabilizer_out("/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/QFT_transpilation_data/" + file_name + "_stabilizers.txt");
+        stabilizer_out << "[";
         for(int i = 0; i < P.size(); i++)
         {
-            std::cout << "---- P Tableau: " << i << " -----" << std::endl;
-            P[i]->print_res_state();
+            // std::cout << "---- P Tableau: " << i << " -----" << std::endl;
+            // P[i]->print_res_state();
+            stabilizer_out << "[";
+            for(int j = 0; j < P[i]->get_num_rows(); j++)
+            {
+                std::pair<std::string, int> stabilizer = P[i]->get_stabilizer_line(j);
+                if(stabilizer.second)
+                {
+                    stabilizer_out << "'-" << stabilizer.first << "'";
+                }
+                else
+                {
+                    stabilizer_out << "'+" << stabilizer.first << "'";
+                }
+                if(j < P[i]->get_num_rows()-1)
+                    stabilizer_out << ", ";
+            }
+            if(i > P.size()-2)
+                stabilizer_out << "]";  
+            else
+                stabilizer_out << "],\n";
         }
-        int layers = P.size();
+        stabilizer_out << "]";
+        stabilizer_out.close();
         // std::cout << "---- End T tableau -----" << std::endl;
         T_combine(T_tab, P);
 
@@ -457,6 +480,6 @@ namespace NWQSim
         outfile << "Repetitions to optimize: " << rep_print << std::endl;
 
         /*Process is done, M and T have been seperated and returned*/
-
+        
     } //End T_passthrough
 }//End namespace

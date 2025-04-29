@@ -39,7 +39,20 @@ int extractNumQubit(const std::string& qubitStr)
         return std::stoi(qubitStr.substr(start + 1, end - start - 1));
     }
     
-    return -1; // Return -1 if no valid integer is found
+    return -1;
+}
+
+std::vector<std::string> split_by_semicolon(const std::string& str) {
+    std::vector<std::string> tokens;
+    std::istringstream ss(str);
+    std::string token;
+    while (std::getline(ss, token, ';')) {
+        size_t start = token.find_first_not_of(" \t");
+        size_t end = token.find_last_not_of(" \t");
+        if (start != std::string::npos)
+            tokens.push_back(token.substr(start, end - start + 1));
+    }
+    return tokens;
 }
 
 void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::string& filename, int& n_qubits) 
@@ -53,151 +66,115 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
 
     std::string line;
     int tCount = 0;
+
     while (std::getline(file, line)) 
     {
-        std::string gate;
-        int qubit1, qubit2;
-
-        if (line.empty() || line.find("include") != std::string::npos || line.find("gate") != std::string::npos || line.find("barrier") != std::string::npos || line.find("OPENQASM") != std::string::npos || line.find("creg") != std::string::npos || line.find("#include") != std::string::npos)
+        if (line.empty() ||
+            line.find("include") != std::string::npos ||
+            line.find("gate") != std::string::npos ||
+            line.find("barrier") != std::string::npos ||
+            line.find("OPENQASM") != std::string::npos ||
+            line.find("creg") != std::string::npos ||
+            line.find("#include") != std::string::npos)
             continue;
 
-        std::istringstream lineStream(line);
-        lineStream >> gate;
+        auto instructions = split_by_semicolon(line);
 
-        if(line.find("qreg ") != std::string::npos)
+        for (const std::string& instr : instructions)
         {
-            n_qubits = extractNumQubit(line);
-            circuit->set_num_qubits(n_qubits);
-            std::cout << n_qubits << std::endl;
-        }
-        else if(gate == "tdg")
-        {
-            tCount++;
-            std::string qubitStr;
-            lineStream >> qubitStr;
-            qubit1 = extractQubitIndex(qubitStr);
-            if (qubit1 != -1) 
-            {
-                circuit->TDG(qubit1);
-            }
-            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
-        }
-        else if(gate == "h")
-        {
-            std::string qubitStr;
-            lineStream >> qubitStr;
-            qubit1 = extractQubitIndex(qubitStr);
-            if (qubit1 != -1) 
-            {
-                circuit->H(qubit1);
-            }
-            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
-        }
-        else if(gate == "s")
-        {
-            std::string qubitStr;
-            lineStream >> qubitStr;
-            qubit1 = extractQubitIndex(qubitStr);
-            if (qubit1 != -1) 
-            {
-                circuit->S(qubit1);
-            }
-            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
-        }
-        else if(gate == "sdg")
-        {
-            std::string qubitStr;
-            lineStream >> qubitStr;
-            qubit1 = extractQubitIndex(qubitStr);
-            if (qubit1 != -1) 
-            {
-                circuit->SDG(qubit1);
-            }
-            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
-        }
-        else if(gate == "t")
-        {
-            tCount++;
+            std::istringstream lineStream(instr);
+            std::string gate;
+            int qubit1 = -1, qubit2 = -1;
 
-            std::string qubitStr;
-            lineStream >> qubitStr;
-            qubit1 = extractQubitIndex(qubitStr);
-            if (qubit1 != -1) 
+            lineStream >> gate;
+
+            if (instr.find("qreg ") != std::string::npos)
             {
-                circuit->T(qubit1);
+                n_qubits = extractNumQubit(instr);
+                circuit->set_num_qubits(n_qubits);
+                std::cout << n_qubits << std::endl;
             }
-            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
-        }
-        else if(gate == "m")
-        {
-            std::string qubitStr;
-            lineStream >> qubitStr;
-            qubit1 = extractQubitIndex(qubitStr);
-            if (qubit1 != -1) 
+            else if(gate == "tdg")
             {
-                circuit->M(qubit1);
+                tCount++;
+                std::string qubitStr;
+                lineStream >> qubitStr;
+                qubit1 = extractQubitIndex(qubitStr);
+                if (qubit1 != -1) circuit->TDG(qubit1);
             }
-            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
-        }
-        else if(gate == "reset")
-        {
-            std::string qubitStr;
-            lineStream >> qubitStr;
-            qubit1 = extractQubitIndex(qubitStr);
-            if (qubit1 != -1) 
+            else if(gate == "t")
             {
-                circuit->RESET(qubit1);
+                tCount++;
+                std::string qubitStr;
+                lineStream >> qubitStr;
+                qubit1 = extractQubitIndex(qubitStr);
+                if (qubit1 != -1) circuit->T(qubit1);
             }
-            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
-        }
-        else if(gate == "cx")
-        {
-            std::string qubitStr1, qubitStr2;
-            //Read the full line after cx and split it by the comma
-            std::getline(lineStream, qubitStr1, ',');
-            std::getline(lineStream, qubitStr2);
-
-            qubitStr1.erase(0, qubitStr1.find_first_not_of(" \t"));
-            qubitStr1.erase(qubitStr1.find_last_not_of(" \t") + 1);
-            qubitStr2.erase(0, qubitStr2.find_first_not_of(" \t"));
-            qubitStr2.erase(qubitStr2.find_last_not_of(" \t") + 1);
-
-            qubit1 = extractQubitIndex(qubitStr1);
-            qubit2 = extractQubitIndex(qubitStr2);
-
-            if (qubit1 != -1 && qubit2 != -1) 
+            else if(gate == "sdg")
             {
-                circuit->CX(qubit1, qubit2);
+                std::string qubitStr;
+                lineStream >> qubitStr;
+                qubit1 = extractQubitIndex(qubitStr);
+                if (qubit1 != -1) circuit->SDG(qubit1);
             }
-            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
-        }
-        else if(gate == "cxyz")
-        {
-            std::string qubitStr1, qubitStr2;
-            //Read the full line after cxyz and split it by the comma
-            std::getline(lineStream, qubitStr1, ',');
-            std::getline(lineStream, qubitStr2);
-
-            qubitStr1.erase(0, qubitStr1.find_first_not_of(" \t"));
-            qubitStr1.erase(qubitStr1.find_last_not_of(" \t") + 1);
-            qubitStr2.erase(0, qubitStr2.find_first_not_of(" \t"));
-            qubitStr2.erase(qubitStr2.find_last_not_of(" \t") + 1);
-
-            qubit1 = extractQubitIndex(qubitStr1);
-            qubit2 = extractQubitIndex(qubitStr2);
-
-            if (qubit1 != -1 && qubit2 != -1) 
+            else if(gate == "s")
             {
-                circuit->CX(qubit1, qubit2);
-                circuit->CY(qubit1, qubit2);
-                circuit->CZ(qubit1, qubit2);
+                std::string qubitStr;
+                lineStream >> qubitStr;
+                qubit1 = extractQubitIndex(qubitStr);
+                if (qubit1 != -1) circuit->S(qubit1);
             }
-            // std::cout << gate << qubit1 << ", " << qubit2 << std::endl;
-        }
-        else
-        {
-            std::cout << gate << " does not match a gate."; 
+            else if(gate == "h")
+            {
+                std::string qubitStr;
+                lineStream >> qubitStr;
+                qubit1 = extractQubitIndex(qubitStr);
+                if (qubit1 != -1) circuit->H(qubit1);
+            }
+            else if(gate == "m" || gate == "measure")
+            {
+                std::string qubitStr;
+                lineStream >> qubitStr;
+                qubit1 = extractQubitIndex(qubitStr);
+                if (qubit1 != -1) circuit->M(qubit1);
+            }
+            else if(gate == "reset")
+            {
+                std::string qubitStr;
+                lineStream >> qubitStr;
+                qubit1 = extractQubitIndex(qubitStr);
+                if (qubit1 != -1) circuit->RESET(qubit1);
+            }
+            else if(gate == "cx" || gate == "cxyz")
+            {
+                std::string qubitStr1, qubitStr2;
+                std::getline(lineStream, qubitStr1, ',');
+                std::getline(lineStream, qubitStr2);
+
+                qubitStr1.erase(0, qubitStr1.find_first_not_of(" \t"));
+                qubitStr1.erase(qubitStr1.find_last_not_of(" \t") + 1);
+                qubitStr2.erase(0, qubitStr2.find_first_not_of(" \t"));
+                qubitStr2.erase(qubitStr2.find_last_not_of(" \t") + 1);
+
+                qubit1 = extractQubitIndex(qubitStr1);
+                qubit2 = extractQubitIndex(qubitStr2);
+
+                if (qubit1 != -1 && qubit2 != -1)
+                {
+                    circuit->CX(qubit1, qubit2);
+                    if (gate == "cxyz")
+                    {
+                        circuit->CY(qubit1, qubit2);
+                        circuit->CZ(qubit1, qubit2);
+                    }
+                }
+            }
+            else if (!gate.empty())
+            {
+                std::cout << gate << " does not match a gate.\n";
+            }
         }
     }
-    std::cout << "------\n\n\n TCount in qasm: " << tCount << " \n\n\n-----" << std::endl;
+
+    // std::cout << "------\n\n\n TCount in qasm: " << tCount << " \n\n\n-----" << std::endl;
 }
