@@ -6,7 +6,7 @@
 #include "../gate.hpp"
 #include "../circuit.hpp"
 #include "../config.hpp"
-#include "private/exp_gate_declarations_host.hpp"
+#include "../private/exp_gate_declarations_host.hpp"
 
 #include "../circuit_pass/fusion.hpp"
 #include "../private/macros.hpp"
@@ -290,6 +290,11 @@ namespace NWQSim
 
             assert(qubit0 != qubit1); // Non-cloning
 
+            assert(std::abs(qubit0 - qubit1) == 1);
+            if(std::abs(qubit0 - qubit1) != 1){
+                std::cout<<"Yo no"<<std::endl;
+                throw std::runtime_error("Yo no");
+            }
             int site0 = qubit0 + 1;
             int site1 = qubit1 + 1;
             auto i = sites(site0);
@@ -370,23 +375,24 @@ namespace NWQSim
                         auto rdm = network_(1) * prime(dag(network_(1)));
 
                         auto p_si = std::real(eltC(rdm,1,1));
-                        if (r <= p_si){
-                            res |= static_cast<IdxType>(1) << (n_qubits-j);
+                        if (r >= p_si){
+                            res |= static_cast<IdxType>(1) << (j-1);
                             }
                         results[i] = res;
                         }
                     else{
+                        
                         auto rdm = prime(dag(network_(n_qubits)),"Link")*network_(n_qubits);
  
                         for (auto k = 1; k <= n_qubits-j ; k++){
-                            std::cout<<"k contr "<<k<<std::endl;
+                        
                             rdm *= network_(k);
                             rdm *= prime(dag(network_(k)));
                         }
 
                         auto p_si = std::real(eltC(rdm,1,1));
          
-                        if (r >= p_si){
+                        if (r <= p_si){
 
                             auto site = sites(j);
                             auto si = itensor::ITensor(site);
@@ -426,8 +432,8 @@ namespace NWQSim
                             temp_net.set(1,temp);
                             network_ = temp_net;
 
-                            res |= static_cast<IdxType>(1) << (n_qubits-j);
-                            std::cout<<"j: "<<j<<" n_qubits: "<<n_qubits<<" (n_qubits-j-1) "<<(n_qubits-j)<<std::endl;
+                            res |= static_cast<IdxType>(1) << (j-1);
+         
 
                             network_ /= std::sqrt(p_si);
                     }
