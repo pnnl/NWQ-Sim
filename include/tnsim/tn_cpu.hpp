@@ -381,15 +381,22 @@ namespace NWQSim
                         results[i] = res;
                         }
                     else{
+                 
+                        auto rdm = prime(dag(network_(n_qubits-j+1)),"Link")*network_(n_qubits-j+1);
                         
-                        auto rdm = prime(dag(network_(n_qubits)),"Link")*network_(n_qubits);
+                 
  
                         for (auto k = 1; k <= n_qubits-j ; k++){
                         
                             rdm *= network_(k);
-                            rdm *= prime(dag(network_(k)));
+                            if (k==1){
+                                rdm *= prime(dag(network_(k)));
+                            }
+                            else{
+                                rdm *= prime(dag(network_(k)),"Link");
+                            }
                         }
-
+            
                         auto p_si = std::real(eltC(rdm,1,1));
          
                         if (r <= p_si){
@@ -406,9 +413,12 @@ namespace NWQSim
 
                             auto temp_net = itensor::MPS(n_qubits-j);
                             for (int i = 1;i<=(n_qubits-j);i++){
-                                temp_net.ref(i) = network_(j+i);}
+                            
+                                temp_net.ref(i) = network_(i+1);}
+    
                             temp_net.set(1,temp);
                             network_ = temp_net;
+               
 
                             network_ /= std::sqrt(p_si);
                         
@@ -428,9 +438,12 @@ namespace NWQSim
 
                             auto temp_net = itensor::MPS(n_qubits-j);
                             for (int i = 1;i<=(n_qubits-j);i++){
-                                temp_net.ref(i) = network_(j+i);}
+                             
+                                temp_net.ref(i) = network_(i+1);}
+                    
                             temp_net.set(1,temp);
                             network_ = temp_net;
+                    
 
                             res |= static_cast<IdxType>(1) << (j-1);
          
