@@ -103,23 +103,23 @@ endif()
 
 
 
-set(SOURCE_FILE "surface_code_2D.cpp")
+set(SOURCE_FILE "cnot_lattice.cpp")
 
-add_executable(surface_code_2D surface_code_2D.cpp)
+add_executable(cnot_lattice cnot_lattice.cpp)
 
-target_compile_features(surface_code_2D PRIVATE cxx_std_17)
+target_compile_features(cnot_lattice PRIVATE cxx_std_17)
 
 
 # Link against OpenMP if available
 if(OpenMP_FOUND)
-    target_link_libraries(surface_code_2D PUBLIC OpenMP::OpenMP_CXX)
-    target_compile_definitions(surface_code_2D PUBLIC OMP_ENABLED)
+    target_link_libraries(cnot_lattice PUBLIC OpenMP::OpenMP_CXX)
+    target_compile_definitions(cnot_lattice PUBLIC OMP_ENABLED)
 endif()
 
 # Link against MPI if available
 if(MPI_FOUND)
-    target_link_libraries(surface_code_2D PUBLIC MPI::MPI_CXX)
-    target_compile_definitions(surface_code_2D PUBLIC MPI_ENABLED)
+    target_link_libraries(cnot_lattice PUBLIC MPI::MPI_CXX)
+    target_compile_definitions(cnot_lattice PUBLIC MPI_ENABLED)
 endif()
 
 # If CUDA Toolkit is available, set the CUDA standard and definitions
@@ -131,15 +131,15 @@ if(CUDAToolkit_FOUND)
     # target_compile_definitions(backendManager PRIVATE CUDA_ENABLED)
     set(ENV{MY_CUDA_ARCH} "80")
 
-    target_compile_features(surface_code_2D PRIVATE cuda_std_17)
-    #target_link_libraries(surface_code_2D PUBLIC CUDA::cudart)
-    target_compile_definitions(surface_code_2D PUBLIC CUDA_ENABLED)
+    target_compile_features(cnot_lattice PRIVATE cuda_std_17)
+    #target_link_libraries(cnot_lattice PUBLIC CUDA::cudart)
+    target_compile_definitions(cnot_lattice PUBLIC CUDA_ENABLED)
 
     # If NVSHMEM is available, link against it and set the definitions
     if(NVSHMEM_FOUND AND TARGET nvshmem::nvshmem)
-        set_target_properties(surface_code_2D PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-        target_link_libraries(surface_code_2D PUBLIC nvshmem::nvshmem)
-        target_compile_definitions(surface_code_2D PUBLIC CUDA_MPI_ENABLED)
+        set_target_properties(cnot_lattice PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+        target_link_libraries(cnot_lattice PUBLIC nvshmem::nvshmem)
+        target_compile_definitions(cnot_lattice PUBLIC CUDA_MPI_ENABLED)
     endif()
 endif()
 
@@ -147,7 +147,7 @@ if(HIP_FOUND)
     enable_language(HIP)
     set_source_files_properties(${SOURCE_FILE} PROPERTIES LANGUAGE HIP)
 
-    # target_compile_features(surface_code_2D PRIVATE hip_std_17)
-    target_compile_definitions(surface_code_2D_ PUBLIC HIP_ENABLED)
+    # target_compile_features(cnot_lattice PRIVATE hip_std_17)
+    target_compile_definitions(cnot_lattice_ PUBLIC HIP_ENABLED)
 
 endif()

@@ -169,10 +169,10 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
                     }
                 }
             }
-            else if (!gate.empty())
-            {
-                std::cout << gate << " does not match a gate.\n";
-            }
+            // else if (!gate.empty())
+            // {
+            //     std::cout << gate << " does not match a gate.\n";
+            // }
         }
     }
 

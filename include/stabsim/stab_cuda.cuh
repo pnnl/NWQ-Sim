@@ -870,16 +870,17 @@ namespace NWQSim
 
             //=========================================
         }
-        void sample()
-        {
-            int* d_x_frame;
-            int* d_z_frame;
-            cudaMalloc(&d_x_frame, n * sizeof(int));
-            cudaMalloc(&d_z_frame, n * sizeof(int));
 
-            void* args[] = {&m_results, &gates_gpu, &n_gates, &n, &d_x_frame, &d_z_frame};
-            cudaLaunchCooperativeKernel((void*)pauli_frame_sim, gridDim, blockDim, args);
-        }
+        // void sample()
+        // {
+        //     int* d_x_frame;
+        //     int* d_z_frame;
+        //     cudaMalloc(&d_x_frame, n * sizeof(int));
+        //     cudaMalloc(&d_z_frame, n * sizeof(int));
+
+        //     void* args[] = {&m_results, &gates_gpu, &n_gates, &n, &d_x_frame, &d_z_frame};
+        //     cudaLaunchCooperativeKernel((void*)pauli_frame_sim, gridDim, blockDim, args);
+        // }
 
         IdxType measure(IdxType qubit) override
         {
@@ -1319,7 +1320,6 @@ namespace NWQSim
 
                 default:
                     printf("Non-Clifford or unrecognized gate: %d\n", op_name);
-                    assert(false);
             }
         }
         // printf("Kernel is done!\n");
@@ -1402,60 +1402,60 @@ namespace NWQSim
         }
     }
 
-    __global__ void pauli_frame_sim(int* m_results, Gate* gates_gpu, IdxType n_gates, int n, int shots)
-    {
-        cg::grid_group grid = cg::this_grid();
-        int i = blockIdx.x * blockDim.x + threadIdx.x;
-        IdxType rows = stab_gpu->rows;
-        IdxType cols = stab_gpu->cols;
-        if(i >= shots) return;
-        int x_frame[n](0);
-        int z_frame[n](0);
-        int r = 0;
+    // __global__ void pauli_frame_sim(int* m_results, Gate* gates_gpu, IdxType n_gates, int n, int shots)
+    // {
+    //     cg::grid_group grid = cg::this_grid();
+    //     int i = blockIdx.x * blockDim.x + threadIdx.x;
+    //     IdxType rows = stab_gpu->rows;
+    //     IdxType cols = stab_gpu->cols;
+    //     if(i >= shots) return;
+    //     int x_frame[n](0);
+    //     int z_frame[n](0);
+    //     int r = 0;
 
-        OP op_name;
+    //     OP op_name;
 
-        curandState state;
-        curand_init(1234, i, 0, &state);
+    //     curandState state;
+    //     curand_init(1234, i, 0, &state);
         
-        for (int k = 0; k < n_gates; k++) 
-        {
-            op_name = gates_gpu[k].op_name;
-            a = gates_gpu[k].qubit;
+    //     for (int k = 0; k < n_gates; k++) 
+    //     {
+    //         op_name = gates_gpu[k].op_name;
+    //         a = gates_gpu[k].qubit;
             
-            grid.sync();
+    //         grid.sync();
 
-            switch (op_name) 
-            {
-                case OP::H:
-                    int p = (x_frame[a] << 1) | z_frame[a];
+    //         switch (op_name) 
+    //         {
+    //             case OP::H:
+    //                 int p = (x_frame[a] << 1) | z_frame[a];
 
-                    r ^= (p == 3);
-                    x_frame[a] = (p == 1);
-                    z_frame[a] = (p == 2); 
+    //                 r ^= (p == 3);
+    //                 x_frame[a] = (p == 1);
+    //                 z_frame[a] = (p == 2); 
 
-                    break;
+    //                 break;
 
-                case OP::S:
-                    int p = (x_frame[a] << 1) | z_frame[a];
+    //             case OP::S:
+    //                 int p = (x_frame[a] << 1) | z_frame[a];
 
-                    r ^= (p == 3);
-                    z_frame[a] = !(p == 3);
+    //                 r ^= (p == 3);
+    //                 z_frame[a] = !(p == 3);
 
                     
-                    break;
+    //                 break;
 
-                case OP::CX:
-                    int cntrl = gates_gpu[k].cntrl;
-                    z_frame[cntrl] ^= z_frame[a];
-                    x_frame[a] ^= x_frame[cntrl];
+    //             case OP::CX:
+    //                 int cntrl = gates_gpu[k].cntrl;
+    //                 z_frame[cntrl] ^= z_frame[a];
+    //                 x_frame[a] ^= x_frame[cntrl];
 
-                    break;
+    //                 break;
 
-                case OP::M:
-            }
-        }
-    }
+    //             case OP::M:
+    //         }
+    //     }
+    // }
 
 } //namespace NWQSim
 
