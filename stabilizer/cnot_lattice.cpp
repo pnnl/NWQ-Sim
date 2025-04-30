@@ -32,11 +32,7 @@ int main() {
             appendQASMToCircuit(circuit, input, n_qubits);
 
             std::vector<NWQSim::Gate> gates = circuit->get_gates();
-            std::cout << "\n\n\n Gates: \n" << std::endl;
-            for(int i = 0; i <circuit->num_gates(); i++)
-            {
-                std::cout << gates[i].gateToString() << std::endl;
-            }
+            // std::cout << circuit->to_string() << std::endl;
 
             double timer = 0;
             auto state = BackendManager::create_state(backend, n_qubits, sim_method);

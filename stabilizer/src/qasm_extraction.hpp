@@ -88,7 +88,11 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
 
             lineStream >> gate;
 
-            if (instr.find("qreg ") != std::string::npos)
+            if(instr.find("//") != std::string::npos)
+            {
+                continue;
+            }
+            else if(instr.find("qreg") != std::string::npos)
             {
                 n_qubits = extractNumQubit(instr);
                 circuit->set_num_qubits(n_qubits);

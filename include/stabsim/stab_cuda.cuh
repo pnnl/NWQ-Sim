@@ -1299,24 +1299,134 @@ namespace NWQSim
                 }
 
                 case OP::RESET:
-                    for(int j = 0; j < cols; j++)
+                {
+                    //Reset p_shared in the first thread of the first block
+                    if(threadIdx.x == 0)
                     {
-                        index = (i * cols) + j;
-                        if((i/2) == j)
+                        //Initialize shared memory
+                        local_p_shared = rows;
+                        if(blockIdx.x == 0) 
                         {
-                            row_col_index = ((i+n_qubits) * cols) + j;
-                            x_arr[index] = 1;
-                            z_arr[row_col_index] = 1;
-                            r_arr[i] = 0;
-                            r_arr[i/2] = 0;
+                            // printf("M\n\n");
+                            //Initialize global memory
+                            p_shared = rows;
                         }
-                        else
+                    }
+                    
+
+                    //Initialize thread memory
+                    p = rows;
+                    if((i >= (half_row)) && (x_arr[index]))
+                        p = i;
+                        
+                    
+                    //Reduce within a block
+                    atomicMin(&local_p_shared, p);
+                    // if(i == 0 && j == 0)
+                    //     printf("Shared reduced\n");
+                    
+                    //Reduce across all blocks (all blocks need to be caught up)
+                    grid.sync();
+                    // __syncthreads();
+                    if(threadIdx.x == 0)
+                        atomicMin(&p_shared, local_p_shared);
+                    // if(i == 0 && j == 0)
+                    //     printf("Global reduced\n");
+                    // __syncthreads();
+                    grid.sync();
+
+                    //Debugging output
+                    // if(i == 0)
+                    //     printf("p_shared = %d\n", p_shared);
+
+                    //If no p among the stabilizers is found, the measurement will be random
+                    if(p_shared != rows)
+                    {
+                        if(i < cols)
                         {
+                            //Set every column of the destab of row p to the stab of row p
+                            index = (p_shared * cols) + i;
+                            row_col_index = ((p_shared-(half_row)) * cols) + i;
+                            x_arr[row_col_index] = x_arr[index];    
+                            z_arr[row_col_index] = z_arr[index];
+                            x_arr[index] = 0;
+                            z_arr[index] = 0; 
+                        }
+                        
+                        grid.sync();
+
+                        //Rowsum for all rows < 2n
+                        for(int k = 0; k < scratch_row; k++)
+                        {
+                            //printf("Entering row/2 for loop\n");
+                            if(x_arr[k * cols + a] && k != p_shared)
+                            {
+                                //Initialize the sums from all rows we're interested in to 0
+                                //Using i as columns
+                                if(i == 0)
+                                    row_sum = 0;
+                                grid.sync();
+                                if(i < half_row)
+                                {
+                                    index = (k * cols) + i;
+                                    row_col_index = (p_shared * cols) + i;
+                                    x = x_arr[row_col_index];
+                                    z = z_arr[row_col_index];
+
+                                    if(x && z) 
+                                    {
+                                        atomicAdd(&row_sum, z_arr[index] - x_arr[index]);
+                                        x_arr[index] ^= x;
+                                        z_arr[index] ^= z;
+                                    }
+                                    if(x && !z) 
+                                    {
+                                        atomicAdd(&row_sum, z_arr[index] * (2 * x_arr[index] - 1));
+                                        x_arr[index] ^= x;
+                                    }
+                                    if(!x && z) 
+                                    {
+                                        atomicAdd(&row_sum, x_arr[index] * (1 - 2 * z_arr[index]));
+                                        z_arr[index] ^= z;
+                                    }
+                                }
+
+                                grid.sync();
+                                
+                                if(i == 0)
+                                {
+                                    //Add the stabilizer r value to the corresponding row sum
+                                    row_sum += 2 * r_arr[k] + 2 * r_arr[p_shared];
+
+                                    if(row_sum % 4)
+                                        r_arr[k] = 1;
+                                    else
+                                        r_arr[k] = 0;
+                                }
+                                //End Rowsum
+                            }
+                        }
+                    }
+                    else
+                    {
+                        //Set the first stabilizer to Z
+                        if(i < cols) //using i as cols
+                        {
+                            x_arr[i] = 0;
+                            z_arr[i] = 0;
+                            index = (n_qubits * cols) + i;
                             x_arr[index] = 0;
                             z_arr[index] = 0;
                         }
+                        if(i == cols)
+                        {
+                            z_arr[(n_qubits * cols) + a] = 1;
+                            x_arr[a] = 1;
+                            r_arr[scratch_row] = 0;
+                        }
                     }
                     break;
+                }
 
                 default:
                     printf("Non-Clifford or unrecognized gate: %d\n", op_name);

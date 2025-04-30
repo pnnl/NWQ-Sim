@@ -1988,15 +1988,62 @@ namespace NWQSim
                         break;
                     }
                     case OP::RESET:
-                        for(int i = 0; i < rows-1; i++)
-                        {
-                            x[i][a] = 0;
-                            z[i][a] = 0;
+                    {
+                        int p = -1;
+                        for(int p_index = half_rows; p_index < rows-1; p_index++)
+                        {  
+                            //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
+                            if(x[p_index][a])
+                            {
+                                p = p_index;
+                                break;
+                            }
                         }
-                        x[a][a] = 1;
-                        z[a+n][a] = 1;
-                        r[a] = 0;
+                        
+                        //If rows anti-commute with a new Z stabilizer
+                        //i.e. remove the entanglement 
+                        if(p > -1)
+                        {
+                            //Set the first stabilizer to Z
+                            for(int i = 0; i < n; i++)
+                            {   x[0][i] = 0;
+                                z[0][i] = 0;
+                                x[rows/2][i] = 0;
+                                z[rows/2][i] = 0;
+                            }
+                            z[rows/2][a] = 1;
+                            x[0][a] = 1;
+                            r[rows/2] = 0;
+                            r[0] = 0;
+
+                            //Propogate the commutation repercussions
+                            for(int i = 0; i < rows-1; i++)
+                            {
+                                // std::cout << "x = " << x[i][a] << std::endl;
+                                if((x[i][a]) && (i != p))
+                                {
+                                    rowsum(i, p);
+                                }
+                            }
+                        }
+                        
+                        //All rows already commute -- weren't entangled
+                        else
+                        {
+                            //Set the first stabilizer to Z
+                            for(int i = 0; i < n; i++)
+                            {   x[0][i] = 0;
+                                z[0][i] = 0;
+                                x[rows/2][i] = 0;
+                                z[rows/2][i] = 0;
+                            }
+                            z[rows/2][a] = 1;
+                            x[0][a] = 1;
+                            r[rows/2] = 0;
+                            r[0] = 0;
+                        }
                         break;
+                    }
 
                     case OP::X:
                         //equiv to H S S H or H Z H
