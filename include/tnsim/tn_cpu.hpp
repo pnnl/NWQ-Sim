@@ -89,30 +89,12 @@ namespace NWQSim
 
         virtual void set_initial(std::string fpath, std::string format) override
         {
-            std::ifstream instream;
-            if (format != "sv")
-            {
-                throw std::runtime_error("SV-Sim only supports statevector input states\n");
-            }
-            instream.open(fpath, std::ios::in | std::ios::binary);
-            if (instream.is_open())
-            {
-                instream.read((char *)sv_real, sizeof(ValType) * dim);
-                instream.read((char *)sv_imag, sizeof(ValType) * dim);
-            }
-            instream.close();
+            throw std::runtime_error("Not implemented");
         }
 
         virtual void dump_res_state(std::string outpath) override
         {
-            std::ofstream outstream;
-            outstream.open(outpath, std::ios::out | std::ios::binary);
-            if (outstream.is_open())
-            {
-                outstream.write((char *)sv_real, sizeof(ValType) * dim);
-                outstream.write((char *)sv_imag, sizeof(ValType) * dim);
-                outstream.close();
-            }
+            throw std::runtime_error("Not implemented");
         };
 
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
@@ -299,7 +281,7 @@ namespace NWQSim
             int site1 = qubit1 + 1;
             auto i = sites(site0);
             auto j = sites(site1);
-            auto gate = itensor::ITensor(i,j,prime(i),prime(j));
+            auto gate = itensor::ITensor(dag(i),dag(j),prime(i),prime(j));
 
             gate.set(1,1,1,1,std::complex<double>(gm_real[0],gm_imag[0]));
             gate.set(1,2,1,1,std::complex<double>(gm_real[1],gm_imag[1]));
@@ -320,6 +302,7 @@ namespace NWQSim
             gate.set(1,2,2,2,std::complex<double>(gm_real[13],gm_imag[13]));
             gate.set(2,1,2,2,std::complex<double>(gm_real[14],gm_imag[14]));
             gate.set(2,2,2,2,std::complex<double>(gm_real[15],gm_imag[15]));
+
 
             network.position(site0);
             auto contract_location = network(site0)*network(site1);
@@ -384,10 +367,10 @@ namespace NWQSim
                  
                         auto rdm = prime(dag(network_(n_qubits-j+1)),"Link")*network_(n_qubits-j+1);
                         
-                 
- 
-                        for (auto k = 1; k <= n_qubits-j ; k++){
                         
+                        
+                        for (auto k = n_qubits-j; k >= 1 ; k--){
+                            
                             rdm *= network_(k);
                             if (k==1){
                                 rdm *= prime(dag(network_(k)));
@@ -396,16 +379,16 @@ namespace NWQSim
                                 rdm *= prime(dag(network_(k)),"Link");
                             }
                         }
-            
+                    
                         auto p_si = std::real(eltC(rdm,1,1));
-         
+                     
                         if (r <= p_si){
 
                             auto site = sites(j);
                             auto si = itensor::ITensor(site);
                             si.set(1,1.);
                             si.set(2,0.);
-           
+
                             auto temp = si * network_(1);
 
                             temp *= network_(2);
@@ -419,9 +402,9 @@ namespace NWQSim
                             temp_net.set(1,temp);
                             network_ = temp_net;
                
-
-                            network_ /= std::sqrt(p_si);
-                        
+                            if (p_si > 0){
+                                network_ /= std::sqrt(p_si);
+                                }
 
                         }
                         else{
@@ -430,25 +413,32 @@ namespace NWQSim
                             auto si = itensor::ITensor(site);
                             si.set(1,0.);
                             si.set(2,1.);
-             
+      
                             auto temp = si * network_(1);
-
+                
+              
                             temp *= network_(2);
+                 
+
 
 
                             auto temp_net = itensor::MPS(n_qubits-j);
+              
                             for (int i = 1;i<=(n_qubits-j);i++){
                              
                                 temp_net.ref(i) = network_(i+1);}
                     
                             temp_net.set(1,temp);
+                          
                             network_ = temp_net;
+                  
                     
 
                             res |= static_cast<IdxType>(1) << (j-1);
          
-
+                            if (p_si > 0){
                             network_ /= std::sqrt(p_si);
+                            }
                     }
                     }
 		        }
