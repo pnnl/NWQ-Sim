@@ -258,7 +258,7 @@ namespace NWQSim
             network.position(site);
             auto temp = gate * network(site);
             temp.noPrime();
-
+    
             // Set the MPS site to new values
             network.set(site,temp);
 
@@ -303,7 +303,7 @@ namespace NWQSim
             gate.set(2,1,2,2,std::complex<double>(gm_real[14],gm_imag[14]));
             gate.set(2,2,2,2,std::complex<double>(gm_real[15],gm_imag[15]));
 
-
+          
             network.position(site0);
             auto contract_location = network(site0)*network(site1);
             auto temp = gate*contract_location;
@@ -354,10 +354,11 @@ namespace NWQSim
 
                     if(j==n_qubits){
 
-
+     
                         auto rdm = network_(1) * prime(dag(network_(1)));
-
+      
                         auto p_si = std::real(eltC(rdm,1,1));
+
                         if (r >= p_si){
                             res |= static_cast<IdxType>(1) << (j-1);
                             }
@@ -367,7 +368,7 @@ namespace NWQSim
                  
                         auto rdm = prime(dag(network_(n_qubits-j+1)),"Link")*network_(n_qubits-j+1);
                         
-                        
+                      
                         
                         for (auto k = n_qubits-j; k >= 1 ; k--){
                             
@@ -379,11 +380,11 @@ namespace NWQSim
                                 rdm *= prime(dag(network_(k)),"Link");
                             }
                         }
-                    
+                        
                         auto p_si = std::real(eltC(rdm,1,1));
-                     
-                        if (r <= p_si){
 
+                        if (r <= p_si){
+       
                             auto site = sites(j);
                             auto si = itensor::ITensor(site);
                             si.set(1,1.);
@@ -401,14 +402,15 @@ namespace NWQSim
     
                             temp_net.set(1,temp);
                             network_ = temp_net;
-               
+
                             if (p_si > 0){
                                 network_ /= std::sqrt(p_si);
                                 }
 
+
                         }
                         else{
-                            
+                           
                             auto site = sites(j);
                             auto si = itensor::ITensor(site);
                             si.set(1,0.);
@@ -435,9 +437,9 @@ namespace NWQSim
                     
 
                             res |= static_cast<IdxType>(1) << (j-1);
-         
-                            if (p_si > 0){
-                            network_ /= std::sqrt(p_si);
+
+                            if (p_si != 1){
+                            network_ /= std::sqrt(1-p_si);
                             }
                     }
                     }
