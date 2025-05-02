@@ -55,13 +55,13 @@ std::vector<std::string> split_by_semicolon(const std::string& str) {
     return tokens;
 }
 
-void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::string& filename, int& n_qubits) 
+bool appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::string& filename, int& n_qubits) 
 {
     std::ifstream file(filename);
     if (!file.is_open()) 
     {
         std::cerr << "Error opening file: " << filename << std::endl;
-        return;
+        return false;
     }
 
     std::string line;
@@ -95,8 +95,11 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             else if(instr.find("qreg") != std::string::npos)
             {
                 n_qubits = extractNumQubit(instr);
+                if(n_qubits > 30000)
+                    return false;
                 circuit->set_num_qubits(n_qubits);
                 std::cout << n_qubits << std::endl;
+                
             }
             else if(gate == "tdg")
             {
@@ -178,7 +181,8 @@ void appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             //     std::cout << gate << " does not match a gate.\n";
             // }
         }
-    }
+    }  
+    return true;
 
     // std::cout << "------\n\n\n TCount in qasm: " << tCount << " \n\n\n-----" << std::endl;
 }

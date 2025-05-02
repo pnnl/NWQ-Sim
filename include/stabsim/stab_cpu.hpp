@@ -2028,19 +2028,34 @@ namespace NWQSim
                         }
                         
                         //All rows already commute -- weren't entangled
+                        //Deterministic
                         else
                         {
-                            //Set the first stabilizer to Z
+                            //Set the scratch space row to be 0
+                            //i is the column indexer in this case
                             for(int i = 0; i < n; i++)
-                            {   x[0][i] = 0;
-                                z[0][i] = 0;
-                                x[rows/2][i] = 0;
-                                z[rows/2][i] = 0;
+                            {
+                                x[rows-1][i] = 0;
+                                z[rows-1][i] = 0;
                             }
-                            z[rows/2][a] = 1;
-                            x[0][a] = 1;
-                            r[rows/2] = 0;
-                            r[0] = 0;
+                            r[rows-1] = 0;
+
+                            //Run rowsum subroutine
+                            for(int i = 0; i < half_rows; i++)
+                            {
+                                if(x[i][a] == 1)
+                                {
+                                    rowsum(rows-1, i+half_rows);
+                                }
+                            }
+                            
+                            if(r[rows-1])
+                            {
+                                for(int i = 0; i < rows-1; i++)
+                                {
+                                    r[i] ^= z[i][a];
+                                }
+                            }
                         }
                         break;
                     }
