@@ -15,10 +15,10 @@
 #include "src/qasm_extraction.hpp"
 
 int main() {
-    std::string folder_path = "/people/garn195/NWQ-Sim/stabilizer/stim_to_qasm_files";
+    std::string folder_path = "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/stim_to_qasm_files";
     int n_qubits = 4;
 
-    std::string backend = "nvgpu";
+    std::string backend = "cpu";
     std::string sim_method = "stab";
 
     for(const auto& entry : std::filesystem::directory_iterator(folder_path)) 
@@ -42,7 +42,7 @@ int main() {
 
             std::string name = "";
             std::ostringstream filename;
-            filename << "/people/garn195/NWQ-Sim/stabilizer/surface_operation_bench" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
+            filename << "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/surface_operation_bench" << backend << "_" << sim_method << "_" << n_qubits << ".txt";
             std::ofstream outfile(filename.str());
             if (!outfile) 
             {
@@ -53,8 +53,6 @@ int main() {
             outfile << timer/1000.0 << std::endl;
             outfile << n_qubits << std::endl;
             outfile << circuit->num_gates() << std::endl;
-
-            
         }
     }
     return 0;
