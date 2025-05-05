@@ -272,11 +272,6 @@ namespace NWQSim
 
             assert(qubit0 != qubit1); // Non-cloning
 
-            assert(std::abs(qubit0 - qubit1) == 1);
-            if(std::abs(qubit0 - qubit1) != 1){
-                std::cout<<"Yo no"<<std::endl;
-                throw std::runtime_error("Yo no");
-            }
             int site0 = qubit0 + 1;
             int site1 = qubit1 + 1;
             auto i = sites(site0);
@@ -303,17 +298,94 @@ namespace NWQSim
             gate.set(2,1,2,2,std::complex<double>(gm_real[14],gm_imag[14]));
             gate.set(2,2,2,2,std::complex<double>(gm_real[15],gm_imag[15]));
 
-          
-            network.position(site0);
-            auto contract_location = network(site0)*network(site1);
-            auto temp = gate*contract_location;
-                temp.noPrime();
-            auto [u,s,v] = itensor::svd(temp,itensor::inds(network(site0)),{"Cutoff=", 0.0, "MaxDim=", 10});	    
+            auto q_dist = std::abs(qubit0 - qubit1);
+            //
+            // Non-adjacent 2-qubit gates using MPOs
+            //
+            if(std::abs(qubit0 - qubit1) != 1){
+            // if(1){
 
-            network.set(site0, u);
-            network.set(site1, s*v);
-            network.orthogonalize();
+                network.position(site0);
+                // PrintData(gate);
+                auto gate_MPO = itensor::MPO(n_qubits);
+                auto [u,s,v] = itensor::svd(gate,{i,prime(i)},{j,prime(j)});
 
+                auto lusv = commonInds(u,s)[0];
+
+
+
+                itensor::Index lright;
+                itensor::Index lleft;
+                
+
+                for (auto i = 1; i<=n_qubits;i++){
+                    if(not((i == site0) || (i == site1))){
+                        if(i==1){
+                            lright = itensor::Index(4,"Link");
+                            gate_MPO.set(i,itensor::delta(sites(i),prime(sites(i)),lright));
+                        }
+                        else if( i==n_qubits){
+                            lleft = lright;
+                            gate_MPO.set(i,itensor::delta(sites(i),prime(sites(i)),lleft));
+                        }
+                        else{
+                            lleft = lright;
+                            lright = itensor::Index(4,"Link");
+                            auto diag1 = itensor::delta(sites(i),prime(sites(i)));
+                            auto diag2 = itensor::delta(lleft,lright);
+                            auto diag3 = toDense(diag2);
+                            auto temp = diag1 * diag3;
+                            // PrintData(temp);
+                            gate_MPO.set(i,temp);
+                        }
+                    }
+                    else if(i==site0){
+                        if(not(i==1 or i==n_qubits)){
+                            lleft = lright;
+                            lright = itensor::Index(4,"Link");
+                            auto lu = itensor::delta(lright,lusv);
+                            gate_MPO.set(site0, u*lu*itensor::delta(lleft));
+                        }
+                        else{
+                            lright = itensor::Index(4,"Link");
+                            auto lu = itensor::delta(lright,lusv);
+                            gate_MPO.set(site0, u*lu);
+                        }
+                    }
+                    else if(i==site1){
+                        if(not(i==1 or i==n_qubits)){
+                            lleft = lright;
+                            auto lsv = itensor::delta(lleft,lusv);
+                            lright = itensor::Index(4,"Link");
+                            gate_MPO.set(site1, s*v*lsv*itensor::delta(lright));
+                        }
+                        else{
+                            lleft = lright;
+                            auto lsv = itensor::delta(lleft,lusv);
+                            gate_MPO.set(site1, s*v*lsv);
+                        }
+                    }
+                    
+                }
+
+                // PrintData(gate_MPO);
+                network = applyMPO(gate_MPO,network);
+                // PrintData(network);
+
+                network.noPrime();
+                network.orthogonalize();
+            }
+            else{
+                network.position(site0);
+                auto contract_location = network(site0)*network(site1);
+                auto temp = gate*contract_location;
+                    temp.noPrime();
+                auto [u,s,v] = itensor::svd(temp,itensor::inds(network(site0)),{"Cutoff=", 0.0, "MaxDim=", 10});	    
+
+                network.set(site0, u);
+                network.set(site1, s*v);
+                network.orthogonalize();
+            }
         }
 
         //============== C4 Gate ================
@@ -383,10 +455,11 @@ namespace NWQSim
                         
                         auto p_si = std::real(eltC(rdm,1,1));
 
+                        auto site = sites(j);
+                        auto si = itensor::ITensor(site);
+
                         if (r <= p_si){
        
-                            auto site = sites(j);
-                            auto si = itensor::ITensor(site);
                             si.set(1,1.);
                             si.set(2,0.);
 
@@ -411,8 +484,6 @@ namespace NWQSim
                         }
                         else{
                            
-                            auto site = sites(j);
-                            auto si = itensor::ITensor(site);
                             si.set(1,0.);
                             si.set(2,1.);
       
