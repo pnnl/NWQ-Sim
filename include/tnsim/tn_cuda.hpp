@@ -290,9 +290,9 @@ namespace NWQSim
                   sch2(
                     Tnew("l","p'","r") = G("p'","p") * T("l","p","r"),
                     "proj_site",
-                    tamm::ExecutionHW::GPU
+                    tamm::ExecutionHW::CPU
                   );
-                  sch2.execute(tamm::ExecutionHW::GPU);
+                  sch2.execute(tamm::ExecutionHW::CPU);
                   T.deallocate();
                   work[site] = std::move(Tnew);
                 }
