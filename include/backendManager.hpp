@@ -17,7 +17,7 @@
 #ifdef CUDA_ENABLED
 #include "svsim/sv_cuda.cuh"
 #include "dmsim/dm_cuda.cuh"
-#include "dmsim/tn_cuda.hpp"
+#include "tnsim/tn_cuda.hpp"
 #endif
 
 #ifdef CUDA_MPI_ENABLED
