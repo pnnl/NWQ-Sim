@@ -101,7 +101,7 @@ namespace NWQSim
             SAFE_FREE_HOST(results);
             //GA_Terminate();
             //MPI_Finalize();
-            tamm::finalize();
+            //tamm::finalize();
         }
 
         void reset_state() override {
@@ -195,7 +195,7 @@ namespace NWQSim
             std::uniform_real_distribution<double> dist(0.0, 1.0);
         
             // 3) Repeat for each shot
-            for(IdxType rep = 0; rep < repetition; ++rep) {
+            for(IdxType rep = 0; rep < 1; ++rep) {
               std::cerr << "[DEBUG] === rep " << rep << " ===\n";
               IdxType bitstring = 0;
               auto work = mps_tensors;  // copy so we can update in place
