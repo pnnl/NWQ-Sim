@@ -103,7 +103,7 @@ public:
         {
             if (simulator_method == "SV")
                 return std::make_shared<NWQSim::SV_CUDA>(numQubits);
-            else if (simulator_method ="DM")
+            else if (simulator_method == "DM")
                 return std::make_shared<NWQSim::DM_CUDA>(numQubits);
             else
                 return std::make_shared<NWQSim::TN_CUDA>(numQubits);

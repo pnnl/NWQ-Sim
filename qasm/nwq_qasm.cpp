@@ -142,7 +142,7 @@ int main(int argc, char **argv)
                 }
                 else
                 {
-                    sae_print("Benchmark %d fidelity: %.4f Passed!\n", benchmark_index, fidelity);
+                    safe_print("Benchmark %d fidelity: %.4f Passed!\n", benchmark_index, fidelity);
                 }
             }
             if (passed)
