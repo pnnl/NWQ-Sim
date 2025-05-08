@@ -244,7 +244,7 @@ namespace NWQSim
         // Arbitrary 1-qubit gate
         virtual void C1_GATE(const ValType *gm_real, const ValType *gm_imag, const IdxType qubit)
         {
-            // std::cout<<"C1"<<std::endl;
+            // iTensor is 1 indexed
             int site = qubit + 1;
 
             //Initialize empty C1 Gate tensor
@@ -259,18 +259,18 @@ namespace NWQSim
 
             // Move center of orthongality to qubit that will be contracted with gate
             network.position(site);
-            // PrintData(network);
+         
+            //Contract the 1-qubit gate with the MPS site at the qubit
             auto temp = gate * network(site);
-            // PrintData(temp);
+          
             temp.noPrime();
-            // PrintData(gate);
+  
             
             // Set the MPS site to new values
             network.set(site,temp);
+
+            // For safety re-orthogonalize the network
             network.orthogonalize();
-            
-            
-            // PrintData(network);
             
 
         }
@@ -283,19 +283,26 @@ namespace NWQSim
 
             assert(qubit0 != qubit1); // Non-cloning
 
-            itensor::ITensor full_mat;
-            full_mat = network(1);
-            for(auto i = 1 ; i <= n_qubits-1 ; i++){
-                full_mat *= network(i+1);
-            }
-            // PrintData(full_mat);
-
+            // iTensor is 1 indexed
             int site0 = qubit0 + 1;
             int site1 = qubit1 + 1;
+
+            // Get iTensor index "names" of control and target qubit
             auto i = sites(site0);
             auto j = sites(site1);
+
+            // Initialize 2-qubit gate tensor with correct indices
+            //     (i')  (j')
+            //      |     |   
+            //    -----------
+            //    | 2Q Gate |
+            //    -----------
+            //      |     |
+            //     (i)   (j)
+
             auto gate = itensor::ITensor(dag(i),dag(j),prime(i),prime(j));
 
+            // Set values of C2 gate tensor
             gate.set(1,1,1,1,std::complex<double>(gm_real[0],gm_imag[0]));
             gate.set(1,2,1,1,std::complex<double>(gm_real[1],gm_imag[1]));
             gate.set(2,1,1,1,std::complex<double>(gm_real[2],gm_imag[2]));
@@ -316,91 +323,74 @@ namespace NWQSim
             gate.set(2,1,2,2,std::complex<double>(gm_real[14],gm_imag[14]));
             gate.set(2,2,2,2,std::complex<double>(gm_real[15],gm_imag[15]));
 
-            auto q_dist = std::abs(qubit0 - qubit1);
-            // PrintData(gate);
             //
-            // std::cout<<"C2"<<std::endl;
-            // PrintData(network);
-            // Non-adjacent 2-qubit gates using MPOs
+            // Non-adjacent / Non-local 2-qubit gates
+            //
+            // qubit0 must be < then qubit1  (control must be to the left (smaller site number) of target)
             //
             auto method = true;
             if(std::abs(qubit0 - qubit1) != 1){
-            // if(1){
 
-            
-                // std::cout<<"non local"<<std::endl;
-                
-
-                auto gate_MPO = itensor::MPO(n_qubits);
+                // 2Q Gate Decomposition into Control: u  ;  Target: s*v
                 auto [u,s,v] = itensor::svd(gate,{i,prime(i)},{j,prime(j)});
                 auto sv = s*v;
-                // PrintData(u);
-                // PrintData(s);
-                // PrintData(v);
 
-                // Sequential Contraction Method based on Quantinuum pytket
                 if(method){
+                    // Sequential Contraction Method based on Quantinuum pytket
                     itensor::ITensor propagating_bond;
                     itensor::Index lindex;
+
+                    // Move center of orthogonality
                     network.position(site0);
-                    // PrintData(network);
+      
+                    // Initial contraction of control "gate" and control qubit
                     auto site0_contract = u*network(site0);
-                    // PrintData(site0_contract);
+
+                    // Decompose contraction, U is the new site tensor in the circuit network
+                    // S*V holds the "propagating bond" which is "pushed" through the circuit to the target site
+                    // This "bond" is the dangling link of the initial gate SVD
                     auto [U,S,V] = itensor::svd(site0_contract,{i,prime(i),leftLinkIndex(network,site0)});
                     network.set(site0,U);
                     network.position(site0);
                     propagating_bond =S*V;
                 
-                    // PrintData(U);
-                    // PrintData(propagating_bond);
-
+                    // Track link index to insure correct indices are contracted at each step
                     lindex = commonInds(U,S)[0];
-                    // std::cout<<"leftlim "<<leftLim(network)<<std::endl;
-                    // std::cout<<"rightlim "<<rightLim(network)<<std::endl;
-            
 
+            
+                    // Repeat propagation process through the intermediate sites
                     for(auto i = site0+1 ; i < site1; i++ ){
-                        // PrintData(lindex);
+
                         auto i_contract = propagating_bond * network(i);
-                        // PrintData(network(i));
-                        // PrintData(i_contract);
-                        
                         auto [u,s,v] = itensor::svd(i_contract,{sites(i),lindex});
                         lindex = commonInds(u,s)[0];
-                        // PrintData(u);
                         network.set(i,u);
                         network.position(i);
                         propagating_bond = s*v;
-                        // PrintData(propagating_bond);
-                        // std::cout<<"leftlim "<<leftLim(network)<<std::endl;
-                        // std::cout<<"rightlim "<<rightLim(network)<<std::endl;
-                
+
         
                     }
-                    // PrintData(sv);
-                    // PrintData(network(site1));
+   
+                    // Final contraction with Target qubit, propagating bond is absorbed in U,Link on sv
                     auto site1_contract = sv*propagating_bond*network(site1);
     
+                    // Target site is set to new values
                     network.set(site1,site1_contract);
-                    
-                    // PrintData(network);
-                    
-                    // std::cout<<"leftlim "<<leftLim(network)<<std::endl;
-                    // std::cout<<"rightlim "<<rightLim(network)<<std::endl;
+
+                    // network clean-up is performed after else statement
             
-
-
-
                 }
                 else{
                     // MPO Method, Almost Works?
                     //
                     // WARNING Normalization breaks!!
-                    auto lusv = commonInds(u,s)[0];
 
                     itensor::Index lright;
                     itensor::Index lleft;
                     network.position(1);
+
+                    auto gate_MPO = itensor::MPO(n_qubits);
+                    auto lusv = commonInds(u,s)[0];
 
                     for (auto i = 1; i<=n_qubits;i++){
                         if(not((i == site0) || (i == site1))){
@@ -460,34 +450,64 @@ namespace NWQSim
                     for(auto i = 1 ; i <= n_qubits-1 ; i++){
                         full_gate *= gate_MPO(i+1);
                     }
-                    // PrintData(full_gate);
-                    // PrintData(full_mat);
-                    // PrintData(gate_MPO);
+
                     network = applyMPO(gate_MPO,network);
                     network.normalize();
-                    // PrintData(network);
+
                 }
+
+                // network clean-up
                 network.noPrime();
                 network.orthogonalize();
-                // PrintData(network);
-                // std::cout<<"leftlim "<<leftLim(network)<<std::endl;
-                // std::cout<<"rightlim "<<rightLim(network)<<std::endl;
 
-                full_mat = network(1);
-                for(auto i = 1 ; i <= n_qubits-1 ; i++){
-                    full_mat *= network(i+1);
-                }
-                // PrintData(full_mat);
+
+                // Useful printing method, may be removed later
+                // full_mat = network(1);
+                // for(auto i = 1 ; i <= n_qubits-1 ; i++){
+                //     full_mat *= network(i+1);
+                // }
+                // // PrintData(full_mat);
             }
             else{
-                // std::cout<<"local"<<std::endl;
+                // Local 2-qubit gate method
+                //
+
+                // Move orthoganility center to control qubit
                 network.position(site0);
+
+                //     |    |
+                //    --------
+                //    | gate |
+                //    --------
+                //     |    |
+                //     O -- O
+                //
+                //
                 auto contract_location = network(site0)*network(site1);
-                auto temp = gate*contract_location;
-                    temp.noPrime();
-                auto [u,s,v] = itensor::svd(temp,itensor::inds(network(site0)),{"Cutoff=", 0.0, "MaxDim=", 10});	    
+
+                //     |    |
+                //    --------
+                //    | gate |
+                //    --------
+                //     |    |
+                //    --------
+                //   | sites  |
+                //    --------
+                auto new_sites_contracted = gate*contract_location;
+                //
+                //      |       |
+                //    -------------
+                //    | sites*gate |
+                //    -------------
+  
+                new_sites_contracted.noPrime();
+                auto [u,s,v] = itensor::svd(new_sites_contracted ,itensor::inds(network(site0)),{"Cutoff=", 0.0, "MaxDim=", 10});	    
                 network.set(site0, u);
                 network.set(site1, s*v);
+
+                //    |      |
+                //   (u) - (s*v)
+                //
                 network.orthogonalize();
             }
         }
@@ -517,9 +537,10 @@ namespace NWQSim
  
             // Move to right orthogonal gauge for improved scaling before sampling
             network.position(1);
-            // PrintData(network);
+
+            // Useful printing, may be removed later
+            //
             // std::cout<<"Net norm "<<norm(network)<<std::endl;
-         
             // std::cout<<"0000 "<<innerC(network,all_zeros)<<std::endl;
             // itensor::ITensor full_mat;
             // full_mat = network(1);
@@ -528,17 +549,31 @@ namespace NWQSim
             // }
             // PrintData(full_mat);
             // std::cout<<"0000 "<<innerC(network,all_zeros)<<std::endl;
-            
+
+
+            // "Perfect" Sampling Algorithm
+            //  https://tensornetwork.org/mps/algorithms/sampling/
+            //
+            //  Overview:
+            //  Make Reduced Density Matrix (over qubit i) of network
+            //  Diagonal of RDM are the probabilities of obtaining 0 or 1 for qubit i
+            //  Sample qubit i
+            //  Contracte result of sampling as 0 or 1 vector into starting network
+            //  Repeat process
+            //  
             for (IdxType i = 0; i < repetition; i++)
             {
-        
+                // Work with copy of network
                 auto network_ =  network;
                 IdxType res = 0;
 
                 for(IdxType j = 1;j <= n_qubits; j++){
 
+                    // RNG
                     ValType r = uni_dist(rng);
 
+
+                    // Sampling final qubit
                     if(j==n_qubits){
 
      
@@ -552,11 +587,12 @@ namespace NWQSim
                         results[i] = res;
                         }
                     else{
-                 
+                        // Sampling qubits 0 through n_qubits - 1
+
+                        // Initial build of reduced density matrix on first location
                         auto rdm = prime(dag(network_(n_qubits-j+1)),"Link")*network_(n_qubits-j+1);
                         
                       
-                        
                         for (auto k = n_qubits-j; k >= 1 ; k--){
                             
                             rdm *= network_(k);
@@ -575,6 +611,7 @@ namespace NWQSim
 
                         if (r <= p_si){
        
+                            // si =  |0>
                             si.set(1,1.);
                             si.set(2,0.);
 
@@ -590,7 +627,8 @@ namespace NWQSim
     
                             temp_net.set(1,temp);
                             network_ = temp_net;
-
+                            
+                            // Dont divide by 0
                             if (p_si > 0){
                                 network_ /= std::sqrt(p_si);
                                 }
@@ -598,18 +636,15 @@ namespace NWQSim
 
                         }
                         else{
-                           
+
+                           // si =  |1>
                             si.set(1,0.);
                             si.set(2,1.);
       
                             auto temp = si * network_(1);
-                
               
                             temp *= network_(2);
                  
-
-
-
                             auto temp_net = itensor::MPS(n_qubits-j);
               
                             for (int i = 1;i<=(n_qubits-j);i++){
@@ -624,6 +659,7 @@ namespace NWQSim
 
                             res |= static_cast<IdxType>(1) << (j-1);
 
+                            // Dont divide by 0
                             if (p_si != 1){
                             network_ /= std::sqrt(1-p_si);
                             }
