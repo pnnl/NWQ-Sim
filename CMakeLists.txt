@@ -82,7 +82,7 @@ endif()
 
 
 # Link Itensor
-set(ITENSOR_ROOT "/Users/jon/Softwares/ITensor"
+set(ITENSOR_ROOT "/global/cfs/projectdirs/m4623/jbersson/ITensor"
     CACHE PATH "Path to external ITensor installation")
 
 include_directories("${ITENSOR_ROOT}")
