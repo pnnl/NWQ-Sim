@@ -109,6 +109,11 @@ public:
                 return std::make_shared<NWQSim::TN_CUDA>(numQubits);
         }
 #endif
+        
+        else if (backend == "NVGPU_TAMM" || backend == "CPU_TAMM")
+        {
+            return std::make_shared<NWQSim::TN_CUDA>(numQubits);
+        }
 
 #ifdef HIP_ENABLED
         else if (backend == "AMDGPU")

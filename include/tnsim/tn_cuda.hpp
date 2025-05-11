@@ -60,7 +60,7 @@ namespace NWQSim
             for(IdxType i = 0; i <= n_qubits; ++i) {
                 IdxType dim = (i == 0 || i == n_qubits ? 1 : max_bond_dim);
                 bond_dims[i] = dim; 
-                tamm::IndexSpace is(tamm::Range{0, static_cast<tamm::Index>(dim)});
+                tamm::IndexSpace is{tamm::range(dim)};
                 bond_tis[i] = tamm::TiledIndexSpace(is, 1);
             }
         
@@ -68,21 +68,15 @@ namespace NWQSim
             phys_dims.resize(n_qubits);
             for(IdxType i = 0; i < n_qubits; ++i) {
                 phys_dims[i] = 2;
-                tamm::IndexSpace is(tamm::Range{0, static_cast<tamm::Index>(2)});
+                tamm::IndexSpace is{tamm::range(2)};
                 phys_tis[i] = tamm::TiledIndexSpace(is, 1);
             }
         
             mps_tensors.reserve(n_qubits);
             for(IdxType i = 0; i < n_qubits; ++i) {
-                std::cerr << "[TN_CUDA] allocate T["<<i<<"] dims = ("
-                << bond_dims[i] << "," 
-                << phys_dims[i] << "," 
-                << bond_dims[i+1] << ")\n";
                 tamm::Tensor<Cplx> T{bond_tis[i], phys_tis[i], bond_tis[i+1]};
-                printf("Created first tensor!");
                 T.set_dense();
                 T.allocate(&ec);
-                printf("Allocated first tensor!");
                 T.loop_nest().iterate([&](auto const& idxs) {
                     Cplx v = (idxs[0] == 0 && idxs[1] == 0 && idxs[2] == 0)
                              ? Cplx(1.0,0.0)
@@ -92,10 +86,9 @@ namespace NWQSim
                 mps_tensors.push_back(std::move(T));
             }
 
-            printf("Constructor finished!");
         }
 
-        // Virtual destructor inherits from QuantumState
+         //Virtual destructor inherits from QuantumState
         ~TN_CUDA() noexcept override 
         {
             SAFE_FREE_HOST(results);
@@ -157,7 +150,7 @@ namespace NWQSim
                     for(int idx=0; idx<16; ++idx)
                         U4[idx] = Cplx(g.gm_real[idx], g.gm_imag[idx]);
 
-                    apply_two_qubit(U4, g.qubit, g.ctrl);
+                    apply_two_qubit(U4, g.ctrl, g.qubit);
                 }
                 else if (g.op_name == OP::MA)
                 {
@@ -182,134 +175,97 @@ namespace NWQSim
         }
 
         IdxType* measure_all(IdxType repetition) override {
-            std::cerr << "[DEBUG] Enter measure_all(repetition=" << repetition << ")\n";
-        
             // 1) Prepare results buffer
             SAFE_FREE_HOST(results);
             SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
             std::memset(results, 0, sizeof(IdxType) * repetition);
-            std::cerr << "[DEBUG] results buffer allocated at " << results << "\n";
         
             // 2) RNG setup
             std::mt19937_64                        rng{std::random_device{}()};
             std::uniform_real_distribution<double> dist(0.0, 1.0);
         
-            // 3) Repeat for each shot
-            for(IdxType rep = 0; rep < 1; ++rep) {
-              std::cerr << "[DEBUG] === rep " << rep << " ===\n";
-              IdxType bitstring = 0;
-              auto work = mps_tensors;  // copy so we can update in place
+            // 3) One‐time left‐canonical sweep on the live MPS
+            left_canonicalize(mps_tensors);
         
-              // 4) Loop over sites
-              for(IdxType site = 0; site < n_qubits; ++site) {
-                std::cerr << "[DEBUG] --- site " << site << " ---\n";
+            // Temp host buffers
+            std::vector<Cplx> env, tmp0, tmp1;
         
-                // 4a) Build the list of A_k and its conjugate
-                std::string l_lbl   = "l"  + std::to_string(site);
-                std::string p_lbl   = "p"  + std::to_string(site);
-                std::string pp_lbl  = p_lbl + "'";
-                std::string r_lbl   = "l"  + std::to_string(site+1);
+            // 4) Repeat for each shot
+            for(IdxType rep = 0; rep < repetition; ++rep) {
+                IdxType packed = 0;
         
-                auto Ak  = work[site](l_lbl, p_lbl,   r_lbl);
-                auto AkH = tamm::conj(Ak)(l_lbl, pp_lbl, r_lbl);
-        
-                std::cerr << "[DEBUG] Built factors Ak@" << Ak.tensor().base_ptr()
-                          << " and AkH@" << AkH.tensor().base_ptr() << "\n";
-        
-                // 4b) Allocate R and a fresh Rtmp
-                tamm::Tensor<Cplx> R   ({phys_tis[site], phys_tis[site]});
-                tamm::Tensor<Cplx> Rtmp({phys_tis[site], phys_tis[site]});
-                R   .set_dense(); R   .allocate(&ec);
-                Rtmp.set_dense(); Rtmp.allocate(&ec);
-                std::cerr << "[DEBUG] Allocated R@" << R.base_ptr()
-                          << " and Rtmp@" << Rtmp.base_ptr() << "\n";
-        
-                // 4c) Build the full expr = Ak * AkH
-                auto expr = Ak * AkH;
-        
-                // 4d) Contract into Rtmp
-                {
-                  std::cerr << "[DEBUG] Scheduling contraction into Rtmp\n";
-                  tamm::Scheduler sch{ec};
-                  sch(
-                    Rtmp(pp_lbl, p_lbl) = expr,
-                    "compute_rdm_site_into_Rtmp",
-                    tamm::ExecutionHW::GPU
-                  );
-                  sch.execute(tamm::ExecutionHW::GPU);
+                // 4a) Deep‐copy the canonical MPS into work
+                std::vector<tamm::Tensor<Cplx>> work;
+                work.reserve(n_qubits);
+                for(IdxType site = 0; site < n_qubits; ++site) {
+                    auto& T0 = mps_tensors[site];
+                    tamm::Tensor<Cplx> Tcopy({bond_tis[site],
+                                              phys_tis[site],
+                                              bond_tis[site+1]});
+                    Tcopy.set_dense();
+                    Tcopy.allocate(&ec);
+                    tamm::Scheduler sch_copy{ec};
+                    sch_copy(Tcopy("l","p","r") = T0("l","p","r"),
+                             "mps_deep_copy", tamm::ExecutionHW::GPU);
+                    sch_copy.execute(tamm::ExecutionHW::GPU);
+                    work.push_back(std::move(Tcopy));
                 }
-                std::cerr << "[DEBUG] Completed contraction into Rtmp\n";
         
-                // 4e) Copy Rtmp → R
-                {
-                  std::cerr << "[DEBUG] Copying Rtmp into R\n";
-                  tamm::Scheduler sch{ec};
-                  sch(
-                    R(pp_lbl, p_lbl) = Rtmp(pp_lbl, p_lbl),
-                    "move_Rtmp_into_R",
-                    tamm::ExecutionHW::GPU
-                  );
-                  sch.execute(tamm::ExecutionHW::GPU);
+                // 4b) Initialize the left‐environment
+                env.assign(1, Cplx(1.0, 0.0));
+        
+                // 5) Sample qubits in right→left order
+                for(IdxType j = 1; j <= n_qubits; ++j) {
+                    IdxType site = n_qubits - j;               // rightmost first
+                    IdxType Dr   = bond_dims[site+1];
+        
+                    tmp0.assign(Dr, Cplx(0.0,0.0));
+                    tmp1.assign(Dr, Cplx(0.0,0.0));
+        
+                    // 5a) Contract env into the two physical slices
+                    auto& T = work[site];
+                    T.loop_nest().iterate([&](auto const& idxs){
+                        IdxType l = idxs[0], s = idxs[1], r = idxs[2];
+                        Cplx    v; T.get(idxs, gsl::span<Cplx>(&v,1));
+                        if(s == 0) tmp0[r] += env[l] * v;
+                        else       tmp1[r] += env[l] * v;
+                    });
+        
+                    // 5b) Compute probabilities
+                    double w0 = 0.0, w1 = 0.0;
+                    for(IdxType r = 0; r < Dr; ++r) {
+                        w0 += std::norm(tmp0[r]);
+                        w1 += std::norm(tmp1[r]);
+                    }
+                    double total = w0 + w1;
+                    double p0    = w0 / total;
+        
+                    // 5c) Sample outcome
+                    bool outcome1 = (dist(rng) >= p0);
+        
+                    // 5d) Pack bit into its physical position (first sample → bit 0, etc.)
+                    if(outcome1) packed |= (IdxType(1) << (j - 1));
+        
+                    // 5e) Update env
+                    double invnorm = 1.0 / std::sqrt(outcome1 ? w1 : w0);
+                    env.clear();
+                    env.reserve(Dr);
+                    auto& chosen = outcome1 ? tmp1 : tmp0;
+                    for(IdxType r = 0; r < Dr; ++r) {
+                        env.push_back(chosen[r] * invnorm);
+                    }
                 }
-                Rtmp.deallocate();
-                std::cerr << "[DEBUG] Deallocated Rtmp\n";
         
-                // 4f) Extract diagonal, sample
-                Cplx v0, v1;
-                R.get({0,0}, gsl::span<Cplx>(&v0,1));
-                R.get({1,1}, gsl::span<Cplx>(&v1,1));
-                double p0 = std::real(v0), p1 = std::real(v1);
-                std::cerr << "[DEBUG] p0=" << p0 << ", p1=" << p1 << "\n";
-                R.deallocate();
+                // 6) Store result
+                results[rep] = packed;
         
-                bool outcome1 = (dist(rng) >= p0);
-                std::cerr << "[DEBUG] sampled outcome=" << outcome1 << "\n";
-                if(outcome1) bitstring |= (IdxType(1) << site);
-        
-                // 4g) Build & apply projector G
-                std::array<Cplx,4> P = {
-                  Cplx(outcome1 ? 0.0 : 1.0/std::sqrt(p0), 0.0),
-                  Cplx(0.0,0.0),
-                  Cplx(0.0,0.0),
-                  Cplx(outcome1 ? 1.0/std::sqrt(p1) : 0.0, 0.0)
-                };
-                tamm::Tensor<Cplx> G({phys_tis[site], phys_tis[site]});
-                G.set_dense(); G.allocate(&ec);
-                G.loop_nest().iterate([&](auto const& idxs){
-                  G.put(idxs, gsl::span<Cplx>(&P[idxs[0]*2 + idxs[1]],1));
-                });
-                std::cerr << "[DEBUG] Projector G built\n";
-        
-                {
-                  auto& T = work[site];
-                  tamm::Tensor<Cplx> Tnew({bond_tis[site],
-                                           phys_tis[site],
-                                           bond_tis[site+1]});
-                  Tnew.set_dense(); Tnew.allocate(&ec);
-                  tamm::Scheduler sch2{ec};
-                  sch2(
-                    Tnew("l","p'","r") = G("p'","p") * T("l","p","r"),
-                    "proj_site",
-                    tamm::ExecutionHW::CPU
-                  );
-                  sch2.execute(tamm::ExecutionHW::CPU);
-                  T.deallocate();
-                  work[site] = std::move(Tnew);
+                // 7) Cleanup work
+                for(auto& Tw : work) {
+                    Tw.deallocate();
                 }
-                G.deallocate();
-                std::cerr << "[DEBUG] Collapsed MPS tensor " << site << "\n";
+                work.clear();
+            }
         
-                results[rep] = bitstring;
-                std::cerr << "[DEBUG] partial bitstring=0x"
-                          << std::hex << bitstring << std::dec << "\n";
-              } // per-site
-        
-              std::cerr << "[DEBUG] rep " << rep
-                        << " complete, result=0x"
-                        << std::hex << results[rep] << std::dec << "\n";
-            } // per-rep
-        
-            std::cerr << "[DEBUG] Exit measure_all\n";
             return results;
         }
 
@@ -378,167 +334,346 @@ namespace NWQSim
             mps_tensors[site] = std::move(Tnew);
         }
 
-        void apply_two_qubit(const std::array<Cplx,16>& U4, IdxType q0, IdxType q1) 
-        {
-            // 1) Entry log
-            std::cerr << "[DEBUG] Enter apply_two_qubit(q0=" << q0
-                      << ", q1=" << q1 << ")" << std::endl;
+        void apply_two_qubit(const std::array<Cplx,16>& U4, IdxType q0, IdxType q1) {
+            // 0) Initial diagnostics
+            printf("[DEBUG] Qubit sites: %zu, %zu\n", (size_t)q0, (size_t)q1);
+            std::array<Cplx,16> U4_eff = U4;  // copy to mutable buffer
         
-            // 2) Local dims from stored vectors
+            // Dump U4_eff
+            {
+                IdxType d = phys_dims[q0];
+                printf("[DEBUG] U4_eff (row-major %zux%zu):\n", (size_t)d, (size_t)d);
+                for(size_t i = 0; i < d*d; ++i) {
+                    Cplx v = U4_eff[i];
+                    printf("  U4_eff[%2zu] = (%.6f, %.6f)\n",
+                           i, (double)std::real(v), (double)std::imag(v));
+                }
+            }
+        
+            // Bond dims
+            printf("[DEBUG] bond_dims =");
+            for(auto bd : bond_dims) printf(" %zu", (size_t)bd);
+            printf("\n");
+        
+            // 1) Local dimensions
             IdxType Dl = bond_dims[q0];
             IdxType Dr = bond_dims[q1+1];
             IdxType d  = phys_dims[q0];
-            std::cerr << "[DEBUG] Dl (bond_dims[" << q0 << "]) = " << Dl
-                      << ", Dr (bond_dims[" << (q1+1) << "]) = " << Dr
-                      << ", d (phys_dims[" << q0 << "]) = " << d << std::endl;
+            printf("[DEBUG] Dl=%zu, d=%zu, Dr=%zu\n", (size_t)Dl, (size_t)d, (size_t)Dr);
         
-            // 3) Sanity‐check all IndexSpace extents
-            auto check_tis = [&](auto const& tis, const char* name) {
-                auto extent = tis.index_space().num_indices();
-                std::cerr << "[DEBUG] " << name << " extent = " << extent << std::endl;
-            };
-            check_tis(bond_tis[q0],      "bond_tis[q0]");
-            check_tis(phys_tis[q0],      "phys_tis[q0]");
-            check_tis(phys_tis[q1],      "phys_tis[q1]");
-            check_tis(bond_tis[q1+1],    "bond_tis[q1+1]");
-        
-            // 4) Merge tensors M = T[q0] × T[q1]
+            // 2) Merge MPS cores into M(l,p0,p1,r)
+            tamm::Tensor<Cplx> M({ bond_tis[q0], phys_tis[q0], phys_tis[q1], bond_tis[q1+1] });
+            M.set_dense(); M.allocate(&ec);
             {
-                std::cerr << "[DEBUG] Constructing M("
-                          << Dl << "×" << d << "×" << d << "×" << Dr << ")"
-                          << std::endl;
-                tamm::Tensor<Cplx> M({bond_tis[q0], phys_tis[q0],
-                                      phys_tis[q1], bond_tis[q1+1]});
-                std::cerr << "[DEBUG] Calling M.set_dense()" << std::endl;
-                M.set_dense();
-                std::cerr << "[DEBUG] Allocating M" << std::endl;
-                M.allocate(&ec);
-                std::cerr << "[DEBUG] Allocation of M succeeded" << std::endl;
-        
-                std::cerr << "[DEBUG] Submitting merge-two scheduler" << std::endl;
-                {
-                    tamm::Scheduler sch{ec};
-                    sch(M("l","p0","p1","r") =
-                           mps_tensors[q0]("l","p0","b") *
-                           mps_tensors[q1]("b","p1","r"),
-                        "merge_two", tamm::ExecutionHW::GPU);
-                    sch.execute(tamm::ExecutionHW::GPU);
-                }
-                std::cerr << "[DEBUG] merge-two scheduler complete" << std::endl;
-        
-                // 5) Build two‐qubit gate tensor G4
-                std::cerr << "[DEBUG] Constructing G4(2×2×2×2)" << std::endl;
-                tamm::Tensor<Cplx> G4({phys_tis[q0], phys_tis[q1],
-                                       phys_tis[q0], phys_tis[q1]});
-                G4.set_dense();
-                std::cerr << "[DEBUG] Allocating G4" << std::endl;
-                G4.allocate(&ec);
-                std::cerr << "[DEBUG] Filling G4 from U4[]" << std::endl;
-                G4.loop_nest().iterate([&](auto const& idxs){
-                    int row = idxs[0]*d + idxs[1];
-                    int col = idxs[2]*d + idxs[3];
-                    Cplx v = U4[row*4 + col];
-                    G4.put(idxs, gsl::span<Cplx>(&v,1));
-                });
-                std::cerr << "[DEBUG] G4 initialization complete" << std::endl;
-        
-                // 6) Apply G4 to M → M2
-                std::cerr << "[DEBUG] Constructing M2(same shape as M)" << std::endl;
-                tamm::Tensor<Cplx> M2({bond_tis[q0], phys_tis[q0],
-                                       phys_tis[q1], bond_tis[q1+1]});
-                M2.set_dense();
-                std::cerr << "[DEBUG] Allocating M2" << std::endl;
-                M2.allocate(&ec);
-                std::cerr << "[DEBUG] Submitting apply-two scheduler" << std::endl;
-                {
-                    tamm::Scheduler sch{ec};
-                    sch(M2("l","p0p","p1p","r") =
-                           G4("p0p","p1p","p0","p1") * M("l","p0","p1","r"),
-                        "apply_two", tamm::ExecutionHW::GPU);
-                    sch.execute(tamm::ExecutionHW::GPU);
-                }
-                std::cerr << "[DEBUG] apply-two scheduler complete" << std::endl;
-        
-                // 7) Tear down temporaries M and G4
-                std::cerr << "[DEBUG] Deallocating M and G4" << std::endl;
-                M.deallocate();
-                G4.deallocate();
-        
-                // 8) Move data from M2 into Eigen for SVD
-                std::cerr << "[DEBUG] Copying M2 into Eigen matrix of size ("
-                          << (Dl*d) << "×" << (d*Dr) << ")" << std::endl;
-                Eigen::Index rows = Dl * d;
-                Eigen::Index cols = d  * Dr;
-                Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> mat(rows, cols);
-                M2.loop_nest().iterate([&](auto const& idxs){
-                    IdxType l  = idxs[0], p0 = idxs[1], p1 = idxs[2], r = idxs[3];
-                    Cplx v;
-                    M2.get(idxs, gsl::span<Cplx>(&v,1));
-                    mat(l*d + p0, p1*Dr + r) = v;
-                });
-                std::cerr << "[DEBUG] Eigen matrix population complete" << std::endl;
-        
-                // 9) SVD and truncation
-                std::cerr << "[DEBUG] Computing SVD" << std::endl;
-                Eigen::JacobiSVD<decltype(mat)> svd(mat,
-                    Eigen::ComputeThinU | Eigen::ComputeThinV);
-                IdxType chi = std::min<IdxType>(max_bond_dim,
-                                                 static_cast<IdxType>(svd.singularValues().size()));
-                std::cerr << "[DEBUG] Truncation chi = " << chi << std::endl;
-                auto U  = svd.matrixU().leftCols(chi);
-                auto S  = svd.singularValues().head(chi).asDiagonal();
-                auto Vh = svd.matrixV().leftCols(chi).adjoint();
-                auto US = U * S;
-        
-                // 10) Build new MPS tensors Ti_new and Tj_new
-                std::cerr << "[DEBUG] Constructing Ti_new("
-                          << Dl << "×" << d << "×" << chi << ")" << std::endl;
-                tamm::Tensor<Cplx> Ti_new({bond_tis[q0], phys_tis[q0],
-                                           tamm::TiledIndexSpace(tamm::range(0,chi),1)});
-                Ti_new.set_dense();
-                Ti_new.allocate(&ec);
-                Ti_new.loop_nest().iterate([&](auto const& idxs){
-                    IdxType l  = idxs[0], p0 = idxs[1], b = idxs[2];
-                    Cplx v = (b < chi ? US(l*d + p0, b) : Cplx{0,0});
-                    Ti_new.put(idxs, gsl::span<Cplx>(&v,1));
-                });
-                std::cerr << "[DEBUG] Ti_new complete" << std::endl;
-        
-                std::cerr << "[DEBUG] Constructing Tj_new("
-                          << chi << "×" << d << "×" << Dr << ")" << std::endl;
-                tamm::Tensor<Cplx> Tj_new({
-                    tamm::TiledIndexSpace(tamm::range(0,chi),1),
-                    phys_tis[q1],
-                    bond_tis[q1+1]
-                });
-                Tj_new.set_dense();
-                Tj_new.allocate(&ec);
-                Tj_new.loop_nest().iterate([&](auto const& idxs){
-                    IdxType b  = idxs[0], p1 = idxs[1], r = idxs[2];
-                    Cplx v = (b < chi ? Vh(b, p1*Dr + r) : Cplx{0,0});
-                    Tj_new.put(idxs, gsl::span<Cplx>(&v,1));
-                });
-                std::cerr << "[DEBUG] Tj_new complete" << std::endl;
-        
-                // 11) Replace old tensors
-                std::cerr << "[DEBUG] Deallocating old mps_tensors[" << q0
-                          << "] and [" << q1 << "]" << std::endl;
-                mps_tensors[q0].deallocate();
-                mps_tensors[q1].deallocate();
-                mps_tensors[q0] = std::move(Ti_new);
-                mps_tensors[q1] = std::move(Tj_new);
-        
-                // 12) Final deallocation of M2
-                std::cerr << "[DEBUG] Deallocating M2 and exit apply_two_qubit" << std::endl;
-                M2.deallocate();
+                tamm::Scheduler sch{ec};
+                sch(M("l","p0","p1","r") =
+                      mps_tensors[q0]("l","p0","b") *
+                      mps_tensors[q1]("b","p1","r"),
+                    "merge_two", tamm::ExecutionHW::GPU);
+                sch.execute(tamm::ExecutionHW::GPU);
             }
+            printf("[DEBUG] Merged cores q%zu and q%zu into M\n", (size_t)q0, (size_t)q1);
+        
+            // 3) Build two-qubit gate tensor G4(p0',p1',p0,p1)
+            tamm::Tensor<Cplx> G4({
+                phys_tis[q0],  // axis 0 = p0'
+                phys_tis[q1],  // axis 1 = p1'
+                phys_tis[q0],  // axis 2 = p0
+                phys_tis[q1]   // axis 3 = p1
+            });
+            G4.set_dense(); G4.allocate(&ec);
+            G4.loop_nest().iterate([&](auto const& idxs){
+                int p0p = idxs[0];
+                int p1p = idxs[1];
+                int p0  = idxs[2];
+                int p1  = idxs[3];
+                int row = p0 * d + p1;
+                int col = p0p * d + p1p;
+                G4.put(idxs, gsl::span<Cplx>(&U4_eff[row*(d*d) + col],1));
+            });
+            printf("[DEBUG] Constructed G4\n");
+        
+            // 4) Apply G4 → M2
+            tamm::Tensor<Cplx> M2({ bond_tis[q0], phys_tis[q0], phys_tis[q1], bond_tis[q1+1] });
+            M2.set_dense(); M2.allocate(&ec);
+            {
+                tamm::Scheduler sch{ec};
+                sch(M2("l","p0p","p1p","r") =
+                      G4("p0p","p1p","p0","p1") * M("l","p0","p1","r"),
+                    "apply_two", tamm::ExecutionHW::GPU);
+                sch.execute(tamm::ExecutionHW::GPU);
+            }
+            M.deallocate(); G4.deallocate();
+            printf("[DEBUG] Applied G4 to M → M2\n");
+        
+            // 5) Flatten M2 into Eigen matrix (Dl·d)×(d·Dr)
+            Eigen::Index rows = Dl * d;
+            Eigen::Index cols = d  * Dr;
+            printf("[DEBUG] Preparing Eigen matrix (%lld × %lld)\n",
+                   (long long)rows, (long long)cols);
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> mat(rows, cols);
+            M2.loop_nest().iterate([&](auto const& idxs){
+                IdxType l  = idxs[0];
+                IdxType p0 = idxs[1];
+                IdxType p1 = idxs[2];
+                IdxType r  = idxs[3];
+                Cplx v; M2.get(idxs, gsl::span<Cplx>(&v,1));
+                mat(l*d + p0, p1*Dr + r) = v;
+            });
+            printf("[DEBUG] Populated Eigen matrix\n");
+        
+            // 6) SVD + truncate
+            Eigen::JacobiSVD<decltype(mat)> svd(mat, Eigen::ComputeThinU | Eigen::ComputeThinV);
+            auto svals = svd.singularValues();
+            IdxType chi = std::min<IdxType>(max_bond_dim, (IdxType)svals.size());
+            printf("[DEBUG] SVD singular values =");
+            for(int i = 0; i < std::min<int>(5, (int)svals.size()); ++i)
+                printf(" %.6f", (double)svals(i));
+            double ssum = svals.sum();
+            printf(" ... sum=%.6f, chi=%zu\n", ssum, (size_t)chi);
+        
+            auto Umat  = svd.matrixU().leftCols(chi);
+            auto Sdiag = svals.head(chi).asDiagonal();
+            auto Vh    = svd.matrixV().leftCols(chi).adjoint();
+        
+            // 7) Update bond metadata
+            bond_dims[q0+1] = chi;
+            {
+                tamm::IndexSpace is_new{tamm::range(chi)};
+                bond_tis[q0+1]   = tamm::TiledIndexSpace(is_new,1);
+            }
+            printf("[DEBUG] Updated bond_dims[%zu] = %zu\n", (size_t)(q0+1), (size_t)chi);
+        
+            // 8) Build left-canonical Ti_new
+            tamm::Tensor<Cplx> Ti_new({
+                bond_tis[q0], phys_tis[q0],
+                tamm::TiledIndexSpace(tamm::range(chi),1)
+            });
+            Ti_new.set_dense(); Ti_new.allocate(&ec);
+            Ti_new.loop_nest().iterate([&](auto const& idxs){
+                IdxType l = idxs[0], p0 = idxs[1], b = idxs[2];
+                Cplx val = Umat(l*d + p0, b);
+                Ti_new.put(idxs, gsl::span<Cplx>(&val,1));
+            });
+        
+            // 9) Build center Tj_new = Sdiag·Vh
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> SV = Sdiag * Vh;
+            tamm::Tensor<Cplx> Tj_new({
+                tamm::TiledIndexSpace(tamm::range(chi),1),
+                phys_tis[q1],
+                bond_tis[q1+1]
+            });
+            Tj_new.set_dense(); Tj_new.allocate(&ec);
+            Tj_new.loop_nest().iterate([&](auto const& idxs){
+                IdxType b = idxs[0], p1 = idxs[1], r = idxs[2];
+                Cplx val = SV(b, p1*Dr + r);
+                Tj_new.put(idxs, gsl::span<Cplx>(&val,1));
+            });
+            printf("[DEBUG] Constructed Ti_new and Tj_new\n");
+        
+            // 10) Replace old tensors
+            mps_tensors[q0].deallocate();
+            mps_tensors[q1].deallocate();
+            mps_tensors[q0] = std::move(Ti_new);
+            mps_tensors[q1] = std::move(Tj_new);
+            M2.deallocate();
+            printf("[DEBUG] Replaced mps_tensors at sites %zu and %zu\n", (size_t)q0, (size_t)q1);
+        
+            // 11) Post-gate norm checks (optional)
+            {
+                tamm::Tensor<Cplx> R({ bond_tis[q0], phys_tis[q0], bond_tis[q0+1] });
+                R.set_dense(); R.allocate(&ec);
+                tamm::Scheduler sch{ec};
+                sch(R("l","p","r") =
+                      mps_tensors[q0]("l","p","r") *
+                      tamm::conj(mps_tensors[q0])("l","p","r"),
+                    "norm_q0", tamm::ExecutionHW::GPU);
+                sch.execute(tamm::ExecutionHW::GPU);
+                double norm0 = 0;
+                R.loop_nest().iterate([&](auto const& idxs){
+                    Cplx v; R.get(idxs, gsl::span<Cplx>(&v,1));
+                    norm0 += std::real(v);
+                });
+                R.deallocate();
+                printf("[DEBUG] post-gate norm(q%zu) = %f\n", (size_t)q0, norm0);
+            }
+            {
+                tamm::Tensor<Cplx> R({ bond_tis[q1], phys_tis[q1], bond_tis[q1+1] });
+                R.set_dense(); R.allocate(&ec);
+                tamm::Scheduler sch{ec};
+                sch(R("l","p","r") =
+                      mps_tensors[q1]("l","p","r") *
+                      tamm::conj(mps_tensors[q1])("l","p","r"),
+                    "norm_q1", tamm::ExecutionHW::GPU);
+                sch.execute(tamm::ExecutionHW::GPU);
+                double norm1 = 0;
+                R.loop_nest().iterate([&](auto const& idxs){
+                    Cplx v; R.get(idxs, gsl::span<Cplx>(&v,1));
+                    norm1 += std::real(v);
+                });
+                R.deallocate();
+                printf("[DEBUG] post-gate norm(q%zu) = %f\n", (size_t)q1, norm1);
+            }
+        
+            printf("[DEBUG] apply_two_qubit completed for sites %zu, %zu\n\n", (size_t)q0, (size_t)q1);
         }
+
+        void left_canonicalize(std::vector<tamm::Tensor<Cplx>>& MPS) {
+          using Eigen::Index;
+        
+          for(IdxType i = 0; i < n_qubits - 1; ++i) {
+            //–– 1) Read dimensions
+            IdxType Dl     = bond_dims[i];
+            IdxType Dr_old = bond_dims[i+1];
+            IdxType d      = phys_dims[i];
+            printf("[LC] sweeping bond %zu (sites %zu↔%zu): Dl=%zu, d=%zu, Dr_old=%zu\n",
+                   (size_t)i, (size_t)i, (size_t)(i+1),
+                   (size_t)Dl, (size_t)d, (size_t)Dr_old);
+        
+            //–– 2) Build flattened Mmat ∈ ℂ^{(Dl·d)×Dr_old}
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> Mmat(Dl*d, Dr_old);
+            MPS[i].loop_nest().iterate([&](auto const& idxs){
+              IdxType l = idxs[0], p = idxs[1], r = idxs[2];
+              Cplx    v; MPS[i].get(idxs, gsl::span<Cplx>(&v,1));
+              Mmat(l*d + p, r) = v;
+            });
+            printf("[LC]   built Mmat of size %zux%zu\n",
+                   (size_t)(Dl*d), (size_t)Dr_old);
+        
+            //–– Debug: print every entry of Mmat
+            printf("[LC]   dumping Mmat entries:\n");
+            for(Index row = 0; row < Mmat.rows(); ++row) {
+              for(Index col = 0; col < Mmat.cols(); ++col) {
+                Cplx v = Mmat(row,col);
+                printf("    Mmat(%lld,%lld) = (%.6f, %.6f)\n",
+                       (long long)row, (long long)col,
+                       (double)std::real(v), (double)std::imag(v));
+              }
+            }
+        
+            //–– 3) Compute thin SVD: Mmat = Umat · Sdiag · Vh
+            Eigen::JacobiSVD<decltype(Mmat)> svd(
+              Mmat, Eigen::ComputeThinU | Eigen::ComputeThinV
+            );
+            auto svals = svd.singularValues();
+            Index full_rank = (Index)svals.size();
+            Index chi = std::min<Index>((Index)max_bond_dim, full_rank);
+            printf("[LC]   SVD full_rank=%lld, truncating to χ=%zu\n",
+                   (long long)full_rank, (size_t)chi);
+        
+            auto Umat  = svd.matrixU().leftCols(chi);           // (Dl·d)×χ
+            auto Sdiag = svals.head(chi).asDiagonal();          // χ×χ
+            auto Vh    = svd.matrixV().leftCols(chi).adjoint(); // χ×Dr_old
+            printf("[LC]   extracted Umat(%zux%zu), Sdiag(%zux%zu), Vh(%zux%zu)\n",
+                   (size_t)(Dl*d), (size_t)chi,
+                   (size_t)chi,     (size_t)chi,
+                   (size_t)chi,     (size_t)Dr_old);
+        
+            //–– 4) Update bond dimension & create new left tensor
+            bond_dims[i+1] = chi;
+            {
+              tamm::IndexSpace is_new{tamm::range(chi)};
+              bond_tis[i+1]   = tamm::TiledIndexSpace(is_new, 1);
+            }
+            tamm::Tensor<Cplx> Tleft({bond_tis[i], phys_tis[i], bond_tis[i+1]});
+            Tleft.set_dense(); Tleft.allocate(&ec);
+            Tleft.loop_nest().iterate([&](auto const& idxs){
+              IdxType l = idxs[0], p = idxs[1], b = idxs[2];
+              Cplx    v = Umat(l*d + p, b);
+              Tleft.put(idxs, gsl::span<Cplx>(&v,1));
+            });
+            printf("[LC]   built Tleft(site=%zu) with new bond dim=%zu\n",
+                   (size_t)i, (size_t)chi);
+        
+            //–– Debug: dump Tleft entries
+            printf("[LC]   dumping Tleft entries:\n");
+            Tleft.loop_nest().iterate([&](auto const& idxs){
+              Cplx v; Tleft.get(idxs, gsl::span<Cplx>(&v,1));
+              printf("    Tleft(%zu,%zu,%zu) = (%.6f, %.6f)\n",
+                     (size_t)idxs[0], (size_t)idxs[1], (size_t)idxs[2],
+                     (double)std::real(v), (double)std::imag(v));
+            });
+        
+            //–– 5) Absorb S⋅Vh into the next tensor
+            auto M2 = Sdiag * Vh;  // χ×Dr_old
+            printf("[LC]   formed M2 matrix of size %zux%zu\n",
+                   (size_t)chi, (size_t)Dr_old);
+        
+            auto& Tnext_old = MPS[i+1];
+            IdxType d_next   = phys_dims[i+1];
+            IdxType Dr_right = bond_dims[i+2];
+        
+            // 5a) Flatten old Tnext to Dr_old × (d_next·Dr_right)
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> Tnext_mat(
+              Dr_old, d_next * Dr_right
+            );
+            Tnext_old.loop_nest().iterate([&](auto const& idxs){
+              IdxType b = idxs[0], p = idxs[1], r = idxs[2];
+              Cplx    v; Tnext_old.get(idxs, gsl::span<Cplx>(&v,1));
+              Tnext_mat(b, p*Dr_right + r) = v;
+            });
+            printf("[LC]   flattened Tnext_old(site=%zu) to %zux%zu\n",
+                   (size_t)(i+1),
+                   (size_t)Dr_old,
+                   (size_t)(d_next * Dr_right)
+            );
+        
+            //–– Debug: dump Tnext_mat entries
+            printf("[LC]   dumping Tnext_mat entries:\n");
+            for(Index br = 0; br < Tnext_mat.rows(); ++br) {
+              for(Index cr = 0; cr < Tnext_mat.cols(); ++cr) {
+                Cplx v = Tnext_mat(br,cr);
+                printf("    Tnext_mat(%lld,%lld) = (%.6f, %.6f)\n",
+                       (long long)br, (long long)cr,
+                       (double)std::real(v), (double)std::imag(v));
+              }
+            }
+        
+            // 5b) Multiply: new_flat = M2 (χ×Dr_old) × Tnext_mat (Dr_old×(d_next·Dr_right))
+            auto Tnext_mat2 = M2 * Tnext_mat;  // χ×(d_next·Dr_right)
+            printf("[LC]   applied M2 → new matrix %zux%zu\n",
+                   (size_t)chi,
+                   (size_t)(d_next * Dr_right)
+            );
+        
+            //–– 5c) Reshape back into Tnext(site=i+1)
+            tamm::Tensor<Cplx> Tnext({bond_tis[i+1], phys_tis[i+1], bond_tis[i+2]});
+            Tnext.set_dense(); Tnext.allocate(&ec);
+            Tnext.loop_nest().iterate([&](auto const& idxs){
+              IdxType b = idxs[0], p = idxs[1], r = idxs[2];
+              Cplx    v = Tnext_mat2(b, p*Dr_right + r);
+              Tnext.put(idxs, gsl::span<Cplx>(&v,1));
+            });
+            printf("[LC]   rebuilt Tnext(site=%zu)\n", (size_t)(i+1));
+        
+            //–– Debug: dump Tnext entries
+            printf("[LC]   dumping Tnext entries:\n");
+            Tnext.loop_nest().iterate([&](auto const& idxs){
+              Cplx v; Tnext.get(idxs, gsl::span<Cplx>(&v,1));
+              printf("    Tnext(%zu,%zu,%zu) = (%.6f, %.6f)\n",
+                     (size_t)idxs[0], (size_t)idxs[1], (size_t)idxs[2],
+                     (double)std::real(v), (double)std::imag(v));
+            });
+        
+            //–– 6) Swap in the new cores
+            MPS[i]     .deallocate();
+            Tnext_old  .deallocate();
+            MPS[i]     = std::move(Tleft);
+            MPS[i+1]   = std::move(Tnext);
+            printf("[LC]   swapped in new cores for sites %zu and %zu\n\n",
+                   (size_t)i, (size_t)(i+1));
+          }
+        
+          printf("[LC] left_canonicalize complete; sites 0…%zu are left-iso, centre at site %zu\n",
+                 (size_t)(n_qubits-2), (size_t)(n_qubits-1));
+        }
+
 
         static tamm::ProcGroup init_pg() {
             int argc = 0; char** argv = nullptr;
             //MPI_Init(&argc,&argv);
             //GA_Initialize();
-            tamm::initialize(argc, argv);
+            //tamm::initialize(argc, argv);
             //tamm::ProcGroup::self_ga_pgroup(true);
             return tamm::ProcGroup::create_world_coll();
         }
