@@ -47,5 +47,6 @@ target_link_libraries(nwq_qasm
     BLAS
     LAPACK
 )
+
 # —————————————————————————————————————————————————————
 

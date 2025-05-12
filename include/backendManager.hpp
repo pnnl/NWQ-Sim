@@ -64,8 +64,10 @@ public:
         NWQSim::safe_print("- AMDGPU\n");
 #endif
     }
+    int MaxDim;
+    double Cutoff;
 
-    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "SV")
+    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "SV", int max_dim = 100, double sv_cutoff = 0.0)
     {
         // Convert to uppercase
         std::transform(backend.begin(), backend.end(), backend.begin(),
@@ -82,8 +84,8 @@ public:
                 return std::make_shared<NWQSim::SV_CPU>(numQubits);
             else if (simulator_method == "DM")
                 return std::make_shared<NWQSim::DM_CPU>(numQubits);
-	    else
-		return std::make_shared<NWQSim::TN_CPU>(numQubits);
+            else
+                return std::make_shared<NWQSim::TN_CPU>(numQubits, max_dim, sv_cutoff);
         }
 
 #ifdef OMP_ENABLED

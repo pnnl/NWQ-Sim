@@ -26,7 +26,7 @@ namespace NWQSim
     {
 
     public:
-        TN_CPU(IdxType _n_qubits) : QuantumState(SimType::TN)
+        TN_CPU(IdxType _n_qubits, int max_dim, double sv_cutoff) : QuantumState(SimType::TN)
         {
             // Initialize CPU side
             n_qubits = _n_qubits;
@@ -35,6 +35,10 @@ namespace NWQSim
             half_dim = (IdxType)1 << (n_qubits - 1);
             sv_size = dim * (IdxType)sizeof(ValType);
             n_cpu = 1;
+
+            // MPS Parameters
+            MaxDim = max_dim;
+            Cutoff = sv_cutoff;
 
             // CPU side initialization
             SAFE_ALOC_HOST(sv_real, sv_size);
@@ -56,7 +60,11 @@ namespace NWQSim
 	        auto network = itensor::MPS(state);
             auto all_zeros = network;
 
+            
+            std::cout<<"MaxDim "<<MaxDim<<" Cutoff "<<Cutoff<<std::endl;
+
         }
+
 
         ~TN_CPU()
         {
@@ -117,6 +125,7 @@ namespace NWQSim
 
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
+            // std::cout<<"sim_time: "<<sim_time<<std::endl;
 
             if (Config::PRINT_SIM_TRACE)
             {
@@ -177,7 +186,11 @@ namespace NWQSim
         ValType *sv_imag;
         ValType *m_real;
 
-        //
+        // MPS Params
+        int MaxDim;
+        double Cutoff;
+
+        // MPS Objects
         itensor::SpinHalf sites;
         itensor::MPS network,all_zeros;
 
@@ -194,17 +207,27 @@ namespace NWQSim
         {
             auto start = std::chrono::steady_clock::now();
             int n_gates = gates.size();
+            double c2_time = 0.0;
+            double c1_time = 0.0;
             for (int i = 0; i < n_gates; i++)
             {
                 auto g = gates[i];
 
                 if (g.op_name == OP::C1)
                 {
+                    cpu_timer c1_timer;
+                    c1_timer.start_timer();
                     C1_GATE(g.gm_real, g.gm_imag, g.qubit);
+                    c1_timer.stop_timer();
+                    c1_time += c1_timer.measure();
                 }
                 else if (g.op_name == OP::C2)
                 {
+                    cpu_timer c2_timer;
+                    c2_timer.start_timer();
                     C2_GATE(g.gm_real, g.gm_imag, g.ctrl, g.qubit);
+                    c2_timer.stop_timer();
+                    c2_time += c2_timer.measure();
                 }
                 else if (g.op_name == OP::RESET)
                 {
@@ -238,6 +261,7 @@ namespace NWQSim
             {
                 std::cout << std::endl;
             }
+            std::cout<<"Total C2 Time: "<<c2_time<<" Total C1 Time: "<<c1_time<<std::endl;
         }
 
         //============== C1 Gate ================
@@ -258,7 +282,14 @@ namespace NWQSim
             gate.set(2,2,std::complex<double>(gm_real[3],gm_imag[3]));
 
             // Move center of orthongality to qubit that will be contracted with gate
-            network.position(site);
+            if(isOrtho(network)){
+                if(orthoCenter(network) != site){
+                    network.position(site);
+                }
+            }
+            else{
+                network.position(site);
+            }
          
             //Contract the 1-qubit gate with the MPS site at the qubit
             auto temp = gate * network(site);
@@ -269,8 +300,8 @@ namespace NWQSim
             // Set the MPS site to new values
             network.set(site,temp);
 
-            // For safety re-orthogonalize the network
-            network.orthogonalize();
+            // // For safety re-orthogonalize the network
+            // network.orthogonalize();
             
 
         }
@@ -330,9 +361,9 @@ namespace NWQSim
             //
             auto method = true;
             if(std::abs(qubit0 - qubit1) != 1){
-
+                // std::cout<<"Non local C2"<<std::endl;
                 // 2Q Gate Decomposition into Control: u  ;  Target: s*v
-                auto [u,s,v] = itensor::svd(gate,{i,prime(i)},{j,prime(j)});
+                auto [u,s,v] = itensor::svd(gate,{i,prime(i)},{j,prime(j)},{"Cutoff=", Cutoff, "MaxDim=", MaxDim, "SVDMethod=", "gesdd"});
                 auto sv = s*v;
 
                 if(method){
@@ -341,7 +372,15 @@ namespace NWQSim
                     itensor::Index lindex;
 
                     // Move center of orthogonality
-                    network.position(site0);
+                    if(isOrtho(network)){
+                        if(orthoCenter(network) != site0){
+                            network.position(site0);
+                        }
+                    }
+                    else{
+                        network.position(site0);
+                    }
+
       
                     // Initial contraction of control "gate" and control qubit
                     auto site0_contract = u*network(site0);
@@ -349,7 +388,7 @@ namespace NWQSim
                     // Decompose contraction, U is the new site tensor in the circuit network
                     // S*V holds the "propagating bond" which is "pushed" through the circuit to the target site
                     // This "bond" is the dangling link of the initial gate SVD
-                    auto [U,S,V] = itensor::svd(site0_contract,{i,prime(i),leftLinkIndex(network,site0)});
+                    auto [U,S,V] = itensor::svd(site0_contract,{i,prime(i),leftLinkIndex(network,site0)},{"Cutoff=", Cutoff, "MaxDim=", MaxDim, "SVDMethod=", "gesdd"});
                     network.set(site0,U);
                     network.position(site0);
                     propagating_bond =S*V;
@@ -362,13 +401,12 @@ namespace NWQSim
                     for(auto i = site0+1 ; i < site1; i++ ){
 
                         auto i_contract = propagating_bond * network(i);
-                        auto [u,s,v] = itensor::svd(i_contract,{sites(i),lindex});
+                        auto [u,s,v] = itensor::svd(i_contract,{sites(i),lindex},{"Cutoff=", Cutoff, "MaxDim=", MaxDim, "SVDMethod=", "gesdd"});
                         lindex = commonInds(u,s)[0];
                         network.set(i,u);
                         network.position(i);
                         propagating_bond = s*v;
 
-        
                     }
    
                     // Final contraction with Target qubit, propagating bond is absorbed in U,Link on sv
@@ -458,7 +496,7 @@ namespace NWQSim
 
                 // network clean-up
                 network.noPrime();
-                network.orthogonalize();
+                // network.orthogonalize();
 
 
                 // Useful printing method, may be removed later
@@ -471,9 +509,17 @@ namespace NWQSim
             else{
                 // Local 2-qubit gate method
                 //
-
+                // std::cout<<"Local C2"<<std::endl;
                 // Move orthoganility center to control qubit
-                network.position(site0);
+                if(isOrtho(network)){
+                    if(orthoCenter(network) != site0){
+                        network.position(site0);
+                    }
+                }
+                else{
+                    network.position(site0);
+                }
+                
 
                 //     |    |
                 //    --------
@@ -501,14 +547,15 @@ namespace NWQSim
                 //    -------------
   
                 new_sites_contracted.noPrime();
-                auto [u,s,v] = itensor::svd(new_sites_contracted ,itensor::inds(network(site0)),{"Cutoff=", 0.0, "MaxDim=", 10});	    
+                // auto [u,s,v] = itensor::svd(new_sites_contracted ,itensor::inds(network(site0)),{"Cutoff=", 0.0, "MaxDim=", 10});	
+                auto [u,s,v] = itensor::svd(new_sites_contracted ,itensor::inds(network(site0)),{"Cutoff=", Cutoff, "MaxDim=", MaxDim, "SVDMethod=", "gesdd"});    
                 network.set(site0, u);
                 network.set(site1, s*v);
 
                 //    |      |
                 //   (u) - (s*v)
                 //
-                network.orthogonalize();
+                // network.orthogonalize();
             }
         }
 
@@ -561,11 +608,16 @@ namespace NWQSim
             //  Contracte result of sampling as 0 or 1 vector into starting network
             //  Repeat process
             //  
+
+            double meas_time;
+            cpu_timer meas_timer;
+            meas_timer.start_timer();
             for (IdxType i = 0; i < repetition; i++)
             {
                 // Work with copy of network
                 auto network_ =  network;
                 IdxType res = 0;
+
 
                 for(IdxType j = 1;j <= n_qubits; j++){
 
@@ -666,7 +718,11 @@ namespace NWQSim
                     }
                     }
 		        }
+
             }
+            meas_timer.stop_timer();
+            meas_time = meas_timer.measure();
+            std::cout<<"Total Measure Time: "<<meas_time<<" Measure Time per rep: "<<meas_time/repetition<<std::endl;
         }
         virtual double EXPECT_C4_GATE(const ValType *gm_real, const ValType *gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask)
         {

@@ -87,6 +87,8 @@ public:
         add_option("basis", 0, "", "Run the test benchmark using basis gates", "", false);       // Boolean flag, no argument
         add_option("disable_fusion", 0, "", "Disable gate fusion ", "", false);                  // Boolean flag, no argument
         add_option("random_seed", 0, "", "Set the random seed for the simulation", "INT", true); // Long flag only
+	add_option("max_dim", 0, "100", "Set the maximum bond dimenstion for TNSim", "MAXDIM", true);
+	add_option("sv_cutoff", 0, "0.0", "Set the singular value cutoff for TNSim", "CUTOFF", true);
 
         // Noise model options
         add_option("device", 0, "", "Specify the device noise profile", "FILE_PATH", true);                       // Long flag only
