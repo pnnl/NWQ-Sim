@@ -31,27 +31,27 @@ namespace NWQSim
             // Initialize CPU side
             n_qubits = _n_qubits;
 
-            dim = (IdxType)1 << (n_qubits);
-            half_dim = (IdxType)1 << (n_qubits - 1);
-            sv_size = dim * (IdxType)sizeof(ValType);
+            // dim = (IdxType)1 << (n_qubits);
+            // half_dim = (IdxType)1 << (n_qubits - 1);
+            // sv_size = dim * (IdxType)sizeof(ValType);
             n_cpu = 1;
 
             // MPS Parameters
             MaxDim = max_dim;
             Cutoff = sv_cutoff;
 
-            // CPU side initialization
-            SAFE_ALOC_HOST(sv_real, sv_size);
-            SAFE_ALOC_HOST(sv_imag, sv_size);
-            memset(sv_real, 0, sv_size);
-            memset(sv_imag, 0, sv_size);
+            // // CPU side initialization
+            // SAFE_ALOC_HOST(sv_real, sv_size);
+            // SAFE_ALOC_HOST(sv_imag, sv_size);
+            // memset(sv_real, 0, sv_size);
+            // memset(sv_imag, 0, sv_size);
 
-            // State-vector initial state [0..0] = 1
-            sv_real[0] = 1.;
-            cpu_mem += sv_size * 4;
+            // // State-vector initial state [0..0] = 1
+            // sv_real[0] = 1.;
+            // cpu_mem += sv_size * 4;
 
-            SAFE_ALOC_HOST(m_real, sv_size + sizeof(ValType));
-            memset(m_real, 0, sv_size + sizeof(ValType));
+            // SAFE_ALOC_HOST(m_real, sv_size + sizeof(ValType));
+            // memset(m_real, 0, sv_size + sizeof(ValType));
             rng.seed(Config::RANDOM_SEED);
 
             // ITensor MPS Initialization
@@ -68,21 +68,21 @@ namespace NWQSim
 
         ~TN_CPU()
         {
-            // Release for CPU side
-            SAFE_FREE_HOST(sv_real);
-            SAFE_FREE_HOST(sv_imag);
-            SAFE_FREE_HOST(m_real);
-            SAFE_FREE_HOST(results);
+            // // Release for CPU side
+            // SAFE_FREE_HOST(sv_real);
+            // SAFE_FREE_HOST(sv_imag);
+            // SAFE_FREE_HOST(m_real);
+            // SAFE_FREE_HOST(results);
         }
 
         void reset_state() override
         {
-            // Reset CPU input & output
-            memset(sv_real, 0, sv_size);
-            memset(sv_imag, 0, sv_size);
-            memset(m_real, 0, sv_size + sizeof(ValType));
-            // State Vector initial state [0..0] = 1
-            sv_real[0] = 1.;
+            // // Reset CPU input & output
+            // memset(sv_real, 0, sv_size);
+            // memset(sv_imag, 0, sv_size);
+            // memset(m_real, 0, sv_size + sizeof(ValType));
+            // // State Vector initial state [0..0] = 1
+            // sv_real[0] = 1.;
 	    
             // MPS initial state |00..0>
             sites = itensor::SpinHalf(int(n_qubits),{"ConserveQNs=", false});
@@ -154,7 +154,6 @@ namespace NWQSim
         IdxType *measure_all(IdxType repetition) override
         {
             MA_GATE(repetition);
-	    std::cout<<"measure_all was called"<<std::endl;
             return results;
         }
 
@@ -176,15 +175,15 @@ namespace NWQSim
     protected:
         // n_qubits is the number of qubits
         IdxType n_qubits;
-        IdxType sv_size;
-        IdxType dim;
-        IdxType half_dim;
+        // IdxType sv_size;
+        // IdxType dim;
+        // IdxType half_dim;
         IdxType n_cpu;
 
-        // CPU arrays
-        ValType *sv_real;
-        ValType *sv_imag;
-        ValType *m_real;
+        // // CPU arrays
+        // ValType *sv_real;
+        // ValType *sv_imag;
+        // ValType *m_real;
 
         // MPS Params
         int MaxDim;
@@ -253,9 +252,9 @@ namespace NWQSim
                     std::logic_error("Invalid gate type");
                 }
 
-#ifdef PURITY_CHECK
-                Purity_Check(g, i);
-#endif
+// #ifdef PURITY_CHECK
+//                 Purity_Check(g, i);
+// #endif
             }
             if (Config::PRINT_SIM_TRACE)
             {
@@ -359,7 +358,7 @@ namespace NWQSim
             //
             // qubit0 must be < then qubit1  (control must be to the left (smaller site number) of target)
             //
-            auto method = true;
+            auto method = false;
             if(std::abs(qubit0 - qubit1) != 1){
                 // std::cout<<"Non local C2"<<std::endl;
                 // 2Q Gate Decomposition into Control: u  ;  Target: s*v
@@ -753,17 +752,18 @@ namespace NWQSim
         //============== Purity Check  ================
         void Purity_Check(SVGate g, const IdxType t)
         {
-            ValType purity = 0;
-            for (IdxType i = 0; i < (((IdxType)1 << n_qubits)); i++)
-                purity += ((sv_real[i] * sv_real[i]) + (sv_imag[i] * sv_imag[i]));
-            if (fabs(purity - 1.0) > ERROR_BAR)
-            {
-                printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld) with %lf\n", t, OP_NAMES[g.op_name], g.ctrl, g.qubit, purity);
-            }
+            throw std::runtime_error("Not implemented");
+            // ValType purity = 0;
+            // for (IdxType i = 0; i < (((IdxType)1 << n_qubits)); i++)
+            //     purity += ((sv_real[i] * sv_real[i]) + (sv_imag[i] * sv_imag[i]));
+            // if (fabs(purity - 1.0) > ERROR_BAR)
+            // {
+            //     printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld) with %lf\n", t, OP_NAMES[g.op_name], g.ctrl, g.qubit, purity);
+            // }
         }
 
-        virtual ValType *get_real() const override { return sv_real; };
-        virtual ValType *get_imag() const override { return sv_imag; };
+        virtual ValType *get_real() const override { throw std::runtime_error("Not implemented"); };
+        virtual ValType *get_imag() const override { throw std::runtime_error("Not implemented"); };
     };
 
 } // namespace NWQSim
