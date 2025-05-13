@@ -55,6 +55,8 @@ namespace NWQSim
           pg(init_pg()),
           ec(pg, tamm::DistributionKind::dense, tamm::MemoryManagerKind::ga)
         {
+
+            //printf("Inside constructor\n");
             bond_tis.resize(n_qubits + 1);
             bond_dims.resize(n_qubits + 1);
             for(IdxType i = 0; i <= n_qubits; ++i)
@@ -90,6 +92,7 @@ namespace NWQSim
                 mps_tensors.push_back(std::move(T));
             }
 
+            //printf("Finished constructor\n");
         }
 
          //Virtual destructor inherits from QuantumState
@@ -102,6 +105,7 @@ namespace NWQSim
         }
 
         void reset_state() override {
+            //printf("Inside reset gate\n");
             for(IdxType i = 0; i < n_qubits; ++i)
             {
                 auto& T = mps_tensors[i];
@@ -117,7 +121,7 @@ namespace NWQSim
 
         void set_seed(IdxType seed) override
         {
-            throw std::runtime_error("TN_CUDA does not use RNG seed, not accessible form cutensornet API");
+            throw std::runtime_error("TN_CUDA does not use RNG seed, not accessible form cutensornet API\n");
         }
 
         void set_initial(std::string fpath, std::string format) override
@@ -132,6 +136,7 @@ namespace NWQSim
 
         void sim(std::shared_ptr<NWQSim::Circuit> circuit) override
         {
+            //printf("Inside sim\n");
             IdxType origional_gates = circuit->num_gates();
             std::vector<SVGate> gates = fuse_circuit_sv(circuit);
             IdxType n_gates = gates.size();
@@ -140,7 +145,9 @@ namespace NWQSim
             cpu_timer sim_timer;
             sim_timer.start_timer();
 	    
+            //printf("Going inside sim kernel\n");
             simulation_kernel(gates);
+
 
             sim_timer.stop_timer();
             sim_time = sim_timer.measure();
@@ -223,6 +230,7 @@ namespace NWQSim
 
                 if (g.op_name == OP::C1)
                 {
+                    //printf("Inside C1\n");
                     std::array<Cplx,4> U;
                     for(int idx=0; idx<4; ++idx)
                     {
@@ -233,6 +241,7 @@ namespace NWQSim
                 }
                 else if (g.op_name == OP::C2)
                 {
+                    //printf("C2\n");
                     std::array<Cplx,16> U4;
                     for(int idx=0; idx<16; ++idx)
                         U4[idx] = Cplx(g.gm_real[idx], g.gm_imag[idx]);
@@ -267,8 +276,8 @@ namespace NWQSim
 
         void C1_GATE(const std::array<Cplx,4>& U, IdxType site) 
         {
-            printf("In One qubit gaate!");
-            dump_state("Before");
+            //printf("In One qubit gaate!");
+            //dump_state("Before C1");
             tamm::Tensor<Cplx> G({phys_tis[site], phys_tis[site]});
             G.set_dense();
             G.allocate(&ec);
@@ -285,70 +294,93 @@ namespace NWQSim
         
             tamm::Scheduler sch{ec};
             sch(Tnew("l","p'","r") = G("p'","p") * T("l","p","r"),
-                "apply_one_qubit", tamm::ExecutionHW::GPU);
-            sch.execute(tamm::ExecutionHW::GPU);
+                "apply_one_qubit", tamm::ExecutionHW::CPU);
+            sch.execute(tamm::ExecutionHW::CPU);
         
             T.deallocate();
             mps_tensors[site] = std::move(Tnew);
-            dump_state("Before");
+            //dump_state("After C1");
         }
         
-        // Inside your TN_CUDA class
-        std::array<Cplx,4> flatten_two_qubit(const tamm::Tensor<Cplx>& A,
-                                             const tamm::Tensor<Cplx>& B)
-        {
-            // χ = current bond dimension between qubit 0 and 1
-            const IdxType chi = bond_dims[1];
-            const IdxType d0  = phys_dims[0];  // == 2
-            const IdxType d1  = phys_dims[1];  // == 2
-        
-            // 1) Copy A(1×2×χ) into host vector Adata[p0*χ + b]
-            std::vector<Cplx> Adata(d0 * chi);
-            A.loop_nest().iterate([&](auto const& idxs){
-                IdxType l  = idxs[0];       // == 0
-                IdxType p0 = idxs[1];       // 0 or 1
-                IdxType b  = idxs[2];       // 0…χ-1
-                Cplx    v;
-                A.get(idxs, gsl::span<Cplx>(&v,1));
-                Adata[p0 * chi + b] = v;
+        std::vector<Cplx> flatten_mps_state() {
+            const size_t N = mps_tensors.size();
+            // 1) Initialize with tensor 0: shape = [d0, χ1]
+            const IdxType d0   = phys_dims[0];
+            const IdxType chi1 = bond_dims[1];
+            std::vector<Cplx> state(d0 * chi1, Cplx{0,0});
+            mps_tensors[0].loop_nest().iterate([&](auto const& idxs){
+                // idxs = [l=0, p0∈[0,d0), b1∈[0,χ1))
+                Cplx v; 
+                mps_tensors[0].get(idxs, gsl::span<Cplx>(&v,1));
+                state[idxs[1] * chi1 + idxs[2]] = v;
             });
         
-            // 2) Copy B(χ×2×1) into host vector Bdata[b*2 + p1]
-            std::vector<Cplx> Bdata(chi * d1);
-            B.loop_nest().iterate([&](auto const& idxs){
-                IdxType b  = idxs[0];       // 0…χ-1
-                IdxType p1 = idxs[1];       // 0 or 1
-                IdxType r  = idxs[2];       // == 0
-                Cplx    v;
-                B.get(idxs, gsl::span<Cplx>(&v,1));
-                Bdata[b * d1 + p1] = v;
-            });
+            // 2) For each subsequent tensor i=1..N-1, absorb into 'state'
+            for(size_t i = 1; i < N; ++i) {
+                const auto& T      = mps_tensors[i];
+                const IdxType di   = phys_dims[i];
+                const IdxType chi_i   = bond_dims[i];
+                const IdxType chi_ip1 = bond_dims[i+1];
         
-            // 3) Build ψ_{p0,p1} = sum_b A(0,p0,b) * B(b,p1,0)
-            std::array<Cplx,4> psi{};
-            for(IdxType p0 = 0; p0 < d0; ++p0)
-            {
-                for(IdxType p1 = 0; p1 < d1; ++p1)
-                {
-                    Cplx sum = Cplx(0.0,0.0);
-                    for(IdxType b = 0; b < chi; ++b)
-                    {
-                        sum += Adata[p0 * chi + b] * Bdata[b * d1 + p1];
+                const size_t rows = state.size() / chi_i;
+                // new_rows = rows * di, new_cols = χ_{i+1}
+                std::vector<Cplx> new_state(rows * di * chi_ip1, Cplx{0,0});
+        
+                // Pre-copy T into host‐linear Tdata[(bi*di + pi)*χ_{i+1} + bip1]
+                std::vector<Cplx> Tdata(chi_i * di * chi_ip1);
+                T.loop_nest().iterate([&](auto const& idxs){
+                    Cplx v;
+                    T.get(idxs, gsl::span<Cplx>(&v,1));
+                    const auto bi   = idxs[0];
+                    const auto pi   = idxs[1];
+                    const auto bip1 = idxs[2];
+                    Tdata[(bi * di + pi) * chi_ip1 + bip1] = v;
+                });
+        
+                // Contract: new_state[(r*di + pi)*χ_{i+1} + bip1] +=
+                //     state[r*χ_i + bi] * Tdata[(bi*di + pi)*χ_{i+1} + bip1]
+                for(size_t r = 0; r < rows; ++r) {
+                    for(IdxType bi = 0; bi < chi_i; ++bi) {
+                        const Cplx α = state[r * chi_i + bi];
+                        if(α == Cplx{0,0}) continue;
+                        for(IdxType pi = 0; pi < di; ++pi) {
+                            for(IdxType bip1 = 0; bip1 < chi_ip1; ++bip1) {
+                                new_state[(pi * rows + r) * chi_ip1 + bip1]
+                                  += α * Tdata[(bi*di + pi) * chi_ip1 + bip1];
+                            }
+                        }
                     }
-                    psi[p1 * d1 + p0] = sum;
                 }
+        
+                state.swap(new_state);
             }
         
-            return psi;
+            // At the end χ_N == 1, so state.size() == ∏ₖ dₖ
+            return state;
         }
- 
-        void dump_state(const std::string& tag)
-        {
-          auto psi = flatten_two_qubit(mps_tensors[0], mps_tensors[1]);
-          printf("[DUMP %s] ψ = [", tag.c_str());
-          for(int i=0; i<4; ++i)
-            printf(" (%.6f,%.6f)", std::real(psi[i]), std::imag(psi[i]));
-          printf(" ]\n");
+
+        void dump_state(const std::string& tag) {
+            auto psi = flatten_mps_state();
+            const size_t N          = phys_dims.size();      // number of qubits
+            const size_t dim        = psi.size();            // should be 2^N
+            printf("[DUMP %s] dim = %zu\n", tag.c_str(), dim);
+        
+            // For each basis index i = 0..2^N-1:
+            for(size_t i = 0; i < dim; ++i) {
+                // 1) Build the binary label "b_{N-1}...b_1b_0"
+                //    where b_k = (i >> k) & 1, and we print k=N-1 down to 0.
+                std::string bits;
+                bits.reserve(N);
+                for(int q = int(N) - 1; q >= 0; --q) {
+                    bits.push_back(char('0' + ((i >> q) & 1)));
+                }
+        
+                // 2) Print:    000:(re,im)  001:(re,im)  010:(re,im) ...
+                printf("%s:(%.6f,%.6f)  ",
+                       bits.c_str(),
+                       std::real(psi[i]), std::imag(psi[i]));
+            }
+            printf("\n");
         }
 
         virtual void C2_GATE_L(const std::array<Cplx,16>& U4, IdxType q0, IdxType q1)
@@ -364,8 +396,8 @@ namespace NWQSim
             sch(M("l","p0","p1","r") =
                   mps_tensors[q0]("l","p0","b") *
                   mps_tensors[q1]("b","p1","r"),
-                "merge_two", tamm::ExecutionHW::GPU);
-            sch.execute(tamm::ExecutionHW::GPU);
+                "merge_two", tamm::ExecutionHW::CPU);
+            sch.execute(tamm::ExecutionHW::CPU);
         
             tamm::Tensor<Cplx> G4({
                 phys_tis[q0],  // axis 0 = p0'
@@ -373,6 +405,7 @@ namespace NWQSim
                 phys_tis[q0],  // axis 2 = p0
                 phys_tis[q1]   // axis 3 = p1
             });
+            //printf("Here");
 
             G4.set_dense(); G4.allocate(&ec);
             G4.loop_nest().iterate([&](auto const& idxs){
@@ -392,8 +425,8 @@ namespace NWQSim
                 tamm::Scheduler sch{ec};
                 sch(M2("l","p0p","p1p","r") =
                       G4("p0p","p1p","p0","p1") * M("l","p0","p1","r"),
-                    "apply_two", tamm::ExecutionHW::GPU);
-                sch.execute(tamm::ExecutionHW::GPU);
+                    "apply_two", tamm::ExecutionHW::CPU);
+                sch.execute(tamm::ExecutionHW::CPU);
             }
             M.deallocate(); G4.deallocate();
         
@@ -453,26 +486,269 @@ namespace NWQSim
             M2.deallocate();
         }
 
-        virtual void C2_GATE_NL(const std::array<Cplx,16>& U4, IdxType q0, IdxType q1)
+        virtual void C2_GATE_NL(const std::array<Cplx,16>& U4, IdxType q0,IdxType q1)
         {
-            throw std::runtime_error("Non Local 2 Qubit Gates Not Implemnted!");
+            // 0) Center MPS at control qubit
+            position(q0);
+        
+            // 1) Gate SVD: 4×4 → Ugate·Sgate·Vhgate
+            Eigen::Matrix<Cplx,4,4> Gmat;
+            for(int r = 0; r < 4; ++r)
+                for(int c = 0; c < 4; ++c)
+                    Gmat(r,c) = U4[r*4 + c];
+            Eigen::JacobiSVD<decltype(Gmat)> gate_svd(
+                Gmat, Eigen::ComputeThinU | Eigen::ComputeThinV);
+            auto svals   = gate_svd.singularValues();                  // length‐4 vector
+            IdxType chiG = std::min<IdxType>(max_bond_dim,
+                                              static_cast<IdxType>(svals.size()));
+            auto Ugate   = gate_svd.matrixU().leftCols(chiG);          // (4×chiG)
+            auto Vhgate  = gate_svd.matrixV().leftCols(chiG).adjoint(); // (chiG×4)
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> SVfull =
+                svals.head(chiG).asDiagonal() * Vhgate;
+        
+            // 2) Merge control site with Ugate + local SVD
+            IdxType Dl     = bond_dims[q0];
+            IdxType Dr_old = bond_dims[q0+1];
+            tamm::TiledIndexSpace mid_ti  { tamm::IndexSpace(tamm::range(chiG)), 1 };
+            tamm::TiledIndexSpace r_old_ti{ tamm::IndexSpace(tamm::range(Dr_old)),1 };
+        
+            // Build Uten[p_out,p_in,a]
+            tamm::Tensor<Cplx> Uten({ phys_tis[q0], phys_tis[q0], mid_ti });
+            Uten.set_dense(); Uten.allocate(&ec);
+            Uten.loop_nest().iterate([&](auto const& idxs){
+                auto pout = idxs[0], pin = idxs[1], a = idxs[2];
+                Cplx v = Ugate(pout*2 + pin, a);
+                Uten.put(idxs, gsl::span<Cplx>(&v,1));
+            });
+        
+            // Contract into M0[l,pout,a,r_old]
+            tamm::Tensor<Cplx> M0({ bond_tis[q0], phys_tis[q0], mid_ti, r_old_ti });
+            M0.set_dense(); M0.allocate(&ec);
+            {
+                tamm::Scheduler sch{ec};
+                sch(M0("l","pout","a","r") =
+                      Uten("pout","pin","a") * mps_tensors[q0]("l","pin","r"),
+                    "merge_control", tamm::ExecutionHW::CPU);
+                sch.execute(tamm::ExecutionHW::CPU);
+            }
+            Uten.deallocate();
+        
+            // Flatten and SVD M0 → U0,S0,V0h
+            Eigen::Index rows0 = Dl * 2 * chiG;
+            Eigen::Index cols0 = Dr_old;
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> mat0(rows0, cols0);
+            M0.loop_nest().iterate([&](auto const& idxs){
+                auto l    = idxs[0];
+                auto pout = idxs[1];
+                auto a    = idxs[2];
+                auto r    = idxs[3];
+                Cplx v; M0.get(idxs, gsl::span<Cplx>(&v,1));
+                mat0(l*2*chiG + pout*chiG + a, r) = v;
+            });
+            auto svd0   = Eigen::JacobiSVD<decltype(mat0)>(
+                             mat0,
+                             Eigen::ComputeThinU | Eigen::ComputeThinV);
+            auto s0     = svd0.singularValues();                      // length‐≤chiG
+            IdxType chi0= std::min<IdxType>(max_bond_dim,
+                                             static_cast<IdxType>(s0.size()));
+            auto U0mat  = svd0.matrixU().leftCols(chi0);               // (rows0×chi0)
+            auto V0h    = svd0.matrixV().leftCols(chi0).adjoint();     // (chi0×Dr_old)
+        
+            // Update left tensor at q0
+            bond_dims[q0+1] = chi0;
+            {
+                tamm::IndexSpace is_new{ tamm::range(chi0) };
+                bond_tis[q0+1] = tamm::TiledIndexSpace(is_new,1);
+            }
+            tamm::Tensor<Cplx> T0new({ bond_tis[q0], phys_tis[q0], bond_tis[q0+1] });
+            T0new.set_dense(); T0new.allocate(&ec);
+            T0new.loop_nest().iterate([&](auto const& idxs){
+                auto l    = idxs[0];
+                auto pout = idxs[1];
+                auto b    = idxs[2];
+                Cplx v = U0mat(l*2*chiG + pout*chiG + b, b);
+                T0new.put(idxs, gsl::span<Cplx>(&v,1));
+            });
+            mps_tensors[q0].deallocate();
+            mps_tensors[q0] = std::move(T0new);
+            M0.deallocate();
+        
+            // 3) Build initial propagation bond prop(a,l) = s0(a) * V0h(a,l)
+            tamm::Tensor<Cplx> prop({ tamm::TiledIndexSpace{ tamm::IndexSpace{tamm::range(chi0)},1 },
+                                      r_old_ti });
+            prop.set_dense(); prop.allocate(&ec);
+            prop.loop_nest().iterate([&](auto const& idxs){
+                auto a = idxs[0], l = idxs[1];
+                Cplx v = s0(a) * V0h(a,l);
+                prop.put(idxs, gsl::span<Cplx>(&v,1));
+            });
+            IdxType currChi = chi0;
+        
+            // Propagate through each intermediate site
+            for(IdxType site = q0+1; site < q1; ++site) {
+                IdxType Dr_i = bond_dims[site+1];
+                tamm::Tensor<Cplx> M1({ tamm::TiledIndexSpace{ tamm::IndexSpace{tamm::range(currChi)},1 },
+                                          phys_tis[site],
+                                          tamm::TiledIndexSpace{ tamm::IndexSpace{tamm::range(Dr_i)},1 } });
+                M1.set_dense(); M1.allocate(&ec);
+                {
+                    tamm::Scheduler sch{ec};
+                    sch(M1("a","p","r") =
+                          prop("a","l") * mps_tensors[site]("l","p","r"),
+                        "merge_prop", tamm::ExecutionHW::CPU);
+                    sch.execute(tamm::ExecutionHW::CPU);
+                }
+        
+                // SVD at site
+                Eigen::Index rows1 = currChi * 2;
+                Eigen::Index cols1 = Dr_i;
+                Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> mat1(rows1, cols1);
+                M1.loop_nest().iterate([&](auto const& idxs){
+                    auto a = idxs[0], p = idxs[1], r = idxs[2];
+                    Cplx v; M1.get(idxs, gsl::span<Cplx>(&v,1));
+                    mat1(a*2 + p, r) = v;
+                });
+                auto svd1   = Eigen::JacobiSVD<decltype(mat1)>(
+                                  mat1,
+                                  Eigen::ComputeThinU | Eigen::ComputeThinV);
+                auto s1     = svd1.singularValues();                  // length‐≤currChi*2
+                IdxType chi1= std::min<IdxType>(max_bond_dim,
+                                                static_cast<IdxType>(s1.size()));
+                auto U1mat  = svd1.matrixU().leftCols(chi1);
+                auto V1h    = svd1.matrixV().leftCols(chi1).adjoint();
+        
+                // Write back updated tensor
+                bond_dims[site+1] = chi1;
+                bond_tis[site+1]  = tamm::TiledIndexSpace{ tamm::IndexSpace{tamm::range(chi1)},1 };
+                tamm::Tensor<Cplx> T1new({ bond_tis[site],
+                                           phys_tis[site],
+                                           bond_tis[site+1] });
+                T1new.set_dense(); T1new.allocate(&ec);
+                T1new.loop_nest().iterate([&](auto const& idxs){
+                    auto a = idxs[0], p = idxs[1], b = idxs[2];
+                    Cplx v = U1mat(a*2 + p, b);
+                    T1new.put(idxs, gsl::span<Cplx>(&v,1));
+                });
+                mps_tensors[site].deallocate();
+                mps_tensors[site] = std::move(T1new);
+                M1.deallocate();
+        
+                // Rebuild prop = s1(b) * V1h(b,r)
+                tamm::Tensor<Cplx> propnew({ tamm::TiledIndexSpace{ tamm::IndexSpace{tamm::range(chi1)},1 },
+                                              tamm::TiledIndexSpace{ tamm::IndexSpace{tamm::range(bond_dims[site+1])},1 } });
+                propnew.set_dense(); propnew.allocate(&ec);
+                propnew.loop_nest().iterate([&](auto const& idxs){
+                    auto b = idxs[0], r = idxs[1];
+                    Cplx v = s1(b) * V1h(b,r);
+                    propnew.put(idxs, gsl::span<Cplx>(&v,1));
+                });
+                prop.deallocate();
+                prop = std::move(propnew);
+                currChi = chi1;
+            }
+        
+            // 4a) Propagate into the target site
+            tamm::Tensor<Cplx> Tmid({ tamm::TiledIndexSpace{ tamm::IndexSpace{tamm::range(currChi)},1 },
+                                      phys_tis[q1],
+                                      tamm::TiledIndexSpace{ tamm::IndexSpace{tamm::range(bond_dims[q1+1])},1 } });
+            Tmid.set_dense(); Tmid.allocate(&ec);
+            {
+                tamm::Scheduler sch{ec};
+                sch(Tmid("a","pin","r") =
+                      prop("a","l") * mps_tensors[q1]("l","pin","r"),
+                    "propagate_to_target", tamm::ExecutionHW::CPU);
+                sch.execute(tamm::ExecutionHW::CPU);
+            }
+            mps_tensors[q1].deallocate();
+        
+            // 4b) Absorb the gate spectrum into Tmid → Tfin
+            tamm::Tensor<Cplx> Gten({ tamm::TiledIndexSpace{ tamm::IndexSpace{tamm::range(chiG)},1 },
+                                      phys_tis[q1],
+                                      phys_tis[q1] });
+            Gten.set_dense(); Gten.allocate(&ec);
+            Gten.loop_nest().iterate([&](auto const& idxs){
+                auto a    = idxs[0];
+                auto pout = idxs[1];
+                auto pin  = idxs[2];
+                Cplx v = SVfull(a, pout*2 + pin);
+                Gten.put(idxs, gsl::span<Cplx>(&v,1));
+            });
+        
+            tamm::Tensor<Cplx> Tfin({ bond_tis[q1], phys_tis[q1], bond_tis[q1+1] });
+            Tfin.set_dense(); Tfin.allocate(&ec);
+            {
+                tamm::Scheduler sch{ec};
+                sch(Tfin("a","p","r") =
+                      Gten("a","p","pin") * Tmid("a","pin","r"),
+                    "absorb_gate_spectrum", tamm::ExecutionHW::CPU);
+                sch.execute(tamm::ExecutionHW::CPU);
+            }
+        
+            // Cleanup and install final tensor
+            Tmid.deallocate();
+            prop.deallocate();
+            Gten.deallocate();
+            mps_tensors[q1] = std::move(Tfin);
         }
 
-        virtual void C2_GATE(const std::array<Cplx,16>& U4, IdxType q0, IdxType q1) 
-        {
-            //dump_state("Before");
-
-            if (std::abs(q0 - q1) != 1)
-            {
-                C2_GATE_NL(U4, q0, q1); 
+        // The 4×4 SWAP matrix in row‐major order, in the computational basis {00,01,10,11}
+        static constexpr std::array<Cplx,16> SWAP_U4 = {
+            // row 00 → col 00
+            Cplx(1,0), Cplx(0,0), Cplx(0,0), Cplx(0,0),
+            // row 01 → col 10
+            Cplx(0,0), Cplx(0,0), Cplx(1,0), Cplx(0,0),
+            // row 10 → col 01
+            Cplx(0,0), Cplx(1,0), Cplx(0,0), Cplx(0,0),
+            // row 11 → col 11
+            Cplx(0,0), Cplx(0,0), Cplx(0,0), Cplx(1,0)
+        };
+        
+        // Apply an arbitrary two‐qubit gate U4 on qubits q0, q1 (not necessarily adjacent)
+        void C2_GATE_NL_SWAP(const std::array<Cplx,16>& U4, IdxType q0, IdxType q1) {
+            // 1) Determine ordering and (if necessary) permute U4
+            bool reversed = (q0 > q1);
+            IdxType i = std::min(q0, q1), j = std::max(q0, q1);
+            std::array<Cplx,16> U4_eff;
+            if(!reversed) {
+                U4_eff = U4;
+            } else {
+                // swap the role of the two qubits in U4:
+                // (p0',p1') ↔ (p1',p0'), (p0,p1) ↔ (p1,p0)
+                for(int r0=0; r0<2; ++r0)
+                for(int r1=0; r1<2; ++r1)
+                for(int c0=0; c0<2; ++c0)
+                for(int c1=0; c1<2; ++c1) {
+                    int src = (r0*2 + r1)*4 + (c0*2 + c1);
+                    int dst = (r1*2 + r0)*4 + (c1*2 + c0);
+                    U4_eff[dst] = U4[src];
+                }
             }
-            else
-            {
+        
+            // 2) Bubble qubit 'i' forward until it sits at position j−1
+            for(IdxType k = i; k < j-1; ++k) {
+                C2_GATE_L(SWAP_U4, k, k+1);
+            }
+        
+            // 3) Apply the target gate on the now‐adjacent pair (j−1, j)
+            C2_GATE_L(U4_eff, j-1, j);
+        
+            // 4) Undo the SWAP cascade
+            for(IdxType k = j-1; k > i; --k) {
+                C2_GATE_L(SWAP_U4, k-1, k);
+            }
+        }
+        
+        // Finally, modify your dispatcher in C2_GATE:
+        virtual void C2_GATE(const std::array<Cplx,16>& U4, IdxType q0, IdxType q1) {
+            //dump_state("Before C2");
+            //position(q0);  // center the MPS on q0 first
+            if(std::abs(q0 - q1) == 1) {
                 C2_GATE_L(U4, q0, q1);
+            } else {
+                C2_GATE_NL_SWAP(U4, q0, q1);
             }
-            //dump_state("after");
+            //dump_state("After C2");
         }
-
 
         //TODO: Rewrite these canonialization functions using QR
 
@@ -698,6 +974,95 @@ namespace NWQSim
                 results[rep] = packed;
             }
         }
+
+        void local_left_step(IdxType i) {
+            // dimensions
+            const IdxType Dl = bond_dims[i];
+            const IdxType Dr = bond_dims[i+1];
+            const IdxType d  = phys_dims[i];
+            const IdxType d_next = phys_dims[i+1];
+            const IdxType Dr_next = bond_dims[i+2];
+        
+            // 1) Build matrix M = reshape MPS[i] into (Dl * d) × Dr
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> Mmat(Dl * d, Dr);
+            auto& Ti = mps_tensors[i];
+            Ti.loop_nest().iterate([&](auto const& idxs){
+                IdxType l = idxs[0], p = idxs[1], r = idxs[2];
+                Cplx v; Ti.get(idxs, gsl::span<Cplx>(&v,1));
+                Mmat(l*d + p, r) = v;
+            });
+        
+            // 2) SVD: M = U · S · Vh
+            Eigen::JacobiSVD<decltype(Mmat)> svd(
+              Mmat, Eigen::ComputeThinU | Eigen::ComputeThinV);
+            auto Umat  = svd.matrixU();
+            auto Sdiag = svd.singularValues().asDiagonal();
+            auto Vh    = svd.matrixV().adjoint();
+        
+            // 3) Truncate (if desired) and update bond dimension
+            const IdxType chi = Umat.cols();
+            bond_dims[i+1] = chi;
+            {
+              tamm::IndexSpace is_new{tamm::range(chi)};
+              bond_tis[i+1] = tamm::TiledIndexSpace(is_new, 1);
+            }
+        
+            // 4) Write back new MPS[i] ← reshape U into (Dl × d × chi)
+            tamm::Tensor<Cplx> Ti_new({bond_tis[i], phys_tis[i], bond_tis[i+1]});
+            Ti_new.set_dense(); Ti_new.allocate(&ec);
+            Ti_new.loop_nest().iterate([&](auto const& idxs){
+                IdxType l = idxs[0], p = idxs[1], b = idxs[2];
+                Cplx val = Umat(l*d + p, b);
+                Ti_new.put(idxs, gsl::span<Cplx>(&val,1));
+            });
+        
+            // 5) Absorb S·Vh into MPS[i+1]:
+            //    build A = S · Vh  (size chi × Dr)
+            //    then contract A into MPS[i+1] on its left bond
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> A = Sdiag * Vh;
+        
+            // flatten old MPS[i+1] into (Dr × d_next*Dr_next)
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> Bmat(
+              Dr, d_next * Dr_next);
+            auto& Tj = mps_tensors[i+1];
+            Tj.loop_nest().iterate([&](auto const& idxs){
+                IdxType b = idxs[0], p = idxs[1], r = idxs[2];
+                Cplx v; Tj.get(idxs, gsl::span<Cplx>(&v,1));
+                Bmat(b, p*Dr_next + r) = v;
+            });
+        
+            // form new right tensor matrix: (chi × d_next*Dr_next)
+            auto Bnew = A * Bmat;
+        
+            // write back MPS[i+1]
+            tamm::Tensor<Cplx> Tj_new(
+              {bond_tis[i+1], phys_tis[i+1], bond_tis[i+2]});
+            Tj_new.set_dense(); Tj_new.allocate(&ec);
+            Tj_new.loop_nest().iterate([&](auto const& idxs){
+                IdxType b = idxs[0], p = idxs[1], r = idxs[2];
+                Cplx val = Bnew(b, p*Dr_next + r);
+                Tj_new.put(idxs, gsl::span<Cplx>(&val,1));
+            });
+        
+            // replace old tensors
+            Ti.deallocate();
+            Tj.deallocate();
+            mps_tensors[i]   = std::move(Ti_new);
+            mps_tensors[i+1] = std::move(Tj_new);
+        }
+        
+        /// Move the orthogonality center to `site`:
+        void position(IdxType site) {
+            assert(site < n_qubits);
+            // 1) fully right‐canonicalize to put center at 0
+            right_canonicalize(mps_tensors);
+            // 2) sweep center rightward from 0 → site
+            for(IdxType i = 0; i < site; ++i){
+                local_left_step(i);
+            }
+            // now the MPS is in mixed‐canonical form with center exactly at `site`
+        }
+
 
 
         virtual void M_GATE(const IdxType qubit)
