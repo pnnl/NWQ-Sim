@@ -20,8 +20,8 @@ using namespace NWQSim;
 using ValType = double;
 namespace fs = std::filesystem;
 
-static constexpr int MIN_QB       = 4;
-static constexpr int MAX_QB       = 7;
+static constexpr int MIN_QB       = 14;
+static constexpr int MAX_QB       = 15;
 static constexpr int CIRCUITS     = 5;
 static constexpr int SHOTS        = 10024;
 static constexpr double THRESHOLD = 2.0 / 3.0;
