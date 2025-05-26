@@ -5,6 +5,7 @@
 
 #include "svsim/sv_cpu.hpp"
 #include "dmsim/dm_cpu.hpp"
+#include "tnsim/tn_cuda.hpp"
 
 #ifdef OMP_ENABLED
 #include "svsim/sv_omp.hpp"
@@ -17,7 +18,6 @@
 #ifdef CUDA_ENABLED
 #include "svsim/sv_cuda.cuh"
 #include "dmsim/dm_cuda.cuh"
-#include "tnsim/tn_cuda.hpp"
 #endif
 
 #ifdef CUDA_MPI_ENABLED
@@ -65,7 +65,7 @@ public:
 #endif
     }
 
-    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "SV")
+    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "SV", int bd = 100)
     {
         // Convert to uppercase
         std::transform(backend.begin(), backend.end(), backend.begin(),
@@ -105,14 +105,12 @@ public:
                 return std::make_shared<NWQSim::SV_CUDA>(numQubits);
             else if (simulator_method == "DM")
                 return std::make_shared<NWQSim::DM_CUDA>(numQubits);
-            else
-                return std::make_shared<NWQSim::TN_CUDA>(numQubits);
         }
 #endif
         
         else if (backend == "NVGPU_TAMM" || backend == "CPU_TAMM")
         {
-            return std::make_shared<NWQSim::TN_CUDA>(numQubits);
+            return std::make_shared<NWQSim::TN_CUDA>(numQubits, bd);
         }
 
 #ifdef HIP_ENABLED

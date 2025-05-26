@@ -48,10 +48,10 @@ namespace NWQSim
     class TN_CUDA : public QuantumState
     {
     public:
-        TN_CUDA(IdxType _n_qubits)
+        TN_CUDA(IdxType _n_qubits, int bd = 100)
         : QuantumState(SimType::TN),
           n_qubits(_n_qubits),
-          max_bond_dim(10),
+          max_bond_dim(bd),
           pg(init_pg()),
           ec(pg, tamm::DistributionKind::dense, tamm::MemoryManagerKind::ga)
         {
