@@ -26,7 +26,7 @@ namespace NWQSim
     {
 
     public:
-        TN_CPU(IdxType _n_qubits, int max_dim, double sv_cutoff) : QuantumState(SimType::TN)
+        TN_CPU(IdxType _n_qubits, IdxType max_dim, double sv_cutoff) : QuantumState(SimType::TN)
         {
             // Initialize CPU side
             n_qubits = _n_qubits;
@@ -37,7 +37,7 @@ namespace NWQSim
             n_cpu = 1;
 
             // MPS Parameters
-            MaxDim = max_dim;
+            MaxDim = int(max_dim);
             Cutoff = sv_cutoff;
 
             // // CPU side initialization
@@ -226,7 +226,9 @@ namespace NWQSim
                     c2_timer.start_timer();
                     C2_GATE(g.gm_real, g.gm_imag, g.ctrl, g.qubit);
                     c2_timer.stop_timer();
-                    c2_time += c2_timer.measure();
+                    auto timec2 = c2_timer.measure();
+                    c2_time += timec2;
+                    // std::cout<<"time c2 "<<c2<<std::endl;
                 }
                 else if (g.op_name == OP::RESET)
                 {
@@ -358,9 +360,9 @@ namespace NWQSim
             //
             // qubit0 must be < then qubit1  (control must be to the left (smaller site number) of target)
             //
-            auto method = false;
+            auto method = true;
             if(std::abs(qubit0 - qubit1) != 1){
-                // std::cout<<"Non local C2"<<std::endl;
+                std::cout<<"Non local C2"<<std::endl;
                 // 2Q Gate Decomposition into Control: u  ;  Target: s*v
                 auto [u,s,v] = itensor::svd(gate,{i,prime(i)},{j,prime(j)},{"Cutoff=", Cutoff, "MaxDim=", MaxDim, "SVDMethod=", "gesdd"});
                 auto sv = s*v;
@@ -403,7 +405,7 @@ namespace NWQSim
                         auto [u,s,v] = itensor::svd(i_contract,{sites(i),lindex},{"Cutoff=", Cutoff, "MaxDim=", MaxDim, "SVDMethod=", "gesdd"});
                         lindex = commonInds(u,s)[0];
                         network.set(i,u);
-                        network.position(i);
+                        // network.position(i);
                         propagating_bond = s*v;
 
                     }
@@ -418,9 +420,8 @@ namespace NWQSim
             
                 }
                 else{
-                    // MPO Method, Almost Works?
+                    // MPO Method
                     //
-                    // WARNING Normalization breaks!!
 
                     itensor::Index lright;
                     itensor::Index lleft;
@@ -492,6 +493,9 @@ namespace NWQSim
                     network.normalize();
 
                 }
+                // Non-Adjacent SWAP Method
+
+                
 
                 // network clean-up
                 network.noPrime();
@@ -508,7 +512,7 @@ namespace NWQSim
             else{
                 // Local 2-qubit gate method
                 //
-                // std::cout<<"Local C2"<<std::endl;
+                std::cout<<"Local C2"<<std::endl;
                 // Move orthoganility center to control qubit
                 if(isOrtho(network)){
                     if(orthoCenter(network) != site0){
@@ -546,7 +550,6 @@ namespace NWQSim
                 //    -------------
   
                 new_sites_contracted.noPrime();
-                // auto [u,s,v] = itensor::svd(new_sites_contracted ,itensor::inds(network(site0)),{"Cutoff=", 0.0, "MaxDim=", 10});	
                 auto [u,s,v] = itensor::svd(new_sites_contracted ,itensor::inds(network(site0)),{"Cutoff=", Cutoff, "MaxDim=", MaxDim, "SVDMethod=", "gesdd"});    
                 network.set(site0, u);
                 network.set(site1, s*v);
@@ -579,6 +582,7 @@ namespace NWQSim
             SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
             memset(results, 0, sizeof(IdxType) * repetition);
 
+            std::cout<<"Measurement Begin"<<std::endl;
             
  
             // Move to right orthogonal gauge for improved scaling before sampling
