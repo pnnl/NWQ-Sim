@@ -1,145 +1,95 @@
 #include <iostream>
 #include <fstream>
-#include <vector>
-#include <string>
-#include <filesystem>
-#include <sstream>
-#include <iomanip>
-#include <algorithm>
 #include <cmath>
-#include <memory>
+#include <string>
 #include <csignal>
-#include "src/qasm_parser.hpp"
 #include "../include/backendManager.hpp"
 #include "../include/state.hpp"
-#include "../include/nwq_util.hpp"
-
-#include <tamm/tamm.hpp>
+#include "../include/circuit.hpp"
 
 using namespace NWQSim;
 using ValType = double;
-namespace fs = std::filesystem;
-
-static constexpr int MIN_QB       = 14;
-static constexpr int MAX_QB       = 15;
-static constexpr int CIRCUITS     = 5;
-static constexpr int SHOTS        = 10024;
-static constexpr double THRESHOLD = 2.0 / 3.0;
 
 void segfault_handler(int) {
+    std::cerr << "[FATAL] Segmentation fault\n";
     std::exit(1);
 }
 
-int main(int argc, char **argv) {
-    tamm::initialize(argc, argv);
+int main(int argc, char** argv) {
     std::signal(SIGSEGV, segfault_handler);
+    tamm::initialize(argc, argv);
 
-    const std::string qasm_dir = "qv_qasm";
-    const std::string csv_path = "bond_vs_qv.csv";
+    int n_qubits = 10;
+    int bd_min   = 1;
+    int bd_max   = 20;
+    int SHOTS    = 8192;
 
-    std::ofstream csv(csv_path);
-    if (!csv) {
-        std::cerr << "[ERROR] Unable to open " << csv_path << "\n";
+    if (argc > 1) n_qubits = std::stoi(argv[1]);
+    if (argc > 2) bd_min   = std::stoi(argv[2]);
+    if (argc > 3) bd_max   = std::stoi(argv[3]);
+    if (argc > 4) SHOTS    = std::stoi(argv[4]);
+    if (bd_min > bd_max) {
+        std::cerr << "[ERROR] bd_min (" << bd_min
+                  << ") > bd_max (" << bd_max << ")\n";
         return 1;
     }
-    csv << "bond_dimension,log2(QV),QV\n";
 
-    for (int bd = 1; bd <= 5; ++bd) {
-        std::cerr << "[INFO] Starting bond_dimension=" << bd << "\n";
-        int max_pass = 0;
+    std::cerr << "[INFO] n_qubits=" << n_qubits
+              << "  bd_min="   << bd_min
+              << "  bd_max="   << bd_max
+              << "  shots="    << SHOTS << "\n";
 
-        for (int k = MIN_QB; k <= MAX_QB; ++k) {
-            std::cerr << "[INFO] Testing k=" << k << " qubits\n";
-            double sum_hop = 0.0;
-            size_t dim = size_t(1) << k;
+    auto circuit = std::make_shared<Circuit>(n_qubits);
+    circuit->H(0);
+    for (int i = 0; i < n_qubits - 1; ++i) {
+        circuit->CX(i, i + 1);
+    }
 
-            for (int c = 0; c < CIRCUITS; ++c) {
-                std::cerr << "[DEBUG] bd=" << bd
-                          << " k=" << k
-                          << " circuit=" << c
-                          << " -- loading QASM\n";
+    long long idx_zero = 0LL;
+    long long idx_one  = (n_qubits < 63)
+                       ? ((1LL << n_qubits) - 1)
+                       : -1LL;
 
-                std::ostringstream fname;
-                fname << qasm_dir << "/QV_" << k << "q_"
-                      << std::setfill('0') << std::setw(3) << c
-                      << ".qasm";
-                fs::path qasm_path = fname.str();
-                if (!fs::exists(qasm_path)) {
-                    std::cerr << "[ERROR] Missing file: " << qasm_path << "\n";
-                    return 1;
-                }
+    ValType inv_sqrt2 = 1.0/std::sqrt(2.0);
 
-                // Ideal statevector sampling to estimate p_sv
-                std::cerr << "[DEBUG] Executing SV simulation\n";
-                qasm_parser parser_sv;
-                parser_sv.load_qasm_file(qasm_path.string());
-                auto state_sv = BackendManager::create_state("CPU", k, "SV");
-                auto counts_sv = parser_sv.execute(state_sv, "", "", SHOTS);
-                std::cerr << "[DEBUG] counts_sv size = " << counts_sv->size() << "\n";
+    std::ofstream csv("bond_vs_fidelity.csv");
+    if (!csv) {
+        std::cerr << "[ERROR] Cannot open bond_vs_fidelity.csv\n";
+        return 1;
+    }
+    csv << "bond_dimension,fidelity\n";
+    csv << std::fixed << std::setprecision(8);
 
-                std::vector<ValType> p_sv(dim, 0.0);
-                for (auto &ent : *counts_sv) {
-                    int idx = std::stoi(ent.first, nullptr, 2);
-                    p_sv[idx] = ent.second / ValType(SHOTS);
-                }
+    for (int bd = bd_min; bd <= bd_max; ++bd) {
+        std::cerr << "[INFO] TN sampling bond_dim=" << bd << "\n";
 
-                auto p_sorted = p_sv;
-                std::sort(p_sorted.begin(), p_sorted.end());
-                ValType median = (dim & 1)
-                    ? p_sorted[dim/2]
-                    : 0.5 * (p_sorted[dim/2 - 1] + p_sorted[dim/2]);
-                std::cerr << "[DEBUG] median = " << median << "\n";
+        auto tn_state = BackendManager::create_state("CPU",
+                                                     n_qubits,
+                                                     "TN",
+                                                     bd);
+        tn_state->sim(circuit);
+        long long* samples = tn_state->measure_all(SHOTS);
 
-                std::vector<bool> is_heavy(dim);
-                for (size_t i = 0; i < dim; ++i) {
-                    is_heavy[i] = (p_sv[i] > median);
-                }
-
-                // Tensor-network sampling
-                std::cerr << "[DEBUG] Executing TN simulation with bd=" << bd << "\n";
-                qasm_parser parser_tn;
-                parser_tn.load_qasm_file(qasm_path.string());
-                auto state_tn = BackendManager::create_state("CPU_TAMM", k, "TN", bd);
-                auto counts_tn = parser_tn.execute(state_tn, "", "", SHOTS);
-                std::cerr << "[DEBUG] counts_tn size = " << counts_tn->size() << "\n";
-
-                int heavy_hits = 0;
-                for (auto &ent : *counts_tn) {
-                    int idx = std::stoi(ent.first, nullptr, 2);
-                    if (is_heavy[idx]) {
-                        heavy_hits += ent.second;
-                    }
-                }
-
-                ValType hop = heavy_hits / ValType(SHOTS);
-                sum_hop += hop;
-                std::cerr << "[DEBUG] circuit=" << c
-                          << " hop=" << hop << "\n";
-            }
-
-            ValType avg_hop = sum_hop / CIRCUITS;
-            std::cerr << "[INFO] k=" << k
-                      << " average_hop=" << avg_hop << "\n";
-            if (avg_hop > THRESHOLD) {
-                max_pass = k;
-                std::cerr << "[INFO] hop > threshold, updating max_pass=" << max_pass << "\n";
-            } else {
-                std::cerr << "[INFO] hop <= threshold, breaking k-loop\n";
-                break;
-            }
+        long long cnt0 = 0, cnt1 = 0;
+        for (int i = 0; i < SHOTS; ++i) {
+            if (samples[i] == idx_zero)     ++cnt0;
+            else if (samples[i] == idx_one) ++cnt1;
         }
 
-        int log2_qv = max_pass;
-        int qv      = (log2_qv > 0 ? (1 << log2_qv) : 0);
-        csv << bd << "," << log2_qv << "," << qv << "\n";
-        std::cerr << "[RESULT] bond_dimension=" << bd
-                  << " log2(QV)=" << log2_qv
-                  << " QV=" << qv << "\n";
-    }
-    tamm::finalize();
+        ValType sum   = ValType(cnt0 + cnt1);
+        ValType beta0 = std::sqrt(cnt0 / sum);
+        ValType beta1 = std::sqrt(cnt1 / sum);
 
-    printf("Finished!");
+        ValType overlap = inv_sqrt2*(beta0 + beta1);
+        ValType fidelity = overlap*overlap;
+
+        csv << bd << "," << fidelity << "\n";
+        std::cerr << "[RESULT] bd=" << bd
+                  << "  fidelity=" << fidelity << "\n";
+    }
+
+    tamm::finalize();
+    csv.close();
     return 0;
 }
-
 

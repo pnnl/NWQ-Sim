@@ -48,51 +48,74 @@ namespace NWQSim
     class TN_CUDA : public QuantumState
     {
     public:
-        TN_CUDA(IdxType _n_qubits, int bd = 100)
+        TN_CUDA(IdxType _n_qubits,
+               IdxType _max_bond_dim = 100)
         : QuantumState(SimType::TN),
           n_qubits(_n_qubits),
-          max_bond_dim(bd),
+          block_size(2048),
+          max_bond_dim(_max_bond_dim),
           pg(init_pg()),
           ec(pg, tamm::DistributionKind::dense, tamm::MemoryManagerKind::ga)
         {
-
-            //printf("Inside constructor\n");
-            bond_tis.resize(n_qubits + 1);
-            bond_dims.resize(n_qubits + 1);
-            for(IdxType i = 0; i <= n_qubits; ++i)
-            {
-                IdxType dim = 1;
-                bond_dims[i] = dim; 
-                tamm::IndexSpace is{tamm::range(dim)};
-                bond_tis[i] = tamm::TiledIndexSpace(is, 1);
+          // 1) build bond index spaces, each tiled by block_size
+          bond_tis.resize(n_qubits + 1);
+          bond_dims.resize(n_qubits + 1);
+          for(IdxType i = 0; i <= n_qubits; ++i) {
+            bond_dims[i] = 1;
+            tamm::IndexSpace is{tamm::range(1)};
+            bond_tis[i] = tamm::TiledIndexSpace(is, block_size);
+          }
+        
+          // 2) build physical index spaces (always small, tile-size=1)
+          phys_tis.resize(n_qubits);
+          phys_dims.resize(n_qubits);
+          for(IdxType i = 0; i < n_qubits; ++i) {
+            phys_dims[i] = 2;
+            tamm::IndexSpace is{tamm::range(2)};
+            phys_tis[i] = tamm::TiledIndexSpace(is, /*phys tilesize=*/1);
+          }
+        
+          // 3) allocate and initialize MPS tensors via bulk puts
+          mps_tensors.reserve(n_qubits);
+          for(IdxType i = 0; i < n_qubits; ++i) {
+            tamm::Tensor<Cplx> T({ bond_tis[i],
+                                   phys_tis[i],
+                                   bond_tis[i+1] });
+            T.set_dense();
+            T.allocate(&ec);
+        
+            // initialize each tile in one call
+            for(const auto& blockid : T.loop_nest()) {
+              const size_t bs = T.block_size(blockid);
+              std::vector<Cplx> hostbuf(bs);
+        
+              auto dims    = T.block_dims(blockid);    // e.g. [d_l, d_p, d_r]
+              auto offsets = T.block_offsets(blockid); // e.g. [o_l, o_p, o_r]
+        
+              for(size_t idx = 0; idx < bs; ++idx) {
+                size_t rem = idx;
+        
+                // local coords within this block
+                size_t l_loc = rem % dims[0]; rem /= dims[0];
+                size_t p_loc = rem % dims[1]; rem /= dims[1];
+                size_t r_loc = rem % dims[2];
+        
+                // global indices
+                IdxType l = offsets[0] + l_loc;
+                IdxType p = offsets[1] + p_loc;
+                IdxType r = offsets[2] + r_loc;
+        
+                // set the |0…0> amplitude to 1, rest 0
+                hostbuf[idx] = (l == 0 && p == 0 && r == 0)
+                               ? Cplx{1.0,0.0}
+                               : Cplx{0.0,0.0};
+              }
+        
+              T.put(blockid, hostbuf);
             }
         
-            phys_tis.resize(n_qubits);
-            phys_dims.resize(n_qubits);
-            for(IdxType i = 0; i < n_qubits; ++i)
-            {
-                phys_dims[i] = 2;
-                tamm::IndexSpace is{tamm::range(2)};
-                phys_tis[i] = tamm::TiledIndexSpace(is, 1);
-            }
-        
-            mps_tensors.reserve(n_qubits);
-            for(IdxType i = 0; i < n_qubits; ++i)
-            {
-                tamm::Tensor<Cplx> T{bond_tis[i], phys_tis[i], bond_tis[i+1]};
-                T.set_dense();
-                T.allocate(&ec);
-                T.loop_nest().iterate([&](auto const& idxs)
-                {
-                    Cplx v = (idxs[0] == 0 && idxs[1] == 0 && idxs[2] == 0)
-                             ? Cplx(1.0,0.0)
-                             : Cplx(0.0,0.0);
-                    T.put(idxs, gsl::span<Cplx>(&v,1));
-                });
-                mps_tensors.push_back(std::move(T));
-            }
-
-            //printf("Finished constructor\n");
+            mps_tensors.push_back(std::move(T));
+          }
         }
 
          //Virtual destructor inherits from QuantumState
@@ -209,6 +232,7 @@ namespace NWQSim
         IdxType n_qubits;
         IdxType* results = NULL;
         IdxType max_bond_dim;
+        int block_size;
 
         tamm::ProcGroup pg;
         tamm::ExecutionContext ec;
@@ -222,31 +246,58 @@ namespace NWQSim
 
         virtual void simulation_kernel(const std::vector<SVGate> &gates)
         {
-            auto start = std::chrono::steady_clock::now();
+            using namespace std::chrono;
+        
+            duration<double> c1_total(0);
+            duration<double> c2_local_total(0);
+            duration<double> c2_nonlocal_total(0);
+            duration<double> ma_total(0);
+        
+            int c1_count = 0;
+            int c2_local_count = 0;
+            int c2_nonlocal_count = 0;
+            int ma_count = 0;
+        
             int n_gates = gates.size();
             for (int i = 0; i < n_gates; i++)
             {
                 auto g = gates[i];
-
+                auto op_start = steady_clock::now();
+        
                 if (g.op_name == OP::C1)
                 {
-                    //printf("Inside C1\n");
                     std::array<Cplx,4> U;
-                    for(int idx=0; idx<4; ++idx)
+                    for (int idx = 0; idx < 4; ++idx)
                     {
                         U[idx] = Cplx(g.gm_real[idx], g.gm_imag[idx]);
                     }
-
                     C1_GATE(U, g.qubit);
+        
+                    auto op_end = steady_clock::now();
+                    c1_total += duration_cast<duration<double>>(op_end - op_start);
+                    ++c1_count;
                 }
                 else if (g.op_name == OP::C2)
                 {
-                    //printf("C2\n");
                     std::array<Cplx,16> U4;
-                    for(int idx=0; idx<16; ++idx)
+                    for (int idx = 0; idx < 16; ++idx)
+                    {
                         U4[idx] = Cplx(g.gm_real[idx], g.gm_imag[idx]);
-
+                    }
                     C2_GATE(U4, g.ctrl, g.qubit);
+        
+                    auto op_end = steady_clock::now();
+                    int delta = std::abs(g.ctrl - g.qubit);
+                    if (delta == 1)
+                    {
+                        c2_local_total += duration_cast<duration<double>>(op_end - op_start);
+                        ++c2_local_count;
+                    }
+                    else
+                    {
+                        c2_nonlocal_total += duration_cast<duration<double>>(op_end - op_start);
+                        ++c2_nonlocal_count;
+                    }
                 }
                 else if (g.op_name == OP::RESET)
                 {
@@ -259,49 +310,103 @@ namespace NWQSim
                 else if (g.op_name == OP::MA)
                 {
                     MA_GATE(g.qubit);
+        
+                    auto op_end = steady_clock::now();
+                    ma_total += duration_cast<duration<double>>(op_end - op_start);
+                    ++ma_count;
                 }
                 else if (g.op_name == OP::EXPECT)
                 {
-                    ObservableList *o = (ObservableList *)(g.data);
+                    ObservableList *o = static_cast<ObservableList *>(g.data);
                     EXPECT_GATE(o);
                 }
                 else
                 {
                     std::cout << "Unrecognized gates" << std::endl
                               << OP_NAMES[g.op_name] << std::endl;
-                    std::logic_error("Invalid gate type");
+                    throw std::logic_error("Invalid gate type");
                 }
             }
+        
+            std::cout << "Gate Timing Report (seconds):" << std::endl;
+        
+            std::cout << "C1 (1-qubit) total:   " << c1_total.count()
+                      << "    avg: " << (c1_count ? c1_total.count() / c1_count : 0) << std::endl;
+        
+            std::cout << "C2 local total:        " << c2_local_total.count()
+                      << "    avg: " << (c2_local_count ? c2_local_total.count() / c2_local_count : 0) << std::endl;
+        
+            std::cout << "C2 non-local total:    " << c2_nonlocal_total.count()
+                      << "    avg: " << (c2_nonlocal_count ? c2_nonlocal_total.count() / c2_nonlocal_count : 0) << std::endl;
+        
+            std::cout << "MA total:              " << ma_total.count()
+                      << "    avg: " << (ma_count ? ma_total.count() / ma_count : 0) << std::endl;
         }
 
-        void C1_GATE(const std::array<Cplx,4>& U, IdxType site) 
-        {
-            //printf("In One qubit gaate!");
-            //dump_state("Before C1");
-            tamm::Tensor<Cplx> G({phys_tis[site], phys_tis[site]});
-            G.set_dense();
-            G.allocate(&ec);
-            G.loop_nest().iterate([&](auto const& idxs) 
-            {
-                Cplx v = U[idxs[0]*2 + idxs[1]];
-                G.put(idxs, gsl::span<Cplx>(&v,1));
-            });
+       void C1_GATE(const std::array<Cplx,4>& U, IdxType site) {
+          using Clock = std::chrono::high_resolution_clock;
+          using MS    = std::chrono::milliseconds;
         
-            auto& T = mps_tensors[site];
-            tamm::Tensor<Cplx> Tnew({bond_tis[site], phys_tis[site], bond_tis[site+1]});
-            Tnew.set_dense();
-            Tnew.allocate(&ec);
+          // 1) Build the 2×2 gate tensor G by bulk‐putting each tile
+          auto t0 = Clock::now();
+          tamm::Tensor<Cplx> G({ phys_tis[site], phys_tis[site] });
+          G.set_dense();
+          G.allocate(&ec);
         
-            tamm::Scheduler sch{ec};
-            sch(Tnew("l","p'","r") = G("p'","p") * T("l","p","r"),
-                "apply_one_qubit", tamm::ExecutionHW::CPU);
-            sch.execute(tamm::ExecutionHW::CPU);
+          for(const auto& blockid : G.loop_nest()) {
+            size_t bs = G.block_size(blockid);
+            std::vector<Cplx> hostbuf(bs);
         
-            T.deallocate();
-            mps_tensors[site] = std::move(Tnew);
-            //dump_state("After C1");
+            auto dims    = G.block_dims(blockid);
+            auto offsets = G.block_offsets(blockid);
+        
+            // each element in the tile corresponds to some (p_out,p_in)
+            for(size_t j = 0; j < bs; ++j) {
+              size_t rem = j;
+              size_t pout_loc = rem % dims[0]; rem /= dims[0];
+              size_t pin_loc  = rem % dims[1];
+        
+              // global indices
+              size_t pout = offsets[0] + pout_loc;
+              size_t pin  = offsets[1] + pin_loc;
+        
+              hostbuf[j] = U[pout*2 + pin];
+            }
+        
+            G.put(blockid, hostbuf);
+          }
+          auto t1 = Clock::now();
+          std::cout << "[C1_GATE] Build G —      "
+                    << std::chrono::duration_cast<MS>(t1 - t0).count()
+                    << " ms\n";
+        
+          // 2) Apply it
+          auto t2 = Clock::now();
+          auto& T = mps_tensors[site];
+          tamm::Tensor<Cplx> Tnew({ bond_tis[site], phys_tis[site], bond_tis[site+1] });
+          Tnew.set_dense();
+          Tnew.allocate(&ec);
+        
+          tamm::Scheduler sch{ec};
+          sch(Tnew("l","p'","r") = G("p'","p") * T("l","p","r"),
+              "apply_one_qubit", tamm::ExecutionHW::GPU);
+          sch.execute(tamm::ExecutionHW::GPU);
+          auto t3 = Clock::now();
+          std::cout << "[C1_GATE] Apply —        "
+                    << std::chrono::duration_cast<MS>(t3 - t2).count()
+                    << " ms\n";
+        
+          // 3) Cleanup
+          T.deallocate();
+          mps_tensors[site] = std::move(Tnew);
+          G.deallocate();
+        
+          auto t4 = Clock::now();
+          std::cout << "[C1_GATE] Total —        "
+                    << std::chrono::duration_cast<MS>(t4 - t0).count()
+                    << " ms\n";
         }
-        
+ 
         std::vector<Cplx> flatten_mps_state() {
             const size_t N = mps_tensors.size();
             // 1) Initialize with tensor 0: shape = [d0, χ1]
@@ -383,106 +488,163 @@ namespace NWQSim
             printf("\n");
         }
 
-        virtual void C2_GATE_L(const std::array<Cplx,16>& U4, IdxType q0, IdxType q1)
+        virtual void C2_GATE_L(const std::array<Cplx,16>& U4,
+                               IdxType q0,
+                               IdxType q1)
         {
+            using Clock = std::chrono::high_resolution_clock;
+        
+            auto t_start = Clock::now();
+        
             std::array<Cplx,16> U4_eff = U4;
+        
             IdxType Dl = bond_dims[q0];
             IdxType Dr = bond_dims[q1+1];
-
-            tamm::Tensor<Cplx> M({bond_tis[q0], phys_tis[q0], phys_tis[q1], bond_tis[q1+1]});
-            M.set_dense(); M.allocate(&ec);
-
+        
+            tamm::Tensor<Cplx> M({bond_tis[q0], phys_tis[q0],
+                                  phys_tis[q1], bond_tis[q1+1]});
+            M.set_dense();
+            M.allocate(&ec);
+        
             tamm::Scheduler sch{ec};
             sch(M("l","p0","p1","r") =
                   mps_tensors[q0]("l","p0","b") *
                   mps_tensors[q1]("b","p1","r"),
-                "merge_two", tamm::ExecutionHW::CPU);
-            sch.execute(tamm::ExecutionHW::CPU);
+                "merge_two", tamm::ExecutionHW::GPU);
+            sch.execute(tamm::ExecutionHW::GPU);
         
-            tamm::Tensor<Cplx> G4({
-                phys_tis[q0],  // axis 0 = p0'
-                phys_tis[q1],  // axis 1 = p1'
-                phys_tis[q0],  // axis 2 = p0
-                phys_tis[q1]   // axis 3 = p1
-            });
-            //printf("Here");
-
-            G4.set_dense(); G4.allocate(&ec);
-            G4.loop_nest().iterate([&](auto const& idxs){
-                int p0p = idxs[0];
-                int p1p = idxs[1];
-                int p0  = idxs[2];
-                int p1  = idxs[3];
-                // Compute row/col in the flattened 4×4 U4_eff
-                int row = p0p * 2 + p1p;  
-                int col = p0  * 2 + p1;   
-                G4.put(idxs, gsl::span<Cplx>(&U4_eff[row * 4 + col], 1));
-            });
+            tamm::Tensor<Cplx> G4({ phys_tis[q0], phys_tis[q1],
+                                    phys_tis[q0], phys_tis[q1] });
+            G4.set_dense();
+            G4.allocate(&ec);
         
-            tamm::Tensor<Cplx> M2({bond_tis[q0], phys_tis[q0], phys_tis[q1], bond_tis[q1+1]});
-            M2.set_dense(); M2.allocate(&ec);
-            {
-                tamm::Scheduler sch{ec};
-                sch(M2("l","p0p","p1p","r") =
-                      G4("p0p","p1p","p0","p1") * M("l","p0","p1","r"),
-                    "apply_two", tamm::ExecutionHW::CPU);
-                sch.execute(tamm::ExecutionHW::CPU);
+            for(const auto& blockid : G4.loop_nest()) {
+                size_t bs = G4.block_size(blockid);
+                std::vector<Cplx> hostbuf(bs);
+                auto dims = G4.block_dims(blockid);
+                auto offs = G4.block_offsets(blockid);
+                size_t c = 0;
+                for(size_t p0p = offs[0]; p0p < offs[0] + dims[0]; ++p0p) {
+                    for(size_t p1p = offs[1]; p1p < offs[1] + dims[1]; ++p1p) {
+                        for(size_t p0 = offs[2]; p0 < offs[2] + dims[2]; ++p0) {
+                            for(size_t p1 = offs[3]; p1 < offs[3] + dims[3]; ++p1, ++c) {
+                                int row = int(p0p*2 + p1p);
+                                int col = int(p0*2 + p1);
+                                hostbuf[c] = U4_eff[row*4 + col];
+                            }
+                        }
+                    }
+                }
+                G4.put(blockid, hostbuf);
             }
-            M.deallocate(); G4.deallocate();
+        
+            tamm::Tensor<Cplx> M2({bond_tis[q0], phys_tis[q0],
+                                   phys_tis[q1], bond_tis[q1+1]});
+            M2.set_dense();
+            M2.allocate(&ec);
+        
+            {
+                tamm::Scheduler sch2{ec};
+                sch2(M2("l","p0p","p1p","r") =
+                       G4("p0p","p1p","p0","p1") * M("l","p0","p1","r"),
+                     "apply_two", tamm::ExecutionHW::GPU);
+                sch2.execute(tamm::ExecutionHW::GPU);
+            }
+        
+            M.deallocate();
+            G4.deallocate();
         
             Eigen::Index rows = Dl * 2;
-            Eigen::Index cols = 2  * Dr;
+            Eigen::Index cols = 2 * Dr;
             Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> mat(rows, cols);
-            M2.loop_nest().iterate([&](auto const& idxs){
-                IdxType l  = idxs[0];
-                IdxType p0 = idxs[1];
-                IdxType p1 = idxs[2];
-                IdxType r  = idxs[3];
-                Cplx v; M2.get(idxs, gsl::span<Cplx>(&v,1));
-                mat(l*2 + p0, p1*Dr + r) = v;
-            });
         
-            Eigen::JacobiSVD<decltype(mat)> svd(mat, Eigen::ComputeThinU | Eigen::ComputeThinV);
+            for(const auto& blockid : M2.loop_nest()) {
+                size_t bs = M2.block_size(blockid);
+                std::vector<Cplx> hostbuf(bs);
+                M2.get(blockid, hostbuf);
+                auto dims = M2.block_dims(blockid);
+                auto offs = M2.block_offsets(blockid);
+                size_t c = 0;
+                for(size_t l = offs[0]; l < offs[0] + dims[0]; ++l) {
+                    for(size_t p0 = offs[1]; p0 < offs[1] + dims[1]; ++p0) {
+                        for(size_t p1 = offs[2]; p1 < offs[2] + dims[2]; ++p1) {
+                            for(size_t r = offs[3]; r < offs[3] + dims[3]; ++r, ++c) {
+                                mat(l*2 + p0, p1*Dr + r) = hostbuf[c];
+                            }
+                        }
+                    }
+                }
+            }
+        
+            Eigen::BDCSVD<decltype(mat)> svd(mat,
+                Eigen::ComputeThinU | Eigen::ComputeThinV);
             auto svals = svd.singularValues();
-            IdxType chi = std::min<IdxType>(max_bond_dim, (IdxType)svals.size());
-        
+            IdxType chi = std::min<IdxType>(max_bond_dim,
+                                             IdxType(svals.size()));
             auto Umat  = svd.matrixU().leftCols(chi);
             auto Sdiag = svals.head(chi).asDiagonal();
             auto Vh    = svd.matrixV().leftCols(chi).adjoint();
         
             bond_dims[q0+1] = chi;
             {
-                tamm::IndexSpace is_new{tamm::range(chi)};
-                bond_tis[q0+1] = tamm::TiledIndexSpace(is_new,1);
+                tamm::IndexSpace is_new{ tamm::range(chi) };
+                bond_tis[q0+1] = tamm::TiledIndexSpace(is_new, block_size);
             }
         
             tamm::Tensor<Cplx> Ti_new({
-                bond_tis[q0], phys_tis[q0], tamm::TiledIndexSpace(tamm::range(chi),1)
+                bond_tis[q0], phys_tis[q0],
+                tamm::TiledIndexSpace(tamm::range(chi), block_size)
             });
-            Ti_new.set_dense(); Ti_new.allocate(&ec);
-            Ti_new.loop_nest().iterate([&](auto const& idxs){
-                IdxType l = idxs[0], p0 = idxs[1], b = idxs[2];
-                Cplx val = Umat(l*2 + p0, b);
-                Ti_new.put(idxs, gsl::span<Cplx>(&val,1));
-            });
+            Ti_new.set_dense();
+            Ti_new.allocate(&ec);
+        
+            for(const auto& blockid : Ti_new.loop_nest()) {
+                size_t bs = Ti_new.block_size(blockid);
+                std::vector<Cplx> hostbuf(bs);
+                auto dims = Ti_new.block_dims(blockid);
+                auto offs = Ti_new.block_offsets(blockid);
+                size_t c = 0;
+                for(size_t l = offs[0]; l < offs[0] + dims[0]; ++l) {
+                    for(size_t p0 = offs[1]; p0 < offs[1] + dims[1]; ++p0) {
+                        for(size_t b = offs[2]; b < offs[2] + dims[2]; ++b, ++c) {
+                            hostbuf[c] = Umat(l*2 + p0, b);
+                        }
+                    }
+                }
+                Ti_new.put(blockid, hostbuf);
+            }
         
             Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> SV = Sdiag * Vh;
+        
             tamm::Tensor<Cplx> Tj_new({
-                tamm::TiledIndexSpace(tamm::range(chi),1),
+                tamm::TiledIndexSpace(tamm::range(chi), block_size),
                 phys_tis[q1],
                 bond_tis[q1+1]
             });
-            Tj_new.set_dense(); Tj_new.allocate(&ec);
-            Tj_new.loop_nest().iterate([&](auto const& idxs){
-                IdxType b = idxs[0], p1 = idxs[1], r = idxs[2];
-                Cplx val = SV(b, p1*Dr + r);
-                Tj_new.put(idxs, gsl::span<Cplx>(&val,1));
-            });
-            
+            Tj_new.set_dense();
+            Tj_new.allocate(&ec);
+        
+            for(const auto& blockid : Tj_new.loop_nest()) {
+                size_t bs = Tj_new.block_size(blockid);
+                std::vector<Cplx> hostbuf(bs);
+                auto dims = Tj_new.block_dims(blockid);
+                auto offs = Tj_new.block_offsets(blockid);
+                size_t c = 0;
+                for(size_t b = offs[0]; b < offs[0] + dims[0]; ++b) {
+                    for(size_t p1 = offs[1]; p1 < offs[1] + dims[1]; ++p1) {
+                        for(size_t r = offs[2]; r < offs[2] + dims[2]; ++r, ++c) {
+                            hostbuf[c] = SV(b, p1*Dr + r);
+                        }
+                    }
+                }
+                Tj_new.put(blockid, hostbuf);
+            }
+        
             mps_tensors[q0].deallocate();
             mps_tensors[q1].deallocate();
             mps_tensors[q0] = std::move(Ti_new);
             mps_tensors[q1] = std::move(Tj_new);
+        
             M2.deallocate();
         }
 
@@ -496,7 +658,7 @@ namespace NWQSim
             for(int r = 0; r < 4; ++r)
                 for(int c = 0; c < 4; ++c)
                     Gmat(r,c) = U4[r*4 + c];
-            Eigen::JacobiSVD<decltype(Gmat)> gate_svd(
+            Eigen::BDCSVD<decltype(Gmat)> gate_svd(
                 Gmat, Eigen::ComputeThinU | Eigen::ComputeThinV);
             auto svals   = gate_svd.singularValues();                  // length‐4 vector
             IdxType chiG = std::min<IdxType>(max_bond_dim,
@@ -545,7 +707,7 @@ namespace NWQSim
                 Cplx v; M0.get(idxs, gsl::span<Cplx>(&v,1));
                 mat0(l*2*chiG + pout*chiG + a, r) = v;
             });
-            auto svd0   = Eigen::JacobiSVD<decltype(mat0)>(
+            auto svd0   = Eigen::BDCSVD<decltype(mat0)>(
                              mat0,
                              Eigen::ComputeThinU | Eigen::ComputeThinV);
             auto s0     = svd0.singularValues();                      // length‐≤chiG
@@ -608,7 +770,7 @@ namespace NWQSim
                     Cplx v; M1.get(idxs, gsl::span<Cplx>(&v,1));
                     mat1(a*2 + p, r) = v;
                 });
-                auto svd1   = Eigen::JacobiSVD<decltype(mat1)>(
+                auto svd1   = Eigen::BDCSVD<decltype(mat1)>(
                                   mat1,
                                   Eigen::ComputeThinU | Eigen::ComputeThinV);
                 auto s1     = svd1.singularValues();                  // length‐≤currChi*2
@@ -752,227 +914,397 @@ namespace NWQSim
 
         //TODO: Rewrite these canonialization functions using QR
 
-        void right_canonicalize(std::vector<tamm::Tensor<Cplx>>& MPS)
-        {
-            for (IdxType i = n_qubits - 1; i > 0; --i)
+        void right_canonicalize(std::vector<tamm::Tensor<Cplx>>& MPS) {
+          for(IdxType i = n_qubits - 1; i > 0; --i) {
+            // 0) dimensions
+            IdxType Dl_old = bond_dims[i];
+            IdxType Dr     = bond_dims[i+1];
+            IdxType d      = phys_dims[i];
+            IdxType Dl_prev= bond_dims[i-1];
+            IdxType d_prev = phys_dims[i-1];
+        
+            //
+            // 1) Bulk-get MPS[i] into Eigen Mmat of shape (Dl_old × (d*Dr))
+            //
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> Mmat(Dl_old, d * Dr);
             {
-                IdxType Dl_old = bond_dims[i];
-                IdxType Dr     = bond_dims[i+1];
-                IdxType d      = phys_dims[i];
+              auto& T = MPS[i];
+              for(const auto& blockid : T.loop_nest()) {
+                // allocate host buffer for entire tile
+                const size_t bs = T.block_size(blockid);
+                std::vector<Cplx> hostbuf(bs);
+                T.get(blockid, hostbuf);
         
-                Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> Mmat(Dl_old, d * Dr);
-                MPS[i].loop_nest().iterate([&](auto const& idxs)
-                {
-                    IdxType l = idxs[0], p = idxs[1], r = idxs[2];
-                    Cplx v;
-                    MPS[i].get(idxs, gsl::span<Cplx>(&v,1));
-                    Mmat(l, p * Dr + r) = v;
-                });
-        
-                Eigen::JacobiSVD<decltype(Mmat)> svd(
-                    Mmat, Eigen::ComputeThinU | Eigen::ComputeThinV
-                );
-                auto svals      = svd.singularValues();
-                Index full_rank = static_cast<Index>(svals.size());
-                Index chi       = std::min<Index>(static_cast<Index>(max_bond_dim), full_rank);
-        
-                auto Umat  = svd.matrixU().leftCols(chi);
-                auto Sdiag = svals.head(chi).asDiagonal();
-                auto Vh    = svd.matrixV().leftCols(chi).adjoint();
-        
-                bond_dims[i] = chi;
-                {
-                    tamm::IndexSpace is_new{tamm::range(chi)};
-                    bond_tis[i] = tamm::TiledIndexSpace(is_new, 1);
+                // unravel each element into its (l,p,r) and write into Mmat
+                auto dims    = T.block_dims(blockid);
+                auto offs    = T.block_offsets(blockid);
+                size_t idx = 0;
+                for(size_t ll = offs[0]; ll < offs[0] + dims[0]; ++ll)
+                for(size_t pp = offs[1]; pp < offs[1] + dims[1]; ++pp)
+                for(size_t rr = offs[2]; rr < offs[2] + dims[2]; ++rr, ++idx) {
+                  Mmat(ll, pp * Dr + rr) = hostbuf[idx];
                 }
-        
-                tamm::Tensor<Cplx> Tnew({bond_tis[i], phys_tis[i], bond_tis[i+1]});
-                Tnew.set_dense();
-                Tnew.allocate(&ec);
-                Tnew.loop_nest().iterate([&](auto const& idxs)
-                {
-                    IdxType l = idxs[0], p = idxs[1], r = idxs[2];
-                    Cplx val = Vh(l, p * Dr + r);
-                    Tnew.put(idxs, gsl::span<Cplx>(&val,1));
-                });
-        
-                IdxType Dl_prev = bond_dims[i-1];
-                IdxType d_prev  = phys_dims[i-1];
-                Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> Mprev(Dl_prev * d_prev, Dl_old);
-                MPS[i-1].loop_nest().iterate([&](auto const& idxs)
-                {
-                    IdxType l = idxs[0], p = idxs[1], r = idxs[2];
-                    Cplx v;
-                    MPS[i-1].get(idxs, gsl::span<Cplx>(&v,1));
-                    Mprev(l * d_prev + p, r) = v;
-                });
-        
-                auto US     = Umat * Sdiag;
-                auto Mprev2 = Mprev * US;
-        
-                tamm::Tensor<Cplx> Tprev({bond_tis[i-1], phys_tis[i-1], bond_tis[i]});
-                Tprev.set_dense();
-                Tprev.allocate(&ec);
-                Tprev.loop_nest().iterate([&](auto const& idxs)
-                {
-                    IdxType l = idxs[0], p = idxs[1], r = idxs[2];
-                    Cplx val = Mprev2(l * d_prev + p, r);
-                    Tprev.put(idxs, gsl::span<Cplx>(&val,1));
-                });
-        
-                MPS[i].deallocate();
-                MPS[i-1].deallocate();
-                MPS[i]   = std::move(Tnew);
-                MPS[i-1] = std::move(Tprev);
+              }
             }
+        
+            //
+            // 2) SVD: Mmat = U · S · Vh
+            //
+            Eigen::BDCSVD<decltype(Mmat)> svd(
+              Mmat, Eigen::ComputeThinU | Eigen::ComputeThinV
+            );
+            auto svals      = svd.singularValues();
+            IdxType full    = IdxType(svals.size());
+            IdxType chi     = std::min<IdxType>(full, max_bond_dim);
+            auto Umat       = svd.matrixU().leftCols(chi);            // (Dl_old × chi)
+            auto Sdiag      = svals.head(chi).asDiagonal();           // (chi × chi)
+            auto Vh         = svd.matrixV().leftCols(chi).adjoint();  // (chi × (d*Dr))
+        
+            //
+            // 3) Update bond_dims and bond_tis
+            //
+            bond_dims[i] = chi;
+            {
+              tamm::IndexSpace is_new{tamm::range(chi)};
+              bond_tis[i] = tamm::TiledIndexSpace(is_new, block_size);
+            }
+        
+            //
+            // 4) Build new right tensor Tnew via bulk-puts of Vh
+            //
+            tamm::Tensor<Cplx> Tnew({bond_tis[i], phys_tis[i], bond_tis[i+1]});
+            Tnew.set_dense();
+            Tnew.allocate(&ec);
+            for(const auto& blockid : Tnew.loop_nest()) {
+              const size_t bs = Tnew.block_size(blockid);
+              std::vector<Cplx> hostbuf(bs);
+        
+              auto dims = Tnew.block_dims(blockid);
+              auto offs = Tnew.block_offsets(blockid);
+              size_t idx = 0;
+              for(size_t ll = offs[0]; ll < offs[0] + dims[0]; ++ll)
+              for(size_t pp = offs[1]; pp < offs[1] + dims[1]; ++pp)
+              for(size_t rr = offs[2]; rr < offs[2] + dims[2]; ++rr, ++idx) {
+                hostbuf[idx] = Vh(ll, pp * Dr + rr);
+              }
+        
+              Tnew.put(blockid, hostbuf);
+            }
+        
+            //
+            // 5) Bulk-get MPS[i-1] into Eigen Mprev of shape ((Dl_prev*d_prev) × Dl_old)
+            //
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> Mprev(Dl_prev * d_prev, Dl_old);
+            {
+              auto& Told = MPS[i-1];
+              for(const auto& blockid : Told.loop_nest()) {
+                const size_t bs = Told.block_size(blockid);
+                std::vector<Cplx> hostbuf(bs);
+                Told.get(blockid, hostbuf);
+        
+                auto dims = Told.block_dims(blockid);
+                auto offs = Told.block_offsets(blockid);
+                size_t idx = 0;
+                for(size_t ll = offs[0]; ll < offs[0] + dims[0]; ++ll)
+                for(size_t pp = offs[1]; pp < offs[1] + dims[1]; ++pp)
+                for(size_t rr = offs[2]; rr < offs[2] + dims[2]; ++rr, ++idx) {
+                  Mprev(ll * d_prev + pp, rr) = hostbuf[idx];
+                }
+              }
+            }
+        
+            //
+            // 6) Form Mprev2 = Mprev * (Umat * Sdiag)
+            //
+            auto US     = Umat * Sdiag;    //   (Dl_old × chi)
+            auto Mprev2 = Mprev * US;      // (Dl_prev*d_prev × chi)
+        
+            //
+            // 7) Build new left tensor Tprev via bulk-puts of Mprev2
+            //
+            tamm::Tensor<Cplx> Tprev({bond_tis[i-1], phys_tis[i-1], bond_tis[i]});
+            Tprev.set_dense();
+            Tprev.allocate(&ec);
+            for(const auto& blockid : Tprev.loop_nest()) {
+              const size_t bs = Tprev.block_size(blockid);
+              std::vector<Cplx> hostbuf(bs);
+        
+              auto dims = Tprev.block_dims(blockid);
+              auto offs = Tprev.block_offsets(blockid);
+              size_t idx = 0;
+              for(size_t ll = offs[0]; ll < offs[0] + dims[0]; ++ll)
+              for(size_t pp = offs[1]; pp < offs[1] + dims[1]; ++pp)
+              for(size_t rr = offs[2]; rr < offs[2] + dims[2]; ++rr, ++idx) {
+                hostbuf[idx] = Mprev2(ll * d_prev + pp, rr);
+              }
+        
+              Tprev.put(blockid, hostbuf);
+            }
+        
+            //
+            // 8) Swap into MPS and cleanup
+            //
+            MPS[i].deallocate();
+            MPS[i-1].deallocate();
+            MPS[i]     = std::move(Tnew);
+            MPS[i-1]   = std::move(Tprev);
+          }
         }
 
 
-        void left_canonicalize(std::vector<tamm::Tensor<Cplx>>& MPS)
-        {
-            for (IdxType i = 0; i < n_qubits - 1; ++i)
+        void left_canonicalize(std::vector<tamm::Tensor<Cplx>>& MPS) {
+          for(IdxType i = 0; i < n_qubits - 1; ++i) {
+            // 0) dimensions
+            IdxType Dl       = bond_dims[i];
+            IdxType Dr_old   = bond_dims[i+1];
+            IdxType d        = phys_dims[i];
+            IdxType d_next   = phys_dims[i+1];
+            IdxType Dr_right = bond_dims[i+2];
+        
+            //
+            // 1) Bulk-get MPS[i] into Eigen Mmat of shape (Dl*d) × Dr_old
+            //
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> Mmat(Dl * d, Dr_old);
             {
-                IdxType Dl      = bond_dims[i];
-                IdxType Dr_old  = bond_dims[i+1];
-                IdxType d       = phys_dims[i];
+              auto& T = MPS[i];
+              for(const auto& blockid : T.loop_nest()) {
+                const size_t bs = T.block_size(blockid);
+                std::vector<Cplx> hostbuf(bs);
+                T.get(blockid, hostbuf);
         
-                Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> Mmat(Dl * d, Dr_old);
-                MPS[i].loop_nest().iterate([&](auto const& idxs)
-                {
-                    IdxType l = idxs[0], p = idxs[1], r = idxs[2];
-                    Cplx v;
-                    MPS[i].get(idxs, gsl::span<Cplx>(&v,1));
-                    Mmat(l * d + p, r) = v;
-                });
-        
-                Eigen::JacobiSVD<decltype(Mmat)> svd(
-                    Mmat, Eigen::ComputeThinU | Eigen::ComputeThinV
-                );
-                auto svals      = svd.singularValues();
-                Index full_rank = static_cast<Index>(svals.size());
-                Index chi       = std::min<Index>(static_cast<Index>(max_bond_dim), full_rank);
-        
-                auto Umat  = svd.matrixU().leftCols(chi);
-                auto Sdiag = svals.head(chi).asDiagonal();
-                auto Vh    = svd.matrixV().leftCols(chi).adjoint();
-        
-                bond_dims[i+1] = chi;
-                {
-                    tamm::IndexSpace is_new{tamm::range(chi)};
-                    bond_tis[i+1] = tamm::TiledIndexSpace(is_new, 1);
+                auto dims = T.block_dims(blockid);
+                auto offs = T.block_offsets(blockid);
+                size_t idx = 0;
+                // unravel tile
+                for(size_t ll = offs[0]; ll < offs[0] + dims[0]; ++ll)
+                for(size_t pp = offs[1]; pp < offs[1] + dims[1]; ++pp)
+                for(size_t rr = offs[2]; rr < offs[2] + dims[2]; ++rr, ++idx) {
+                  Mmat(ll * d + pp, rr) = hostbuf[idx];
                 }
-        
-                tamm::Tensor<Cplx> Tleft({bond_tis[i], phys_tis[i], bond_tis[i+1]});
-                Tleft.set_dense();
-                Tleft.allocate(&ec);
-                Tleft.loop_nest().iterate([&](auto const& idxs)
-                {
-                    IdxType l = idxs[0], p = idxs[1], b = idxs[2];
-                    Cplx v = Umat(l * d + p, b);
-                    Tleft.put(idxs, gsl::span<Cplx>(&v,1));
-                });
-        
-                auto M2 = Sdiag * Vh;
-        
-                auto& Tnext_old = MPS[i+1];
-                IdxType d_next   = phys_dims[i+1];
-                IdxType Dr_right = bond_dims[i+2];
-        
-                Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> Tnext_mat(
-                    Dr_old, d_next * Dr_right
-                );
-                Tnext_old.loop_nest().iterate([&](auto const& idxs)
-                {
-                    IdxType b = idxs[0], p = idxs[1], r = idxs[2];
-                    Cplx v;
-                    Tnext_old.get(idxs, gsl::span<Cplx>(&v,1));
-                    Tnext_mat(b, p * Dr_right + r) = v;
-                });
-        
-                auto Tnext_mat2 = M2 * Tnext_mat;
-        
-                tamm::Tensor<Cplx> Tnext({bond_tis[i+1], phys_tis[i+1], bond_tis[i+2]});
-                Tnext.set_dense();
-                Tnext.allocate(&ec);
-                Tnext.loop_nest().iterate([&](auto const& idxs)
-                {
-                    IdxType b = idxs[0], p = idxs[1], r = idxs[2];
-                    Cplx v = Tnext_mat2(b, p * Dr_right + r);
-                    Tnext.put(idxs, gsl::span<Cplx>(&v,1));
-                });
-        
-                MPS[i].deallocate();
-                Tnext_old.deallocate();
-                MPS[i]     = std::move(Tleft);
-                MPS[i+1]   = std::move(Tnext);
+              }
             }
+        
+            //
+            // 2) SVD: Mmat = U · S · Vh
+            //
+            Eigen::BDCSVD<decltype(Mmat)> svd(
+              Mmat, Eigen::ComputeThinU | Eigen::ComputeThinV
+            );
+            auto svals      = svd.singularValues();
+            IdxType full    = IdxType(svals.size());
+            IdxType chi     = std::min<IdxType>(full, max_bond_dim);
+            auto Umat       = svd.matrixU().leftCols(chi);            // (Dl*d) × chi
+            auto Sdiag      = svals.head(chi).asDiagonal();           // chi × chi
+            auto Vh         = svd.matrixV().leftCols(chi).adjoint();  // chi × Dr_old
+        
+            //
+            // 3) Update bond_dims and bond_tis
+            //
+            bond_dims[i+1] = chi;
+            {
+              tamm::IndexSpace is_new{tamm::range(chi)};
+              bond_tis[i+1] = tamm::TiledIndexSpace(is_new, block_size);
+            }
+        
+            //
+            // 4) Build new left tensor Tleft via bulk-puts of U
+            //
+            tamm::Tensor<Cplx> Tleft({bond_tis[i], phys_tis[i], bond_tis[i+1]});
+            Tleft.set_dense();
+            Tleft.allocate(&ec);
+            for(const auto& blockid : Tleft.loop_nest()) {
+              const size_t bs = Tleft.block_size(blockid);
+              std::vector<Cplx> hostbuf(bs);
+        
+              auto dims = Tleft.block_dims(blockid);
+              auto offs = Tleft.block_offsets(blockid);
+              size_t idx = 0;
+              for(size_t ll = offs[0]; ll < offs[0] + dims[0]; ++ll)
+              for(size_t pp = offs[1]; pp < offs[1] + dims[1]; ++pp)
+              for(size_t bb = offs[2]; bb < offs[2] + dims[2]; ++bb, ++idx) {
+                // Umat maps (l*d + p) → b
+                hostbuf[idx] = Umat(ll * d + pp, bb);
+              }
+        
+              Tleft.put(blockid, hostbuf);
+            }
+        
+            //
+            // 5) Bulk-get MPS[i+1] into Eigen Tnext_mat of shape Dr_old × (d_next * Dr_right)
+            //
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> Tnext_mat(Dr_old, d_next * Dr_right);
+            {
+              auto& Tnext_old = MPS[i+1];
+              for(const auto& blockid : Tnext_old.loop_nest()) {
+                const size_t bs = Tnext_old.block_size(blockid);
+                std::vector<Cplx> hostbuf(bs);
+                Tnext_old.get(blockid, hostbuf);
+        
+                auto dims = Tnext_old.block_dims(blockid);
+                auto offs = Tnext_old.block_offsets(blockid);
+                size_t idx = 0;
+                for(size_t bb = offs[0]; bb < offs[0] + dims[0]; ++bb)
+                for(size_t pp = offs[1]; pp < offs[1] + dims[1]; ++pp)
+                for(size_t rr = offs[2]; rr < offs[2] + dims[2]; ++rr, ++idx) {
+                  Tnext_mat(bb, pp * Dr_right + rr) = hostbuf[idx];
+                }
+              }
+            }
+        
+            //
+            // 6) Multiply through the spectrum: M2_eig = Sdiag · Vh  (chi × Dr_old)
+            //                  then Tnext_mat2 = M2_eig · Tnext_mat
+            //
+            auto M2_eig     = Sdiag * Vh;         // chi × Dr_old
+            auto Tnext_mat2 = M2_eig * Tnext_mat; // chi × (d_next*Dr_right)
+        
+            //
+            // 7) Build new right tensor Tnext via bulk-puts of Tnext_mat2
+            //
+            tamm::Tensor<Cplx> Tnext({bond_tis[i+1], phys_tis[i+1], bond_tis[i+2]});
+            Tnext.set_dense();
+            Tnext.allocate(&ec);
+            for(const auto& blockid : Tnext.loop_nest()) {
+              const size_t bs = Tnext.block_size(blockid);
+              std::vector<Cplx> hostbuf(bs);
+        
+              auto dims = Tnext.block_dims(blockid);
+              auto offs = Tnext.block_offsets(blockid);
+              size_t idx = 0;
+              for(size_t bb = offs[0]; bb < offs[0] + dims[0]; ++bb)
+              for(size_t pp = offs[1]; pp < offs[1] + dims[1]; ++pp)
+              for(size_t rr = offs[2]; rr < offs[2] + dims[2]; ++rr, ++idx) {
+                hostbuf[idx] = Tnext_mat2(bb, pp * Dr_right + rr);
+              }
+        
+              Tnext.put(blockid, hostbuf);
+            }
+        
+            //
+            // 8) Swap in and cleanup
+            //
+            MPS[i].deallocate();
+            MPS[i+1].deallocate();
+            MPS[i]   = std::move(Tleft);
+            MPS[i+1] = std::move(Tnext);
+          }
         }
 
 
-        virtual void MA_GATE(const IdxType repetition)
-        {
-            SAFE_FREE_HOST(results);
-            SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
-            std::memset(results, 0, sizeof(IdxType) * repetition);
+        virtual void MA_GATE(const IdxType repetition) {
+          using Clock = std::chrono::steady_clock;
+          using MS    = std::chrono::duration<double, std::milli>;
+          std::mt19937_64 rng{ std::random_device{}() };
+          std::uniform_real_distribution<double> dist(0.0,1.0);
+
         
-            std::mt19937_64 rng{ std::random_device{}() };
-            std::uniform_real_distribution<double> dist(0.0, 1.0);
+          // 1) Allocate result buffer
+          auto t_alloc_start = Clock::now();
+          SAFE_FREE_HOST(results);
+          SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
+          std::memset(results, 0, sizeof(IdxType) * repetition);
+          auto t_alloc_end = Clock::now();
+          std::cout << "[MA_GATE] Result‐buffer alloc: "
+                    << MS(t_alloc_end - t_alloc_start).count() << " ms\n";
         
-            left_canonicalize(mps_tensors);
-            right_canonicalize(mps_tensors);
+          // RNG setup (negligible, so not timed)
         
-            for (IdxType rep = 0; rep < repetition; ++rep)
-            {
-                IdxType packed = 0;
-                std::vector<Cplx> env(1, Cplx{1.0, 0.0});
+          // 2) Canonicalize
+          auto t_can_start = Clock::now();
+          left_canonicalize(mps_tensors);
+          right_canonicalize(mps_tensors);
+          auto t_can_end = Clock::now();
+          std::cout << "[MA_GATE] Canonicalization: "
+                    << MS(t_can_end - t_can_start).count() << " ms\n";
         
-                for (IdxType site = 0; site < n_qubits; ++site)
-                {
-                    auto &T = mps_tensors[site];
-                    IdxType Dl = bond_dims[site];
-                    IdxType Dr = bond_dims[site + 1];
+          // 3) Loop over repetitions
+          for(IdxType rep = 0; rep < repetition; ++rep) {
+            auto t_rep_start = Clock::now();
         
-                    std::vector<Cplx> env0(Dr, Cplx{0.0, 0.0});
-                    std::vector<Cplx> env1(Dr, Cplx{0.0, 0.0});
+            IdxType packed = 0;
+            std::vector<Cplx> env(1, Cplx{1.0,0.0});
         
-                    T.loop_nest().iterate([&](auto const &idxs)
-                    {
-                        IdxType l = idxs[0], s = idxs[1], r = idxs[2];
-                        Cplx v;
-                        T.get(idxs, gsl::span<Cplx>(&v, 1));
-                        Cplx prod = env[l] * v;
-                        if (s == 0)
-                            env0[r] += prod;
-                        else
-                            env1[r] += prod;
-                    });
+            // 4) Sweep through each site
+            for(IdxType site = 0; site < n_qubits; ++site) {
+              auto t_site_start = Clock::now();
         
-                    long double w0 = 0, w1 = 0;
-                    for (IdxType r = 0; r < Dr; ++r)
-                    {
-                        w0 += std::norm(env0[r]);
-                        w1 += std::norm(env1[r]);
-                    }
-                    long double sumw = w0 + w1;
+              auto& T = mps_tensors[site];
+              IdxType Dl = bond_dims[site];
+              IdxType Dr = bond_dims[site+1];
         
-                    long double p0 = (sumw > 0) ? (w0 / sumw) : 0.0L;
-                    bool outcome1 = (dist(rng) >= static_cast<double>(p0));
-                    if (outcome1)
-                        packed |= (IdxType(1) << site);
+              // Branch accumulators
+              std::vector<Cplx> env0(Dr, Cplx{0.0,0.0});
+              std::vector<Cplx> env1(Dr, Cplx{0.0,0.0});
         
-                    auto &chosen = outcome1 ? env1 : env0;
-                    long double norm_branch = outcome1 ? w1 : w0;
-                    long double invnorm = (norm_branch > 0)
-                                             ? (1.0L / std::sqrt(norm_branch))
-                                             : 0.0L;
+              // 4a) Bulk‐get + unpack each tile
+              auto t_tiles_start = Clock::now();
+              for(const auto& blockid : T.loop_nest()) {
+                size_t bs = T.block_size(blockid);
+                std::vector<Cplx> hostbuf(bs);
+                T.get(blockid, hostbuf);
         
-                    env.assign(Dr, Cplx{0.0, 0.0});
-                    for (IdxType r = 0; r < Dr; ++r)
-                        env[r] = chosen[r] * static_cast<Cplx>(invnorm);
+                auto dims    = T.block_dims(blockid);
+                auto offsets = T.block_offsets(blockid);
+        
+                // unpack tile
+                size_t idx = 0;
+                for(size_t jj = 0; jj < dims[0]; ++jj)
+                for(size_t kk = 0; kk < dims[1]; ++kk)
+                for(size_t ll = 0; ll < dims[2]; ++ll, ++idx) {
+                  IdxType l = offsets[0] + jj;
+                  IdxType s = offsets[1] + kk;
+                  IdxType r = offsets[2] + ll;
+                  Cplx v = hostbuf[idx];
+                  Cplx prod = env[l] * v;
+                  if(s == 0) env0[r] += prod;
+                  else       env1[r] += prod;
                 }
+              }
+              auto t_tiles_end = Clock::now();
         
-                results[rep] = packed;
+              // 4b) Compute weights & sample
+              auto t_sample_start = Clock::now();
+              long double w0 = 0, w1 = 0;
+              for(IdxType r = 0; r < Dr; ++r) {
+                w0 += std::norm(env0[r]);
+                w1 += std::norm(env1[r]);
+              }
+              long double sumw = w0 + w1;
+              long double p0   = sumw > 0 ? (w0 / sumw) : 0.0L;
+              bool outcome1    = (dist(rng) >= static_cast<double>(p0));
+              if(outcome1) packed |= (IdxType(1) << site);
+              auto& chosen    = outcome1 ? env1 : env0;
+              long double norm_branch = outcome1 ? w1 : w0;
+              long double invnorm      = norm_branch > 0
+                                        ? (1.0L / std::sqrt(norm_branch))
+                                        : 0.0L;
+              env.assign(Dr, Cplx{0.0,0.0});
+              for(IdxType r = 0; r < Dr; ++r)
+                env[r] = chosen[r] * static_cast<Cplx>(invnorm);
+              auto t_sample_end = Clock::now();
+        
+              auto t_site_end = Clock::now();
+        
+              // Print per‐site breakdown (for first 3 reps only)
+              if(rep < 3) {
+                std::cout << "[MA_GATE] rep=" << rep
+                          << " site=" << site
+                          << " tile‐unpack: " << MS(t_tiles_end - t_tiles_start).count() << " ms, "
+                          << "sample: "       << MS(t_sample_end - t_sample_start).count() << " ms, "
+                          << "total-site: "  << MS(t_site_end - t_site_start).count() << " ms\n";
+              }
             }
+        
+            results[rep] = packed;
+            auto t_rep_end = Clock::now();
+        
+            if(rep < 3) {
+              std::cout << "[MA_GATE] rep=" << rep
+                        << " total: " << MS(t_rep_end - t_rep_start).count() << " ms\n";
+            }
+          }
+        
+          std::cout << "[MA_GATE] done (" << repetition << " reps, rep‐details printed for first 3)\n";
         }
 
         void local_left_step(IdxType i) {
@@ -993,7 +1325,7 @@ namespace NWQSim
             });
         
             // 2) SVD: M = U · S · Vh
-            Eigen::JacobiSVD<decltype(Mmat)> svd(
+            Eigen::BDCSVD<decltype(Mmat)> svd(
               Mmat, Eigen::ComputeThinU | Eigen::ComputeThinV);
             auto Umat  = svd.matrixU();
             auto Sdiag = svd.singularValues().asDiagonal();
