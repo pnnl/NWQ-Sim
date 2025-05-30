@@ -184,6 +184,8 @@ install(DIRECTORY include/svsim DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim)
 install(DIRECTORY include/dmsim DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim)
 install(DIRECTORY include/circuit_pass DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim)
 
+install(DIRECTORY vqe/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim/vqe)
+
 #Export the targets to a script
 install(EXPORT nwqsim-targets
     FILE
