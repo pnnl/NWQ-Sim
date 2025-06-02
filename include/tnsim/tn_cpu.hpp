@@ -35,6 +35,8 @@ namespace NWQSim
             // half_dim = (IdxType)1 << (n_qubits - 1);
             // sv_size = dim * (IdxType)sizeof(ValType);
             n_cpu = 1;
+	    //temporary cpu_mem
+	    cpu_mem = 0.0;
 
             // MPS Parameters
             MaxDim = int(max_dim);
@@ -55,13 +57,9 @@ namespace NWQSim
             rng.seed(Config::RANDOM_SEED);
 
             // ITensor MPS Initialization
-	        auto sites = itensor::SpinHalf(int(n_qubits),{"ConserveQNs=", false});
+	    auto sites = itensor::SpinHalf(int(n_qubits),{"ConserveQNs=", false});
     	    auto state = itensor::InitState(sites,"Up");
-	        auto network = itensor::MPS(state);
-            auto all_zeros = network;
-
-            
-            std::cout<<"MaxDim "<<MaxDim<<" Cutoff "<<Cutoff<<std::endl;
+	    auto network = itensor::MPS(state);
 
         }
 
@@ -88,7 +86,6 @@ namespace NWQSim
             sites = itensor::SpinHalf(int(n_qubits),{"ConserveQNs=", false});
             auto state = itensor::InitState(sites,"Up");
             network = itensor::MPS(state);
-            all_zeros = network;
             network.position(1);
         }
 
@@ -191,7 +188,7 @@ namespace NWQSim
 
         // MPS Objects
         itensor::SpinHalf sites;
-        itensor::MPS network,all_zeros;
+        itensor::MPS network;
 
         IdxType *results = NULL;
 
@@ -228,7 +225,7 @@ namespace NWQSim
                     c2_timer.stop_timer();
                     auto timec2 = c2_timer.measure();
                     c2_time += timec2;
-                    // std::cout<<"time c2 "<<c2<<std::endl;
+                    std::cout<<"time c2 "<<timec2<<std::endl;
                 }
                 else if (g.op_name == OP::RESET)
                 {
@@ -362,7 +359,7 @@ namespace NWQSim
             //
             auto method = true;
             if(std::abs(qubit0 - qubit1) != 1){
-                std::cout<<"Non local C2"<<std::endl;
+                //std::cout<<"Non local C2"<<std::endl;
                 // 2Q Gate Decomposition into Control: u  ;  Target: s*v
                 auto [u,s,v] = itensor::svd(gate,{i,prime(i)},{j,prime(j)},{"Cutoff=", Cutoff, "MaxDim=", MaxDim, "SVDMethod=", "gesdd"});
                 auto sv = s*v;
@@ -512,7 +509,7 @@ namespace NWQSim
             else{
                 // Local 2-qubit gate method
                 //
-                std::cout<<"Local C2"<<std::endl;
+                //std::cout<<"Local C2"<<std::endl;
                 // Move orthoganility center to control qubit
                 if(isOrtho(network)){
                     if(orthoCenter(network) != site0){
@@ -587,19 +584,6 @@ namespace NWQSim
  
             // Move to right orthogonal gauge for improved scaling before sampling
             network.position(1);
-
-            // Useful printing, may be removed later
-            //
-            // std::cout<<"Net norm "<<norm(network)<<std::endl;
-            // std::cout<<"0000 "<<innerC(network,all_zeros)<<std::endl;
-            // itensor::ITensor full_mat;
-            // full_mat = network(1);
-            // for(auto i = 1 ; i <= n_qubits-1 ; i++){
-            //     full_mat *= network(i+1);
-            // }
-            // PrintData(full_mat);
-            // std::cout<<"0000 "<<innerC(network,all_zeros)<<std::endl;
-
 
             // "Perfect" Sampling Algorithm
             //  https://tensornetwork.org/mps/algorithms/sampling/
