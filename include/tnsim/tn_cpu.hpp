@@ -30,11 +30,8 @@ namespace NWQSim
         {
             // Initialize CPU side
             n_qubits = _n_qubits;
-
-            // dim = (IdxType)1 << (n_qubits);
-            // half_dim = (IdxType)1 << (n_qubits - 1);
-            // sv_size = dim * (IdxType)sizeof(ValType);
             n_cpu = 1;
+
 	    //temporary cpu_mem
 	    cpu_mem = 0.0;
 
@@ -42,18 +39,6 @@ namespace NWQSim
             MaxDim = int(max_dim);
             Cutoff = sv_cutoff;
 
-            // // CPU side initialization
-            // SAFE_ALOC_HOST(sv_real, sv_size);
-            // SAFE_ALOC_HOST(sv_imag, sv_size);
-            // memset(sv_real, 0, sv_size);
-            // memset(sv_imag, 0, sv_size);
-
-            // // State-vector initial state [0..0] = 1
-            // sv_real[0] = 1.;
-            // cpu_mem += sv_size * 4;
-
-            // SAFE_ALOC_HOST(m_real, sv_size + sizeof(ValType));
-            // memset(m_real, 0, sv_size + sizeof(ValType));
             rng.seed(Config::RANDOM_SEED);
 
             // ITensor MPS Initialization
@@ -67,20 +52,11 @@ namespace NWQSim
         ~TN_CPU()
         {
             // // Release for CPU side
-            // SAFE_FREE_HOST(sv_real);
-            // SAFE_FREE_HOST(sv_imag);
-            // SAFE_FREE_HOST(m_real);
-            // SAFE_FREE_HOST(results);
         }
 
         void reset_state() override
         {
             // // Reset CPU input & output
-            // memset(sv_real, 0, sv_size);
-            // memset(sv_imag, 0, sv_size);
-            // memset(m_real, 0, sv_size + sizeof(ValType));
-            // // State Vector initial state [0..0] = 1
-            // sv_real[0] = 1.;
 	    
             // MPS initial state |00..0>
             sites = itensor::SpinHalf(int(n_qubits),{"ConserveQNs=", false});
@@ -117,7 +93,6 @@ namespace NWQSim
             // Set Gauge of MPS to right-canonical
             network.position(1);
          
-
             simulation_kernel(gates);
 
             sim_timer.stop_timer();
@@ -172,15 +147,7 @@ namespace NWQSim
     protected:
         // n_qubits is the number of qubits
         IdxType n_qubits;
-        // IdxType sv_size;
-        // IdxType dim;
-        // IdxType half_dim;
         IdxType n_cpu;
-
-        // // CPU arrays
-        // ValType *sv_real;
-        // ValType *sv_imag;
-        // ValType *m_real;
 
         // MPS Params
         int MaxDim;
@@ -201,31 +168,18 @@ namespace NWQSim
 
         virtual void simulation_kernel(const std::vector<SVGate> &gates)
         {
-            auto start = std::chrono::steady_clock::now();
             int n_gates = gates.size();
-            double c2_time = 0.0;
-            double c1_time = 0.0;
             for (int i = 0; i < n_gates; i++)
             {
                 auto g = gates[i];
 
                 if (g.op_name == OP::C1)
                 {
-                    cpu_timer c1_timer;
-                    c1_timer.start_timer();
                     C1_GATE(g.gm_real, g.gm_imag, g.qubit);
-                    c1_timer.stop_timer();
-                    c1_time += c1_timer.measure();
                 }
                 else if (g.op_name == OP::C2)
                 {
-                    cpu_timer c2_timer;
-                    c2_timer.start_timer();
                     C2_GATE(g.gm_real, g.gm_imag, g.ctrl, g.qubit);
-                    c2_timer.stop_timer();
-                    auto timec2 = c2_timer.measure();
-                    c2_time += timec2;
-                    std::cout<<"time c2 "<<timec2<<std::endl;
                 }
                 else if (g.op_name == OP::RESET)
                 {
@@ -259,7 +213,6 @@ namespace NWQSim
             {
                 std::cout << std::endl;
             }
-            std::cout<<"Total C2 Time: "<<c2_time<<" Total C1 Time: "<<c1_time<<std::endl;
         }
 
         //============== C1 Gate ================
@@ -498,13 +451,6 @@ namespace NWQSim
                 network.noPrime();
                 // network.orthogonalize();
 
-
-                // Useful printing method, may be removed later
-                // full_mat = network(1);
-                // for(auto i = 1 ; i <= n_qubits-1 ; i++){
-                //     full_mat *= network(i+1);
-                // }
-                // // PrintData(full_mat);
             }
             else{
                 // Local 2-qubit gate method
@@ -579,8 +525,6 @@ namespace NWQSim
             SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
             memset(results, 0, sizeof(IdxType) * repetition);
 
-            std::cout<<"Measurement Begin"<<std::endl;
-            
  
             // Move to right orthogonal gauge for improved scaling before sampling
             network.position(1);
@@ -596,9 +540,6 @@ namespace NWQSim
             //  Repeat process
             //  
 
-            double meas_time;
-            cpu_timer meas_timer;
-            meas_timer.start_timer();
             for (IdxType i = 0; i < repetition; i++)
             {
                 // Work with copy of network
@@ -707,9 +648,6 @@ namespace NWQSim
 		        }
 
             }
-            meas_timer.stop_timer();
-            meas_time = meas_timer.measure();
-            std::cout<<"Total Measure Time: "<<meas_time<<" Measure Time per rep: "<<meas_time/repetition<<std::endl;
         }
         virtual double EXPECT_C4_GATE(const ValType *gm_real, const ValType *gm_imag, IdxType qubit0, IdxType qubit1, IdxType qubit2, IdxType qubit3, IdxType mask)
         {
@@ -741,13 +679,6 @@ namespace NWQSim
         void Purity_Check(SVGate g, const IdxType t)
         {
             throw std::runtime_error("Not implemented");
-            // ValType purity = 0;
-            // for (IdxType i = 0; i < (((IdxType)1 << n_qubits)); i++)
-            //     purity += ((sv_real[i] * sv_real[i]) + (sv_imag[i] * sv_imag[i]));
-            // if (fabs(purity - 1.0) > ERROR_BAR)
-            // {
-            //     printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld) with %lf\n", t, OP_NAMES[g.op_name], g.ctrl, g.qubit, purity);
-            // }
         }
 
         virtual ValType *get_real() const override { throw std::runtime_error("Not implemented"); };
