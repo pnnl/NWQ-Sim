@@ -130,7 +130,7 @@ namespace NWQSim
             }
         }
 
-        //Apply gates to stabilizer-only tableau
+        //Apply gates to a stabilizer-only tableau
         void apply_gate(std::string gate, int a, int b = -1) override
         {
             int tempVal;
@@ -188,7 +188,7 @@ namespace NWQSim
             }
             else
             {
-                std::cout << "Non-Clifford Gatae in apply_gate!" << std::endl;
+                std::cout << "Non-Clifford Gate in apply_gate!" << std::endl;
             }
         }
 
@@ -285,6 +285,22 @@ namespace NWQSim
                 pauliStrings.push_back(stabilizers);
             }//For rows(pauli strings)
             return pauliStrings;
+        }
+
+        void initialize_erasure_mask() override
+        {
+            x_erasure.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
+                                                       //second n represents stabilizers + 1 extra row
+            z_erasure.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
+            r_erasure.resize(rows, 0); //column on the right with 2n+1 rows
+            //The 2n+1 th row is scratch space
+
+            //Intialize the identity tableau
+            for(int i = 0; i < n; i++)
+            {
+                x_erasure[i][i] = 1;
+                z_erasure[i+n][i] = 1;
+            }
         }
 
         //Get a pauli string stabilizer and phase bit
@@ -1285,6 +1301,9 @@ namespace NWQSim
         std::vector<std::vector<int>> x;
         std::vector<std::vector<int>> z;
         std::vector<int> r;
+        std::vector<std::vector<int>> x_erasure;
+        std::vector<std::vector<int>> z_erasure;
+        std::vector<int> r_erasure;
         IdxType* totalResults = NULL;
         IdxType** totalResultsLong = NULL;
 

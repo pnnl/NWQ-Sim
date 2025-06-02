@@ -14,7 +14,37 @@
 
 namespace NWQSim
 {
-
+    void dump_stabilizers(std::vector<std::shared_ptr<QuantumState>>& P, std::string file_path)
+    {
+        std::ofstream stabilizer_out(file_path);
+        stabilizer_out << "[";
+        for(int i = 0; i < P.size(); i++)
+        {
+            // std::cout << "---- P Tableau: " << i << " -----" << std::endl;
+            // P[i]->print_res_state();
+            stabilizer_out << "[";
+            for(int j = 0; j < P[i]->get_num_rows(); j++)
+            {
+                std::pair<std::string, int> stabilizer = P[i]->get_stabilizer_line(j);
+                if(stabilizer.second)
+                {
+                    stabilizer_out << "'-" << stabilizer.first << "'";
+                }
+                else
+                {
+                    stabilizer_out << "'+" << stabilizer.first << "'";
+                }
+                if(j < P[i]->get_num_rows()-1)
+                    stabilizer_out << ", ";
+            }
+            if(i > P.size()-2)
+                stabilizer_out << "]";  
+            else
+                stabilizer_out << "],\n";
+        }
+        stabilizer_out << "]";
+        stabilizer_out.close();
+    }
     void circuit_reverse(std::shared_ptr<Circuit>& circuit)
     {
         auto new_circ = std::make_shared<Circuit>(circuit->num_qubits());
@@ -441,34 +471,9 @@ namespace NWQSim
         //Processing is done, so we can combine into one tableau if needed
         // std::cout << "---- T tableau -----" << std::endl;
         int layers = P.size();
-        std::ofstream stabilizer_out("/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/QFT_transpilation_data/" + file_name + "_stabilizers.txt");
-        stabilizer_out << "[";
-        for(int i = 0; i < P.size(); i++)
-        {
-            // std::cout << "---- P Tableau: " << i << " -----" << std::endl;
-            // P[i]->print_res_state();
-            stabilizer_out << "[";
-            for(int j = 0; j < P[i]->get_num_rows(); j++)
-            {
-                std::pair<std::string, int> stabilizer = P[i]->get_stabilizer_line(j);
-                if(stabilizer.second)
-                {
-                    stabilizer_out << "'-" << stabilizer.first << "'";
-                }
-                else
-                {
-                    stabilizer_out << "'+" << stabilizer.first << "'";
-                }
-                if(j < P[i]->get_num_rows()-1)
-                    stabilizer_out << ", ";
-            }
-            if(i > P.size()-2)
-                stabilizer_out << "]";  
-            else
-                stabilizer_out << "],\n";
-        }
-        stabilizer_out << "]";
-        stabilizer_out.close();
+
+        dump_stabilizers(P, "/Users/garn195/Project Repositories/NWQ-Sim/stabilizer/QFT_transpilation_data/" + file_name + "_stabilizers.txt");
+        
         // std::cout << "---- End T tableau -----" << std::endl;
         T_combine(T_tab, P);
 
