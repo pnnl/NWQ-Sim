@@ -26,69 +26,66 @@ namespace NWQSim
     {
 
     public:
-        TN_CPU(IdxType _n_qubits, int max_dim, double sv_cutoff) : QuantumState(SimType::TN)
+        TN_CPU(IdxType _n_qubits, IdxType max_dim, double sv_cutoff) : QuantumState(SimType::TN)
         {
             // Initialize CPU side
             n_qubits = _n_qubits;
 
-            dim = (IdxType)1 << (n_qubits);
-            half_dim = (IdxType)1 << (n_qubits - 1);
-            sv_size = dim * (IdxType)sizeof(ValType);
+            // dim = (IdxType)1 << (n_qubits);
+            // half_dim = (IdxType)1 << (n_qubits - 1);
+            // sv_size = dim * (IdxType)sizeof(ValType);
             n_cpu = 1;
+	    //temporary cpu_mem
+	    cpu_mem = 0.0;
 
             // MPS Parameters
-            MaxDim = max_dim;
+            MaxDim = int(max_dim);
             Cutoff = sv_cutoff;
 
-            // CPU side initialization
-            SAFE_ALOC_HOST(sv_real, sv_size);
-            SAFE_ALOC_HOST(sv_imag, sv_size);
-            memset(sv_real, 0, sv_size);
-            memset(sv_imag, 0, sv_size);
+            // // CPU side initialization
+            // SAFE_ALOC_HOST(sv_real, sv_size);
+            // SAFE_ALOC_HOST(sv_imag, sv_size);
+            // memset(sv_real, 0, sv_size);
+            // memset(sv_imag, 0, sv_size);
 
-            // State-vector initial state [0..0] = 1
-            sv_real[0] = 1.;
-            cpu_mem += sv_size * 4;
+            // // State-vector initial state [0..0] = 1
+            // sv_real[0] = 1.;
+            // cpu_mem += sv_size * 4;
 
-            SAFE_ALOC_HOST(m_real, sv_size + sizeof(ValType));
-            memset(m_real, 0, sv_size + sizeof(ValType));
+            // SAFE_ALOC_HOST(m_real, sv_size + sizeof(ValType));
+            // memset(m_real, 0, sv_size + sizeof(ValType));
             rng.seed(Config::RANDOM_SEED);
 
             // ITensor MPS Initialization
-	        auto sites = itensor::SpinHalf(int(n_qubits),{"ConserveQNs=", false});
+	    auto sites = itensor::SpinHalf(int(n_qubits),{"ConserveQNs=", false});
     	    auto state = itensor::InitState(sites,"Up");
-	        auto network = itensor::MPS(state);
-            auto all_zeros = network;
-
-            
-            std::cout<<"MaxDim "<<MaxDim<<" Cutoff "<<Cutoff<<std::endl;
+	    auto network = itensor::MPS(state);
 
         }
 
 
         ~TN_CPU()
         {
-            // Release for CPU side
-            SAFE_FREE_HOST(sv_real);
-            SAFE_FREE_HOST(sv_imag);
-            SAFE_FREE_HOST(m_real);
-            SAFE_FREE_HOST(results);
+            // // Release for CPU side
+            // SAFE_FREE_HOST(sv_real);
+            // SAFE_FREE_HOST(sv_imag);
+            // SAFE_FREE_HOST(m_real);
+            // SAFE_FREE_HOST(results);
         }
 
         void reset_state() override
         {
-            // Reset CPU input & output
-            memset(sv_real, 0, sv_size);
-            memset(sv_imag, 0, sv_size);
-            memset(m_real, 0, sv_size + sizeof(ValType));
-            // State Vector initial state [0..0] = 1
-            sv_real[0] = 1.;
+            // // Reset CPU input & output
+            // memset(sv_real, 0, sv_size);
+            // memset(sv_imag, 0, sv_size);
+            // memset(m_real, 0, sv_size + sizeof(ValType));
+            // // State Vector initial state [0..0] = 1
+            // sv_real[0] = 1.;
 	    
             // MPS initial state |00..0>
             sites = itensor::SpinHalf(int(n_qubits),{"ConserveQNs=", false});
             auto state = itensor::InitState(sites,"Up");
             network = itensor::MPS(state);
-            all_zeros = network;
             network.position(1);
         }
 
@@ -154,7 +151,6 @@ namespace NWQSim
         IdxType *measure_all(IdxType repetition) override
         {
             MA_GATE(repetition);
-	    std::cout<<"measure_all was called"<<std::endl;
             return results;
         }
 
@@ -176,15 +172,15 @@ namespace NWQSim
     protected:
         // n_qubits is the number of qubits
         IdxType n_qubits;
-        IdxType sv_size;
-        IdxType dim;
-        IdxType half_dim;
+        // IdxType sv_size;
+        // IdxType dim;
+        // IdxType half_dim;
         IdxType n_cpu;
 
-        // CPU arrays
-        ValType *sv_real;
-        ValType *sv_imag;
-        ValType *m_real;
+        // // CPU arrays
+        // ValType *sv_real;
+        // ValType *sv_imag;
+        // ValType *m_real;
 
         // MPS Params
         int MaxDim;
@@ -192,7 +188,7 @@ namespace NWQSim
 
         // MPS Objects
         itensor::SpinHalf sites;
-        itensor::MPS network,all_zeros;
+        itensor::MPS network;
 
         IdxType *results = NULL;
 
@@ -227,7 +223,9 @@ namespace NWQSim
                     c2_timer.start_timer();
                     C2_GATE(g.gm_real, g.gm_imag, g.ctrl, g.qubit);
                     c2_timer.stop_timer();
-                    c2_time += c2_timer.measure();
+                    auto timec2 = c2_timer.measure();
+                    c2_time += timec2;
+                    std::cout<<"time c2 "<<timec2<<std::endl;
                 }
                 else if (g.op_name == OP::RESET)
                 {
@@ -253,9 +251,9 @@ namespace NWQSim
                     std::logic_error("Invalid gate type");
                 }
 
-#ifdef PURITY_CHECK
-                Purity_Check(g, i);
-#endif
+// #ifdef PURITY_CHECK
+//                 Purity_Check(g, i);
+// #endif
             }
             if (Config::PRINT_SIM_TRACE)
             {
@@ -361,7 +359,7 @@ namespace NWQSim
             //
             auto method = true;
             if(std::abs(qubit0 - qubit1) != 1){
-                // std::cout<<"Non local C2"<<std::endl;
+                //std::cout<<"Non local C2"<<std::endl;
                 // 2Q Gate Decomposition into Control: u  ;  Target: s*v
                 auto [u,s,v] = itensor::svd(gate,{i,prime(i)},{j,prime(j)},{"Cutoff=", Cutoff, "MaxDim=", MaxDim, "SVDMethod=", "gesdd"});
                 auto sv = s*v;
@@ -404,7 +402,7 @@ namespace NWQSim
                         auto [u,s,v] = itensor::svd(i_contract,{sites(i),lindex},{"Cutoff=", Cutoff, "MaxDim=", MaxDim, "SVDMethod=", "gesdd"});
                         lindex = commonInds(u,s)[0];
                         network.set(i,u);
-                        network.position(i);
+                        // network.position(i);
                         propagating_bond = s*v;
 
                     }
@@ -419,9 +417,8 @@ namespace NWQSim
             
                 }
                 else{
-                    // MPO Method, Almost Works?
+                    // MPO Method
                     //
-                    // WARNING Normalization breaks!!
 
                     itensor::Index lright;
                     itensor::Index lleft;
@@ -493,6 +490,9 @@ namespace NWQSim
                     network.normalize();
 
                 }
+                // Non-Adjacent SWAP Method
+
+                
 
                 // network clean-up
                 network.noPrime();
@@ -509,7 +509,7 @@ namespace NWQSim
             else{
                 // Local 2-qubit gate method
                 //
-                // std::cout<<"Local C2"<<std::endl;
+                //std::cout<<"Local C2"<<std::endl;
                 // Move orthoganility center to control qubit
                 if(isOrtho(network)){
                     if(orthoCenter(network) != site0){
@@ -547,7 +547,6 @@ namespace NWQSim
                 //    -------------
   
                 new_sites_contracted.noPrime();
-                // auto [u,s,v] = itensor::svd(new_sites_contracted ,itensor::inds(network(site0)),{"Cutoff=", 0.0, "MaxDim=", 10});	
                 auto [u,s,v] = itensor::svd(new_sites_contracted ,itensor::inds(network(site0)),{"Cutoff=", Cutoff, "MaxDim=", MaxDim, "SVDMethod=", "gesdd"});    
                 network.set(site0, u);
                 network.set(site1, s*v);
@@ -580,23 +579,11 @@ namespace NWQSim
             SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
             memset(results, 0, sizeof(IdxType) * repetition);
 
+            std::cout<<"Measurement Begin"<<std::endl;
             
  
             // Move to right orthogonal gauge for improved scaling before sampling
             network.position(1);
-
-            // Useful printing, may be removed later
-            //
-            // std::cout<<"Net norm "<<norm(network)<<std::endl;
-            // std::cout<<"0000 "<<innerC(network,all_zeros)<<std::endl;
-            // itensor::ITensor full_mat;
-            // full_mat = network(1);
-            // for(auto i = 1 ; i <= n_qubits-1 ; i++){
-            //     full_mat *= network(i+1);
-            // }
-            // PrintData(full_mat);
-            // std::cout<<"0000 "<<innerC(network,all_zeros)<<std::endl;
-
 
             // "Perfect" Sampling Algorithm
             //  https://tensornetwork.org/mps/algorithms/sampling/
@@ -753,17 +740,18 @@ namespace NWQSim
         //============== Purity Check  ================
         void Purity_Check(SVGate g, const IdxType t)
         {
-            ValType purity = 0;
-            for (IdxType i = 0; i < (((IdxType)1 << n_qubits)); i++)
-                purity += ((sv_real[i] * sv_real[i]) + (sv_imag[i] * sv_imag[i]));
-            if (fabs(purity - 1.0) > ERROR_BAR)
-            {
-                printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld) with %lf\n", t, OP_NAMES[g.op_name], g.ctrl, g.qubit, purity);
-            }
+            throw std::runtime_error("Not implemented");
+            // ValType purity = 0;
+            // for (IdxType i = 0; i < (((IdxType)1 << n_qubits)); i++)
+            //     purity += ((sv_real[i] * sv_real[i]) + (sv_imag[i] * sv_imag[i]));
+            // if (fabs(purity - 1.0) > ERROR_BAR)
+            // {
+            //     printf("Purity Check fails after Gate-%lld=>%s(ctrl:%lld,qubit:%lld) with %lf\n", t, OP_NAMES[g.op_name], g.ctrl, g.qubit, purity);
+            // }
         }
 
-        virtual ValType *get_real() const override { return sv_real; };
-        virtual ValType *get_imag() const override { return sv_imag; };
+        virtual ValType *get_real() const override { throw std::runtime_error("Not implemented"); };
+        virtual ValType *get_imag() const override { throw std::runtime_error("Not implemented"); };
     };
 
 } // namespace NWQSim

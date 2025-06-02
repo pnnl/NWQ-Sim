@@ -21,7 +21,7 @@
 
 using namespace NWQSim;
 ValType pass_threshold = 0.98;
-ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis, int max_dim, double sv_cutoff);
+ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis, IdxType max_dim, double sv_cutoff);
 void print_result(bool is_qobj, map<string, IdxType> *counts, std::shared_ptr<NWQSim::QuantumState> state, IdxType total_shots, std::string prefix = "");
 
 int main(int argc, char **argv)
@@ -71,7 +71,7 @@ int main(int argc, char **argv)
     Config::device_layout_str = config_parser.get_value("layout_str");
 
     // Handle TNSim MPS parameters
-    int max_dim = std::stoll(config_parser.get_value("max_dim"));
+    IdxType max_dim = std::stoll(config_parser.get_value("max_dim"));
     double sv_cutoff = std::stod(config_parser.get_value("sv_cutoff"));
 
     if (config_parser.is_flag_set("backend_list"))
@@ -258,7 +258,7 @@ void print_result(bool is_qobj, map<string, IdxType> *counts, std::shared_ptr<NW
     }
 }
 
-ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis, int max_dim, double sv_cutoff)
+ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis, IdxType max_dim, double sv_cutoff)
 {
     stringstream ss_file, ss_result;
     if (is_basis)
