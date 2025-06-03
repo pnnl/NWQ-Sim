@@ -5,7 +5,10 @@
 
 #include "svsim/sv_cpu.hpp"
 #include "dmsim/dm_cpu.hpp"
+
+
 #include "tnsim/tn_cpu.hpp"
+#include "tnsim/tn_cuda.hpp"
 
 #ifdef OMP_ENABLED
 #include "svsim/sv_omp.hpp"
@@ -107,10 +110,15 @@ public:
         {
             if (simulator_method == "SV")
                 return std::make_shared<NWQSim::SV_CUDA>(numQubits);
-            else
+            else if (simulator_method == "DM")
                 return std::make_shared<NWQSim::DM_CUDA>(numQubits);
         }
 #endif
+        
+        else if (backend == "NVGPU_TAMM" || backend == "CPU_TAMM")
+        {
+            return std::make_shared<NWQSim::TN_CUDA>(numQubits, max_dim);
+        }
 
 #ifdef HIP_ENABLED
         else if (backend == "AMDGPU")

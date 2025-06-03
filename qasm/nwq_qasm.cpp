@@ -19,6 +19,8 @@
 #include "src/cl_parser.hpp"
 /**************************************************************************/
 
+#include <tamm/tamm.hpp>
+
 using namespace NWQSim;
 ValType pass_threshold = 0.98;
 ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis, IdxType max_dim, double sv_cutoff);
@@ -75,6 +77,8 @@ int main(int argc, char **argv)
     double sv_cutoff = std::stod(config_parser.get_value("sv_cutoff"));
 
     if (config_parser.is_flag_set("backend_list"))
+
+#include <tamm/tamm.hpp>
     {
         BackendManager::print_available_backends();
         return 0;
@@ -90,6 +94,10 @@ int main(int argc, char **argv)
     if (backend == "MPI" || backend == "NVGPU_MPI")
     {
         MPI_Init(&argc, &argv);
+    }
+    if (backend == "NVGPU_TAMM" || backend == "CPU_TAMM")
+    {
+        tamm::initialize(argc, argv);
     }
 #endif
 
@@ -143,9 +151,11 @@ int main(int argc, char **argv)
                 {
                     safe_print("Benchmark %d fidelity: %.4f Failed!\n", benchmark_index, fidelity);
                     passed = false;
-                } else{
-		    safe_print("Benchmark %d fidelity: %.4f Passed!\n", benchmark_index, fidelity);
-		}
+                }
+                else
+                {
+                    safe_print("Benchmark %d fidelity: %.4f Passed!\n", benchmark_index, fidelity);
+                }
             }
             if (passed)
                 safe_print("All benchmarks passed!\n");
@@ -232,6 +242,11 @@ int main(int argc, char **argv)
     if (backend == "MPI" || backend == "NVGPU_MPI")
     {
         MPI_Finalize();
+    }
+
+    if (backend == "NVGPU_TAMM" || backend == "CPU_TAMM")
+    {
+        tamm::finalize();
     }
 #endif
     return 0;
