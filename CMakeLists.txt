@@ -96,10 +96,10 @@ set_target_properties(itensor PROPERTIES
 )
 
 # Point to the Cray LibSci install (discover via module show / $LD_LIBRARY_PATH)
-#set(CRAY_LIBSCI_ROOT "/opt/cray/pe/libsci/24.07.0/NVIDIA/23.3/x86_64")
+set(CRAY_LIBSCI_ROOT "/opt/cray/pe/libsci/24.07.0/NVIDIA/23.3/x86_64")
 
 # Add its lib/ directory so that -lsci_nvidia_mpi_mp and -lsci_nvidia_mp resolve
-#link_directories("${CRAY_LIBSCI_ROOT}/lib")
+link_directories("${CRAY_LIBSCI_ROOT}/lib")
 # ————————————————————————————————————————————————————————————————
 
 if(XACC_FOUND)

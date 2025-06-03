@@ -6,8 +6,10 @@
 #include "svsim/sv_cpu.hpp"
 #include "dmsim/dm_cpu.hpp"
 
-
 #include "tnsim/tn_cpu.hpp"
+#ifdef Error
+#  undef Error
+#endif
 #include "tnsim/tn_cuda.hpp"
 
 #ifdef OMP_ENABLED
