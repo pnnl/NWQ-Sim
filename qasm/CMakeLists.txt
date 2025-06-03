@@ -1,6 +1,3 @@
-# qasm/CMakeLists.txt
-
-# Source file for the main executable
 set(SOURCE_FILE "nwq_qasm.cpp")
 find_package(TAMM REQUIRED)
 
