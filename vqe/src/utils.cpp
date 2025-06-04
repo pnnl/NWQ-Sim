@@ -18,6 +18,8 @@
 // #include <set>
 // #include <tuple>
 
+// // Sean: Modify QWC or GC commutation grouping in sorted_insertion()
+
 namespace NWQSim{
 namespace VQE {
   std::ostream& operator<<(std::ostream& out, const PauliOperator& op) {
@@ -156,6 +158,7 @@ std::vector<IdxType> sorted_nodes;
         }
         sorted_nodes = not_added;
     }
+  std::cout << "Cliques: " << cliques.size() << std::endl;
 }
 /**
  * @brief Make an XACC-formatted excitation string for a product of fermionic operators 

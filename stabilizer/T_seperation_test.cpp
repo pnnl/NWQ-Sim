@@ -86,8 +86,6 @@ int main()
 
             outfile << "Total gates: " << total_gates << std::endl;
             outfile.close(); // Close the file
-
-
         }
     }
     return 0;

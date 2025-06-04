@@ -45,6 +45,7 @@ namespace NWQSim
         stabilizer_out << "]";
         stabilizer_out.close();
     }
+    
     void circuit_reverse(std::shared_ptr<Circuit>& circuit)
     {
         auto new_circ = std::make_shared<Circuit>(circuit->num_qubits());
