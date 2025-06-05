@@ -22,11 +22,11 @@
 
 namespace NWQSim
 {
-    class TN_CPU : public QuantumState
+    class TN_ITENSOR : public QuantumState
     {
 
     public:
-        TN_CPU(IdxType _n_qubits, IdxType max_dim, double sv_cutoff) : QuantumState(SimType::TN)
+        TN_ITENSOR(IdxType _n_qubits, IdxType max_dim, double sv_cutoff) : QuantumState(SimType::TN)
         {
             // Initialize CPU side
             n_qubits = _n_qubits;
@@ -49,7 +49,7 @@ namespace NWQSim
         }
 
 
-        ~TN_CPU()
+        ~TN_ITENSOR()
         {
             // // Release for CPU side
         }

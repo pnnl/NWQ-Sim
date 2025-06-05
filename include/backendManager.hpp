@@ -6,11 +6,11 @@
 #include "svsim/sv_cpu.hpp"
 #include "dmsim/dm_cpu.hpp"
 
-#include "tnsim/tn_cpu.hpp"
+#include "tnsim/tn_itensor.hpp"
 #ifdef Error
 #  undef Error
 #endif
-#include "tnsim/tn_cuda.hpp"
+#include "tnsim/tn_tamm.hpp"
 
 #ifdef OMP_ENABLED
 #include "svsim/sv_omp.hpp"
@@ -68,6 +68,8 @@ public:
 #ifdef HIP_ENABLED
         NWQSim::safe_print("- AMDGPU\n");
 #endif
+        NWQSim::safe_print("- TN_TAMM_CPU");
+        NWQSim::safe_print("- TN_TAMM_GPU");
     }
     int MaxDim;
     double Cutoff;
@@ -90,7 +92,13 @@ public:
             else if (simulator_method == "DM")
                 return std::make_shared<NWQSim::DM_CPU>(numQubits);
             else
-                return std::make_shared<NWQSim::TN_CPU>(numQubits, max_dim, sv_cutoff);
+                return std::make_shared<NWQSim::TN_ITENSOR>(numQubits, max_dim, sv_cutoff);
+        }
+
+        
+        else if (backend.rfind("TN_TAMM", 0) == 0) 
+        {
+            return std::make_shared<NWQSim::TN_TAMM>(numQubits, max_dim, backend);
         }
 
 #ifdef OMP_ENABLED
@@ -117,11 +125,6 @@ public:
         }
 #endif
         
-        else if (backend == "NVGPU_TAMM" || backend == "CPU_TAMM")
-        {
-            return std::make_shared<NWQSim::TN_CUDA>(numQubits, max_dim);
-        }
-
 #ifdef HIP_ENABLED
         else if (backend == "AMDGPU")
         {

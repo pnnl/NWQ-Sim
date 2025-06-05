@@ -77,8 +77,6 @@ int main(int argc, char **argv)
     double sv_cutoff = std::stod(config_parser.get_value("sv_cutoff"));
 
     if (config_parser.is_flag_set("backend_list"))
-
-#include <tamm/tamm.hpp>
     {
         BackendManager::print_available_backends();
         return 0;
@@ -95,7 +93,7 @@ int main(int argc, char **argv)
     {
         MPI_Init(&argc, &argv);
     }
-    if (backend == "NVGPU_TAMM" || backend == "CPU_TAMM")
+    if (backend == "TN_TAMM_CPU" || backend == "TN_TAMM_GPU")
     {
         tamm::initialize(argc, argv);
     }
@@ -161,6 +159,11 @@ int main(int argc, char **argv)
                 safe_print("All benchmarks passed!\n");
             else
                 safe_print("TESTING FAILED!\n");
+        }
+
+        if (backend == "TN_TAMM_CPU" || backend == "TN_TAMM_GPU")
+        {
+            tamm::finalize();
         }
 
         return 0;
@@ -244,7 +247,7 @@ int main(int argc, char **argv)
         MPI_Finalize();
     }
 
-    if (backend == "NVGPU_TAMM" || backend == "CPU_TAMM")
+    if (backend == "TN_TAMM_CPU" || backend == "TN_TAMM_GPU")
     {
         tamm::finalize();
     }
@@ -278,13 +281,13 @@ ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, s
     stringstream ss_file, ss_result;
     if (is_basis)
     {
-        ss_file << "../../data/benchmarks_basis/circuits/" << index << ".qasm";
-        ss_result << "../../data/benchmarks_basis/results/" << index << "_result.txt";
+        ss_file << "../data/benchmarks_basis/circuits/" << index << ".qasm";
+        ss_result << "../data/benchmarks_basis/results/" << index << "_result.txt";
     }
     else
     {
-        ss_file << "../../data/benchmarks/circuits/" << index << ".qasm";
-        ss_result << "../../data/benchmarks/results/" << index << "_result.txt";
+        ss_file << "../data/benchmarks/circuits/" << index << ".qasm";
+        ss_result << "../data/benchmarks/results/" << index << "_result.txt";
     }
     ifstream resultFile(ss_result.str().c_str());
     if (!resultFile)

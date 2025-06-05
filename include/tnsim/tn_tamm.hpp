@@ -45,11 +45,12 @@ namespace NWQSim
 {
     using Cplx = std::complex<ValType>;
     using Eigen::Index;
-    class TN_CUDA : public QuantumState
+    class TN_TAMM : public QuantumState
     {
     public:
-        TN_CUDA(IdxType n_qubits,
-                IdxType max_bond_dim = 100)
+        TN_TAMM(IdxType n_qubits,
+                IdxType max_bond_dim = 100,
+                std::string backend = "TN_TAMM_CPU")
         : QuantumState(SimType::TN),
             n_qubits(n_qubits),
             block_size(2048),
@@ -57,6 +58,15 @@ namespace NWQSim
             pg(init_pg()),
             ec(pg, tamm::DistributionKind::dense, tamm::MemoryManagerKind::ga)
         {
+            if (backend == "TN_TAMM_CPU")
+            {
+                exec_hw = tamm::ExecutionHW::CPU;
+            }
+            else if(backend == "TN_TAMM_GPU")
+            {
+                exec_hw = tamm::ExecutionHW::GPU;
+            }
+
             // initialize bond index spaces
             bond_tis.resize(n_qubits + 1);
             bond_dims.resize(n_qubits + 1);
@@ -118,7 +128,7 @@ namespace NWQSim
             }
         }
 
-        ~TN_CUDA() noexcept override 
+        ~TN_TAMM() noexcept override 
         {
             SAFE_FREE_HOST(results);
         }
@@ -140,7 +150,7 @@ namespace NWQSim
 
         void set_seed(IdxType seed) override
         {
-            throw std::runtime_error("TN_CUDA does not use RNG seed, not accessible form cutensornet API\n");
+            throw std::runtime_error("TN_TAMM does not use RNG seed, not accessible form cutensornet API\n");
         }
 
         void set_initial(std::string fpath, std::string format) override
@@ -173,7 +183,7 @@ namespace NWQSim
 
         IdxType measure(IdxType qubit) override
         {
-            throw std::runtime_error("TN_CUDA::measure not implemented");
+            throw std::runtime_error("TN_TAMM::measure not implemented");
         }
 
         IdxType* measure_all(IdxType repetition) override 
@@ -185,27 +195,27 @@ namespace NWQSim
 
         ValType* get_real() const override
         {
-            throw std::runtime_error("TN_CUDA::get_real not implemented");
+            throw std::runtime_error("TN_TAMM::get_real not implemented");
         }
 
         ValType* get_imag() const override
         {
-            throw std::runtime_error("TN_CUDA::get_imag not implemented");
+            throw std::runtime_error("TN_TAMM::get_imag not implemented");
         }
 
         ValType get_exp_z() override
         {
-            throw std::runtime_error("TN_CUDA::get_exp_z() not implemented");
+            throw std::runtime_error("TN_TAMM::get_exp_z() not implemented");
         }
 
         ValType get_exp_z(const std::vector<size_t>& in_bits) override
         {
-            throw std::runtime_error("TN_CUDA::get_exp_z(bits) not implemented");
+            throw std::runtime_error("TN_TAMM::get_exp_z(bits) not implemented");
         }
 
         void print_res_state() override
         {
-            throw std::runtime_error("TN_CUDA::print_res_state not implemented");
+            throw std::runtime_error("TN_TAMM::print_res_state not implemented");
         }
 
     protected:
@@ -213,6 +223,7 @@ namespace NWQSim
         IdxType* results = NULL;
         IdxType max_bond_dim;
         int block_size;
+        tamm::ExecutionHW exec_hw;
 
         tamm::ProcGroup pg;
         tamm::ExecutionContext ec;
@@ -314,8 +325,8 @@ namespace NWQSim
         
             tamm::Scheduler sch{ec};
             sch(Tnew("l","p'","r") = G("p'","p") * T("l","p","r"),
-                "apply_one_qubit", tamm::ExecutionHW::GPU);
-            sch.execute(tamm::ExecutionHW::GPU);
+                "apply_one_qubit", exec_hw);
+            sch.execute(exec_hw);
         
             // replace old tensor and free memory
             T.deallocate();
@@ -432,8 +443,8 @@ namespace NWQSim
                 sch(M("l","p0","p1","r") =
                     mps_tensors[q0]("l","p0","b") *
                     mps_tensors[q1]("b","p1","r"),
-                    "merge_two", tamm::ExecutionHW::GPU);
-                sch.execute(tamm::ExecutionHW::GPU);
+                    "merge_two", exec_hw);
+                sch.execute(exec_hw);
             }
         
             // build two qubit gate tensor G4
@@ -473,8 +484,8 @@ namespace NWQSim
                 tamm::Scheduler sch2{ec};
                 sch2(M2("l","p0p","p1p","r") =
                      G4("p0p","p1p","p0","p1") * M("l","p0","p1","r"),
-                     "apply_two", tamm::ExecutionHW::GPU);
-                sch2.execute(tamm::ExecutionHW::GPU);
+                     "apply_two", exec_hw);
+                sch2.execute(exec_hw);
             }
             M.deallocate();
             G4.deallocate();
@@ -637,8 +648,8 @@ namespace NWQSim
                 tamm::Scheduler sch{ ec };
                 sch(M0("l","pout","a","r") =
                     Uten("pout","pin","a") * mps_tensors[q0]("l","pin","r"),
-                    "merge_control", tamm::ExecutionHW::CPU);
-                sch.execute(tamm::ExecutionHW::CPU);
+                    "merge_control", exec_hw);
+                sch.execute(exec_hw);
             }
             Uten.deallocate();
         
@@ -712,8 +723,8 @@ namespace NWQSim
                     tamm::Scheduler sch{ ec };
                     sch(M1("a","p","r") =
                         prop("a","l") * mps_tensors[site]("l","p","r"),
-                        "merge_prop", tamm::ExecutionHW::CPU);
-                    sch.execute(tamm::ExecutionHW::CPU);
+                        "merge_prop", exec_hw);
+                    sch.execute(exec_hw);
                 }
         
                 // SVD at site
@@ -782,8 +793,8 @@ namespace NWQSim
                 tamm::Scheduler sch{ ec };
                 sch(Tmid("a","pin","r") =
                     prop("a","l") * mps_tensors[q1]("l","pin","r"),
-                    "propagate_to_target", tamm::ExecutionHW::CPU);
-                sch.execute(tamm::ExecutionHW::CPU);
+                    "propagate_to_target", exec_hw);
+                sch.execute(exec_hw);
             }
             mps_tensors[q1].deallocate();
         
@@ -809,8 +820,8 @@ namespace NWQSim
                 tamm::Scheduler sch{ ec };
                 sch(Tfin("a","p","r") =
                     Gten("a","p","pin") * Tmid("a","pin","r"),
-                    "absorb_gate_spectrum", tamm::ExecutionHW::CPU);
-                sch.execute(tamm::ExecutionHW::CPU);
+                    "absorb_gate_spectrum", exec_hw);
+                sch.execute(exec_hw);
             }
         
             // finalize and cleanup
