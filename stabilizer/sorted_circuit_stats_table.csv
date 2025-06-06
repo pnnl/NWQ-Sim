@@ -1,7 +1,50 @@
 Circuit,T Gates,T Rotations,T Ratio
+qec_en_n5.txt,1,1,1.0x
+teleportation_n3.txt,1,1,1.0x
+toffoli_n3.txt,3,3,1.0x
 Adder (4),4,4,1.0x
-Adder (10),88,32,2.75x
+fredkin_n3.txt,4,4,1.0x
+qaoa_n3.txt,8,8,1.0x
+simon_n6.txt,8,8,1.0x
+wstate_n3.txt,14,14,1.0x
+linearsolver_n3.txt,16,16,1.0x
+quantumwalks_n2.txt,20,18,1.11x
+multiply_n13.txt,24,14,1.71x
+inverseqft_n4.txt,28,28,1.0x
+Adder (10),32,16,2.0x
+seca_n11.txt,32,16,2.0x
+sat_n7.txt,40,24,1.67x
+bigadder_n18.txt,64,32,2.0x
+bell_n4.txt,70,68,1.03x
+qram_n20.txt,80,48,1.67x
+qpe_n9.txt,90,86,1.05x
+qft_n4.txt,92,92,1.0x
+variational_n4.txt,100,92,1.09x
 Mult (15),144,42,3.43x
+swap_test_n25.txt,152,140,1.09x
+basis_test_n4.txt,156,132,1.18x
+basis_change_n3.txt,158,152,1.04x
+vqe_uccsd_n4.txt,160,160,1.0x
+pea_n5.txt,166,166,1.0x
+sat_n11.txt,168,58,2.9x
+qf21_n15.txt,170,162,1.05x
+vqe_n4.txt,188,186,1.01x
+knn_n25.txt,204,192,1.06x
+ising_n26.txt,332,324,1.02x
+wstate_n76.txt,416,416,1.0x
+wstate_n27.txt,416,416,1.0x
+qft_n18.txt,596,596,1.0x
+qaoa_n6.txt,672,544,1.24x
+swap_test_n115.txt,736,680,1.08x
+dnn_n2.txt,760,672,1.13x
+vqe_uccsd_n6.txt,884,850,1.04x
+ising_n10.txt,974,928,1.05x
 Mult (45),1512,396,3.82x
+adder_n433.txt,1536,768,2.0x
 "QFT (18, 1)",1677,1333,1.26x
+basis_trotter_n4.txt,1860,1578,1.18x
+dnn_n8.txt,3328,2960,1.12x
+vqe_uccsd_n8.txt,3816,3742,1.02x
+gcm_h6.txt,4852,4486,1.08x
+dnn_n16.txt,6656,5920,1.12x
 "QFT (18, 2)",14383,11463,1.25x
