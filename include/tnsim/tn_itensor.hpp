@@ -524,7 +524,6 @@ namespace NWQSim
             SAFE_FREE_HOST(results);
             SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
             memset(results, 0, sizeof(IdxType) * repetition);
-
  
             // Move to right orthogonal gauge for improved scaling before sampling
             network.position(1);
@@ -539,6 +538,9 @@ namespace NWQSim
             //  Contracte result of sampling as 0 or 1 vector into starting network
             //  Repeat process
             //  
+
+
+	    std::unordered_map<std::string, itensor::ITensor> memo;
 
             for (IdxType i = 0; i < repetition; i++)
             {
@@ -558,8 +560,13 @@ namespace NWQSim
 
      
                         auto rdm = network_(1) * prime(dag(network_(1)));
-      
-                        auto p_si = std::real(eltC(rdm,1,1));
+     			// Bug in iTensor which initializes single site MPS with dangling link 
+			double p_si;
+			if(n_qubits==1){
+				p_si = std::real(eltC(rdm,1,1,1,1));
+			} else{
+                        	p_si = std::real(eltC(rdm,1,1));
+			}
                     
                         if (r >= p_si){
                             res |= static_cast<IdxType>(1) << (j-1);
@@ -570,8 +577,12 @@ namespace NWQSim
                         // Sampling qubits 0 through n_qubits - 1
 
                         // Initial build of reduced density matrix on first location
-                        auto rdm = prime(dag(network_(n_qubits-j+1)),"Link")*network_(n_qubits-j+1);
-                        
+			itensor::ITensor rdm;
+			std::string key = std::to_string(res)+" "+std::to_string(j);
+			if(memo.find(key) != memo.end()){ rdm = memo[key]; }
+			else {
+			
+			rdm = prime(dag(network_(n_qubits-j+1)),"Link")*network_(n_qubits-j+1);
                       
                         for (auto k = n_qubits-j; k >= 1 ; k--){
                             
@@ -583,14 +594,15 @@ namespace NWQSim
                                 rdm *= prime(dag(network_(k)),"Link");
                             }
                         }
-                        
+			}
+                     
                         auto p_si = std::real(eltC(rdm,1,1));
 
                         auto site = sites(j);
                         auto si = itensor::ITensor(site);
 
                         if (r <= p_si){
-       
+
                             // si =  |0>
                             si.set(1,1.);
                             si.set(2,0.);
@@ -611,8 +623,8 @@ namespace NWQSim
                             // Dont divide by 0
                             if (p_si > 0){
                                 network_ /= std::sqrt(p_si);
-                                }
-
+                            }
+			    if(memo.find(key) == memo.end()){ memo[key] = rdm; }
 
                         }
                         else{
@@ -638,11 +650,13 @@ namespace NWQSim
                     
 
                             res |= static_cast<IdxType>(1) << (j-1);
+			    
 
                             // Dont divide by 0
                             if (p_si != 1){
                             network_ /= std::sqrt(1-p_si);
                             }
+			    if(memo.find(key) == memo.end()){ memo[key] = rdm; }
                     }
                     }
 		        }
