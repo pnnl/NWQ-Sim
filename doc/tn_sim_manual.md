@@ -1,23 +1,5 @@
 Running TAMM
-# Specify number of nodes
 # For perlmutter using 4 gpus per node the number of tasks shuld be 5 * nodes
-
-salloc \
-  --nodes=1 \
-  --ntasks=5 \
-  --gpus-per-node=4 \
-  --qos=interactive \
-  --time=01:00:00 \
-  --constraint=gpu \
-  --account=m4623
-
-srun -u \
-  --cpu_bind=map_cpu:0,16,32,48,64 \
-  --mem-bind=map_mem:0,1,2,3,0 \
-  --gpus-per-node=4 \
-  --ntasks-per-node=5 \
-  ../environment/perlmutter_bind.sh ./qasm/nwq_qasm -b TN_TAMM_GPU --sim tn --test 3
-
 
 Things Still needed to be added
 
@@ -40,6 +22,20 @@ Do we want to implement a 1 qubit measure function
 
 ### TAMM Dependencies
 
+Baselevel Dependencies
+- cmake >= 3.26
+- MPI
+- C++17 compilter
+- CUDA >=11.7
+- ROCM >=5.5
+
+Library Dependencies
+- GlobalArrays
+- HPTT, Librett
+- HDF5
+- BLAS/LAPACK
+- BLAS++ , LAPACK++
+- Eigen3, doctest
 
 ### iTensor Dependencies
 
@@ -50,6 +46,13 @@ TODO: Add dependencies here
 
 ### Perlmutter
 
+'''bash
+cmake -DTAMM_ENABLE_CUDA=ON -DGPU_ARCH=80 -DBLIS_CONFIG=generic \
+-DCMAKE_INSTALL_PREFIX=$REPO_INSTALL_PATH ..
+
+make -j3
+make install
+'''
 
 ### Personal Computer
 
@@ -63,6 +66,29 @@ TODO: Add dependencies here
 
 ## TN Sim Run Instructions
 
+The below commands will allocate a interactive session on Perlmutter across a specified number of nodes. Then run a simulation with TN_TAMM_GPU utilizing all of the GPU's across all of the nodes.
+
+'''bash
+salloc \
+  --nodes=1 \
+  --ntasks=5 \
+  --gpus-per-node=4 \
+  --qos=interactive \
+  --time=01:00:00 \
+  --constraint=gpu \
+  --account=mxxxx
+'''
+
+Inside the build directory run the following to run nwq_qasm with TAMM across multiple nodes and gpus.
+
+'''bash
+srun -u \
+  --cpu_bind=map_cpu:0,16,32,48,64 \
+  --mem-bind=map_mem:0,1,2,3,0 \
+  --gpus-per-node=4 \
+  --ntasks-per-node=5 \
+  ../environment/perlmutter_bind.sh ./qasm/nwq_qasm -b TN_TAMM_GPU --sim tn --test 3
+'''
 
 
 
@@ -111,7 +137,7 @@ Currently the tile size is set to a single value. This would also need to become
 
 # Final Recommendation
 
-TAMM already implements parallelized tensor contraction distributed in /parallel across multiple ranks in a HPC cluster. The tradeoff of rewriting everything from scratch vs updating TAMM code ultimately depends on how much flexibility is needed in the NWQ-Sim TN_Sim design. Implementing the following changes in the TAMM code and the current integration of TAMM into NWQ-Sim would be faster than redesigning everything from scratch
+TAMM already implements parallelized tensor contraction distributed in parallel across multiple ranks in a HPC cluster. The tradeoff of rewriting everything from scratch vs updating TAMM code ultimately depends on how much flexibility is needed in the NWQ-Sim TN_Sim design. Implementing the following changes in the TAMM code and the current integration of TAMM into NWQ-Sim would be faster than redesigning everything from scratch
 
 
 Pro's of TAMM
