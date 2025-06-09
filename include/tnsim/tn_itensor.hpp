@@ -310,6 +310,8 @@ namespace NWQSim
             //
             // qubit0 must be < then qubit1  (control must be to the left (smaller site number) of target)
             //
+	    // method = true is Bond Propagation (fastest)
+	    // method = false is MPO
             auto method = true;
             if(std::abs(qubit0 - qubit1) != 1){
                 //std::cout<<"Non local C2"<<std::endl;
@@ -433,10 +435,6 @@ namespace NWQSim
                                 gate_MPO.set(site1, s*v*lsv);
                             }
                         }
-                    }
-                    auto full_gate = gate_MPO(1);
-                    for(auto i = 1 ; i <= n_qubits-1 ; i++){
-                        full_gate *= gate_MPO(i+1);
                     }
 
                     network = applyMPO(gate_MPO,network);
