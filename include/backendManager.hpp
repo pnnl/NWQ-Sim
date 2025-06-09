@@ -6,11 +6,18 @@
 #include "svsim/sv_cpu.hpp"
 #include "dmsim/dm_cpu.hpp"
 
+#ifdef ITENSOR_ENABLED
 #include "tnsim/tn_itensor.hpp"
-#ifdef Error
-#  undef Error
 #endif
+
+// Both itensor and TAMM have Error (may be a better way to do this but this works)
+#ifdef Error
+#undef Error
+#endif
+
+#ifdef TAMM_ENABLED
 #include "tnsim/tn_tamm.hpp"
+#endif
 
 #ifdef OMP_ENABLED
 #include "svsim/sv_omp.hpp"
@@ -98,7 +105,7 @@ public:
         
         else if (backend.rfind("TN_TAMM", 0) == 0) 
         {
-            return std::make_shared<NWQSim::TN_TAMM>(numQubits, max_dim, backend);
+            return std::make_shared<NWQSim::TN_TAMM>(numQubits, max_dim, sv_cutoff, backend);
         }
 
 #ifdef OMP_ENABLED

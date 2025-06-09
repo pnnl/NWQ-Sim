@@ -5,7 +5,6 @@ source ./environment/setup_perlmutter.sh
 
 # Load/build tools needed by TAMM
 module load PrgEnv-gnu
-module load cmake
 module load cpe-cuda
 module load cudatoolkit
 module unload craype-accel-nvidia80

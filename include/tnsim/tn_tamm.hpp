@@ -50,14 +50,34 @@ namespace NWQSim
     public:
         TN_TAMM(IdxType n_qubits,
                 IdxType max_bond_dim = 100,
+                double sv_cutoff = 0.0,
                 std::string backend = "TN_TAMM_CPU")
         : QuantumState(SimType::TN),
             n_qubits(n_qubits),
             block_size(2048),
             max_bond_dim(max_bond_dim),
+            sv_cutoff(sv_cutoff),
             pg(init_pg()),
             ec(pg, tamm::DistributionKind::dense, tamm::MemoryManagerKind::ga)
         {
+            i_proc = pg.rank().value();
+            
+            if(ec.print()) {
+                auto current_time   = std::chrono::system_clock::now();
+                auto current_time_t = std::chrono::system_clock::to_time_t(current_time);
+                auto cur_local_time = localtime(&current_time_t);
+                std::cout << std::endl << "date: " << std::put_time(cur_local_time, "%c") << std::endl;
+                std::cout << "nnodes: " << ec.nnodes() << ", ";
+                std::cout << "nproc_per_node: " << ec.ppn() << ", ";
+                std::cout << "nproc_total: " << ec.nnodes() * ec.ppn() << ", ";
+                if(ec.has_gpu()) {
+                  std::cout << "ngpus_per_node: " << ec.gpn() << ", ";
+                  std::cout << "ngpus_total: " << ec.nnodes() * ec.gpn() << std::endl;
+                }
+                std::cout << std::endl;
+                ec.print_mem_info();
+                std::cout << std::endl;
+            }
             if (backend == "TN_TAMM_CPU")
             {
                 exec_hw = tamm::ExecutionHW::CPU;
@@ -223,6 +243,7 @@ namespace NWQSim
         IdxType* results = NULL;
         IdxType max_bond_dim;
         int block_size;
+        double sv_cutoff;
         tamm::ExecutionHW exec_hw;
 
         tamm::ProcGroup pg;
@@ -521,11 +542,32 @@ namespace NWQSim
             Eigen::BDCSVD<decltype(mat)> svd(mat,
                 Eigen::ComputeThinU | Eigen::ComputeThinV);
             auto svals = svd.singularValues();
-            IdxType chi = std::min<IdxType>(max_bond_dim, IdxType(svals.size()));
-            auto Umat = svd.matrixU().leftCols(chi);
-            auto Sdiag = svals.head(chi).asDiagonal();
-            auto Vh = svd.matrixV().leftCols(chi).adjoint();
-        
+            
+            std::vector<IdxType> keep;
+            keep.reserve(svals.size());
+            for (IdxType i = 0; i < svals.size(); ++i)
+            {
+                if (std::abs(svals(i)) >= sv_cutoff)
+                {
+                    keep.push_back(i);
+                }
+            }
+            
+            IdxType chi = std::min<IdxType>(max_bond_dim, IdxType(keep.size()));
+            
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> Umat(mat.rows(), chi);
+            Eigen::Matrix<Cplx, Eigen::Dynamic, 1> kept_svals(chi);
+            Eigen::Matrix<Cplx, Eigen::Dynamic, Eigen::Dynamic> Vh(chi, mat.cols());
+            for (IdxType k = 0; k < chi; ++k)
+            {
+                IdxType i = keep[k];
+                Umat.col(k)   = svd.matrixU().col(i);
+                kept_svals(k) = svals(i);
+                Vh.row(k)     = svd.matrixV().col(i).adjoint();
+            }
+            
+            auto Sdiag = kept_svals.asDiagonal();
+
             // update bond dimension and index space
             bond_dims[q0 + 1] = chi;
             {
@@ -594,6 +636,8 @@ namespace NWQSim
             M2.deallocate();
         }
 
+
+        // Note: This is not currently working, the itensor version works but this proved a little tricky in TAMM
         virtual void C2_GATE_NL(
             const std::array<Cplx, 16> &U4,
             IdxType q0,
