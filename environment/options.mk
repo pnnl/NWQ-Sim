@@ -2,7 +2,7 @@
 
 ## [1] Choose your compiler
 # Use Cray’s C++ wrapper (NVIDIA toolchain) with C++17 and PIC
-CCCOM = CC -std=c++17 -fPIC
+CCCOM = g++ -std=c++17 -fPIC
 
 # If you ever switch off of Cray you could re-enable one of these:
 # GNU GCC
@@ -17,7 +17,7 @@ PLATFORM = lapack
 
 ## Link flags for Cray LibSci’s BLAS+LAPACK
 ## (these libraries come from `module load cray-libsci`)
-BLAS_LAPACK_LIBFLAGS   = -lsci_nvidia_mp -lsci_lapack
+BLAS_LAPACK_LIBFLAGS   = -lblas -llapack
 BLAS_LAPACK_INCLUDEFLAGS =   # nothing special needed for headers
 
 #########
@@ -80,4 +80,5 @@ else
   DYLIB_EXT  = so
   DYLIB_FLAGS = -shared
 endif
+
 
