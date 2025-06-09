@@ -443,9 +443,6 @@ namespace NWQSim
                     network.normalize();
 
                 }
-                // Non-Adjacent SWAP Method
-
-                
 
                 // network clean-up
                 network.noPrime();
@@ -540,6 +537,7 @@ namespace NWQSim
             //  
 
 
+	    // memoization, storing rdms for later lookup
 	    std::unordered_map<std::string, itensor::ITensor> memo;
 
             for (IdxType i = 0; i < repetition; i++)
