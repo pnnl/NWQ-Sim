@@ -33,7 +33,7 @@ General NWQ-Sim installation instructions can be found at:
 This section provides a condensed guide for installing the `tn_sim_tamm_itensor` branch of NWQ-Sim on a local machine or NERSC's Perlmutter cluster.
 
 ```bash
-git clone https://github.com/JBers/NWQ-Sim.git -b tn_sim_tamm_itensor
+git clone https://github.com/PNNL/NWQ-Sim.git -b tn_sim_tamm_itensor
 ```
 
 ## TAMM Build Instructions
@@ -117,12 +117,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Release -DCUDA_ARCH=80
 make -j4
 ```
 
-### Personal Computer
-
-
-## TN Sim Run Instructions
-
-## Usage Instructions
+## TN Sim Usage Instructions
 
 ### Select Backend
 
@@ -175,8 +170,6 @@ srun -u \
 
 # Recommendations for Continuation of TAMM NWQ-Sim Development
 
-## Steps Needed for Optimization
-
 ## What is Currently Implemented
 
 - Logic for Local and Non-Local 2-Qubit Gates for MPS
@@ -208,59 +201,23 @@ To enable efficient execution of entire quantum circuit layers, SVD should be in
 
 #### 3. Dynamic Tile Size Updates
 
-The current static tile size configuration is suboptimal. Efficient MPS simulations require dynamic tile sizing that adapts to changing bond dimensions and tensor shapes.
+The current static tile size configuration is suboptimal. Efficient simulations would require dynamic tile sizing that adapts to changing bond dimensions and tensor shapes.
 
 ## Final Recommendation
 
-TAMM already offers MPI support and GPU memory management (both AMD and NVIDIA), which are non-trivial features to replicate. The decision to extend TAMM versus developing a new system depends on the flexibility required by the TN_Sim design.
+TAMM already provides a robust foundation for high-performance tensor contraction, including MPI support and GPU memory management for both AMD and NVIDIA platforms. These features are ultimately required to scale a MPS simulation across a HPC cluster such as Perlmutter or Frontier. 
 
-### Advantages of TAMM
+However, TAMM was primarily designed for static tensor contraction and lacks some of the dynamic capabilities required by TN_Sim, such as:
 
-- Open-source, supports MPI
-- GPU support (AMD and NVIDIA)
-- Efficient memory management already implemented
+- A native, GPU-accelerated SVD operator
+- Support for dynamic tile and tensor sizing, adaptable to changing bond dimensions
 
-### Limitations of TAMM
+To optimize TAMM as a backend for TN_Sim, the following changes are necessary:
 
-- Lacks a native SVD operator
-- Tile size is fixed, not adaptive to bond dimension
-- Designed primarily for static tensor contraction, not the dynamic tensor operations typical of MPS
+1. **Enhance TAMM Core**:
+   - Implement a scaled GPU-accelerated SVD operator compatible with the TAMM scheduler
+   - Introduce dynamic tile and tensor sizing to eliminate intermediate data copies during simulation
 
-## Conclusion and Outlook
-
-The Capstone project aimed to implement a Tensor Network Matrix Product State (MPS) quantum simulator within PNNL’s NWQ-Sim package that would:
-
-1. Be compatible with CPU, NVIDIA GPU, and AMD GPU architectures.
-2. Scale across multiple nodes in HPC environments.
-
-### Project Achievements
-
-- Developed a local CPU implementation using ITensor
-- Integrated TAMM for GPU backend support
-- Demonstrated multi-node scalability on Perlmutter
-
-However, time constraints prevented addressing critical inefficiencies. We identified structural changes needed in TAMM for high-performance MPS simulation.
-
-### Critical Limitations and Required Improvements
-
-#### Tensor Operation Parallelization
-
-The TAMM NWQ-Sim implementation only executes one contraction at a time. Enhancing the `sim` function or creating a dedicated fusion scheduler is necessary for parallel tensor execution across MPS sites.
-
-#### Missing TAMM SVD/QR Operator
-
-The absence of native SVD/QR operations forces costly conversions between TAMM tensors and Eigen matrices. These operations are central to MPS algorithms and must be implemented with MPI and GPU support.
-
-#### Static Tile Size Constraints
-
-Static tile sizes do not accommodate the variable bond dimensions in MPS calculations. Dynamic tile size adjustment is essential for optimizing memory usage.
-
-### Recommendations for Future Development
-
-While rewriting NWQ-Sim without TAMM is theoretically possible, enhancing TAMM integration offers a faster, more practical solution. Key changes include:
-
-1. Implement a GPU-accelerated, parallel SVD operator as a schedulable TAMM operation.
-2. Introduce dynamic tile sizing based on tensor shape and bond dimension.
-
-These changes will significantly enhance simulation performance without abandoning existing infrastructure.
+2. **Modify NWQ-Sim Integration**:
+   - Adapt the simulation kernel or gate fusion logic to schedule circuit gates using TAMM’s execution model
 
