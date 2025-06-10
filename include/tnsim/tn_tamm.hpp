@@ -60,8 +60,10 @@ namespace NWQSim
             pg(init_pg()),
             ec(pg, tamm::DistributionKind::dense, tamm::MemoryManagerKind::ga)
         {
+            // set the i_proc to prevent repeat prints
             i_proc = pg.rank().value();
             
+            // print the tamm execution context, this can be commented out if desired
             if(ec.print()) {
                 auto current_time   = std::chrono::system_clock::now();
                 auto current_time_t = std::chrono::system_clock::to_time_t(current_time);
@@ -78,6 +80,7 @@ namespace NWQSim
                 ec.print_mem_info();
                 std::cout << std::endl;
             }
+            // change between cpu or gpu tensor contraction
             if (backend == "TN_TAMM_CPU")
             {
                 exec_hw = tamm::ExecutionHW::CPU;
@@ -209,7 +212,6 @@ namespace NWQSim
         IdxType* measure_all(IdxType repetition) override 
         {
             MA_GATE(repetition);
-	        std::cout<<"measure_all was called"<<std::endl;
             return results; 
         }
 
@@ -355,6 +357,10 @@ namespace NWQSim
             G.deallocate();
         }
  
+
+        /* dump_state is a helper method to help with debugging
+         * the tensor simulation before looking at measurement results.
+         * It prints out the statevector of the mps*/
         std::vector<Cplx> flatten_mps_state()
         {
             // initialize state with first tensor
@@ -451,6 +457,12 @@ namespace NWQSim
             printf("\n");
         }
 
+        /* Implementation of local 2 qubit gate
+         * 1) Allocate gate tensor
+         * 2) Merge the local sites
+         * 3) Apply gate tensor
+         * 4) Apply SVD and concatenate bond dimension
+         * 5) Reallocate tensors to mps sites*/
         virtual void C2_GATE_L(const std::array<Cplx, 16> &U4, IdxType q0, IdxType q1)
         {
             // merge tensors at sites q0 and q1
@@ -882,6 +894,11 @@ namespace NWQSim
             Cplx(0,0), Cplx(0,0), Cplx(0,0), Cplx(1,0)
         };
         
+
+       /* Working non-local 2 qubit gate with SWAP
+        * 1) Move the left most qubit site until adjacent to the right qubit
+        * 2) Perform the local 2 qubit gate
+        * 3) Reverse the swaps*/
         void C2_GATE_NL_SWAP(const std::array<Cplx,16> &U4, IdxType q0, IdxType q1)
         {
             // reorder U4 if qubit indices are reversed
@@ -928,6 +945,7 @@ namespace NWQSim
             }
         }
  
+        /* General 2 qubit gate function, chooses between local or non-local */
         virtual void C2_GATE(const std::array<Cplx,16> &U4, IdxType q0, IdxType q1)
         {
             // choose local or non-local implementation based on qubit adjacency
@@ -1217,6 +1235,24 @@ namespace NWQSim
             }
         }
 
+        /*MA Gate
+        *1) Free and reallocate a buffer to store repetition number of measurement results.
+
+        *2) Canonicalize the MPS from both left and right to stabilize subsequent contractions.
+        
+        *3) Initialize a random number generator for sampling measurement outcomes.
+        
+        *4) For each repetition:
+        *a. Initialize the environment vector with amplitude 1.
+        *b. Loop over all qubit sites from left to right:
+        *i. Extract the MPS tensor at the current site.
+        *ii. Contract the current environment with the tensor to produce two branch environments for qubit outcomes 0 and 1.
+        *iii. Compute squared norms of both branches to determine measurement probabilities.
+        *iv. Sample a measurement outcome based on these probabilities.
+        *v. Record the sampled bit in the packed result.
+        *vi. Renormalize the chosen branch and set it as the new environment.
+        
+        *5) Store the final bitstring for each repetition in the results buffer. */
         virtual void MA_GATE(const IdxType repetition)
         {
             // allocate result buffer
@@ -1243,7 +1279,7 @@ namespace NWQSim
                     IdxType Dl = bond_dims[site];
                     IdxType Dr = bond_dims[site + 1];
         
-                    std::vector<Cplx> env0(Dr, Cplx{0.0, 0.0});
+                    std::vector<Cplx> env0(Dl, Cplx{0.0, 0.0});
                     std::vector<Cplx> env1(Dr, Cplx{0.0, 0.0});
         
                     // unpack tensor into branch environments
@@ -1389,6 +1425,7 @@ namespace NWQSim
             mps_tensors[i+1] = std::move(Tj_new);
         }
         
+        /* Sets the MPS in a mixed gauge centered around a specified position */
         void position(IdxType site)
         {
             assert(site < n_qubits);

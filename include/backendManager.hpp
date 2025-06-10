@@ -98,15 +98,18 @@ public:
                 return std::make_shared<NWQSim::SV_CPU>(numQubits);
             else if (simulator_method == "DM")
                 return std::make_shared<NWQSim::DM_CPU>(numQubits);
+#ifdef ITENSOR_ENABLED
             else
                 return std::make_shared<NWQSim::TN_ITENSOR>(numQubits, max_dim, sv_cutoff);
+#endif
         }
 
-        
+#ifdef TAMM_ENABLED   
         else if (backend.rfind("TN_TAMM", 0) == 0) 
         {
             return std::make_shared<NWQSim::TN_TAMM>(numQubits, max_dim, sv_cutoff, backend);
         }
+#endif
 
 #ifdef OMP_ENABLED
         else if (backend == "OPENMP")
