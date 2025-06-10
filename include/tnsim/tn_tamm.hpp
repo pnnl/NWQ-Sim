@@ -1279,7 +1279,7 @@ namespace NWQSim
                     IdxType Dl = bond_dims[site];
                     IdxType Dr = bond_dims[site + 1];
         
-                    std::vector<Cplx> env0(Dl, Cplx{0.0, 0.0});
+                    std::vector<Cplx> env0(Dr, Cplx{0.0, 0.0});
                     std::vector<Cplx> env1(Dr, Cplx{0.0, 0.0});
         
                     // unpack tensor into branch environments

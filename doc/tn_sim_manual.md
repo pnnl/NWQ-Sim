@@ -73,18 +73,10 @@ make -j3
 make install
 ```
 
-After installing TAMM on Perlmutter you must include the location of the TAMM install directory. Modify the following lines in the top level CMakeLists.txt file.
-
-```bash
-if ( NOT DEFINED TAMM_DIR )
-  set(TAMM_DIR "$ENV{HOME}/PATH/TO/TAMM/INSTALL"
-      CACHE PATH "Path to external TAMM installation")
-endif()
-```
-
 Then the following commands can be run to compile NWQ-Sim for the TN_TAMM_CPU and TN_TAMM_GPU backends.
 
 ```bash
+cd ./NWQ-Sim/build
 cmake .. -DCMAKE_BUILD_TYPE=Release -DCUDA_ARCH=80
 make -j4
 ```
