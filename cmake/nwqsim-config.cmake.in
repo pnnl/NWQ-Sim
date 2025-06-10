@@ -1,0 +1,11 @@
+@PACKAGE_INIT@
+
+find_package(MPI)
+
+if(NOT TARGET nwqsim::nwqsim)
+    include("${CMAKE_CURRENT_LIST_DIR}/nwqsim-targets.cmake")
+endif()
+
+set(NWQSim_FOUND TRUE)
+set(NWQSim_LIBRARIES nwqsim::nwqsim)
+set(NWQSim_INCLUDE_DIRS "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@" "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/nwqsim" "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/nwqsim/vqe")
