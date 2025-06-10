@@ -223,5 +223,5 @@ To optimize TAMM as a backend for TN_Sim, the following changes are necessary:
    - Introduce dynamic tile and tensor sizing to eliminate intermediate data copies during simulation
 
 2. **Modify NWQ-Sim Integration**:
-   - Adapt the simulation kernel or gate fusion logic to schedule circuit gates using TAMM’s execution model
+   - Adapt the simulation kernel or gate fusion logic to schedule circuit to run multiple gate operations in parallel to fully utilize the tamm scheduler.
 
