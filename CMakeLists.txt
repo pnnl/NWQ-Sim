@@ -26,7 +26,7 @@ if (NOT XACC_DIR)
 endif()
 
 if ( NOT DEFINED TAMM_DIR )
-  set(TAMM_DIR "$ENV{HOME}/AaronForkNWQ-Sim/tamm_install"
+  set(TAMM_DIR "${CMAKE_SOURCE_DIR}/../tamm_install"
       CACHE PATH "Path to external TAMM installation")
 endif()
 
