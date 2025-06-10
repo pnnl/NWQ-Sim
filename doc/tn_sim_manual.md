@@ -8,7 +8,7 @@
 Baselevel Dependencies
 - cmake >= 3.26
 - MPI
-- C++17 compilter
+- C++17 compiler
 - CUDA >=11.7
 - ROCM >=5.5
 
@@ -22,12 +22,23 @@ Library Dependencies
 
 ### iTensor Dependencies
 
-TODO: Add dependencies here
+Library Dependencies
+- LBLAS, LLAPACK (From LibSci)
 
+## Installation Instructions
+
+General NWQ-Sim installation instructions can be found at:  
+[https://github.com/PNNL/NWQ-Sim/blob/main/doc/user_manual.md](https://github.com/PNNL/NWQ-Sim/blob/main/doc/user_manual.md)
+
+This section provides a condensed guide for installing the `tn_sim_tamm_itensor` branch of NWQ-Sim on a local machine or NERSC's Perlmutter cluster.
+
+```bash
+git clone https://github.com/JBers/NWQ-Sim.git -b tn_sim_tamm_itensor
+```
 
 ## TAMM Build Instructions
 
-TAMM build instructions can be found here. More direct instructions can be found below specific for Perlmutter.
+TAMM build instructions can be found [here](https://tamm.readthedocs.io/en/latest/install.html). More direct instructions can be found below specific for Perlmutter.
 
 ### Perlmutter
 
@@ -62,7 +73,7 @@ make -j3
 make install
 ```
 
-After installing TAMM on Perlmutter you must include the location of the TAMM install directory. 
+After installing TAMM on Perlmutter you must include the location of the TAMM install directory. Modify the following lines in the top level CMakeLists.txt file.
 
 ```bash
 if ( NOT DEFINED TAMM_DIR )
@@ -81,18 +92,69 @@ make -j4
 
 ### Perlmutter
 
+Clone the iTensor repository:
+
+```bash
+git clone https://github.com/ITensor/ITensor itensor
+```
+
+Edit the `options.mk.sample` file in the `itensor` directory based on your system.  
+Ensure BLAS and LAPACK are enabled. For Perlmutter:
+
+```bash
+cp ./NWQ-Sim/environment/options.mk ./itensor
+source ./NWQ-Sim/environment/setup_perlmutter.sh
+cd ./itensor
+make
+```
+
+```bash
+cd ./NWQ-Sim
+mkdir build
+source ./NWQ-Sim/environment/setup_perlmutter.sh
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCUDA_ARCH=80
+make -j4
+```
 
 ### Personal Computer
 
 
 ## TN Sim Run Instructions
 
-The below commands will allocate a interactive session on Perlmutter across a specified number of nodes. Then run a simulation with TN_TAMM_GPU utilizing all of the GPU's across all of the nodes.
+## Usage Instructions
+
+### Select Backend
+
+TN-Sim supports three backends. The default is `CPU`.
+
+```bash
+./nwq_qasm -q CIRCUIT.QASM --sim tn --backend CPU
+./nwq_qasm -q CIRCUIT.QASM --sim tn --backend TN_TAMM_CPU
+./nwq_qasm -q CIRCUIT.QASM --sim tn --backend TN_TAMM_GPU
+```
+
+### Configure MPS Simulation Parameters
+
+You can configure:
+
+- `--max_dim`: Max number of singular values in SVD (default: 100)
+- `--sv_cutoff`: Minimum magnitude threshold for singular values (default: 0.0)
+
+Example:
+
+```bash
+./nwq_qasm -q CIRCUIT.QASM --sim tn --max_dim 1000 --sv_cutoff 1e-6
+```
+
+### Running TAMM TN-Sim Distributed on Perlmutter
+
+The below commands will allocate a interactive session on Perlmutter across a specified number of nodes. Then run a simulation with TN_TAMM_GPU utilizing all of the GPU's across all of the nodes. The number of tasks to allocate is equal to the number of GPU's per node plus 1 task for the Global Arrays Progress Ranks. The follwing example shows full utilization of 2 nodes on Perlmutter.
 
 ```bash
 salloc \
-  --nodes=1 \
-  --ntasks=5 \
+  --nodes=2 \
+  --ntasks=10 \
   --gpus-per-node=4 \
   --qos=interactive \
   --time=01:00:00 \
@@ -108,64 +170,97 @@ srun -u \
   --mem-bind=map_mem:0,1,2,3,0 \
   --gpus-per-node=4 \
   --ntasks-per-node=5 \
-  ../environment/perlmutter_bind.sh ./qasm/nwq_qasm -b TN_TAMM_GPU --sim tn --test 3
+  ../environment/perlmutter_bind.sh ./qasm/nwq_qasm -b TN_TAMM_GPU --sim tn <args>
 ```
 
+# Recommendations for Continuation of TAMM NWQ-Sim Development
 
-
-# Recommendatins for Continuation of TAMM NWQ-Sim development
-
-Steps needed for optimization 
+## Steps Needed for Optimization
 
 ## What is Currently Implemented
 
-### Logic for Local and Non-Local 2 qubit gates for MPS 
+- Logic for Local and Non-Local 2-Qubit Gates for MPS
+- Left and Right Environment Orthogonalization
+- SVD Contraction
 
-### Left and Right Environment Orthogonalization
+## Known Errors, Bugs, and Inefficiencies
 
-### SVD contraction
-
-## Known errors/bugs/inefficiencies
-
-- SVD is not needed in Left and Right Environment Orthogonalization
+- SVD is not required in Left and Right Environment Orthogonalization
 - Gates are not executed in parallel
 - Measurement is not executed in parallel
-- Run time 
+- Suboptimal run-time performance
 
+## Areas of Interest for Further Consideration
 
-## Things that maybe of interest to think about
+### Tensor Operation Parallelization
 
-### 
+Parallelization involves multiple stages for efficient execution:
 
-## Tensor operation parallelization
+#### 1. Levelize Sequence of Gate Operations
 
-This also has multiple steps needed for efficient parallelization.
+Currently, TAMM NWQ-Sim schedules one tensor contraction at a time. To improve throughput, a new "fusion" function or an enhancement to the existing `sim` function should schedule all tensor operations that can be concurrently executed across all MPS sites. Optimal implementation would require modifying TAMM directly. 
 
-### 1) Levelize sequence of gate operations 
+Note: TAMM supports tensor contraction, addition, and subtraction, but not SVD. This forces data transfers between TAMM tensors and Eigen matrices, introducing overhead.
 
-Currently the TAMM NWQ-Sim implementation only schedules a single tensor contraction at a time during simulation. The immediate speed up to this would be to add either in the sim function or a create a new fusion function to schedule all tensor operations that can be performed at once for all sites in the MPS. The best way to do this would be to modify the TAMM code itself. TAMM currently only implents tensor contraction, addition , subtraction etc. SVD is not supported as a operation in the TAMM scheduler. This means that in the current implementation data from TAMM tensors must frequently be taken and inserted into a eigen matrix to perform SVD. 
+#### 2. TAMM SVD Operator Implementation
 
-### 2) TAMM SVD operator implementation
+To enable efficient execution of entire quantum circuit layers, SVD should be integrated into the TAMM execution graph as a schedulable operator. Additionally, the current Eigen-based SVD implementation is neither parallelized across MPI ranks nor GPU-accelerated. This represents a major bottleneck. A proper TAMM SVD operator should support both.
 
-To perform an entire level of operations in a quantum circuit simulation efficiently SVD should be added as a operator that can be added into the scheduler execution graph. Also, current eigen svd is not parallelized across multiple ranks or gpu accelerated. This is a major bottleneck in the current system design. A TAMM svd operator would need to implement this as well.
+#### 3. Dynamic Tile Size Updates
 
+The current static tile size configuration is suboptimal. Efficient MPS simulations require dynamic tile sizing that adapts to changing bond dimensions and tensor shapes.
 
-### 3) Dynamic Tile Size Updates
+## Final Recommendation
 
-Currently the tile size is set to a single value. This would also need to become dynamic to the problem size, currently the tile size is set to constant and is not dynamic.
+TAMM already offers MPI support and GPU memory management (both AMD and NVIDIA), which are non-trivial features to replicate. The decision to extend TAMM versus developing a new system depends on the flexibility required by the TN_Sim design.
 
+### Advantages of TAMM
 
+- Open-source, supports MPI
+- GPU support (AMD and NVIDIA)
+- Efficient memory management already implemented
 
-# Final Recommendation
+### Limitations of TAMM
 
-TAMM already implements parallelized tensor contraction distributed in parallel across multiple ranks in a HPC cluster. The tradeoff of rewriting everything from scratch vs updating TAMM code ultimately depends on how much flexibility is needed in the NWQ-Sim TN_Sim design. Implementing the following changes in the TAMM code and the current integration of TAMM into NWQ-Sim would be faster than redesigning everything from scratch
+- Lacks a native SVD operator
+- Tile size is fixed, not adaptive to bond dimension
+- Designed primarily for static tensor contraction, not the dynamic tensor operations typical of MPS
 
+## Conclusion and Outlook
 
-Pro's of TAMM
-- MPI, AMD and NVIDIA GPU, memory management already solved in open source PNNL code
+The Capstone project aimed to implement a Tensor Network Matrix Product State (MPS) quantum simulator within PNNL’s NWQ-Sim package that would:
 
+1. Be compatible with CPU, NVIDIA GPU, and AMD GPU architectures.
+2. Scale across multiple nodes in HPC environments.
 
-Con's of TAMM
-- Missing several features for a efficient MPS simulator
-- Such as, SVD operator, dynamic tile resizing to deal with Bond dimension
-- TAMM seems to have been built in mind to multiply static tensors, a MPS has dynamic tensor sizes depending on the bond dimension
+### Project Achievements
+
+- Developed a local CPU implementation using ITensor
+- Integrated TAMM for GPU backend support
+- Demonstrated multi-node scalability on Perlmutter
+
+However, time constraints prevented addressing critical inefficiencies. We identified structural changes needed in TAMM for high-performance MPS simulation.
+
+### Critical Limitations and Required Improvements
+
+#### Tensor Operation Parallelization
+
+The TAMM NWQ-Sim implementation only executes one contraction at a time. Enhancing the `sim` function or creating a dedicated fusion scheduler is necessary for parallel tensor execution across MPS sites.
+
+#### Missing TAMM SVD/QR Operator
+
+The absence of native SVD/QR operations forces costly conversions between TAMM tensors and Eigen matrices. These operations are central to MPS algorithms and must be implemented with MPI and GPU support.
+
+#### Static Tile Size Constraints
+
+Static tile sizes do not accommodate the variable bond dimensions in MPS calculations. Dynamic tile size adjustment is essential for optimizing memory usage.
+
+### Recommendations for Future Development
+
+While rewriting NWQ-Sim without TAMM is theoretically possible, enhancing TAMM integration offers a faster, more practical solution. Key changes include:
+
+1. Implement a GPU-accelerated, parallel SVD operator as a schedulable TAMM operation.
+2. Introduce dynamic tile sizing based on tensor shape and bond dimension.
+
+These changes will significantly enhance simulation performance without abandoning existing infrastructure.
+
