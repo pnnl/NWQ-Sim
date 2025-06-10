@@ -173,8 +173,11 @@ srun -u \
 ## What is Currently Implemented
 
 - Logic for Local and Non-Local 2-Qubit Gates for MPS
+- Full simulation with .qasm files or test
+- Measurement function on all sites
 - Left and Right Environment Orthogonalization
-- SVD Contraction
+- Position functoin to set up mixed gauge for left canoncalization on the left and right canonicalization on the right of a specified site
+- SVD Contraction utilizing eigen on the host
 
 ## Known Errors, Bugs, and Inefficiencies
 
@@ -182,6 +185,7 @@ srun -u \
 - Gates are not executed in parallel
 - Measurement is not executed in parallel
 - Suboptimal run-time performance
+- Bond propogation: There is a function in tn_tamm called C2_GATE_NL that is an attempt at this. Currently TAMM is set up to use SWAP gates for non-local 2 qubit gates and is functionally correct.
 
 ## Areas of Interest for Further Consideration
 
