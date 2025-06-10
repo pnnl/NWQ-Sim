@@ -1,21 +1,4 @@
-Running TAMM
-# For perlmutter using 4 gpus per node the number of tasks shuld be 5 * nodes
-
-Things Still needed to be added
-
-- Dependency graph
-- Add i_proc so it doesn't print off a for each rank
-- Make some pi charts of what most of the time is being used for during MPS simulation.
-
-
-
-Known errors
-
-Application linked against multiple cray-libsci libraries?
-Do we want to implement a 1 qubit measure function
-
 # TN SIM 
-
 
 ## Dependencies
 
@@ -44,18 +27,56 @@ TODO: Add dependencies here
 
 ## TAMM Build Instructions
 
+TAMM build instructions can be found here. More direct instructions can be found below specific for Perlmutter.
+
 ### Perlmutter
 
-'''bash
+Set some temporary install variables.
+
+```bash
+export REPO_ROOT_PATH=$HOME/TAMM
+export REPO_INSTALL_PATH=$HOME/tamm_install
+```
+
+Clone TAMM into Repo path and move to the build directory.
+
+```bash
+git clone git@github.com:NWChemEx/TAMM.git $REPO_ROOT_PATH
+cd $REPO_ROOT_PATH
+mkdir build && cd build
+```
+
+Environment setup command, run this when first building and every subsequent time logging on. This will also run the perlmutter setup script.
+
+```bash
+source $NWQ_SIM_PATH/environment/setup_tamm_perlmutter.sh
+```
+
+Inside the TAMM build directory run the following.
+
+```bash
 cmake -DTAMM_ENABLE_CUDA=ON -DGPU_ARCH=80 -DBLIS_CONFIG=generic \
 -DCMAKE_INSTALL_PREFIX=$REPO_INSTALL_PATH ..
 
 make -j3
 make install
-'''
+```
 
-### Personal Computer
+After installing TAMM on Perlmutter you must include the location of the TAMM install directory. 
 
+```bash
+if ( NOT DEFINED TAMM_DIR )
+  set(TAMM_DIR "$ENV{HOME}/PATH/TO/TAMM/INSTALL"
+      CACHE PATH "Path to external TAMM installation")
+endif()
+```
+
+Then the following commands can be run to compile NWQ-Sim for the TN_TAMM_CPU and TN_TAMM_GPU backends.
+
+```bash
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCUDA_ARCH=80
+make -j4
+```
 ## iTensor Build Instructions
 
 ### Perlmutter
@@ -68,7 +89,7 @@ make install
 
 The below commands will allocate a interactive session on Perlmutter across a specified number of nodes. Then run a simulation with TN_TAMM_GPU utilizing all of the GPU's across all of the nodes.
 
-'''bash
+```bash
 salloc \
   --nodes=1 \
   --ntasks=5 \
@@ -77,18 +98,18 @@ salloc \
   --time=01:00:00 \
   --constraint=gpu \
   --account=mxxxx
-'''
+```
 
 Inside the build directory run the following to run nwq_qasm with TAMM across multiple nodes and gpus.
 
-'''bash
+```bash
 srun -u \
   --cpu_bind=map_cpu:0,16,32,48,64 \
   --mem-bind=map_mem:0,1,2,3,0 \
   --gpus-per-node=4 \
   --ntasks-per-node=5 \
   ../environment/perlmutter_bind.sh ./qasm/nwq_qasm -b TN_TAMM_GPU --sim tn --test 3
-'''
+```
 
 
 
