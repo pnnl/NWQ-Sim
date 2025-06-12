@@ -19,9 +19,11 @@
 #include "src/cl_parser.hpp"
 /**************************************************************************/
 
+#include <tamm/tamm.hpp>
+
 using namespace NWQSim;
 ValType pass_threshold = 0.98;
-ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis);
+ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis, IdxType max_dim, double sv_cutoff);
 void print_result(bool is_qobj, map<string, IdxType> *counts, std::shared_ptr<NWQSim::QuantumState> state, IdxType total_shots, std::string prefix = "");
 
 int main(int argc, char **argv)
@@ -70,6 +72,10 @@ int main(int argc, char **argv)
     Config::device_layout_file = config_parser.get_value("layout");
     Config::device_layout_str = config_parser.get_value("layout_str");
 
+    // Handle TNSim MPS parameters
+    IdxType max_dim = std::stoll(config_parser.get_value("max_dim"));
+    double sv_cutoff = std::stod(config_parser.get_value("sv_cutoff"));
+
     if (config_parser.is_flag_set("backend_list"))
     {
         BackendManager::print_available_backends();
@@ -86,6 +92,10 @@ int main(int argc, char **argv)
     if (backend == "MPI" || backend == "NVGPU_MPI")
     {
         MPI_Init(&argc, &argv);
+    }
+    if (backend == "TN_TAMM_CPU" || backend == "TN_TAMM_GPU")
+    {
+        tamm::initialize(argc, argv);
     }
 #endif
 
@@ -126,7 +136,7 @@ int main(int argc, char **argv)
         {
             total_shots = 16384; // for verification
             int benchmark_index = stoi(config_parser.get_value("test"));
-            ValType fidelity = run_brnchmark(backend, benchmark_index, total_shots, simulation_method, run_with_basis);
+            ValType fidelity = run_brnchmark(backend, benchmark_index, total_shots, simulation_method, run_with_basis, max_dim, sv_cutoff);
             safe_print("Fidelity between NWQSim and Qiskit Execution: %.4f\n", fidelity);
         }
         else if (config_parser.is_flag_set("all_tests"))
@@ -134,17 +144,26 @@ int main(int argc, char **argv)
             bool passed = true;
             for (int benchmark_index = 12; benchmark_index < 36; benchmark_index++)
             {
-                ValType fidelity = run_brnchmark(backend, benchmark_index, total_shots, simulation_method, run_with_basis);
+                ValType fidelity = run_brnchmark(backend, benchmark_index, total_shots, simulation_method, run_with_basis, max_dim, sv_cutoff);
                 if (fidelity < pass_threshold)
                 {
                     safe_print("Benchmark %d fidelity: %.4f Failed!\n", benchmark_index, fidelity);
                     passed = false;
+                }
+                else
+                {
+                    safe_print("Benchmark %d fidelity: %.4f Passed!\n", benchmark_index, fidelity);
                 }
             }
             if (passed)
                 safe_print("All benchmarks passed!\n");
             else
                 safe_print("TESTING FAILED!\n");
+        }
+
+        if (backend == "TN_TAMM_CPU" || backend == "TN_TAMM_GPU")
+        {
+            tamm::finalize();
         }
 
         return 0;
@@ -161,7 +180,7 @@ int main(int argc, char **argv)
         if (!report_fidelity)
         {
             // Create the backend
-            std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method);
+            std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method, max_dim, sv_cutoff);
             if (!state)
             {
                 std::cerr << "Failed to create backend\n";
@@ -183,7 +202,7 @@ int main(int argc, char **argv)
         {
             safe_print("Starting Statevector Simulation...");
             std::string sv_backend = (backend == "NVGPU_MPI" ? "NVGPU" : backend);
-            std::shared_ptr<NWQSim::QuantumState> sv_state = BackendManager::create_state(sv_backend, parser.num_qubits(), "sv");
+            std::shared_ptr<NWQSim::QuantumState> sv_state = BackendManager::create_state(sv_backend, parser.num_qubits(), "sv", max_dim, sv_cutoff);
             if (!sv_state)
             {
                 std::cerr << "Failed to create backend\n";
@@ -199,7 +218,7 @@ int main(int argc, char **argv)
             }
 
             safe_print("Starting Density Matrix Simulation...");
-            std::shared_ptr<NWQSim::QuantumState> dm_state = BackendManager::create_state(backend, parser.num_qubits(), "dm");
+            std::shared_ptr<NWQSim::QuantumState> dm_state = BackendManager::create_state(backend, parser.num_qubits(), "dm", max_dim, sv_cutoff);
             if (!dm_state)
             {
                 std::cerr << "Failed to create backend\n";
@@ -227,6 +246,11 @@ int main(int argc, char **argv)
     {
         MPI_Finalize();
     }
+
+    if (backend == "TN_TAMM_CPU" || backend == "TN_TAMM_GPU")
+    {
+        tamm::finalize();
+    }
 #endif
     return 0;
 }
@@ -252,7 +276,7 @@ void print_result(bool is_qobj, map<string, IdxType> *counts, std::shared_ptr<NW
     }
 }
 
-ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis)
+ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis, IdxType max_dim, double sv_cutoff)
 {
     stringstream ss_file, ss_result;
     if (is_basis)
@@ -274,7 +298,7 @@ ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, s
     qasm_parser parser;
     parser.load_qasm_file(ss_file.str().c_str());
     // Create the backend
-    std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method);
+    std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method, max_dim, sv_cutoff);
     if (!state)
     {
         std::cerr << "Failed to create backend\n";

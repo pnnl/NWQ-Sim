@@ -25,12 +25,25 @@ if (NOT XACC_DIR)
   set(XACC_DIR "$ENV{HOME}/.xacc")
 endif()
 
+if ( NOT DEFINED TAMM_DIR )
+  set(TAMM_DIR "${CMAKE_SOURCE_DIR}/../tamm_install"
+      CACHE PATH "Path to external TAMM installation")
+endif()
+
+list(APPEND CMAKE_PREFIX_PATH "${TAMM_DIR}")
+
 # Find required packages
 find_package(CUDAToolkit)
 find_package(MPI)
 find_package(OpenMP)
 find_package(XACC QUIET)
 find_package(HIP QUIET)
+find_package(LAPACK)
+find_package(BLAS)
+find_package(TAMM)
+
+get_target_property(_mpi_includes MPI::MPI_CXX INTERFACE_INCLUDE_DIRECTORIES)
+message(STATUS "MPI::MPI_CXX include dirs: ${_mpi_includes}")
 
 set(ma_enable "N/A") 
 if(CUDAToolkit_FOUND)
@@ -78,6 +91,33 @@ else()
     set(nvshmem_found_str "N/A")
 endif()
 
+
+
+# Path to external ITensor installation
+set(ITENSOR_ROOT "${CMAKE_SOURCE_DIR}/../itensor"
+    CACHE PATH "Path to external iTensor installation")
+
+# Check that the directory and library actually exist
+if (IS_DIRECTORY "${ITENSOR_ROOT}" AND EXISTS "${ITENSOR_ROOT}/lib/libitensor.a")
+    set(ITENSOR_FOUND TRUE CACHE BOOL "ITensor library available")
+
+    include_directories("${ITENSOR_ROOT}")
+
+    add_library(itensor STATIC IMPORTED)
+    set_target_properties(itensor PROPERTIES
+        IMPORTED_LOCATION "${ITENSOR_ROOT}/lib/libitensor.a"
+        INTERFACE_INCLUDE_DIRECTORIES "${ITENSOR_ROOT}"
+    )
+else()
+    set(ITENSOR_FOUND FALSE CACHE BOOL "ITensor library available")
+endif()
+
+# Point to the Cray LibSci install (discover via module show / $LD_LIBRARY_PATH)
+set(CRAY_LIBSCI_ROOT "/opt/cray/pe/libsci/24.07.0/NVIDIA/23.3/x86_64")
+
+# Add its lib/ directory so that -lsci_nvidia_mpi_mp and -lsci_nvidia_mp resolve
+link_directories("${CRAY_LIBSCI_ROOT}/lib")
+# ————————————————————————————————————————————————————————————————
 
 if(XACC_FOUND)
     set(xacc_found_str "TRUE")
@@ -133,6 +173,8 @@ message(STATUS "OpenMP found: ${OpenMP_CXX_FOUND}")
 message(STATUS "MPI found: ${MPI_FOUND}")
 message(STATUS "CUDA found: ${CUDAToolkit_FOUND}")
 message(STATUS "HIP found: ${hip_found_str}")
+message(STATUS "TAMM found: ${TAMM_FOUND}")
+message(STATUS "iTensor found: ${ITENSOR_FOUND}")
 message(STATUS "NVSHMEM found: ${nvshmem_found_str}")
 message(STATUS "XACC found: ${xacc_found_str}")
 message(STATUS "Matrix Accelerator ENABLED: ${ma_enable}")

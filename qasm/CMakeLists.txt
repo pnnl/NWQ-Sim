@@ -9,10 +9,23 @@ if(OpenMP_FOUND)
     target_compile_definitions(nwq_qasm PUBLIC OMP_ENABLED)
 endif()
 
-# Link against MPI if available
-if(MPI_FOUND)
-    target_link_libraries(nwq_qasm PUBLIC MPI::MPI_CXX)
-    target_compile_definitions(nwq_qasm PUBLIC MPI_ENABLED)
+if (MPI_FOUND)
+  execute_process(
+    COMMAND mpicxx -show
+    OUTPUT_VARIABLE _mpi_show
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  string(REGEX MATCH "-I[^ ]+" _mpi_include_flag "${_mpi_show}")
+  string(REGEX REPLACE "-I" "" _mpi_include_dir "${_mpi_include_flag}")
+  message(STATUS "Detected MPI include dir: ${_mpi_include_dir}")
+
+  target_link_libraries(nwq_qasm PUBLIC MPI::MPI_CXX)
+  target_compile_definitions(nwq_qasm PUBLIC MPI_ENABLED)
+  target_include_directories(nwq_qasm
+    PUBLIC
+      ${_mpi_include_dir}
+      $<$<COMPILE_LANGUAGE:CUDA>:${_mpi_include_dir}>
+  )
 endif()
 
 # If CUDA Toolkit is available, set the CUDA standard and definitions
@@ -21,7 +34,6 @@ if(CUDAToolkit_FOUND)
     set_source_files_properties(${SOURCE_FILE} PROPERTIES LANGUAGE CUDA)
 
     target_compile_features(nwq_qasm PRIVATE cuda_std_17)
-    #target_link_libraries(nwq_qasm PUBLIC CUDA::cudart)
     target_compile_definitions(nwq_qasm PUBLIC CUDA_ENABLED)
 
     # If NVSHMEM is available, link against it and set the definitions
@@ -32,11 +44,22 @@ if(CUDAToolkit_FOUND)
     endif()
 endif()
 
+# If HIP is available, enable HIP support
 if(HIP_FOUND)
     enable_language(HIP)
     set_source_files_properties(${SOURCE_FILE} PROPERTIES LANGUAGE HIP)
 
-    # target_compile_features(nwq_qasm PRIVATE hip_std_17)
     target_compile_definitions(nwq_qasm PUBLIC HIP_ENABLED)
+endif()
 
+# If iTensor is found, enable itensor TN CPU simulator
+if (ITENSOR_FOUND)
+    target_link_libraries(nwq_qasm PRIVATE itensor)
+    target_compile_definitions(nwq_qasm PUBLIC ITENSOR_ENABLED)
+endif()
+
+# If TAMM is found, enable the TN TAMM backend
+if (TAMM_FOUND)
+    target_link_libraries(nwq_qasm PRIVATE tamm::tamm)
+    target_compile_definitions(nwq_qasm PUBLIC TAMM_ENABLED)
 endif()

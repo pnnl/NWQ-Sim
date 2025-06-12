@@ -6,6 +6,19 @@
 #include "svsim/sv_cpu.hpp"
 #include "dmsim/dm_cpu.hpp"
 
+#ifdef ITENSOR_ENABLED
+#include "tnsim/tn_itensor.hpp"
+#endif
+
+// Both itensor and TAMM have Error (may be a better way to do this but this works)
+#ifdef Error
+#undef Error
+#endif
+
+#ifdef TAMM_ENABLED
+#include "tnsim/tn_tamm.hpp"
+#endif
+
 #ifdef OMP_ENABLED
 #include "svsim/sv_omp.hpp"
 #endif
@@ -62,9 +75,13 @@ public:
 #ifdef HIP_ENABLED
         NWQSim::safe_print("- AMDGPU\n");
 #endif
+        NWQSim::safe_print("- TN_TAMM_CPU");
+        NWQSim::safe_print("- TN_TAMM_GPU");
     }
+    int MaxDim;
+    double Cutoff;
 
-    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "SV")
+    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "SV", int max_dim = 100, double sv_cutoff = 0.0)
     {
         // Convert to uppercase
         std::transform(backend.begin(), backend.end(), backend.begin(),
@@ -79,9 +96,20 @@ public:
         {
             if (simulator_method == "SV")
                 return std::make_shared<NWQSim::SV_CPU>(numQubits);
-            else
+            else if (simulator_method == "DM")
                 return std::make_shared<NWQSim::DM_CPU>(numQubits);
+#ifdef ITENSOR_ENABLED
+            else
+                return std::make_shared<NWQSim::TN_ITENSOR>(numQubits, max_dim, sv_cutoff);
+#endif
         }
+
+#ifdef TAMM_ENABLED   
+        else if (backend.rfind("TN_TAMM", 0) == 0) 
+        {
+            return std::make_shared<NWQSim::TN_TAMM>(numQubits, max_dim, sv_cutoff, backend);
+        }
+#endif
 
 #ifdef OMP_ENABLED
         else if (backend == "OPENMP")
@@ -102,11 +130,11 @@ public:
         {
             if (simulator_method == "SV")
                 return std::make_shared<NWQSim::SV_CUDA>(numQubits);
-            else
+            else if (simulator_method == "DM")
                 return std::make_shared<NWQSim::DM_CUDA>(numQubits);
         }
 #endif
-
+        
 #ifdef HIP_ENABLED
         else if (backend == "AMDGPU")
         {
