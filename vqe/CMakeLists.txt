@@ -42,12 +42,12 @@ endif()
 
 # Link against MPI if available
 if(MPI_FOUND)
-    target_link_libraries(nwq_vqe PUBLIC MPI::MPI_CXX)
+    target_link_libraries(nwq_vqe PUBLIC MPI::MPI_C)
     target_compile_definitions(nwq_vqe PUBLIC MPI_ENABLED)
-    target_link_libraries(nwq_qflow PUBLIC MPI::MPI_CXX)
+    target_link_libraries(nwq_qflow PUBLIC MPI::MPI_C)
     target_compile_definitions(nwq_qflow PUBLIC MPI_ENABLED)
 
-    # target_link_libraries(nwqflow PUBLIC MPI::MPI_CXX)
+    # target_link_libraries(nwqflow PUBLIC MPI::MPI_C)
     # target_compile_definitions(nwqflow PUBLIC MPI_ENABLED)
 
 endif()
