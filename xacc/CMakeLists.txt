@@ -15,8 +15,8 @@ if(TARGET OpenMP::OpenMP_CXX)
 endif()
 
 # Link against MPI if available
-if(TARGET MPI::MPI_CXX)
-    target_link_libraries(nwq_xacc PUBLIC MPI::MPI_CXX)
+if(TARGET MPI::MPI_C)
+    target_link_libraries(nwq_xacc PUBLIC MPI::MPI_C)
     target_compile_definitions(nwq_xacc PUBLIC MPI_ENABLED)
 endif()
 
