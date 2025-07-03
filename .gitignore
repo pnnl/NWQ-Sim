@@ -11,8 +11,13 @@
 
 # Ignore build directories
 /build/
+*/build/
 /debug/
 /release/
+
+# Ignore installation directories
+install/
+*/install/
 
 # Ignore temporary files created by macOS
 .DS_Store

@@ -1,92 +1,186 @@
+# ===============================================================================
+# VQE Module CMakeLists.txt
+# ===============================================================================
+
+# Collect source files
 file(GLOB SOURCEFILES "src/*.cpp")
 
-add_executable(nwq_vqe "main.cpp")
-add_executable(nwq_qflow "qflow.cpp")
-# find_path(PYHEADER "Python.h")
-# find_package(Python3 COMPONENTS Interpreter Development)
-# add_library(nwqflow "qflow_py.cpp")
-# set(PYTHON_EXECUTABLE ${Python3_EXECUTABLE})
-# set(PYHEADER ${Python3_EXECUTABLE})
-# add_subdirectory(pybind11)
-# pybind11_add_module(nwqflow "qflow_py.cpp")
+# Add nlopt subdirectory first (dependency)
 add_subdirectory(nlopt)
+
+# ===============================================================================
+# Define targets
+# ===============================================================================
+
+# VQE base library (internal use)
 add_library(vqe SHARED ${SOURCEFILES})
 
-target_compile_features(nwq_vqe PRIVATE cxx_std_17)
-target_compile_features(vqe PRIVATE cxx_std_17)
+# Main VQE executable
+add_executable(nwq_vqe "main.cpp")
 
+# QFlow executable 
+add_executable(nwq_qflow "qflow.cpp")
+
+# ExaChem QFlow shared library (for external use)
+add_library(exachem_qflow_lib SHARED "exachem_qflow_lib.cpp" ${SOURCEFILES})
+
+# Configure build interface include directories only
+target_include_directories(exachem_qflow_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+)
+
+# ===============================================================================
+# Configure target properties
+# ===============================================================================
+
+# Set C++ standard for all targets
+set(ALL_TARGETS vqe nwq_vqe nwq_qflow exachem_qflow_lib)
+foreach(target ${ALL_TARGETS})
+    target_compile_features(${target} PRIVATE cxx_std_17)
+endforeach()
+
+# ===============================================================================
+# Include directories and link directories
+# ===============================================================================
+
+# Include directories for all targets
 include_directories(BEFORE "include" "../include" "nlopt/src/api" "nlopt/build")
-# target_include_directories(nwqflow BEFORE PRIVATE "../extern/pybind11/include" ${Python3_INCLUDE_DIRS})
-target_link_directories(vqe BEFORE  PUBLIC "nlopt/build")
-# target_link_directories(nwq_vqe BEFORE  PUBLIC "nlopt/build")
-target_link_libraries(nwq_vqe PUBLIC vqe)
-target_link_libraries(nwq_qflow PUBLIC vqe)
-# target_link_libraries(nwqflow PUBLIC vqe)
+
+# Link directories for internal builds only
+target_link_directories(vqe BEFORE PRIVATE "nlopt/build")
+target_link_directories(exachem_qflow_lib BEFORE PRIVATE "nlopt/build")
+
+# ===============================================================================
+# Basic linking
+# ===============================================================================
+
+# Link base VQE library dependencies
 target_link_libraries(vqe PUBLIC nlopt m)
 
+# Create the ExaChem QFlow library with proper dependencies
+target_link_libraries(exachem_qflow_lib PUBLIC nlopt m)
+# Note: We include VQE source files directly rather than linking to avoid export issues
+
+# Link executables
+target_link_libraries(nwq_vqe PUBLIC vqe)
+target_link_libraries(nwq_qflow PUBLIC vqe)
+
+# ===============================================================================
+# Build type specific configurations
+# ===============================================================================
+
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-target_compile_definitions(vqe PUBLIC NDEBUG)
-target_compile_definitions(nwq_vqe PUBLIC NDEBUG)
+    foreach(target ${ALL_TARGETS})
+        target_compile_definitions(${target} PRIVATE NDEBUG)
+    endforeach()
 endif()
-# Link against OpenMP if available
+
+# ===============================================================================
+# Optional dependencies
+# ===============================================================================
+
+# OpenMP support
 if(OpenMP_FOUND)
-    target_link_libraries(nwq_vqe PUBLIC OpenMP::OpenMP_CXX)
-    target_compile_definitions(nwq_vqe PUBLIC OMP_ENABLED)
-
-    target_link_libraries(nwq_qflow PUBLIC OpenMP::OpenMP_CXX)
-    target_compile_definitions(nwq_qflow PUBLIC OMP_ENABLED)
-
-    # target_link_libraries(nwqflow PUBLIC OpenMP::OpenMP_CXX)
-    # target_compile_definitions(nwqflow PUBLIC OMP_ENABLED)
+    foreach(target ${ALL_TARGETS})
+        target_link_libraries(${target} PUBLIC OpenMP::OpenMP_CXX)
+        target_compile_definitions(${target} PUBLIC OMP_ENABLED)
+    endforeach()
 endif()
 
-# Link against MPI if available
+# MPI support
 if(MPI_FOUND)
-    target_link_libraries(nwq_vqe PUBLIC MPI::MPI_C)
-    target_compile_definitions(nwq_vqe PUBLIC MPI_ENABLED)
-    target_link_libraries(nwq_qflow PUBLIC MPI::MPI_C)
-    target_compile_definitions(nwq_qflow PUBLIC MPI_ENABLED)
-
-    # target_link_libraries(nwqflow PUBLIC MPI::MPI_C)
-    # target_compile_definitions(nwqflow PUBLIC MPI_ENABLED)
-
+    foreach(target ${ALL_TARGETS})
+        target_link_libraries(${target} PUBLIC MPI::MPI_C)
+        target_compile_definitions(${target} PUBLIC MPI_ENABLED)
+    endforeach()
 endif()
 
-# If CUDA Toolkit is available, set the CUDA standard and definitions
+# ===============================================================================
+# CUDA support
+# ===============================================================================
+
 if(CUDAToolkit_FOUND)
     enable_language(CUDA)
-    set_source_files_properties("main.cpp" PROPERTIES LANGUAGE CUDA)
-    set_source_files_properties("qflow.cpp" PROPERTIES LANGUAGE CUDA)
-    set_source_files_properties("qflow_py.cpp" PROPERTIES LANGUAGE CUDA)
-
-    target_compile_features(nwq_vqe PRIVATE cuda_std_17)
-    #target_link_libraries(nwq_vqe PUBLIC CUDA::cudart)
-    target_compile_definitions(nwq_vqe PUBLIC CUDA_ENABLED)
-
-    target_compile_features(nwq_qflow PRIVATE cuda_std_17)
-    target_compile_definitions(nwq_qflow PUBLIC CUDA_ENABLED)
-
-
-    # target_compile_features(nwqflow PRIVATE cuda_std_17)
-    # target_compile_definitions(nwqflow PUBLIC CUDA_ENABLED)
-
-
-    # If NVSHMEM is available, link against it and set the definitions
+    
+    # Set CUDA source file properties
+    set(CUDA_SOURCE_FILES 
+        "main.cpp" 
+        "qflow.cpp" 
+        "qflow_py.cpp" 
+        "exachem_qflow_lib.cpp"
+    )
+    
+    foreach(file ${CUDA_SOURCE_FILES})
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${file}")
+            set_source_files_properties("${file}" PROPERTIES LANGUAGE CUDA)
+        endif()
+    endforeach()
+    
+    # Apply CUDA features and definitions to all targets
+    foreach(target ${ALL_TARGETS})
+        target_compile_features(${target} PRIVATE cuda_std_17)
+        target_compile_definitions(${target} PUBLIC CUDA_ENABLED)
+    endforeach()
+    
+    # NVSHMEM support
     if(NVSHMEM_FOUND AND TARGET nvshmem::nvshmem)
-        set_target_properties(nwq_vqe PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-        target_link_libraries(nwq_vqe PUBLIC nvshmem::nvshmem)
-        target_compile_definitions(nwq_vqe PUBLIC CUDA_MPI_ENABLED)
-
-        set_target_properties(nwq_qflow PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-        target_link_libraries(nwq_qflow PUBLIC nvshmem::nvshmem)
-        target_compile_definitions(nwq_qflow PUBLIC CUDA_MPI_ENABLED)
-
-        # set_target_properties(nwqflow PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-        # target_link_libraries(nwqflow PUBLIC nvshmem::nvshmem)
-        # target_compile_definitions(nwqflow PUBLIC CUDA_MPI_ENABLED)
+        foreach(target ${ALL_TARGETS})
+            set_target_properties(${target} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+            target_link_libraries(${target} PUBLIC nvshmem::nvshmem)
+            target_compile_definitions(${target} PUBLIC CUDA_MPI_ENABLED)
+        endforeach()
     endif()
 endif()
 
+# ===============================================================================
+# Installation configuration for ExaChem QFlow library
+# ===============================================================================
 
-add_subdirectory("examples")
+# Set installation directory within the project - override CMAKE_INSTALL_PREFIX
+set(EXACHEM_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/install")
+set(CMAKE_INSTALL_PREFIX "${EXACHEM_INSTALL_DIR}" CACHE PATH "Install path prefix" FORCE)
 
+# Install the ExaChem QFlow shared library
+install(TARGETS exachem_qflow_lib
+    EXPORT ExaChemQFlowTargets
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+)
+
+# Install the header file
+install(FILES "include/exachem_qflow.hpp" 
+    DESTINATION include
+)
+
+# Set the install interface include directories after installation
+set_target_properties(exachem_qflow_lib PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:include>"
+)
+
+# Install export targets
+install(EXPORT ExaChemQFlowTargets
+    FILE ExaChemQFlowTargets.cmake
+    NAMESPACE ExaChemQFlow::
+    DESTINATION cmake
+)
+
+# Create and install CMake config file for external packages
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/ExaChemQFlowConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/ExaChemQFlowConfig.cmake"
+    @ONLY
+)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ExaChemQFlowConfig.cmake"
+    DESTINATION cmake
+)
+
+# ===============================================================================
+# Add examples subdirectory
+# ===============================================================================
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/CMakeLists.txt")
+    add_subdirectory("examples")
+endif()

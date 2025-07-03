@@ -16,6 +16,9 @@ project(MyPackage
         DESCRIPTION "NWQSim Qasm"
         LANGUAGES C CXX)
 
+# Set local installation prefix to avoid system installation
+set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/vqe/install" CACHE PATH "Install path prefix" FORCE)
+
 # Set C++ and CUDA standards
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -144,15 +147,16 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 # Subdirectories
 add_subdirectory(qasm)
 
+# Only add VQE subdirectory if nlopt exists - this creates the ExaChemQFlow library
 if (EXISTS "${PROJECT_SOURCE_DIR}/vqe/nlopt/CMakeLists.txt")
     add_subdirectory(vqe)
 endif()
-
 
 if(XACC_FOUND)
     add_subdirectory(xacc)
 endif()
 
+# Keep the interface library for backward compatibility but don't install the full package
 add_library(nwqsim INTERFACE)
 add_library(nwqsim::nwqsim ALIAS nwqsim)
 
@@ -160,67 +164,3 @@ target_include_directories(nwqsim INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/nwqsim>
 )
-
-# Install
-
-include(GNUInstallDirs)
-set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/nwqsim)
-
-install(TARGETS nwqsim
-    EXPORT nwqsim-targets
-)
-
-set(NWQSIM_HEADERS
-    include/backendManager.hpp
-    include/circuit.hpp
-    include/config.hpp
-    include/gate.hpp
-    include/nwq_util.hpp
-    include/state.hpp
-)
-
-install(FILES ${NWQSIM_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim)
-install(DIRECTORY include/svsim DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim)
-install(DIRECTORY include/dmsim DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim)
-install(DIRECTORY include/circuit_pass DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim)
-
-install(DIRECTORY vqe/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim/vqe)
-
-#Export the targets to a script
-install(EXPORT nwqsim-targets
-    FILE
-        nwqsim-targets.cmake
-    NAMESPACE
-        nwqsim::
-    DESTINATION
-        ${INSTALL_CONFIGDIR}
-)
-
-#Create a ConfigVersion.cmake file
-include(CMakePackageConfigHelpers)
-write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/nwqsim-config-version.cmake
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY AnyNewerVersion
-)
-
-configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/nwqsim-config.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/nwqsim-config.cmake
-    INSTALL_DESTINATION ${INSTALL_CONFIGDIR}
-    PATH_VARS CMAKE_INSTALL_INCLUDEDIR
-)
-
-#Install the config, configversion and custom find modules
-install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/nwqsim-config.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/nwqsim-config-version.cmake
-    DESTINATION ${INSTALL_CONFIGDIR}
-)
-
-#Export build tree
-export(EXPORT nwqsim-targets
-    FILE ${CMAKE_CURRENT_BINARY_DIR}/nwqsim-targets.cmake
-    NAMESPACE nwqsim::)
-
-#Register package in user's package registry
-# export(PACKAGE nwqsim)
