@@ -1,4 +1,4 @@
-#include "include/exachem_qflow.hpp"
+#include "include/nwqsim_qflow.hpp"
 #include "include/utils.hpp"
 #include "vqeBackendManager.hpp"
 #include "utils.hpp"
@@ -119,11 +119,9 @@ std::vector<std::pair<std::string, std::complex<double>>> parseHamiltonianFile(c
     return result;
 }
 
-double qflow_nwqsim(const std::vector<std::pair<std::string, std::complex<double>>> &hamiltonian_ops, std::string backend)
+double qflow_nwqsim(const std::vector<std::pair<std::string, std::complex<double>>> &hamiltonian_ops, int n_part, std::string backend)
 {
     VQEBackendManager manager;
-
-    NWQSim::IdxType n_part = 4;
 
     NWQSim::VQE::OptimizerSettings settings;
     settings.max_evals = 100;

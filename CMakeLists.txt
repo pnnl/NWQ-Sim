@@ -147,7 +147,7 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 # Subdirectories
 add_subdirectory(qasm)
 
-# Only add VQE subdirectory if nlopt exists - this creates the ExaChemQFlow library
+# Only add VQE subdirectory if nlopt exists - this creates the NWQSimQFlow library
 if (EXISTS "${PROJECT_SOURCE_DIR}/vqe/nlopt/CMakeLists.txt")
     add_subdirectory(vqe)
 endif()

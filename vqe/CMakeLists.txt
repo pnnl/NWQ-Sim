@@ -21,11 +21,11 @@ add_executable(nwq_vqe "main.cpp")
 # QFlow executable 
 add_executable(nwq_qflow "qflow.cpp")
 
-# ExaChem QFlow shared library (for external use)
-add_library(exachem_qflow_lib SHARED "exachem_qflow_lib.cpp" ${SOURCEFILES})
+# NWQSim QFlow shared library (for external use)
+add_library(nwqsim_qflow_lib SHARED "nwqsim_qflow_lib.cpp" ${SOURCEFILES})
 
 # Configure build interface include directories only
-target_include_directories(exachem_qflow_lib PUBLIC
+target_include_directories(nwqsim_qflow_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
 )
@@ -35,7 +35,7 @@ target_include_directories(exachem_qflow_lib PUBLIC
 # ===============================================================================
 
 # Set C++ standard for all targets
-set(ALL_TARGETS vqe nwq_vqe nwq_qflow exachem_qflow_lib)
+set(ALL_TARGETS vqe nwq_vqe nwq_qflow nwqsim_qflow_lib)
 foreach(target ${ALL_TARGETS})
     target_compile_features(${target} PRIVATE cxx_std_17)
 endforeach()
@@ -49,7 +49,7 @@ include_directories(BEFORE "include" "../include" "nlopt/src/api" "nlopt/build")
 
 # Link directories for internal builds only
 target_link_directories(vqe BEFORE PRIVATE "nlopt/build")
-target_link_directories(exachem_qflow_lib BEFORE PRIVATE "nlopt/build")
+target_link_directories(nwqsim_qflow_lib BEFORE PRIVATE "nlopt/build")
 
 # ===============================================================================
 # Basic linking
@@ -58,8 +58,9 @@ target_link_directories(exachem_qflow_lib BEFORE PRIVATE "nlopt/build")
 # Link base VQE library dependencies
 target_link_libraries(vqe PUBLIC nlopt m)
 
-# Create the ExaChem QFlow library with proper dependencies
-target_link_libraries(exachem_qflow_lib PUBLIC nlopt m)
+# Create the NWQSim QFlow library with proper dependencies
+# Use PRIVATE linking to avoid exporting nlopt dependency to external projects
+target_link_libraries(nwqsim_qflow_lib PRIVATE nlopt m)
 # Note: We include VQE source files directly rather than linking to avoid export issues
 
 # Link executables
@@ -108,7 +109,7 @@ if(CUDAToolkit_FOUND)
         "main.cpp" 
         "qflow.cpp" 
         "qflow_py.cpp" 
-        "exachem_qflow_lib.cpp"
+        "nwqsim_qflow_lib.cpp"
     )
     
     foreach(file ${CUDA_SOURCE_FILES})
@@ -134,46 +135,46 @@ if(CUDAToolkit_FOUND)
 endif()
 
 # ===============================================================================
-# Installation configuration for ExaChem QFlow library
+# Installation configuration for NWQSim QFlow library
 # ===============================================================================
 
 # Set installation directory within the project - override CMAKE_INSTALL_PREFIX
-set(EXACHEM_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/install")
-set(CMAKE_INSTALL_PREFIX "${EXACHEM_INSTALL_DIR}" CACHE PATH "Install path prefix" FORCE)
+set(NWQSIM_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/install")
+set(CMAKE_INSTALL_PREFIX "${NWQSIM_INSTALL_DIR}" CACHE PATH "Install path prefix" FORCE)
 
-# Install the ExaChem QFlow shared library
-install(TARGETS exachem_qflow_lib
-    EXPORT ExaChemQFlowTargets
+# Install the NWQSim QFlow shared library
+install(TARGETS nwqsim_qflow_lib
+    EXPORT NWQSimQFlowTargets
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin
 )
 
 # Install the header file
-install(FILES "include/exachem_qflow.hpp" 
+install(FILES "include/nwqsim_qflow.hpp" 
     DESTINATION include
 )
 
 # Set the install interface include directories after installation
-set_target_properties(exachem_qflow_lib PROPERTIES
+set_target_properties(nwqsim_qflow_lib PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:include>"
 )
 
 # Install export targets
-install(EXPORT ExaChemQFlowTargets
-    FILE ExaChemQFlowTargets.cmake
-    NAMESPACE ExaChemQFlow::
+install(EXPORT NWQSimQFlowTargets
+    FILE NWQSimQFlowTargets.cmake
+    NAMESPACE NWQSimQFlow::
     DESTINATION cmake
 )
 
 # Create and install CMake config file for external packages
 configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/ExaChemQFlowConfig.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/ExaChemQFlowConfig.cmake"
+    "${CMAKE_CURRENT_SOURCE_DIR}/NWQSimQFlowConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/NWQSimQFlowConfig.cmake"
     @ONLY
 )
 
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ExaChemQFlowConfig.cmake"
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/NWQSimQFlowConfig.cmake"
     DESTINATION cmake
 )
 

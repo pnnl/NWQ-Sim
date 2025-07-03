@@ -1,5 +1,5 @@
-#ifndef EXACHEM_QFLOW_HPP
-#define EXACHEM_QFLOW_HPP
+#ifndef NWQSIM_QFLOW_HPP
+#define NWQSIM_QFLOW_HPP
 
 #include <vector>
 #include <string>
@@ -20,7 +20,7 @@ std::vector<std::pair<std::string, std::complex<double>>> parseHamiltonianFile(c
  * @param backend Backend type (default: "CPU")
  * @return Optimized ground state energy
  */
-double qflow_nwqsim(const std::vector<std::pair<std::string, std::complex<double>>> &hamiltonian_ops, std::string backend = "CPU");
+double qflow_nwqsim(const std::vector<std::pair<std::string, std::complex<double>>> &hamiltonian_ops, int n_part, std::string backend = "CPU");
 
 /**
  * @brief Get termination reason for optimization result

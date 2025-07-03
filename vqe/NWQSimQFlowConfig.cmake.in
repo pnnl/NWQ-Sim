@@ -1,0 +1,40 @@
+# NWQSimQFlowConfig.cmake
+# Configuration file for the NWQSimQFlow library
+
+# Set the version
+set(NWQSimQFlow_VERSION 1.0.0)
+
+# Get the directory containing this configuration file
+get_filename_component(NWQSimQFlow_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+
+# Include the exported targets
+include("${NWQSimQFlow_CMAKE_DIR}/NWQSimQFlowTargets.cmake")
+
+# Set variables for backward compatibility
+set(NWQSimQFlow_INCLUDE_DIRS "${NWQSimQFlow_CMAKE_DIR}/include")
+set(NWQSimQFlow_LIBRARY_DIRS "${NWQSimQFlow_CMAKE_DIR}/lib")
+
+# Find the library for backward compatibility
+find_library(NWQSimQFlow_LIBRARIES
+    NAMES nwqsim_qflow_lib
+    PATHS ${NWQSimQFlow_LIBRARY_DIRS}
+    NO_DEFAULT_PATH
+)
+
+# Set found status
+if(TARGET NWQSimQFlow::nwqsim_qflow_lib)
+    set(NWQSimQFlow_FOUND TRUE)
+    message(STATUS "Found NWQSimQFlow: ${NWQSimQFlow_CMAKE_DIR}")
+else()
+    set(NWQSimQFlow_FOUND FALSE)
+    message(WARNING "NWQSimQFlow targets not found")
+endif()
+
+# Provide information about the found package
+if(NWQSimQFlow_FOUND)
+    message(STATUS "NWQSimQFlow version: ${NWQSimQFlow_VERSION}")
+    message(STATUS "NWQSimQFlow include dirs: ${NWQSimQFlow_INCLUDE_DIRS}")
+    if(NWQSimQFlow_LIBRARIES)
+        message(STATUS "NWQSimQFlow libraries: ${NWQSimQFlow_LIBRARIES}")
+    endif()
+endif()
