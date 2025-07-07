@@ -24,15 +24,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if (NOT XACC_DIR)
-  set(XACC_DIR "$ENV{HOME}/.xacc")
-endif()
 
 # Find required packages
 find_package(CUDAToolkit)
 find_package(MPI)
 find_package(OpenMP)
-find_package(XACC QUIET)
 find_package(HIP QUIET)
 
 set(ma_enable "N/A") 
@@ -80,14 +76,6 @@ if(CUDAToolkit_FOUND)
 else()
     set(nvshmem_found_str "N/A")
 endif()
-
-
-if(XACC_FOUND)
-    set(xacc_found_str "TRUE")
-else()
-    set(xacc_found_str "FALSE")
-endif()
-
 
 if(HIP_FOUND)
     set(hip_found_str "TRUE")
@@ -137,7 +125,6 @@ message(STATUS "MPI found: ${MPI_FOUND}")
 message(STATUS "CUDA found: ${CUDAToolkit_FOUND}")
 message(STATUS "HIP found: ${hip_found_str}")
 message(STATUS "NVSHMEM found: ${nvshmem_found_str}")
-message(STATUS "XACC found: ${xacc_found_str}")
 message(STATUS "Matrix Accelerator ENABLED: ${ma_enable}")
 message(STATUS "==========================================================================\n")
 
@@ -150,10 +137,6 @@ add_subdirectory(qasm)
 # Only add VQE subdirectory if nlopt exists - this creates the NWQSimQFlow library
 if (EXISTS "${PROJECT_SOURCE_DIR}/vqe/nlopt/CMakeLists.txt")
     add_subdirectory(vqe)
-endif()
-
-if(XACC_FOUND)
-    add_subdirectory(xacc)
 endif()
 
 # # Keep the interface library for backward compatibility but don't install the full package

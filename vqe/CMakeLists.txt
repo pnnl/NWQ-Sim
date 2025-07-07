@@ -30,7 +30,7 @@ add_executable(nwq_qflow "qflow.cpp")
 # ===============================================================================
 
 # Set C++ standard for all targets
-set(ALL_TARGETS vqe nwqsim_qflow_lib nwq_vqe nwq_qflow)
+set(ALL_TARGETS nwqsim_qflow_lib vqe nwq_vqe nwq_qflow)
 foreach(target ${ALL_TARGETS})
     target_compile_features(${target} PRIVATE cxx_std_17)
 endforeach()
@@ -51,16 +51,17 @@ target_link_directories(nwqsim_qflow_lib BEFORE PRIVATE "nlopt/build")
 # ===============================================================================
 
 # Link base VQE library dependencies
-target_link_libraries(vqe PUBLIC nlopt m)
+target_link_libraries(vqe PRIVATE nlopt m)
 
 # Link nwqsim_qflow_lib dependencies
-target_link_libraries(nwqsim_qflow_lib PUBLIC vqe nlopt m)
+target_link_libraries(nwqsim_qflow_lib PUBLIC vqe)
+target_link_libraries(nwqsim_qflow_lib PRIVATE nlopt m)
 
 # Link main VQE executable dependencies
-target_link_libraries(nwq_vqe PUBLIC vqe)
+target_link_libraries(nwq_vqe PUBLIC vqe nlopt)
 
 # Link QFlow executable dependencies
-target_link_libraries(nwq_qflow PUBLIC vqe)
+target_link_libraries(nwq_qflow PUBLIC vqe nlopt)
 
 # ===============================================================================
 # Build type specific configurations
@@ -69,26 +70,6 @@ target_link_libraries(nwq_qflow PUBLIC vqe)
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     foreach(target ${ALL_TARGETS})
         target_compile_definitions(${target} PRIVATE NDEBUG)
-    endforeach()
-endif()
-
-# ===============================================================================
-# Optional dependencies
-# ===============================================================================
-
-# OpenMP support
-if(OpenMP_FOUND)
-    foreach(target ${ALL_TARGETS})
-        target_link_libraries(${target} PUBLIC OpenMP::OpenMP_CXX)
-        target_compile_definitions(${target} PUBLIC OMP_ENABLED)
-    endforeach()
-endif()
-
-# MPI support
-if(MPI_FOUND)
-    foreach(target ${ALL_TARGETS})
-        target_link_libraries(${target} PUBLIC MPI::MPI_C)
-        target_compile_definitions(${target} PUBLIC MPI_ENABLED)
     endforeach()
 endif()
 
@@ -104,6 +85,7 @@ if(CUDAToolkit_FOUND)
         "main.cpp" 
         "qflow.cpp" 
         "qflow_py.cpp"
+        "nwqsim_qflow_lib.cpp"
     )
     
     foreach(file ${CUDA_SOURCE_FILES})
@@ -117,23 +99,7 @@ if(CUDAToolkit_FOUND)
         target_compile_features(${target} PRIVATE cuda_std_17)
         target_compile_definitions(${target} PUBLIC CUDA_ENABLED)
     endforeach()
-    
-    # NVSHMEM support
-    if(NVSHMEM_FOUND AND TARGET nvshmem::nvshmem)
-        foreach(target ${ALL_TARGETS})
-            set_target_properties(${target} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-            target_link_libraries(${target} PUBLIC nvshmem::nvshmem)
-            target_compile_definitions(${target} PUBLIC CUDA_MPI_ENABLED)
-        endforeach()
-    endif()
 endif()
-
-# ===============================================================================
-# Add examples subdirectory
-# ===============================================================================
-# if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/CMakeLists.txt")
-#     add_subdirectory("examples")
-# endif()
 
 # ===============================================================================
 # Installation configuration for nwqsim_qflow_lib
