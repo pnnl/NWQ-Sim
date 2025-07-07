@@ -15,27 +15,22 @@ add_subdirectory(nlopt)
 # VQE base library (internal use)
 add_library(vqe SHARED ${SOURCEFILES})
 
+# NWQSim QFlow shared library (for installation)
+add_library(nwqsim_qflow_lib SHARED "nwqsim_qflow_lib.cpp")
+
 # Main VQE executable
 add_executable(nwq_vqe "main.cpp")
 
 # QFlow executable 
 add_executable(nwq_qflow "qflow.cpp")
 
-# NWQSim QFlow shared library (for external use)
-add_library(nwqsim_qflow_lib SHARED "nwqsim_qflow_lib.cpp" ${SOURCEFILES})
-
-# Configure build interface include directories only
-target_include_directories(nwqsim_qflow_lib PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
-)
 
 # ===============================================================================
 # Configure target properties
 # ===============================================================================
 
 # Set C++ standard for all targets
-set(ALL_TARGETS vqe nwq_vqe nwq_qflow nwqsim_qflow_lib)
+set(ALL_TARGETS vqe nwqsim_qflow_lib nwq_vqe nwq_qflow)
 foreach(target ${ALL_TARGETS})
     target_compile_features(${target} PRIVATE cxx_std_17)
 endforeach()
@@ -58,13 +53,13 @@ target_link_directories(nwqsim_qflow_lib BEFORE PRIVATE "nlopt/build")
 # Link base VQE library dependencies
 target_link_libraries(vqe PUBLIC nlopt m)
 
-# Create the NWQSim QFlow library with proper dependencies
-# Use PRIVATE linking to avoid exporting nlopt dependency to external projects
-target_link_libraries(nwqsim_qflow_lib PRIVATE nlopt m)
-# Note: We include VQE source files directly rather than linking to avoid export issues
+# Link nwqsim_qflow_lib dependencies
+target_link_libraries(nwqsim_qflow_lib PUBLIC vqe nlopt m)
 
-# Link executables
+# Link main VQE executable dependencies
 target_link_libraries(nwq_vqe PUBLIC vqe)
+
+# Link QFlow executable dependencies
 target_link_libraries(nwq_qflow PUBLIC vqe)
 
 # ===============================================================================
@@ -108,8 +103,7 @@ if(CUDAToolkit_FOUND)
     set(CUDA_SOURCE_FILES 
         "main.cpp" 
         "qflow.cpp" 
-        "qflow_py.cpp" 
-        "nwqsim_qflow_lib.cpp"
+        "qflow_py.cpp"
     )
     
     foreach(file ${CUDA_SOURCE_FILES})
@@ -135,53 +129,58 @@ if(CUDAToolkit_FOUND)
 endif()
 
 # ===============================================================================
-# Installation configuration for NWQSim QFlow library
-# ===============================================================================
-
-# Set installation directory within the project - override CMAKE_INSTALL_PREFIX
-set(NWQSIM_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/install")
-set(CMAKE_INSTALL_PREFIX "${NWQSIM_INSTALL_DIR}" CACHE PATH "Install path prefix" FORCE)
-
-# Install the NWQSim QFlow shared library
-install(TARGETS nwqsim_qflow_lib
-    EXPORT NWQSimQFlowTargets
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
-    RUNTIME DESTINATION bin
-)
-
-# Install the header file
-install(FILES "include/nwqsim_qflow.hpp" 
-    DESTINATION include
-)
-
-# Set the install interface include directories after installation
-set_target_properties(nwqsim_qflow_lib PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:include>"
-)
-
-# Install export targets
-install(EXPORT NWQSimQFlowTargets
-    FILE NWQSimQFlowTargets.cmake
-    NAMESPACE NWQSimQFlow::
-    DESTINATION cmake
-)
-
-# Create and install CMake config file for external packages
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/NWQSimQFlowConfig.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/NWQSimQFlowConfig.cmake"
-    @ONLY
-)
-
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/NWQSimQFlowConfig.cmake"
-    DESTINATION cmake
-)
-
-# ===============================================================================
 # Add examples subdirectory
 # ===============================================================================
+# if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/CMakeLists.txt")
+#     add_subdirectory("examples")
+# endif()
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/CMakeLists.txt")
-    add_subdirectory("examples")
-endif()
+# ===============================================================================
+# Installation configuration for nwqsim_qflow_lib
+# ===============================================================================
+
+# Set installation directories relative to CMAKE_INSTALL_PREFIX
+set(INSTALL_LIB_DIR "lib")
+set(INSTALL_INCLUDE_DIR "include")
+set(INSTALL_BIN_DIR "bin")
+
+# Install the shared library and its dependency
+install(TARGETS nwqsim_qflow_lib vqe
+    EXPORT nwqsim_qflow_lib-targets
+    RUNTIME DESTINATION ${INSTALL_BIN_DIR}
+    LIBRARY DESTINATION ${INSTALL_LIB_DIR}
+    ARCHIVE DESTINATION ${INSTALL_LIB_DIR}
+    INCLUDES DESTINATION ${INSTALL_INCLUDE_DIR}
+)
+
+# Install the header file (only one needed for external projects)
+install(FILES "include/nwqsim_qflow.hpp"
+    DESTINATION ${INSTALL_INCLUDE_DIR}
+)
+
+# Create and install the CMake package configuration files
+install(EXPORT nwqsim_qflow_lib-targets
+    FILE nwqsim_qflow_lib-targets.cmake
+    NAMESPACE nwqsim::
+    DESTINATION ${INSTALL_LIB_DIR}/cmake/nwqsim_qflow_lib
+)
+
+# Create a config file for the package
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+    "nwqsim_qflow_lib-config-version.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/nwqsim_qflow_lib-config.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/nwqsim_qflow_lib-config.cmake"
+    INSTALL_DESTINATION ${INSTALL_LIB_DIR}/cmake/nwqsim_qflow_lib
+)
+
+install(FILES 
+    "${CMAKE_CURRENT_BINARY_DIR}/nwqsim_qflow_lib-config.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/nwqsim_qflow_lib-config-version.cmake"
+    DESTINATION ${INSTALL_LIB_DIR}/cmake/nwqsim_qflow_lib
+)

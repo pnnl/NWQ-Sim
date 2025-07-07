@@ -16,8 +16,8 @@ project(MyPackage
         DESCRIPTION "NWQSim Qasm"
         LANGUAGES C CXX)
 
-# Set local installation prefix to avoid system installation
-set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/vqe/install" CACHE PATH "Install path prefix" FORCE)
+# Set local installation prefix to install in current directory
+set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/install" CACHE PATH "Install path prefix" FORCE)
 
 # Set C++ and CUDA standards
 set(CMAKE_CXX_STANDARD 17)
@@ -156,11 +156,11 @@ if(XACC_FOUND)
     add_subdirectory(xacc)
 endif()
 
-# Keep the interface library for backward compatibility but don't install the full package
-add_library(nwqsim INTERFACE)
-add_library(nwqsim::nwqsim ALIAS nwqsim)
+# # Keep the interface library for backward compatibility but don't install the full package
+# add_library(nwqsim INTERFACE)
+# add_library(nwqsim::nwqsim ALIAS nwqsim)
 
-target_include_directories(nwqsim INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/nwqsim>
-)
+# target_include_directories(nwqsim INTERFACE
+#     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/nwqsim>
+# )
