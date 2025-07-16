@@ -145,6 +145,8 @@ std::vector<int> parseParameterString(const std::string &param_str)
             continue;
         }
     }
+    std::reverse(result.begin(), result.end());
+
 
     return result;
 }
