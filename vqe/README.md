@@ -290,7 +290,61 @@ NWQ-VQE QFlow Options
 ```
 `--delta` and `--eta` are QFlow-specific parameters which control the gradient descent procedure (TODO: implement adaptive stepsize line search). `--delta` is used to perturb parameter vectors to compute the empirical gradient using SPSA, whereas `--eta` controls the descent stepsize. The algorithm descends the gradient from the (random) initial point until it finds a minimum, then returns.
 
+# Result Summary in the Output
 
+After successful execution of `nwq_vqe`, the output will contain a summary of the results at the end of the printout. For example, the command
+```shell
+./vqe/nwq_vqe -f ./H415.hamil -p 4 -v --abstol 1e-8 -lb -3.1 -ub 3.1 --maxeval 1000 -o LN_COBYLA --sym 2
+```
+gives
+```
+--------- Result Summary ---------
+Method                 : VQE, Symmetry Level = 2
+Ansatz                 : UCCSD Minimal
+# Ham. Pauli Strings   : 197
+Operator Stats         : 26 operators, 15 parameters, and 3428 Gates
+Circuit Stats          : 1934 depth, 1988 1q gates, 1440 2q gates, 0.315 gate density
+Optimization terminated: Function tolerance reached
+# function eval.       : 673
+Evaluation Time        : 0 hrs 0 mins 1.3581 secs
+Final objective value  : -1.9947639715805670
+Final parameters:
+  2^ 0 :: -0.0045417680471343
+  6^ 4 :: -0.0045417680471343
+  3^ 0 :: -0.0000072708605015
+  7^ 4 :: -0.0000072708605015
+  2^ 1 :: -0.0000086624570434
+  6^ 5 :: -0.0000086624570434
+  3^ 1 :: -0.0072011151790247
+  7^ 5 :: -0.0072011151790247
+  3^ 2^ 1 0 :: 0.0559262141883256
+  7^ 6^ 5 4 :: 0.0559262141883256
+  6^ 2^ 4 0 :: -0.0953014244963014
+  7^ 2^ 4 0 :: -0.0000130689432080
+  6^ 3^ 4 0 :: -0.0000130689432080
+  6^ 2^ 5 0 :: 0.0000125812063835
+  6^ 2^ 4 1 :: 0.0000125812063835
+  7^ 2^ 5 0 :: 0.1753959843323752
+  6^ 3^ 4 1 :: 0.1753959843323752
+  7^ 3^ 4 0 :: -0.1781937728268054
+  6^ 3^ 5 0 :: 0.1262203587657208
+  7^ 2^ 4 1 :: 0.1262203587657208
+  7^ 3^ 5 0 :: 0.0000102348263700
+  7^ 3^ 4 1 :: 0.0000102348263700
+  6^ 2^ 5 1 :: -0.3725823551270946
+  7^ 2^ 5 1 :: 0.0000003964811323
+  6^ 3^ 5 1 :: 0.0000003964811323
+  7^ 3^ 5 1 :: -0.0810860032080360
+```
+The default orbital ordering is XACC/Qiskit. For H4 example, the spin orbital ordering is like
+```
+ 3 ----- 7     <= Spatial 3
+ 2 ----- 6     <= Spatial 2
+ 1 ----- 5     <= Spatial 1
+ 0 ----- 4     <= Spatial 0
+ α       β
+```
+That is, `2^ 0` represents $t^{2}_0$ or a single excitation from spin-orbital 0 (spatial 0, alpha) to spin-orbital 2 (spatial 2, alpha). And similarly, `6^ 3^ 4 1` represents $t^{6 3}_{4 1}$ or a double excitation from spin-orbitals 4 (spatial 0, beta) and 1 (spatial 1, alpha) to 6 (spatial 2, beta) and 3 (spatial 3, alpha).
 
 
 
