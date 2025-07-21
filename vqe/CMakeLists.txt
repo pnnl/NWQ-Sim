@@ -3,7 +3,15 @@
 # ===============================================================================
 
 # Collect source files
-file(GLOB SOURCEFILES "src/*.cpp")
+set(VQE_SRCS 
+    src/jw.cpp              
+    src/uccsd.cpp     
+    src/utils.cpp
+    src/uccsdmin.cpp
+    src/singletgsd.cpp  
+    src/ansatz_pool.cpp  
+    src/hamiltonian.cpp  
+)
 
 # Add nlopt subdirectory first (dependency)
 add_subdirectory(nlopt)
@@ -13,10 +21,10 @@ add_subdirectory(nlopt)
 # ===============================================================================
 
 # VQE base library (internal use)
-add_library(vqe SHARED ${SOURCEFILES})
+add_library(vqe SHARED ${VQE_SRCS})
 
-# NWQSim QFlow shared library (for installation)
-add_library(nwqsim_qflow_lib SHARED "nwqsim_qflow_lib.cpp")
+# NWQSim QFlow library object
+add_library(nwqsim "nwqsim_qflow_lib.cpp")
 
 # Main VQE executable
 add_executable(nwq_vqe "main.cpp")
@@ -30,7 +38,7 @@ add_executable(nwq_qflow "qflow.cpp")
 # ===============================================================================
 
 # Set C++ standard for all targets
-set(ALL_TARGETS nwqsim_qflow_lib vqe nwq_vqe nwq_qflow)
+set(ALL_TARGETS nwqsim vqe nwq_vqe nwq_qflow)
 foreach(target ${ALL_TARGETS})
     target_compile_features(${target} PRIVATE cxx_std_17)
 endforeach()
@@ -39,12 +47,45 @@ endforeach()
 # Include directories and link directories
 # ===============================================================================
 
-# Include directories for all targets
-include_directories(BEFORE "include" "../include" "nlopt/src/api" "nlopt/build")
+# Set target-specific include directories
+target_include_directories(vqe 
+    PUBLIC 
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+    PRIVATE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/nlopt/src/api>
+)
+
+target_include_directories(nwqsim
+    PUBLIC 
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/nwqsim/vqe>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/nwqsim>
+    PRIVATE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/nlopt/src/api>
+)
+
+target_include_directories(nwq_vqe PRIVATE 
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/nlopt/src/api>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+)
+
+target_include_directories(nwq_qflow PRIVATE 
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/nlopt/src/api>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+)
 
 # Link directories for internal builds only
 target_link_directories(vqe BEFORE PRIVATE "nlopt/build")
-target_link_directories(nwqsim_qflow_lib BEFORE PRIVATE "nlopt/build")
+target_link_directories(nwqsim BEFORE PRIVATE "nlopt/build")
+target_link_directories(nwq_vqe BEFORE PRIVATE "nlopt/build")
+target_link_directories(nwq_qflow BEFORE PRIVATE "nlopt/build")
 
 # ===============================================================================
 # Basic linking
@@ -53,15 +94,14 @@ target_link_directories(nwqsim_qflow_lib BEFORE PRIVATE "nlopt/build")
 # Link base VQE library dependencies
 target_link_libraries(vqe PRIVATE nlopt m)
 
-# Link nwqsim_qflow_lib dependencies
-target_link_libraries(nwqsim_qflow_lib PUBLIC vqe)
-target_link_libraries(nwqsim_qflow_lib PRIVATE nlopt m)
+# Link NWQSim QFlow library dependencies
+target_link_libraries(nwqsim PRIVATE vqe nlopt m)
 
 # Link main VQE executable dependencies
-target_link_libraries(nwq_vqe PUBLIC vqe nlopt)
+target_link_libraries(nwq_vqe PRIVATE vqe nlopt m)
 
 # Link QFlow executable dependencies
-target_link_libraries(nwq_qflow PUBLIC vqe nlopt)
+target_link_libraries(nwq_qflow PRIVATE vqe nlopt m)
 
 # ===============================================================================
 # Build type specific configurations
@@ -100,53 +140,3 @@ if(CUDAToolkit_FOUND)
         target_compile_definitions(${target} PUBLIC CUDA_ENABLED)
     endforeach()
 endif()
-
-# ===============================================================================
-# Installation configuration for nwqsim_qflow_lib
-# ===============================================================================
-
-# Set installation directories relative to CMAKE_INSTALL_PREFIX
-set(INSTALL_LIB_DIR "lib")
-set(INSTALL_INCLUDE_DIR "include")
-set(INSTALL_BIN_DIR "bin")
-
-# Install the shared library and its dependency
-install(TARGETS nwqsim_qflow_lib vqe
-    EXPORT nwqsim_qflow_lib-targets
-    RUNTIME DESTINATION ${INSTALL_BIN_DIR}
-    LIBRARY DESTINATION ${INSTALL_LIB_DIR}
-    ARCHIVE DESTINATION ${INSTALL_LIB_DIR}
-    INCLUDES DESTINATION ${INSTALL_INCLUDE_DIR}
-)
-
-# Install the header file (only one needed for external projects)
-install(FILES "include/nwqsim_qflow.hpp"
-    DESTINATION ${INSTALL_INCLUDE_DIR}
-)
-
-# Create and install the CMake package configuration files
-install(EXPORT nwqsim_qflow_lib-targets
-    FILE nwqsim_qflow_lib-targets.cmake
-    NAMESPACE nwqsim::
-    DESTINATION ${INSTALL_LIB_DIR}/cmake/nwqsim_qflow_lib
-)
-
-# Create a config file for the package
-include(CMakePackageConfigHelpers)
-write_basic_package_version_file(
-    "nwqsim_qflow_lib-config-version.cmake"
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY AnyNewerVersion
-)
-
-configure_package_config_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/nwqsim_qflow_lib-config.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/nwqsim_qflow_lib-config.cmake"
-    INSTALL_DESTINATION ${INSTALL_LIB_DIR}/cmake/nwqsim_qflow_lib
-)
-
-install(FILES 
-    "${CMAKE_CURRENT_BINARY_DIR}/nwqsim_qflow_lib-config.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/nwqsim_qflow_lib-config-version.cmake"
-    DESTINATION ${INSTALL_LIB_DIR}/cmake/nwqsim_qflow_lib
-)

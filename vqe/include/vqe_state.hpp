@@ -7,7 +7,7 @@
 #include "circuit/measurement.hpp"
 #include "gradient/sa_gradient.hpp"
 #include "observable/hamiltonian.hpp"
-#include "nlopt.hpp"
+#include "nlopt/nlopt.hpp"
 #include <memory>
 #include <cmath>
 #include <vector>
