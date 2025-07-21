@@ -48,7 +48,6 @@ __pycache__/
 # Ignore CMake generated files
 CMakeFiles/
 CMakeCache.txt
-*.cmake
 # Makefile
 
 # Ignore other IDE and editor files

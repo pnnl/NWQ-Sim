@@ -119,7 +119,39 @@ std::vector<std::pair<std::string, std::complex<double>>> parseHamiltonianFile(c
     return result;
 }
 
-double qflow_nwqsim(const std::vector<std::pair<std::string, std::complex<double>>> &hamiltonian_ops, int n_part, std::string backend)
+std::vector<int> parseParameterString(const std::string &param_str)
+{
+    std::vector<int> result;
+    std::istringstream iss(param_str);
+    std::string token;
+
+    while (iss >> token)
+    {
+        // Remove ^ if it exists at the end
+        if (!token.empty() && token.back() == '^')
+        {
+            token.pop_back();
+        }
+
+        // Convert to integer and add to result
+        try
+        {
+            int num = std::stoi(token);
+            result.push_back(num);
+        }
+        catch (const std::exception &e)
+        {
+            // Skip invalid tokens
+            continue;
+        }
+    }
+    std::reverse(result.begin(), result.end());
+
+
+    return result;
+}
+
+std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim(const std::vector<std::pair<std::string, std::complex<double>>> &hamiltonian_ops, int n_part, std::string backend)
 {
     VQEBackendManager manager;
 
@@ -151,5 +183,14 @@ double qflow_nwqsim(const std::vector<std::pair<std::string, std::complex<double
 
     double final_energy = optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, n_trials, verbose, delta, eta);
 
-    return final_energy;
+    std::vector<std::pair<std::string, double>> param_map = ansatz->getFermionicOperatorParameters();
+
+    std::vector<std::pair<std::vector<int>, double>> param_vector;
+
+    for (const auto &param : param_map)
+    {
+        param_vector.emplace_back(parseParameterString(param.first), param.second);
+    }
+
+    return std::make_pair(final_energy, param_vector);
 }
