@@ -1,0 +1,47 @@
+,Circuit,"Time
+Gain","Clifford+T
+Gates",T Gates,"Optimized
+Gates",T Ratio
+adder n10,Adder N10,14.26x,189,88,16,2.0x
+adder n4,Adder N4,34.61x,25,4,4,1.0x
+adder n433,Adder N433,2.74x,6196,1536,768,2.0x
+basis test n4,Basis Test N4,51.88x,577,156,132,1.18x
+basis trotter n4,Basis Trotter N4,16.64x,9819,1860,1578,1.18x
+bell n4,Bell N4,17.19x,386,70,68,1.03x
+dnn n16,Dnn N16,8.17x,30016,6656,5920,1.12x
+dnn n2,Dnn N2,46.46x,3414,760,672,1.13x
+dnn n8,Dnn N8,16.56x,15008,3328,2960,1.12x
+fredkin n3,Fredkin N3,19.28x,22,4,4,1.0x
+gcm h6,Gcm H6,7.97x,17719,4852,4486,1.08x
+inverseqft n4,Inverseqft N4,13.29x,99,28,28,1.0x
+ising n10,Ising N10,30.14x,3152,974,928,1.05x
+ising n26,Ising N26,43.93x,1116,332,324,1.02x
+knn n25,Knn N25,11.79x,816,204,192,1.06x
+multiplier n15,Multiplier N15,3.32x,454,144,42,3.43x
+multiplier n45,Multiplier N45,6.77x,4574,1512,396,3.82x
+multiply n13,Multiply N13,11.67x,92,24,14,1.71x
+pea n5,Pea N5,13.69x,523,166,166,1.0x
+qaoa n3,Qaoa N3,28.38x,53,8,8,1.0x
+qaoa n6,Qaoa N6,28.65x,2928,672,544,1.24x
+qec en n5,Qec En N5,27.47x,25,1,1,1.0x
+qf21 n15,Qf21 N15,18.42x,646,170,162,1.05x
+qft n18,Qft N18,19.05x,2150,596,596,1.0x
+qft n18 iter1,Qft N18 Iter1,29.37x,3290,1677,1333,1.26x
+qft n18 iter2,Qft N18 Iter2,20.16x,27292,14383,11463,1.25x
+qft n4,Qft N4,38.83x,310,92,92,1.0x
+qpe n9,Qpe N9,53.14x,334,90,86,1.05x
+qram n20,Qram N20,32.09x,276,80,48,1.67x
+sat n7,Sat N7,32.62x,213,40,24,1.67x
+seca n11,Seca N11,29.27x,200,32,16,2.0x
+simon n6,Simon N6,21.12x,56,8,8,1.0x
+swap test n115,Swap Test N115,10.99x,2866,736,680,1.08x
+swap test n25,Swap Test N25,13.76x,592,152,140,1.09x
+teleportation n3,Teleportation N3,56.61x,8,1,1,1.0x
+toffoli n3,Toffoli N3,22.36x,20,3,3,1.0x
+variational n4,Variational N4,51.23x,363,100,92,1.09x
+vqe n4,Vqe N4,28.66x,639,188,186,1.01x
+vqe uccsd n4,Vqe Uccsd N4,15.41x,952,160,160,1.0x
+vqe uccsd n8,Vqe Uccsd N8,4.48x,33969,3816,3742,1.02x
+wstate n27,Wstate N27,26.17x,1704,416,416,1.0x
+wstate n3,Wstate N3,71.54x,67,14,14,1.0x
+wstate n76,Wstate N76,3.42x,2488,416,416,1.0x

@@ -3,10 +3,8 @@
     "version": "0.1",
     "num_qubits": 2,
     "basis_gates": [
-        "id",
-        "rz",
-        "sx",
-        "x",
+        "h",
+        "z",
         "cx",
         "reset"
     ],

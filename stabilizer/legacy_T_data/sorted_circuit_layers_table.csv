@@ -1,0 +1,50 @@
+Circuit,T Layers,Opt T Layers,T Layer Ratio
+Adder (4),1,1,1.0
+qec_en_n5.txt,1,1,1.0
+fredkin_n3.txt,1,1,1.0
+teleportation_n3.txt,1,1,1.0
+toffoli_n3.txt,1,1,1.0
+simon_n6.txt,1,1,1.0
+multiply_n13.txt,1,1,1.0
+seca_n11.txt,4,4,1.0
+qram_n20.txt,5,5,1.0
+Adder (10),5,5,1.0
+sat_n7.txt,6,6,1.0
+qaoa_n3.txt,8,8,1.0
+Mult (15),8,8,1.0
+bigadder_n18.txt,9,9,1.0
+wstate_n3.txt,10,10,1.0
+swap_test_n115.txt,11,11,1.0
+knn_n25.txt,11,11,1.0
+swap_test_n25.txt,11,11,1.0
+linearsolver_n3.txt,15,15,1.0
+inverseqft_n4.txt,18,18,1.0
+quantumwalks_n2.txt,19,19,1.0
+bell_n4.txt,28,28,1.0
+qft_n4.txt,28,28,1.0
+sat_n11.txt,33,33,1.0
+ising_n26.txt,35,35,1.0
+qft_n18.txt,36,36,1.0
+qpe_n9.txt,46,46,1.0
+variational_n4.txt,49,47,1.04
+vqe_n4.txt,59,59,1.0
+basis_test_n4.txt,63,58,1.09
+qf21_n15.txt,82,82,1.0
+basis_change_n3.txt,89,89,1.0
+Mult (45),128,128,1.0
+vqe_uccsd_n4.txt,130,130,1.0
+pea_n5.txt,146,146,1.0
+ising_n10.txt,184,182,1.01
+adder_n433.txt,193,193,1.0
+wstate_n27.txt,201,201,1.0
+wstate_n76.txt,201,201,1.0
+qaoa_n6.txt,229,199,1.15
+dnn_n2.txt,414,390,1.06
+dnn_n16.txt,450,426,1.06
+dnn_n8.txt,450,426,1.06
+vqe_uccsd_n6.txt,733,733,1.0
+basis_trotter_n4.txt,763,679,1.12
+"QFT (18, 1)",869,869,1.0
+gcm_h6.txt,2851,2844,1.0
+vqe_uccsd_n8.txt,3312,3312,1.0
+"QFT (18, 2)",4311,4311,1.0

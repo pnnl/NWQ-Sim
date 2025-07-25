@@ -265,7 +265,7 @@ namespace NWQSim
         void EXPECT(void *obsptr)
         {
             // Compute the expectation value of a list of observables (data stored in the ObservableList struct)
-            Gate G(OP::EXPECT, 0, -1, 1, 0, 0, 0, 0, obsptr);
+            Gate G(OP::EXPECT, 0, -1, 1, 0, 0, 0, 0, 0, obsptr);
             gates->push_back(G);
             n_expect++;
         }
@@ -505,6 +505,15 @@ namespace NWQSim
             Gate G(OP::CU, qubit, ctrl, 2, theta, phi, lam);
             gates->push_back(G);
         }
+        void DAMP(IdxType qubit, ValType lambda, ValType gamma)
+        {       
+            /******************************************
+             * Pauli damping
+             ******************************************/
+            Gate G(OP::DAMP, qubit, -1, 1, 0, 0, lambda, gamma);
+            // std::cout << "Gate" << G.gateToString();
+            gates->push_back(G);
+        }
         void ECR(IdxType ctrl, IdxType qubit)
         {
             /******************************************
@@ -596,7 +605,7 @@ namespace NWQSim
         }
         void MA(IdxType repetition) // default is pauli-Z
         {
-            Gate G(OP::MA, -1, -1, 1, 0, 0, 0, repetition);
+            Gate G(OP::MA, -1, -1, 1, 0, 0, 0, 0, repetition);
             gates->push_back(G);
         }
         void RESET(IdxType qubit)

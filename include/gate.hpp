@@ -195,6 +195,10 @@ namespace NWQSim
          * RXX gate: TODO
          * RXX = TODO
          ******************************************/
+        DAMP,
+        /******************************************
+         * See Pauli damping model -> sean.garner@pnnl.gov
+         ******************************************/
         ECR,
         /******************************************
          * Echoed Cross-Resonance Gate
@@ -306,6 +310,7 @@ namespace NWQSim
         "CSX",
         "CP",
         "CU",
+        "DAMP",
         "ECR",
         "RXX",
         "RYY",
@@ -337,7 +342,7 @@ namespace NWQSim
         ValType theta;
         ValType phi;
         ValType lam;
-        ValType gamma = 0;
+        ValType gamma;
         IdxType repetition;
         void *data; // extra data (e.g. Pauli operators)
 
@@ -353,6 +358,7 @@ namespace NWQSim
              ValType _theta = 0,
              ValType _phi = 0,
              ValType _lam = 0,
+             ValType _gamma = 0,
              IdxType _repetition = 0,
              void *_data = NULL) : op_name(_op_name),
                                    qubit(_qubit),
@@ -361,6 +367,7 @@ namespace NWQSim
                                    theta(_theta),
                                    phi(_phi),
                                    lam(_lam),
+                                   gamma(_gamma),
                                    repetition(_repetition),
                                    data(_data) {}
 
@@ -371,6 +378,7 @@ namespace NWQSim
                               theta(g.theta),
                               phi(g.phi),
                               lam(g.lam),
+                              gamma(g.gamma),
                               repetition(g.repetition),
                               data(g.data),
                               mod_op(g.mod_op),
@@ -393,7 +401,7 @@ namespace NWQSim
 
             std::stringstream ss;
             ss << OP_NAMES[op_name];
-            if (theta != 0.0 || phi != 0.0 || lam != 0.0)
+            if (theta != 0.0 || phi != 0.0 || lam != 0.0 || gamma != 0.0)
             {
                 ss << "(";
                 if (theta != 0.0)
@@ -407,6 +415,10 @@ namespace NWQSim
                 if (lam != 0.0)
                 {
                     ss << lam;
+                }
+                if (gamma != 0.0)
+                {
+                    ss << gamma;
                 }
                 // Remove trailing comma if exists
                 std::string parameters = ss.str();

@@ -4,6 +4,10 @@
 #include "circuit.hpp"
 #include "config.hpp"
 
+#ifdef EIGEN
+#include "../stabilizer/src/pauli_math.hpp"
+#endif
+
 #include "private/gate_factory/sv_gate.hpp"
 #include <stdexcept> // For std::runtime_error
 #include <vector>
@@ -94,11 +98,12 @@ namespace NWQSim
         {
             throw std::runtime_error("Clear Buffer Not Implemented");
         }
-
-        virtual std::vector<std::vector<double>> get_density_matrix()
+#ifdef EIGEN
+        virtual Eigen::MatrixXcd get_density_matrix()
         {
             throw std::runtime_error("Density Matrix Return Not Implemented");
         }
+#endif
         virtual std::vector<std::vector<int>> get_graph_matrix()
         {
             throw std::runtime_error("Graph Matrix Return Not Implemented");
@@ -163,7 +168,6 @@ namespace NWQSim
         {
             throw std::runtime_error("Apply Gate Not Implemented");
         }
-
 
 
         IdxType i_proc = 0; // process id

@@ -1,10 +1,5 @@
 #pragma once
 
-#ifdef EIGEN
-//Eigen and pauli math
-#include "pauli_math.hpp"
-#endif
-
 #include "../state.hpp"
 
 #include "../nwq_util.hpp"
@@ -52,8 +47,11 @@ namespace NWQSim
                 z[i+n][i] = 1;
             }
             
-            rng.seed(Config::RANDOM_SEED);
+            std::random_device rd;
+            rng.seed(rd());
             dist = std::uniform_int_distribution<int>(0,1);
+            random_float = std::uniform_real_distribution<double>(0.0, 1.0);
+
 
             has_destabilizers = true;
 
@@ -287,21 +285,21 @@ namespace NWQSim
             return pauliStrings;
         }
 
-        void initialize_erasure_mask() override
-        {
-            x_erasure.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
-                                                       //second n represents stabilizers + 1 extra row
-            z_erasure.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
-            r_erasure.resize(rows, 0); //column on the right with 2n+1 rows
-            //The 2n+1 th row is scratch space
+        // void initialize_erasure_mask() override
+        // {
+        //     x_erasure.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
+        //                                                //second n represents stabilizers + 1 extra row
+        //     z_erasure.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
+        //     r_erasure.resize(rows, 0); //column on the right with 2n+1 rows
+        //     //The 2n+1 th row is scratch space
 
-            //Intialize the identity tableau
-            for(int i = 0; i < n; i++)
-            {
-                x_erasure[i][i] = 1;
-                z_erasure[i+n][i] = 1;
-            }
-        }
+        //     //Intialize the identity tableau
+        //     for(int i = 0; i < n; i++)
+        //     {
+        //         x_erasure[i][i] = 1;
+        //         z_erasure[i+n][i] = 1;
+        //     }
+        // }
 
         //Get a pauli string stabilizer and phase bit
         std::pair<std::string,int> get_stabilizer_line(int row) override
@@ -363,54 +361,45 @@ namespace NWQSim
 
 #ifdef EIGEN
         //Creates a sparse density matrix out of Pauli stabilizers
-        std::vector<std::vector<double>> get_density_matrix() override
+        ComplexMatrix get_density_matrix() override
         {
-            std::vector<std::pair<std::string,int>> full_paulis = get_all_lines();
-            std::pair<std::string,int> line;
-            ComplexSparseMatrix DM = createSparseIdentity(1 << n);
-            for(int i = 0; i < full_paulis.size(); i++)
-            {
-                line = full_paulis[i];
-                std::cout << "Line.first " << line.first << std::endl;
-                ComplexSparseMatrix I = createSparseIdentity(1 << n);
-                ComplexSparseMatrix S = createSparseIdentity(1);
-                for(int j = 0; j < line.first.size(); j++)
-                {
-                    switch(line.first[j])
-                    {
-                        case 'I':
-                            S = kroneckerProduct(S, sparsePauliI());
-                            break;
-                        case 'X':
-                            S = kroneckerProduct(S, sparsePauliX());
-                            break;
-                        case 'Y':   
-                            S = kroneckerProduct(S, sparsePauliY());
-                            break;
-                        case 'Z':
-                            S = kroneckerProduct(S, sparsePauliZ());
-                            break;
-                        default:
-                            std::logic_error("Invalid stabilizer");
-                            break;
-                    }
-                }
-                if(line.second == 1)
-                    S = S * -1.0;
+            std::vector<std::pair<std::string, int>> full_paulis = get_all_lines();
+            int dim = 1 << n;
 
-                DM = DM * .5 * (I + S);
-            }
-            std::vector<std::vector<double>> densityMatrix;
-            densityMatrix.resize(DM.rows(), std::vector<double>(DM.cols(),0));
-            for(int i = 0; i < DM.rows(); i++)
-            {
-                for(int j = 0; j < DM.cols(); j++)
-                {
-                    densityMatrix[i][j] = DM.coeff(i, j).real();
+            ComplexMatrix rho = createSparseIdentity(dim);  //Start with identity
+
+            for (const auto& line : full_paulis) {
+                const std::string& pauli_string = line.first;
+                int sign = line.second;
+
+                ComplexMatrix S = Matrix::Ones(1, 1);  //Start with scalar 1
+
+                
+                //Build the stabilizer operator
+                for (char p : pauli_string) {
+                    if (p == 'I')      S = kroneckerProduct(S, pauliI()).eval();
+                    else if (p == 'X') S = kroneckerProduct(S, pauliX()).eval();
+                    else if (p == 'Y') S = kroneckerProduct(S, pauliY()).eval();
+                    else if (p == 'Z') S = kroneckerProduct(S, pauliZ()).eval();
+                    else throw std::logic_error("Invalid Pauli character in stabilizer");
                 }
+
+                //Flip sign if stabilizer has -1 eigenvalue
+                if (sign == 1)
+                    S *= -1.0;
+
+                //Projector: (I + S) / 2
+                ComplexMatrix proj = (createIdentity(dim) + S) * 0.5;
+
+                //Multiply into density matrix
+                rho = (rho * proj);
+                // std::cout << "Matrix has dimensions: " 
+                //     << rho.rows() << " x " << rho.cols() << std::endl;
             }
-            return densityMatrix;
-        }
+
+            // Convert to dense for return
+            return ComplexMatrix(rho);
+        }   
 #endif
 
 
@@ -1307,8 +1296,11 @@ namespace NWQSim
         IdxType* totalResults = NULL;
         IdxType** totalResultsLong = NULL;
 
+        double p = NULL;
+
         std::mt19937 rng;
         std::uniform_int_distribution<int> dist;
+        std::uniform_real_distribution<double> random_float;
 
         //Function to swap two rows of the tableau
         void swapRows(int row1, int row2) {
@@ -1675,6 +1667,141 @@ namespace NWQSim
             qubitReorder(graphMatrix, qubitIndex);
         }
 
+        int damping_generator(double p, double gamma)
+        {   //Remove negative and renormalize
+            //Range [0.0, 1.0)
+            double monte = random_float(rng);
+            float c0 = 0.5 * (1.0-gamma+sqrt(1.0-gamma));
+            float c1 = 0.5 * (1.0-gamma-sqrt(1.0-gamma));
+            float c2 = gamma;
+            // std::cout << "\n C0 " << c0;
+            // std::cout << " C1 " << c1;
+            // std::cout << " C2 " << c2;
+
+            float c0_tot = (1 - p) * c0 + p * c1;
+            float c1_tot = p * c0 + (1 - p) * c1;
+            float c2_tot = c2;
+            // std::cout << " Monte: " << monte << std::endl;
+            double temp = monte - c0_tot;
+
+            std::cout << c0_tot << " " << c1_tot << " " << c2_tot << std::endl;
+
+            if(temp < 0) 
+            {
+                // std::cout << " C0_tot chosen: " << c0_tot;
+                return 0;
+            }
+            
+            temp = temp - c1_tot;
+            if(temp < 0) 
+            {
+                // std::cout << " C1_tot chosen: " << c1_tot;
+                return 1;
+            }
+            temp = temp - c2_tot;
+            if(temp < 0) 
+            {
+                // std::cout << " C2_tot chosen: " << c2_tot;
+                return 2;
+            }
+            else 
+            {
+                std::cout << "Impossible monte" << std::endl;
+                return 3;
+            }
+        }
+
+        void reset_routine(int a)
+        {
+            int p = -1;
+            int temp_result = 0;
+            int half_rows = rows/2;
+
+            for(int p_index = half_rows; p_index < rows-1; p_index++)
+            {  
+                //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
+                if(x[p_index][a])
+                {
+                    p = p_index;
+                    break;
+                }
+            }
+            // std::cout << "p = " << p << std::endl;
+            //A p such that x[p][a] = 1 exists
+            //Random
+            if(p > -1)
+            {
+                for(int i = 0; i < rows-1; i++)
+                {
+                    // std::cout << "x = " << x[i][a] << std::endl;
+                    if((x[i][a]) && (i != p))
+                    {
+                        rowsum(i, p);
+                    }
+                }
+                
+                x[p-half_rows] = x[p];
+                z[p-half_rows] = z[p];
+                //Change all the columns in row p to be 0
+                for(int i = 0; i < n; i++)
+                {
+                    x[p][i] = 0;
+                    z[p][i] = 0;                        
+                }
+
+                //Generate and display a random number
+                int randomBit = dist(rng);
+                
+                if(randomBit)
+                {
+                    //std::cout << "Random result of 1" << std::endl;
+                    r[p] = 1;
+                }
+                else
+                {
+                    //std::cout << "Random result of 0" << std::endl;
+                    r[p] = 0;
+                }
+                z[p][a] = 1;
+
+                temp_result = r[p];
+                // std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
+            }
+            //Deterministic
+            else
+            {
+                //Set the scratch space row to be 0
+                //i is the column indexer in this case
+                for(int i = 0; i < n; i++)
+                {
+                    x[rows-1][i] = 0;
+                    z[rows-1][i] = 0;
+                }
+                r[rows-1] = 0;
+
+                //Run rowsum subroutine
+                for(int i = 0; i < half_rows; i++)
+                {
+                    if(x[i][a] == 1)
+                    {
+                        rowsum(rows-1, i+half_rows);
+                    }
+                }
+                // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
+                temp_result = r[rows-1];
+            }
+            if(temp_result == 1) //Apply X to flip back to 0
+            {
+                for(int i = 0; i < rows-1; i++)
+                {
+                    // z[i][a] ^= x[i][a]; 
+                    r[i] ^= z[i][a];
+
+                    // r[i] ^= z[i][a];
+                }
+            }
+        }
+
         void simulation_kernel(std::vector<Gate>& gates)
         {
             int g = gates.size();
@@ -2008,74 +2135,7 @@ namespace NWQSim
                     }
                     case OP::RESET:
                     {
-                        int p = -1;
-                        for(int p_index = half_rows; p_index < rows-1; p_index++)
-                        {  
-                            //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
-                            if(x[p_index][a])
-                            {
-                                p = p_index;
-                                break;
-                            }
-                        }
-                        
-                        //If rows anti-commute with a new Z stabilizer
-                        //i.e. remove the entanglement 
-                        if(p > -1)
-                        {
-                            //Set the first stabilizer to Z
-                            for(int i = 0; i < n; i++)
-                            {   x[0][i] = 0;
-                                z[0][i] = 0;
-                                x[rows/2][i] = 0;
-                                z[rows/2][i] = 0;
-                            }
-                            z[rows/2][a] = 1;
-                            x[0][a] = 1;
-                            r[rows/2] = 0;
-                            r[0] = 0;
-
-                            //Propogate the commutation repercussions
-                            for(int i = 0; i < rows-1; i++)
-                            {
-                                // std::cout << "x = " << x[i][a] << std::endl;
-                                if((x[i][a]) && (i != p))
-                                {
-                                    rowsum(i, p);
-                                }
-                            }
-                        }
-                        
-                        //All rows already commute -- weren't entangled
-                        //Deterministic
-                        else
-                        {
-                            //Set the scratch space row to be 0
-                            //i is the column indexer in this case
-                            for(int i = 0; i < n; i++)
-                            {
-                                x[rows-1][i] = 0;
-                                z[rows-1][i] = 0;
-                            }
-                            r[rows-1] = 0;
-
-                            //Run rowsum subroutine
-                            for(int i = 0; i < half_rows; i++)
-                            {
-                                if(x[i][a] == 1)
-                                {
-                                    rowsum(rows-1, i+half_rows);
-                                }
-                            }
-                            
-                            if(r[rows-1])
-                            {
-                                for(int i = 0; i < rows-1; i++)
-                                {
-                                    r[i] ^= z[i][a];
-                                }
-                            }
-                        }
+                        reset_routine(a);
                         break;
                     }
 
@@ -2104,6 +2164,28 @@ namespace NWQSim
                         }
                         break;
                     
+                    case OP::DAMP:
+                        // std::cout << "Gamma " << gate.gamma << std::endl;
+                        switch(damping_generator(gate.lam, gate.gamma))
+                        {
+                            case 0: //Do nothing
+                                break;
+                            case 1: //Apply Z
+                                for(int i = 0; i < rows-1; i++)
+                                {
+                                    //Phase
+                                    r[i] ^= x[i][a];
+                                }
+                                break;
+                            case 2: //Reset to |0>
+                                reset_routine(a);
+                                break;
+                            default:
+                                std::logic_error("Invalid damping result");
+                                exit(1);
+                        }
+                        break;
+                        
                     case OP::MA:
                         measure_all();
                         break;

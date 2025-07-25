@@ -1,7 +1,0 @@
-Circuit,Number of Qubits,Raw T Gates,Optimized T Gates,Raw Layers,Optimized Layers,Optimized Layer Ratio
-Adder (4),4,4,4,1,1,0.0
-Adder (10),10,88,32,10,7,0.30000000000000004
-Multiplier (15),15,144,42,8,8,0.0
-Multiplier (45),45,1512,396,128,128,0.0
-QFT (18) (1),18,1677,1333,869,869,0.0
-QFT (18) (2),18,14383,11463,4311,4311,0.0

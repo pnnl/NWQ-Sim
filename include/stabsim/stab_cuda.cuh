@@ -1630,7 +1630,7 @@ namespace NWQSim
         __shared__ curandState state;
         if(i == rows/2)
         {
-            curand_init(1234, i, 0, &state);
+            curand_init(seed, i, 0, &state);
         }
         
         // printf("Starting for loop!! \n\n");
@@ -1663,8 +1663,12 @@ namespace NWQSim
                 return;
             }
             if(op_name == OP::CX) {
-                grid.sync();
-                int ctrl_index = row * stab_gpu->cols + gates_gpu[col].ctrl;
+                int ctrl_index = row * cols + gates_gpu[col].ctrl;
+
+                if((index % blockDim.x) == ctrl_index % blockDim.x)
+                    __syncthreads();
+                else
+                    grid.sync();
 
                 uint32_t x_ctrl = x_arr[ctrl_index];
                 uint32_t z_ctrl = z_arr[ctrl_index];
@@ -1686,7 +1690,7 @@ namespace NWQSim
                     local_p_shared = rows;
                     if(blockIdx.x == 0) 
                     {
-                        // printf("M\n\n");
+                        //printf("M\n\n");
                         //Initialize global memory
                         p_shared = rows;
                     }
