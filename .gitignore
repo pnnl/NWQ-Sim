@@ -59,3 +59,8 @@ CMakeCache.txt
 .idea/
 *.iml
 
+#Ignore stabilizer testing files
+/stabilizer/legacy_graphics
+/stabilizer/legacy_runtime_data
+/stabilizer/legacy_T_data
+
