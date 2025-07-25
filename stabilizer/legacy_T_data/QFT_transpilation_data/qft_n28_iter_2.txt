@@ -1,7 +1,0 @@
-Processing time: 2.81357
-Optimization time: 13.368
-Intial T count: 16491
-Optimized T count: 13103
-Optimized layers: 2727
-Repetitions to optimize: 2
-Total Gates: 31692
