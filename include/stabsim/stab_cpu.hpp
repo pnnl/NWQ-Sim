@@ -1681,11 +1681,53 @@ namespace NWQSim
             float c0_tot = (1 - p) * c0 + p * c1;
             float c1_tot = p * c0 + (1 - p) * c1;
             float c2_tot = c2;
+            double total = c0_tot + c1_tot + c2_tot;
+            double tolerance = 1e-6;
+           
+
+            // if (std::abs(total - 1.0) > tolerance) {
+            //     std::cerr << "Assertion failed: c0_tot + c1_tot + c2_tot = " << total << " (expected ~1)\n";
+            //     std::cerr << "p = " << p << ", gamma = " << gamma << std::endl;
+            //     assert(false);
+            // }
+            // if(c0_tot < 0){
+            //     std::cerr << "Assertion failed: c0_tot = " << c0_tot << std::endl;                
+            //     std::cerr << "p = " << p << ", gamma = " << gamma << std::endl;
+            //     assert(false);
+            // }
+            // if(c2_tot < 0){
+            //     std::cerr << "Assertion failed: c2_tot = " << c2_tot << std::endl;                
+            //     std::cerr << "p = " << p << ", gamma = " << gamma << std::endl;
+            //     assert(false);
+            // }
+
+            //Remormalization if C1~ < 0
+
+            // if(c0_tot < 0){
+            //     c0_tot = 0;
+            //     double sum = c1_tot+c2_tot;
+            //     c1_tot = c1_tot/sum;
+            //     c2_tot = c2_tot/sum;
+            // }
+            // if(c1_tot < 0){
+            //     c2_tot = 0;
+            //     double sum = c0_tot+c2_tot;
+            //     c0_tot = c0_tot/sum;
+            //     c2_tot = c2_tot/sum;
+            // }
+            // else if(c2_tot < 0){
+            //     c2_tot = 0;
+            //     double sum = c1_tot+c0_tot;
+            //     c1_tot = c1_tot/sum;
+            //     c0_tot = c0_tot/sum;
+            // }
+
             // std::cout << " Monte: " << monte << std::endl;
+            
+            // std::cout << "c: " << c0 << " " << c1 << " " << c2 << std::endl;
+            // std::cout << "c~: " << c0_tot << " " << c1_tot << " " << c2_tot << std::endl;
+
             double temp = monte - c0_tot;
-
-            std::cout << c0_tot << " " << c1_tot << " " << c2_tot << std::endl;
-
             if(temp < 0) 
             {
                 // std::cout << " C0_tot chosen: " << c0_tot;
@@ -1706,7 +1748,7 @@ namespace NWQSim
             }
             else 
             {
-                std::cout << "Impossible monte" << std::endl;
+                std::cerr << "Impossible monte" << std::endl;
                 return 3;
             }
         }
