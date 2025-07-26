@@ -1670,33 +1670,65 @@ namespace NWQSim
         int damping_generator(double p, double gamma)
         {   //Remove negative and renormalize
             //Range [0.0, 1.0)
+            double tolerance = 1e-9;
             double monte = random_float(rng);
-            float c0 = 0.5 * (1.0-gamma+sqrt(1.0-gamma));
-            float c1 = 0.5 * (1.0-gamma-sqrt(1.0-gamma));
-            float c2 = gamma;
+            double c0 = 0.5 * (1.0-gamma+sqrt(1.0-gamma));
+            double c1 = 0.5 * (1.0-gamma-sqrt(1.0-gamma));
+            double c2 = gamma;
+            // double total = c0 + c1 + c2;
             // std::cout << "\n C0 " << c0;
             // std::cout << " C1 " << c1;
             // std::cout << " C2 " << c2;
+            // double
 
-            float c0_tot = (1 - p) * c0 + p * c1;
-            float c1_tot = p * c0 + (1 - p) * c1;
-            float c2_tot = c2;
-            double total = c0_tot + c1_tot + c2_tot;
-            double tolerance = 1e-6;
-           
+            // if(c0 < 0){
+            //     std::cerr << "Assertion failed: c0 = " << c0 << std::endl;                
+            //     std::cerr << "p = " << p << ", gamma = " << gamma << std::endl;
+            //     assert(false);
+            // }
+            // if(c1 < 0){
+            //     std::cerr << "c1 = " << c1 << std::endl;                
+            //     std::cerr << "p = " << p << ", gamma = " << gamma << std::endl;
+            //     assert(false);
+            // }
 
             // if (std::abs(total - 1.0) > tolerance) {
-            //     std::cerr << "Assertion failed: c0_tot + c1_tot + c2_tot = " << total << " (expected ~1)\n";
+            //     std::cerr << "Assertion failed: c0 + c1 + c2 = " << total << " (expected ~1)\n";
+            //     std::cerr << "p = " << p << ", gamma = " << gamma << std::endl;
+            //     assert(false);
+            // }
+
+            double c0_tot = (1 - p) * c0 + p * c1;
+            double c1_tot = p * c0 + (1 - p) * c1;
+            double c2_tot = c2;
+
+            // if(c1_tot < 0)
+            // {
+            //     double tot = c0_tot + c2_tot;
+            //     c1_tot = 0;
+            //     c0_tot = c0_tot/tot;
+            //     c2_tot = c2_tot/tot;
+            // }
+           
+
+            // if (std::abs(tot_total - 1.0) > tolerance) {
+            //     std::cerr << "Assertion failed: c0_tot + c1_tot + c2_tot = " << tot_total << " (expected ~1)\n";
             //     std::cerr << "p = " << p << ", gamma = " << gamma << std::endl;
             //     assert(false);
             // }
             // if(c0_tot < 0){
-            //     std::cerr << "Assertion failed: c0_tot = " << c0_tot << std::endl;                
+            //     std::cerr << "Assertion failed: c0_tot = " << c0_tot << std::endl;
+            //     std::cerr << "c1_tot = " << c1_tot << std::endl;    
+            //     std::cerr << "c0 = " << c0 << std::endl;          
+            //     std::cerr << "c1 = " << c1 << std::endl;          
             //     std::cerr << "p = " << p << ", gamma = " << gamma << std::endl;
             //     assert(false);
             // }
-            // if(c2_tot < 0){
-            //     std::cerr << "Assertion failed: c2_tot = " << c2_tot << std::endl;                
+            // if(c1_tot < 0){
+            //     std::cerr << "Assertion failed: c1_tot = " << c1_tot << std::endl;  
+            //     std::cerr << "c0_tot = " << c0_tot << std::endl;               
+            //     std::cerr << "c0 = " << c0 << std::endl;          
+            //     std::cerr << "c1 = " << c1 << std::endl;          
             //     std::cerr << "p = " << p << ", gamma = " << gamma << std::endl;
             //     assert(false);
             // }

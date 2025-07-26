@@ -36,11 +36,11 @@ int main(int argc, char* argv[]) {
     double T1 = std::atof(argv[2]);
     double T2;
     double t = tau;
-    for(T2 = T1/10; T2 < (2*T1 + T1/10); T2 += T1/10)
+    for(T2 = T1/10; T2 < (2*T1+T1/10); T2 += T1/10)
     {
         double lambda = 1/T2 - 1/(2*T1);
         double p_amp = 1 - exp(-t/T1);
-        double p_phase = 1 - exp(-t*lambda);
+        double p_phase = .5*(1 - exp(-t*lambda));
         // std::cerr << "T1: " << T1 << " T2: " << T2 << " tau: " << t << std::endl;
         // std::cout << lambda << " " << gamma << std::endl;
         int n_qubits = 1;
