@@ -101,48 +101,6 @@ if(HIP_FOUND)
 endif()
 
 
-
-
-set(SOURCE_FILE "damping_channel.cpp")
-
-add_executable(damping_channel damping_channel.cpp)
-
-target_compile_features(damping_channel PRIVATE cxx_std_17)
-
-
-# Link against OpenMP if available
-if(OpenMP_FOUND)
-    target_link_libraries(damping_channel PUBLIC OpenMP::OpenMP_CXX)
-    target_compile_definitions(damping_channel PUBLIC OMP_ENABLED)
-endif()
-
-# Link against MPI if available
-if(MPI_FOUND)
-    target_link_libraries(damping_channel PUBLIC MPI::MPI_CXX)
-    target_compile_definitions(damping_channel PUBLIC MPI_ENABLED)
-endif()
-
-# If CUDA Toolkit is available, set the CUDA standard and definitions
-if(CUDAToolkit_FOUND)
-    enable_language(CUDA)
-    set_source_files_properties(${SOURCE_FILE} PROPERTIES LANGUAGE CUDA)
-
-    # Define CUDA_ENABLED for the C++ executable
-    # target_compile_definitions(backendManager PRIVATE CUDA_ENABLED)
-    set(ENV{MY_CUDA_ARCH} "80")
-
-    target_compile_features(damping_channel PRIVATE cuda_std_17)
-    #target_link_libraries(damping_channel PUBLIC CUDA::cudart)
-    target_compile_definitions(damping_channel PUBLIC CUDA_ENABLED)
-
-    # If NVSHMEM is available, link against it and set the definitions
-    if(NVSHMEM_FOUND AND TARGET nvshmem::nvshmem)
-        set_target_properties(damping_channel PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-        target_link_libraries(damping_channel PUBLIC nvshmem::nvshmem)
-        target_compile_definitions(damping_channel PUBLIC CUDA_MPI_ENABLED)
-    endif()
-endif()
-
 if(HIP_FOUND)
     enable_language(HIP)
     set_source_files_properties(${SOURCE_FILE} PROPERTIES LANGUAGE HIP)

@@ -1663,12 +1663,7 @@ namespace NWQSim
                 return;
             }
             if(op_name == OP::CX) {
-                int ctrl_index = row * cols + gates_gpu[col].ctrl;
-
-                if((index % blockDim.x) == ctrl_index % blockDim.x)
-                    __syncthreads();
-                else
-                    grid.sync();
+                int ctrl_index = row * cols + gates_gpu[k].ctrl;
 
                 uint32_t x_ctrl = x_arr[ctrl_index];
                 uint32_t z_ctrl = z_arr[ctrl_index];
@@ -1696,7 +1691,6 @@ namespace NWQSim
                     }
                 }
                 
-
                 //Initialize thread memory
                 p = rows;
                 if((i >= (half_row)) && (x_arr[index]))
