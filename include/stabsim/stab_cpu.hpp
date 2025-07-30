@@ -1296,8 +1296,6 @@ namespace NWQSim
         IdxType* totalResults = NULL;
         IdxType** totalResultsLong = NULL;
 
-        double p = NULL;
-
         std::mt19937 rng;
         std::uniform_int_distribution<int> dist;
         std::uniform_real_distribution<double> random_float;
