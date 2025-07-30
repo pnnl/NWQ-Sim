@@ -63,4 +63,5 @@ CMakeCache.txt
 /stabilizer/legacy_graphics
 /stabilizer/legacy_runtime_data
 /stabilizer/legacy_T_data
+/stabilizer/damping_work/qasm_circuits
 

@@ -1,0 +1,181 @@
+OPENQASM 2.0;
+include "qelib1.inc";
+
+qreg q[85];
+creg rec[85];
+
+barrier q;
+
+cx q[0], q[1];
+cx q[2], q[3];
+cx q[4], q[5];
+cx q[6], q[7];
+cx q[8], q[9];
+cx q[10], q[11];
+cx q[12], q[13];
+cx q[14], q[15];
+cx q[16], q[17];
+cx q[18], q[19];
+cx q[20], q[21];
+cx q[22], q[23];
+cx q[24], q[25];
+cx q[26], q[27];
+cx q[28], q[29];
+cx q[30], q[31];
+cx q[32], q[33];
+cx q[34], q[35];
+cx q[36], q[37];
+cx q[38], q[39];
+cx q[40], q[41];
+cx q[42], q[43];
+cx q[44], q[45];
+cx q[46], q[47];
+cx q[48], q[49];
+cx q[50], q[51];
+cx q[52], q[53];
+cx q[54], q[55];
+cx q[56], q[57];
+cx q[58], q[59];
+cx q[60], q[61];
+cx q[62], q[63];
+cx q[64], q[65];
+cx q[66], q[67];
+cx q[68], q[69];
+cx q[70], q[71];
+cx q[72], q[73];
+cx q[74], q[75];
+cx q[76], q[77];
+cx q[78], q[79];
+cx q[80], q[81];
+cx q[82], q[83];
+barrier q;
+
+cx q[2], q[1];
+cx q[4], q[3];
+cx q[6], q[5];
+cx q[8], q[7];
+cx q[10], q[9];
+cx q[12], q[11];
+cx q[14], q[13];
+cx q[16], q[15];
+cx q[18], q[17];
+cx q[20], q[19];
+cx q[22], q[21];
+cx q[24], q[23];
+cx q[26], q[25];
+cx q[28], q[27];
+cx q[30], q[29];
+cx q[32], q[31];
+cx q[34], q[33];
+cx q[36], q[35];
+cx q[38], q[37];
+cx q[40], q[39];
+cx q[42], q[41];
+cx q[44], q[43];
+cx q[46], q[45];
+cx q[48], q[47];
+cx q[50], q[49];
+cx q[52], q[51];
+cx q[54], q[53];
+cx q[56], q[55];
+cx q[58], q[57];
+cx q[60], q[59];
+cx q[62], q[61];
+cx q[64], q[63];
+cx q[66], q[65];
+cx q[68], q[67];
+cx q[70], q[69];
+cx q[72], q[71];
+cx q[74], q[73];
+cx q[76], q[75];
+cx q[78], q[77];
+cx q[80], q[79];
+cx q[82], q[81];
+cx q[84], q[83];
+barrier q;
+
+measure q[1] -> rec[0]; reset q[1]; // decomposed MR
+measure q[3] -> rec[1]; reset q[3]; // decomposed MR
+measure q[5] -> rec[2]; reset q[5]; // decomposed MR
+measure q[7] -> rec[3]; reset q[7]; // decomposed MR
+measure q[9] -> rec[4]; reset q[9]; // decomposed MR
+measure q[11] -> rec[5]; reset q[11]; // decomposed MR
+measure q[13] -> rec[6]; reset q[13]; // decomposed MR
+measure q[15] -> rec[7]; reset q[15]; // decomposed MR
+measure q[17] -> rec[8]; reset q[17]; // decomposed MR
+measure q[19] -> rec[9]; reset q[19]; // decomposed MR
+measure q[21] -> rec[10]; reset q[21]; // decomposed MR
+measure q[23] -> rec[11]; reset q[23]; // decomposed MR
+measure q[25] -> rec[12]; reset q[25]; // decomposed MR
+measure q[27] -> rec[13]; reset q[27]; // decomposed MR
+measure q[29] -> rec[14]; reset q[29]; // decomposed MR
+measure q[31] -> rec[15]; reset q[31]; // decomposed MR
+measure q[33] -> rec[16]; reset q[33]; // decomposed MR
+measure q[35] -> rec[17]; reset q[35]; // decomposed MR
+measure q[37] -> rec[18]; reset q[37]; // decomposed MR
+measure q[39] -> rec[19]; reset q[39]; // decomposed MR
+measure q[41] -> rec[20]; reset q[41]; // decomposed MR
+measure q[43] -> rec[21]; reset q[43]; // decomposed MR
+measure q[45] -> rec[22]; reset q[45]; // decomposed MR
+measure q[47] -> rec[23]; reset q[47]; // decomposed MR
+measure q[49] -> rec[24]; reset q[49]; // decomposed MR
+measure q[51] -> rec[25]; reset q[51]; // decomposed MR
+measure q[53] -> rec[26]; reset q[53]; // decomposed MR
+measure q[55] -> rec[27]; reset q[55]; // decomposed MR
+measure q[57] -> rec[28]; reset q[57]; // decomposed MR
+measure q[59] -> rec[29]; reset q[59]; // decomposed MR
+measure q[61] -> rec[30]; reset q[61]; // decomposed MR
+measure q[63] -> rec[31]; reset q[63]; // decomposed MR
+measure q[65] -> rec[32]; reset q[65]; // decomposed MR
+measure q[67] -> rec[33]; reset q[67]; // decomposed MR
+measure q[69] -> rec[34]; reset q[69]; // decomposed MR
+measure q[71] -> rec[35]; reset q[71]; // decomposed MR
+measure q[73] -> rec[36]; reset q[73]; // decomposed MR
+measure q[75] -> rec[37]; reset q[75]; // decomposed MR
+measure q[77] -> rec[38]; reset q[77]; // decomposed MR
+measure q[79] -> rec[39]; reset q[79]; // decomposed MR
+measure q[81] -> rec[40]; reset q[81]; // decomposed MR
+measure q[83] -> rec[41]; reset q[83]; // decomposed MR
+measure q[0] -> rec[42];
+measure q[2] -> rec[43];
+measure q[4] -> rec[44];
+measure q[6] -> rec[45];
+measure q[8] -> rec[46];
+measure q[10] -> rec[47];
+measure q[12] -> rec[48];
+measure q[14] -> rec[49];
+measure q[16] -> rec[50];
+measure q[18] -> rec[51];
+measure q[20] -> rec[52];
+measure q[22] -> rec[53];
+measure q[24] -> rec[54];
+measure q[26] -> rec[55];
+measure q[28] -> rec[56];
+measure q[30] -> rec[57];
+measure q[32] -> rec[58];
+measure q[34] -> rec[59];
+measure q[36] -> rec[60];
+measure q[38] -> rec[61];
+measure q[40] -> rec[62];
+measure q[42] -> rec[63];
+measure q[44] -> rec[64];
+measure q[46] -> rec[65];
+measure q[48] -> rec[66];
+measure q[50] -> rec[67];
+measure q[52] -> rec[68];
+measure q[54] -> rec[69];
+measure q[56] -> rec[70];
+measure q[58] -> rec[71];
+measure q[60] -> rec[72];
+measure q[62] -> rec[73];
+measure q[64] -> rec[74];
+measure q[66] -> rec[75];
+measure q[68] -> rec[76];
+measure q[70] -> rec[77];
+measure q[72] -> rec[78];
+measure q[74] -> rec[79];
+measure q[76] -> rec[80];
+measure q[78] -> rec[81];
+measure q[80] -> rec[82];
+measure q[82] -> rec[83];
+measure q[84] -> rec[84];

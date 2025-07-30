@@ -1,0 +1,53 @@
+OPENQASM 2.0;
+include "qelib1.inc";
+
+qreg q[21];
+creg rec[21];
+
+barrier q;
+
+cx q[0], q[1];
+cx q[2], q[3];
+cx q[4], q[5];
+cx q[6], q[7];
+cx q[8], q[9];
+cx q[10], q[11];
+cx q[12], q[13];
+cx q[14], q[15];
+cx q[16], q[17];
+cx q[18], q[19];
+barrier q;
+
+cx q[2], q[1];
+cx q[4], q[3];
+cx q[6], q[5];
+cx q[8], q[7];
+cx q[10], q[9];
+cx q[12], q[11];
+cx q[14], q[13];
+cx q[16], q[15];
+cx q[18], q[17];
+cx q[20], q[19];
+barrier q;
+
+measure q[1] -> rec[0]; reset q[1]; // decomposed MR
+measure q[3] -> rec[1]; reset q[3]; // decomposed MR
+measure q[5] -> rec[2]; reset q[5]; // decomposed MR
+measure q[7] -> rec[3]; reset q[7]; // decomposed MR
+measure q[9] -> rec[4]; reset q[9]; // decomposed MR
+measure q[11] -> rec[5]; reset q[11]; // decomposed MR
+measure q[13] -> rec[6]; reset q[13]; // decomposed MR
+measure q[15] -> rec[7]; reset q[15]; // decomposed MR
+measure q[17] -> rec[8]; reset q[17]; // decomposed MR
+measure q[19] -> rec[9]; reset q[19]; // decomposed MR
+measure q[0] -> rec[10];
+measure q[2] -> rec[11];
+measure q[4] -> rec[12];
+measure q[6] -> rec[13];
+measure q[8] -> rec[14];
+measure q[10] -> rec[15];
+measure q[12] -> rec[16];
+measure q[14] -> rec[17];
+measure q[16] -> rec[18];
+measure q[18] -> rec[19];
+measure q[20] -> rec[20];

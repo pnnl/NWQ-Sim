@@ -1,0 +1,21 @@
+OPENQASM 2.0;
+include "qelib1.inc";
+
+qreg q[5];
+creg rec[5];
+
+barrier q;
+
+cx q[0], q[1];
+cx q[2], q[3];
+barrier q;
+
+cx q[2], q[1];
+cx q[4], q[3];
+barrier q;
+
+measure q[1] -> rec[0]; reset q[1]; // decomposed MR
+measure q[3] -> rec[1]; reset q[3]; // decomposed MR
+measure q[0] -> rec[2];
+measure q[2] -> rec[3];
+measure q[4] -> rec[4];
