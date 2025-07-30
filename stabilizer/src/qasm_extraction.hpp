@@ -95,8 +95,6 @@ bool appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
             else if(instr.find("qreg") != std::string::npos)
             {
                 n_qubits = extractNumQubit(instr);
-                if(n_qubits > 30000)
-                    return false;
                 circuit->set_num_qubits(n_qubits);
                 std::cout << n_qubits << std::endl;
                 

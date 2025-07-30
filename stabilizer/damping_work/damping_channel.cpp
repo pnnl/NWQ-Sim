@@ -12,6 +12,7 @@
 #include "../../include/state.hpp"
 #include "../../include/circuit.hpp"
 #include "../../include/nwq_util.hpp"
+#include "../src/qasm_extraction.hpp"
 
 void print_dm(double num, ComplexMatrix rho, double total_time) 
 {
@@ -27,8 +28,8 @@ void print_dm(double num, ComplexMatrix rho, double total_time)
 
 int main(int argc, char* argv[]) {
     // Expecting 2 arguments: tau and T1
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <qubits> <tau> <T1> <T2> <shots>\n";
+    if (argc < 6) {
+        std::cerr << "Usage: " << argv[0] << " <qubits> <tau> <T1> <T2> <shots> <qasm filepath>\n";
         return 1;
     }
 
@@ -39,10 +40,11 @@ int main(int argc, char* argv[]) {
     double T2 = std::atof(argv[4]);
     double iters = std::atof(argv[5]);
 
-    double total_time;
+
+    double total_time = 0;
     double lambda = 1/T2 - 1/(2*T1);
-    double p_amp = 1 - exp(-t/T1);
-    double p_phase = .5*(1 - exp(-t*lambda));
+    double p_amp = 1 - exp(-tau/T1);
+    double p_phase = .5*(1 - exp(-tau*lambda));
     
 
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
@@ -50,35 +52,45 @@ int main(int argc, char* argv[]) {
     std::string backend = "cpu";
     std::string sim_method = "stab";
 
-    circuit->H(0);
-    // circuit->CX(0,1);
-    // circuit->CX(1,2);
-    circuit->DAMP(0, p_phase, p_amp);
-    // circuit->DAMP(1, p_phase, p_amp);
-    // circuit->DAMP(2, p_phase, p_amp);  
+    //Get the base circuit from a qasm file
+    if(argv[6])
+    {
+        std::string qasmfile = argv[6];
+        appendQASMToCircuit(circuit, qasmfile, n_qubits);
+        for(int n = 0; n < n_qubits; n++)
+            circuit->DAMP(n, p_phase, p_amp);
+    }
+    //Use a manually built circuit
+    else
+    {
+        circuit->H(0);
+        circuit->DAMP(0, p_phase, p_amp);
+    }
 
+    
     std::vector<ComplexMatrix> densityMatrices;
-    ComplexMatrix avgDM = ComplexMatrix::Zero(1<<n_qubits, 1<<n_qubits);
+    ComplexMatrix avgDM = ComplexMatrix::Zero(1<<1, 1<<1);
+    auto stab_state = BackendManager::create_state(backend, n_qubits, sim_method);
     for(int num_iters = 0; num_iters < iters; num_iters++)
     {
         double timer = 0;
-        auto stab_state = BackendManager::create_state(backend, n_qubits, sim_method);
         stab_state->sim(circuit, timer);
-        total_time += timer;
-        avgDM += (stab_state->get_density_matrix());
+        total_time += timer;  //in seconds
+        stab_state->reset_state();
+        // avgDM += (stab_state->get_density_matrix());
         // NWQSim::IdxType* results = stab_state->measure_all(shots);
         // std::cout << "Results: ";
         // for(int i = 0; i < shots; i++)
         //     std::cout << results[i] << " ";
     }
 
-    avgDM /= static_cast<Complex>(iters);
+    // avgDM /= static_cast<Complex>(iters);
 
     // std::cout << "Average density matrix:\n" << avgDM << "\n";
 
     // std::cout << "Trace: " << avgDM.trace() << "\n";
 
-    print_dm(T2, avgDM); 
+    print_dm(T2, avgDM, total_time/1000); 
 
     // sim_method = "dm";
     // auto dmCircuit = std::make_shared<NWQSim::Circuit>(n_qubits);

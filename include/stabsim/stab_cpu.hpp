@@ -1888,10 +1888,25 @@ namespace NWQSim
             {
                 auto gate = gates[k];
                 int a = gate.qubit;
-                assert((a < n) && "Gate qubit is out of bounds for the state!");
 
                 switch (gate.op_name)
                 {
+                    case OP::CX:
+                    {
+                        int a = gate.ctrl;
+                        int b = gate.qubit;
+                        for(int i = 0; i < rows-1; i++)
+                        {
+                            //Phase
+                            r[i] = r[i]^ (x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1);
+
+                            //Entry
+                            x[i][b] ^= x[i][a];
+                            z[i][a] ^= z[i][b];
+                        }
+                        break;
+                    }
+
                     case OP::H: 
                         for(int i = 0; i < rows-1; i++)
                         {
@@ -1923,6 +1938,28 @@ namespace NWQSim
 
                             //Entry
                             z[i][a] ^= x[i][a];
+                        }
+                        break;
+
+                    case OP::DAMP:
+                        // std::cout << "Gamma " << gate.gamma << std::endl;
+                        switch(damping_generator(gate.lam, gate.gamma))
+                        {
+                            case 0: //Do nothing
+                                break;
+                            case 1: //Apply Z
+                                for(int i = 0; i < rows-1; i++)
+                                {
+                                    //Phase
+                                    r[i] ^= x[i][a];
+                                }
+                                break;
+                            case 2: //Reset to |0>
+                                reset_routine(a);
+                                break;
+                            default:
+                                std::logic_error("Invalid damping result");
+                                exit(1);
                         }
                         break;
                     
@@ -2047,22 +2084,6 @@ namespace NWQSim
                             exit(1);
                         }
                         break;
-
-                    case OP::CX:
-                    {
-                        int a = gate.ctrl;
-                        int b = gate.qubit;
-                        for(int i = 0; i < rows-1; i++)
-                        {
-                            //Phase
-                            r[i] = r[i]^ (x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1);
-
-                            //Entry
-                            x[i][b] ^= x[i][a];
-                            z[i][a] ^= z[i][b];
-                        }
-                        break;
-                    }
                     case OP::CY:
                     {
                         int a = gate.ctrl;
@@ -2238,27 +2259,7 @@ namespace NWQSim
                         }
                         break;
                     
-                    case OP::DAMP:
-                        // std::cout << "Gamma " << gate.gamma << std::endl;
-                        switch(damping_generator(gate.lam, gate.gamma))
-                        {
-                            case 0: //Do nothing
-                                break;
-                            case 1: //Apply Z
-                                for(int i = 0; i < rows-1; i++)
-                                {
-                                    //Phase
-                                    r[i] ^= x[i][a];
-                                }
-                                break;
-                            case 2: //Reset to |0>
-                                reset_routine(a);
-                                break;
-                            default:
-                                std::logic_error("Invalid damping result");
-                                exit(1);
-                        }
-                        break;
+
                         
                     case OP::MA:
                         measure_all();
