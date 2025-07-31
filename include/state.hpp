@@ -173,6 +173,15 @@ namespace NWQSim
         IdxType i_proc = 0; // process id
         ValType *buffer_state = nullptr;
         SimType sim_type;
+        std::vector<int> measurement_results;
+
+        virtual std::vector<int> get_measurement_results() {
+            return measurement_results;
+        }
+
+        virtual void clear_measurement_results() {
+            measurement_results.clear();
+        }
     };
 
 } // namespace NWQSim

@@ -105,19 +105,16 @@ namespace NWQSim
         //resets the tableau to a full identity
         void reset_state() override
         {
-            //Tableau format: 2n x n X matrix, 2n x n Z matrix and 2n x 1 phase column. All have an extra 1 x n scratch space (1x1 for phase).
-            //n is the number of qubits. First n rows represent destabilizer pauli strings, second n rows represent stabilizers
-            //columns represent qubits 
-            //Destabilizer/stabilizer rows can have more stabilizers added later ti become 2*n x m
             rows = 2*n+1;
             cols = n;
-
             stabCounts = n;
-
-            x.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
-                                                       //second n represents stabilizers + 1 extra row
-            z.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
-            r.resize(rows, 0); //column on the right with 2n+1 rows
+            for (auto& row : x) {
+                std::fill(row.begin(), row.end(), 0);
+            }
+            for (auto& row : z) {
+                std::fill(row.begin(), row.end(), 0);
+            }
+            std::fill(r.begin(), r.end(), 0);
             //The 2n+1 th row is scratch space
 
             //Intialize the identity tableau
@@ -126,6 +123,16 @@ namespace NWQSim
                 x[i][i] = 1;
                 z[i+n][i] = 1;
             }
+            
+            std::random_device rd;
+            rng.seed(rd());
+            dist = std::uniform_int_distribution<int>(0,1);
+            random_float = std::uniform_real_distribution<double>(0.0, 1.0);
+
+
+            has_destabilizers = true;
+
+            memset(totalResults, 0, sizeof(IdxType));
         }
 
         //Apply gates to a stabilizer-only tableau
@@ -1864,6 +1871,7 @@ namespace NWQSim
                 // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
                 temp_result = r[rows-1];
             }
+            measurement_results.push_back(temp_result);
             if(temp_result == 1) //Apply X to flip back to 0
             {
                 for(int i = 0; i < rows-1; i++)

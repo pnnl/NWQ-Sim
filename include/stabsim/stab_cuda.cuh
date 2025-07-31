@@ -851,6 +851,15 @@ namespace NWQSim
             /*End simulate*/
             sim_time += sim_timer.measure();
 
+            // Copy measurement results from device to host
+            int num_measurements;
+            cudaMemcpyFromSymbol(&num_measurements, measurement_idx_counter, sizeof(int), 0, cudaMemcpyDeviceToHost);
+            if (num_measurements > 0) {
+                cudaMemcpy(h_measurement_results, d_measurement_results, num_measurements * sizeof(int), cudaMemcpyDeviceToHost);
+                measurement_results.assign(h_measurement_results, h_measurement_results + num_measurements);
+            }
+
+
             cudaCheckError();
             //Copy data to the CPU side and unpack
             copy_bits_from_gpu();
@@ -1046,6 +1055,24 @@ namespace NWQSim
         int** shotResultGPU;
         int seed;
 
+        int* d_measurement_results = nullptr;
+        int* h_measurement_results = nullptr;
+        int measurement_count = 0;
+
+        void allocate_measurement_buffers(int max_measurements) {
+            if (d_measurement_results == nullptr) {
+                SAFE_ALOC_GPU(d_measurement_results, max_measurements * sizeof(int));
+                h_measurement_results = new int[max_measurements];
+            }
+        }
+
+        void free_measurement_buffers() {
+            SAFE_FREE_GPU(d_measurement_results);
+            delete[] h_measurement_results;
+            d_measurement_results = nullptr;
+            h_measurement_results = nullptr;
+        }
+
         IdxType* totalResults = nullptr;
         IdxType** totalResultsLong = nullptr;
 
@@ -1071,6 +1098,8 @@ namespace NWQSim
 
     __device__ int p_shared;
     __device__ uint32_t row_sum;
+    __device__ int measurement_idx_counter; 
+
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates, int seed)
     {
         cg::grid_group grid = cg::this_grid();
@@ -1171,213 +1200,143 @@ namespace NWQSim
                 case OP::M:
                 {
                     grid.sync();
-                    //Reset p_shared in the first thread of the first block
-                    if(threadIdx.x == 0)
+                    if (threadIdx.x == 0)
                     {
-                        //Initialize shared memory
                         local_p_shared = rows;
-                        if(blockIdx.x == 0) 
+                        if (blockIdx.x == 0)
                         {
-                            // printf("M\n\n");
-                            //Initialize global memory
                             p_shared = rows;
                         }
                     }
-                
-                    //Reduce within blocks (shared memory is only shared in a block)
-                    if((i >= (half_row)) && (x_arr[index]))
-                        atomicMin(&local_p_shared, i);
-                
-                    //Reduce across all blocks (all blocks need to be caught up)
                     grid.sync();
 
-                    if(threadIdx.x == 0)
-                        atomicMin(&p_shared, local_p_shared);
-
-                    grid.sync();
-
-                    //Debugging output
-                    // if(i == 0)
-                    //     printf("p_shared = %d\n", p_shared);
-
-                    //If p among the stabilizers is found, the measurement will be random
-                    if(p_shared != rows)
+                    if ((i >= half_row) && (x_arr[index]))
                     {
-                        //Rowsum for all rows < 2n
-                        for(int k = 0; k < scratch_row; k++)
+                        atomicMin(&local_p_shared, i);
+                    }
+                    grid.sync();
+
+                    if (threadIdx.x == 0)
+                    {
+                        atomicMin(&p_shared, local_p_shared);
+                    }
+                    grid.sync();
+
+                    p = p_shared;
+
+                    if (p != rows)
+                    {
+                        // Random measurement
+                        if (x_arr[i * cols + a] && i != p)
                         {
-                            //printf("Entering row/2 for loop\n");
-                            if(x_arr[k * cols + a] && k != p_shared)
+                            // Parallel rowsum
+                            uint32_t local_sum = 0;
+                            uint32_t h = i;
+                            uint32_t p_row = p;
+
+                            for (int j = 0; j < n_qubits; j++)
                             {
-                                //Initialize the sums from all rows we're interested in to 0
-                                //Using i as columns
-                                if(i == 0)
-                                    row_sum = 0;
-                                grid.sync();
-                                if(i < half_row)
+                                uint32_t h_idx = h * cols + j;
+                                uint32_t p_idx = p_row * cols + j;
+                                uint32_t x_p = x_arr[p_idx];
+                                uint32_t z_p = z_arr[p_idx];
+                                uint32_t x_h = x_arr[h_idx];
+                                uint32_t z_h = z_arr[h_idx];
+
+                                if (x_p)
                                 {
-                                    index = (k * cols) + i;
-                                    row_col_index = (p_shared * cols) + i;
-                                    x = x_arr[row_col_index];
-                                    z = z_arr[row_col_index];
-
-                                    if(x && z) 
-                                    {
-                                        atomicAdd(&row_sum, z_arr[index] - x_arr[index]);
-                                        x_arr[index] ^= x;
-                                        z_arr[index] ^= z;
-                                    }
-                                    if(x && !z) 
-                                    {
-                                        atomicAdd(&row_sum, z_arr[index] * (2 * x_arr[index] - 1));
-                                        x_arr[index] ^= x;
-                                    }
-                                    if(!x && z) 
-                                    {
-                                        atomicAdd(&row_sum, x_arr[index] * (1 - 2 * z_arr[index]));
-                                        z_arr[index] ^= z;
-                                    }
-                                }
-
-                                grid.sync();
-                                
-                                if(i == 0)
-                                {
-                                    //Add the stabilizer r value to the corresponding row sum
-                                    row_sum += 2 * r_arr[k] + 2 * r_arr[p_shared];
-
-                                    if(row_sum % 4)
-                                        r_arr[k] = 1;
+                                    if (z_p)
+                                        local_sum += z_h - x_h;
                                     else
-                                        r_arr[k] = 0;
-                                    // printf("row_sum[%d] = %d\n", i, row_sum);
+                                        local_sum += z_h * (2 * x_h - 1);
                                 }
-                                //End Rowsum
+                                else if (z_p)
+                                {
+                                    local_sum += x_h * (1 - 2 * z_h);
+                                }
+                                x_arr[h_idx] = x_p ^ x_h;
+                                z_arr[h_idx] = z_p ^ z_h;
                             }
+                            local_sum += 2 * r_arr[h] + 2 * r_arr[p_row];
+                            r_arr[h] = (local_sum % 4 == 0) ? 0 : 1;
                         }
 
                         grid.sync();
 
-                        if(i < cols)
+                        if (i < cols)
                         {
-                            //Set every column of the destab of row p to the stab of row p
-                            index = (p_shared * cols) + i;
-                            row_col_index = ((p_shared-(half_row)) * cols) + i;
-                            x_arr[row_col_index] = x_arr[index];    
+                            index = (p * cols) + i;
+                            row_col_index = ((p - half_row) * cols) + i;
+                            x_arr[row_col_index] = x_arr[index];
                             z_arr[row_col_index] = z_arr[index];
                             x_arr[index] = 0;
-                            z_arr[index] = 0; 
+                            z_arr[index] = 0;
                         }
-                        if(i == cols)
+
+                        if (i == cols)
                         {
-                            //Generate a random bit (0 or 1)
-                            r_arr[p_shared] = curand(&state) & 1;
-                            // printf("Random measurement at qubit %d value: %d\n", a, r_arr[p_shared]);
-
-                            //Update z to reflect a z measurement
-                            z_arr[(p_shared * cols) + a] = 1; 
-
-                            stab_gpu->singleResultGPU[a] = r_arr[p_shared];
-                            // printf("Random done %d\n ", stab_gpu->singleResultGPU[a]);
+                            r_arr[p] = curand(&state) & 1;
+                            z_arr[(p * cols) + a] = 1;
+                            int meas_idx = atomicAdd(&measurement_idx_counter, 1);
+                            stab_gpu->d_measurement_results[meas_idx] = r_arr[p];
                         }
                     }
                     else
                     {
-                        // if(i == 0)
-                        // {
-                        //     printf("Deterministic\n");
-                        // }
-
-                        //Set the scratch row to 0
-                        if(i < cols) //using i as cols
+                        // Deterministic measurement
+                        if (i < cols)
                         {
                             index = (scratch_row * cols) + i;
                             x_arr[index] = 0;
                             z_arr[index] = 0;
                         }
-                        if(i == cols)
+                        if (i == cols)
                         {
                             r_arr[scratch_row] = 0;
                         }
 
-                        //Wait for the scratch row to be reset before proceeding
                         grid.sync();
-                    
-                        //Rowsum for all rows < n
-                        #pragma unroll
-                        for(int k = 0; k < half_row; k++)
+
+                        if (x_arr[i * cols + a] && i < half_row)
                         {
-                            grid.sync();
-                            //printf("Entering row/2 for loop\n");
-                            if(x_arr[k * cols + a])
+                            // Parallel rowsum
+                            uint32_t local_sum = 0;
+                            uint32_t h = scratch_row;
+                            uint32_t p_row = i + half_row;
+
+                            for (int j = 0; j < n_qubits; j++)
                             {
-                                //printf("x_arr[i] = %d \n", x_arr[(i * cols) + a]);
-                                //Start Rowsum
+                                uint32_t h_idx = h * cols + j;
+                                uint32_t p_idx = p_row * cols + j;
+                                uint32_t x_p = x_arr[p_idx];
+                                uint32_t z_p = z_arr[p_idx];
+                                uint32_t x_h = x_arr[h_idx];
+                                uint32_t z_h = z_arr[h_idx];
 
-                                // Over every column (j)
-                                // printf("rows = %d \n", rows);
-                                // printf("i = %d \n", i);
-                                // printf("j = %d \n", j);
-                                // printf("row_sum[i] = %d \n", row_sum[i]);
-
-                                //Initialize the sums from all rows we're interested in to 0
-                                //Using i as columns
-                                if(threadIdx.x == 0)
+                                if (x_p)
                                 {
-                                    row_sum = 0;
-                                }
-                                if(i < cols)
-                                {
-                                    row_col_index = (scratch_row * cols) + i;
-                                    index = ((k+(n_qubits)) * cols) + i;
-                                    local_sum = 0;            
-                                    x = x_arr[index];
-                                    z = z_arr[index];
-
-                                    if(x && z) 
-                                    {
-                                        local_sum = z_arr[row_col_index] - x_arr[row_col_index];
-                                        x_arr[row_col_index] ^= x;
-                                        z_arr[row_col_index] ^= z;
-
-                                        // printf("Col_val in %d = %d \n", i, col_val);
-                                    }
-                                    if(x && !z) 
-                                    {
-                                        local_sum = z_arr[row_col_index] * (2 * x_arr[row_col_index] - 1);
-                                        x_arr[row_col_index] ^= x;
-                                        // printf("Col_val in %d = %d \n", i, col_val);
-                                    }
-                                    if(!x && z) 
-                                    {
-                                        local_sum = x_arr[row_col_index] * (1 - 2 * z_arr[row_col_index]);
-                                        z_arr[row_col_index] ^= z;
-                                        // printf("Col_val in %d = %d \n", i, col_val);
-                                    }
-                                
-                                    //Add all of the columns together for a given row
-                                    atomicAdd(&row_sum, local_sum);
-                                }
-                                grid.sync();
-                                if(i == 0)
-                                {
-                                    //Add the stabilizer r value to the corresponding row sum
-                                    row_sum += 2 * r_arr[k+(half_row)] + 2 * r_arr[scratch_row];
-
-                                    if(row_sum % 4)
-                                        r_arr[scratch_row] = 1;
+                                    if (z_p)
+                                        local_sum += z_h - x_h;
                                     else
-                                        r_arr[scratch_row] = 0;
-                                    // printf("row_sum[%d] = %d\n", i, row_sum);
+                                        local_sum += z_h * (2 * x_h - 1);
                                 }
+                                else if (z_p)
+                                {
+                                    local_sum += x_h * (1 - 2 * z_h);
+                                }
+                                x_arr[h_idx] = x_p ^ x_h;
+                                z_arr[h_idx] = z_p ^ z_h;
                             }
-                        } //End Rowsum
+                            local_sum += 2 * r_arr[h] + 2 * r_arr[p_row];
+                            r_arr[h] = (local_sum % 4 == 0) ? 0 : 1;
+                        }
 
-                        if(i == 0)
+                        grid.sync();
+
+                        if (i == 0)
                         {
-                            stab_gpu->singleResultGPU[a] = r_arr[scratch_row];
-                            // printf("Deterministic measurement at qubit %d value: %d\n", 
-                            //     a, r_arr[scratch_row]);
+                            int meas_idx = atomicAdd(&measurement_idx_counter, 1);
+                            stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
                         }
                     }
                     break;
