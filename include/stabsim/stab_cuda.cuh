@@ -1565,6 +1565,7 @@ namespace NWQSim
         if(i >= rows-1) return;
 
         int n_qubits = stab_gpu->n;
+        int row = i;
         uint32_t* x_arr = stab_gpu->x_bit_gpu;
         uint32_t* z_arr = stab_gpu->z_bit_gpu;
         uint32_t* r_arr = stab_gpu->r_bit_gpu;
