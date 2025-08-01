@@ -14,33 +14,28 @@
 #include "../include/stabsim/stab_cuda.cuh"
 
 int main() {
-    int n_qubits = 256; // A few hundred qubits
+    int n_qubits = 10; // A few hundred qubits
     double timer_cpu = 0;
     double timer_cuda = 0;
 
     // Create a deterministic circuit
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
-    for (int i = 0; i < n_qubits; ++i) {
-        circuit->H(i);
-        if (i % 2 == 0) {
-            circuit->S(i);
+        for (int i = 0; i < n_qubits; ++i) {
+            circuit->H(i);
         }
-        if (i < n_qubits - 1) {
-            circuit->CX(i, i + 1);
+        // Add some measurement gates to test that part of the logic
+        for (int i = 0; i < n_qubits; ++i) {
+            circuit->M(i);
         }
-    }
-    // Add some measurement gates to test that part of the logic
-    for (int i = 0; i < n_qubits / 4; ++i) {
-        circuit->M(i);
-    }
+    
 
 
     // Create CPU and GPU states
-    auto cpu_state = std::make_unique<NWQSim::STAB_CPU>(n_qubits);
-    auto cuda_state = std::make_unique<NWQSim::STAB_CUDA>(n_qubits);
+    auto cpu_state = BackendManager::create_state("cpu", n_qubits, "stab");
+    auto cuda_state = BackendManager::create_state("nvgpu", n_qubits, "stab");
 
     // Allocate measurement buffers for CUDA
-    int num_measurements = n_qubits / 4;
+    int num_measurements = n_qubits;
     cuda_state->allocate_measurement_buffers(num_measurements);
 
     // Simulate on both backends
@@ -59,6 +54,7 @@ int main() {
     auto cuda_stabilizers = cuda_state->get_stabilizers();
     auto cpu_measurements = cpu_state->get_measurement_results();
     auto cuda_measurements = cuda_state->get_measurement_results();
+    
 
     // Sort both vectors to ensure order doesn't matter
     std::sort(cpu_stabilizers.begin(), cpu_stabilizers.end());
@@ -95,6 +91,12 @@ int main() {
                 match = false;
             }
         }
+    }
+
+    for (int i = 0; i < n_qubits; ++i) {
+        std::cout << "Match at " << i << ": "
+                    << "CPU=" << cpu_measurements[i] << ", "
+                    << "CUDA=" << cuda_measurements[i] << std::endl;
     }
 
     if (match) {

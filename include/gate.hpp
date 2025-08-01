@@ -197,6 +197,17 @@ namespace NWQSim
          ******************************************/
         DAMP,
         /******************************************
+         * T1 >= T2 Exact T1/T2 Probability Damping, T2 < T1 Quasiprobability T1/T2 Damping
+         * See Pauli damping model -> sean.garner@pnnl.gov
+         ******************************************/
+        T1,
+        /******************************************
+         * T1 Quasiprobability Distribution Damping
+         * See Pauli damping model -> sean.garner@pnnl.gov
+         ******************************************/
+        T2,
+        /******************************************
+         * T2 Probability Distribution Damping
          * See Pauli damping model -> sean.garner@pnnl.gov
          ******************************************/
         ECR,
@@ -311,6 +322,8 @@ namespace NWQSim
         "CP",
         "CU",
         "DAMP",
+        "T1",
+        "T2",
         "ECR",
         "RXX",
         "RYY",

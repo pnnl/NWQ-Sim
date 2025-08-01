@@ -34,6 +34,7 @@ namespace NWQSim
             rows = 2*n+1;
             cols = n;
             stabCounts = n;
+            gamma_factor = 1;
             x.resize(rows, std::vector<int>(cols,0)); //first 2n+1 x n block. first n represents destabilizers
                                                        //second n represents stabilizers + 1 extra row
             z.resize(rows, std::vector<int>(cols,0)); //second 2n+1 x n block to form the 2n+1 x 2n sized tableau
@@ -108,6 +109,7 @@ namespace NWQSim
             rows = 2*n+1;
             cols = n;
             stabCounts = n;
+            dm_sign = 1;
             for (auto& row : x) {
                 std::fill(row.begin(), row.end(), 0);
             }
@@ -405,7 +407,7 @@ namespace NWQSim
             }
 
             // Convert to dense for return
-            return ComplexMatrix(rho);
+            return ComplexMatrix(rho * gamma_factor);
         }   
 #endif
 
@@ -1291,6 +1293,7 @@ namespace NWQSim
 
     protected:
         IdxType n;
+        int dm_sign;
         int stabCounts;
         IdxType rows;
         IdxType cols;
@@ -1302,6 +1305,7 @@ namespace NWQSim
         std::vector<int> r_erasure;
         IdxType* totalResults = NULL;
         IdxType** totalResultsLong = NULL;
+        double gamma_factor;
 
         std::mt19937 rng;
         std::uniform_int_distribution<int> dist;
@@ -1672,10 +1676,50 @@ namespace NWQSim
             qubitReorder(graphMatrix, qubitIndex);
         }
 
+        int T1_gen(double gamma)
+        {
+            double monte = random_float(rng);
+            double c0 = 0.5 * (1.0-gamma+sqrt(1.0-gamma));
+            double c1 = 0.5 * (1.0-gamma-sqrt(1.0-gamma));
+            double c2 = gamma;
+            
+            c1 = abs(c1);
+            double sum = c0 + c1 + c2;
+            gamma_factor = sum;
+            c0 = c0/sum;
+            c1 = c1/sum;
+            c2 = c2/sum;
+            
+
+            // std::cout << "c0: " << c0 << " c1: " << c1 << " c2: " << c2 << std::endl;
+            double temp = monte - c0;
+            if(temp < 0) 
+            {
+                return 0;
+            }
+            
+            temp = temp - c1;
+            if(temp < 0) 
+            {
+                gamma_factor *= -1;
+                return 1;
+            }
+            temp = temp - c2;
+            if(temp < 0) 
+            {
+                return 2;
+            }
+            else 
+            {
+                std::cerr << "Impossible monte" << std::endl;
+                return 3;
+            }
+        }
+
         int damping_generator(double p, double gamma)
         {   //Remove negative and renormalize
             //Range [0.0, 1.0)
-            double tolerance = 1e-9;
+            // double tolerance = 1e-9;
             double monte = random_float(rng);
             double c0 = 0.5 * (1.0-gamma+sqrt(1.0-gamma));
             double c1 = 0.5 * (1.0-gamma-sqrt(1.0-gamma));
@@ -1949,7 +1993,7 @@ namespace NWQSim
 
                     case OP::DAMP:
                         // std::cout << "Gamma " << gate.gamma << std::endl;
-                        switch(damping_generator(gate.lam, gate.gamma))
+                        switch(damping_generator(gate.lam/2, gate.gamma))
                         {
                             case 0: //Do nothing
                                 break;
@@ -1968,7 +2012,39 @@ namespace NWQSim
                                 exit(1);
                         }
                         break;
-                    
+
+                    case OP::T1:
+                        switch(T1_gen(gate.gamma))
+                        {
+                            case 0: //Do nothing
+                                break;
+                            case 1: //Apply Z
+                                for(int i = 0; i < rows-1; i++)
+                                {
+                                    //Phase
+                                    r[i] ^= x[i][a];
+                                }
+                                break;
+                            case 2: //Reset to |0>
+                                reset_routine(a);
+                                break;
+                            default:
+                                std::logic_error("Invalid damping result");
+                                exit(1);
+                        }
+                        break;
+                        
+                    case OP::T2:
+                        if(random_float(rng) < gate.lam/2)
+                        {
+                            for(int i = 0; i < rows-1; i++)
+                            {
+                                //Phase
+                                r[i] ^= x[i][a];
+                            }
+                        }
+                        break;
+
                     case OP::RX:
                         //H SDG H
                         if(gate.theta == PI/2)

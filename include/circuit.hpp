@@ -508,9 +508,27 @@ namespace NWQSim
         void DAMP(IdxType qubit, ValType lambda, ValType gamma)
         {       
             /******************************************
-             * Pauli damping
+             * T1/T2 damping
              ******************************************/
             Gate G(OP::DAMP, qubit, -1, 1, 0, 0, lambda, gamma);
+            // std::cout << "Gate" << G.gateToString();
+            gates->push_back(G);
+        }
+        void T1(IdxType qubit, ValType gamma)
+        {       
+            /******************************************
+             * T1 damping
+             ******************************************/
+            Gate G(OP::T1, qubit, -1, 1, 0, 0, 0, gamma);
+            // std::cout << "Gate" << G.gateToString();
+            gates->push_back(G);
+        }
+        void T2(IdxType qubit, ValType lambda)
+        {       
+            /******************************************
+             * T2 damping
+             ******************************************/
+            Gate G(OP::T2, qubit, -1, 1, 0, 0, lambda);
             // std::cout << "Gate" << G.gateToString();
             gates->push_back(G);
         }

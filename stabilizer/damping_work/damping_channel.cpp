@@ -48,7 +48,7 @@ int main(int argc, char* argv[]) {
     double total_time;
     double lambda = 1/T2 - 1/(2*T1);
     double p_amp = 1 - exp(-t/T1);
-    double p_phase = .5*(1 - exp(-t*lambda));
+    double p_phase = 1 - exp(-t*lambda);
     
 
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
@@ -89,41 +89,19 @@ int main(int argc, char* argv[]) {
         timer = 0;
         stab_state->sim(circuit, timer);
         total_time += timer;
-        //If manually built, average
         if(!qasm_exists)
             avgDM += stab_state->get_density_matrix();
         stab_state->reset_state();
-        // NWQSim::IdxType* results = stab_state->measure_all(shots);
-        // std::cout << "Results: ";
-        // for(int i = 0; i < shots; i++)
-        //     std::cout << results[i] << " ";
     }
 
     //If manually built, return the DM
     if(!qasm_exists)
     {
         avgDM /= static_cast<Complex>(iters);
-         // std::cout << "Trace: " << avgDM.trace() << "\n";
         print_dm(T2, avgDM, total_time);
     }
     else
         print_time(total_time);
 
-    // sim_method = "dm";
-    // auto dmCircuit = std::make_shared<NWQSim::Circuit>(n_qubits);
-    // dmCircuit->H(0);
-    // dmCircuit->CX(0,1);
-    // std::vector<NWQSim::IdxType> qubits = {0, 1};
-    // // for(int each : std::views::iota(0, n_qubits))
-    // // {
-    // //     qubits.push_back(each);
-    // // }
-    // const std::vector<NWQSim::IdxType> qubit_list = qubits;
-    // dmCircuit->MOD_NOISE("SET", "T1", 100, qubit_list);
-    // dmCircuit->MOD_NOISE("SET", "T2", 100, qubit_list);
-    // auto DM_state = BackendManager::create_state(backend, n_qubits, sim_method);
-    // std::cout << "Starting DM Sim" << std::endl;
-    // DM_state->sim(circuit, timer);
-    // DM_state->print_res_state();
     return 0;
 }
