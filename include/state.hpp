@@ -168,7 +168,14 @@ namespace NWQSim
         {
             throw std::runtime_error("Apply Gate Not Implemented");
         }
-
+        virtual void allocate_measurement_buffers(int max_measurements)
+        {
+            throw std::runtime_error("Allocate Measurement Buffers Not Implemented");
+        }
+        virtual void free_measurement_buffers()
+        {
+            throw std::runtime_error("Free Measurement Buffers Not Implemented");
+        }
 
         IdxType i_proc = 0; // process id
         ValType *buffer_state = nullptr;

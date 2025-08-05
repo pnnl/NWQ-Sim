@@ -50,7 +50,7 @@ namespace NWQSim
 
     // Simulation kernel runtime
     class STAB_CUDA;
-    __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates, int seed = 0);
+    __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates);
     __global__ void simulation_kernel_cuda2D(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType gate_chunk);
 
     class STAB_CUDA : public QuantumState
@@ -442,10 +442,6 @@ namespace NWQSim
                 temp_r[h] = 1;
         } //End rowsum
 
-        int *getSingleResult() override{
-            return singleResultHost;
-        }
-
         //Provides a bit/shot measurement output without affecting the original tableau
         IdxType *measure_all(IdxType shots = 2048) override
         {
@@ -775,7 +771,7 @@ namespace NWQSim
 
 
             int minGridSize, blockSize;
-            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda, 3* sizeof(int), 0);
+            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda, 0, 0);
             printf("Max block size: %d\n", blockSize);
             int threadsPerBlockX = 1024;
 
@@ -799,40 +795,47 @@ namespace NWQSim
                 printf("STABSim_gpu is running! Using %lld qubits.\n", n);
             }
 
-            // Use the class's seed member which is already copied to GPU
-            void *args[] = {&stab_gpu, &gates_gpu, &n_gates, &this->seed};
+            void *args[] = {&stab_gpu, &gates_gpu, &n_gates};
+
+            int supportCoop = 0;
+            cudaDeviceGetAttribute(&supportCoop, cudaDevAttrCooperativeLaunch, 0);
+            if (!supportCoop) {
+                printf("Cooperative launch not supported!\n");
+                return;
+            }
+            if (blocksPerGrid <= 0 || threadsPerBlock <= 0) {
+                printf("Invalid grid/block size: blocks=%d, threads=%d\n", blocksPerGrid, threadsPerBlock);
+                return;
+            }
+            if (!stab_gpu || !gates_gpu) {
+                printf("Device pointers not allocated!\n");
+                return;
+            }
+            if (n_gates <= 0) {
+                printf("No gates to simulate!\n");
+                return;
+            }
 
             /*Simulate*/
             std::cout << "\n -------------------- \n Simulation starting! \n -------------------- \n" << std::endl;
             sim_timer.start_timer();
 
-            // Initialize the measurement counter on the device to 0
-            if (d_measurement_idx_counter) {
-                int initial_meas_count = 0;
-                cudaMemcpy(d_measurement_idx_counter, &initial_meas_count, sizeof(int), cudaMemcpyHostToDevice);
-            }
-
             //Launch with cooperative kernel
-            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda, blocksPerGrid, threadsPerBlock, args, 3* sizeof(int));
-
-            // simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
+            cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda, blocksPerGrid, threadsPerBlock, args, sizeof(int) * 3);
 
             sim_timer.stop_timer();
-            // CHECK_CUDA_CALL(cudaPeekAtLastError());
+
+            cudaError_t err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                printf("Kernel launch error: %s\n", cudaGetErrorString(err));
+                return;
+            }
             cudaSafeCall(cudaDeviceSynchronize());
             /*End simulate*/
             sim_time += sim_timer.measure();
 
             // Copy measurement results from device to host
-            if (d_measurement_idx_counter) {
-                int num_measurements;
-                cudaMemcpy(&num_measurements, d_measurement_idx_counter, sizeof(int), cudaMemcpyDeviceToHost);
-                if (num_measurements > 0) {
-                    cudaMemcpy(h_measurement_results, d_measurement_results, num_measurements * sizeof(int), cudaMemcpyDeviceToHost);
-                    measurement_results.assign(h_measurement_results, h_measurement_results + num_measurements);
-                }
-            }
-
+            cudaMemcpy(h_measurement_results, d_measurement_results, measurement_count * sizeof(int), cudaMemcpyDeviceToHost);                
 
             cudaCheckError();
             //Copy data to the CPU side and unpack
@@ -927,7 +930,6 @@ namespace NWQSim
 
         int* d_measurement_results = nullptr;
         int* h_measurement_results = nullptr;
-        int* d_measurement_idx_counter = nullptr;
         int measurement_count = 0;
 
         void allocate_measurement_buffers(int max_measurements) override {
@@ -939,17 +941,14 @@ namespace NWQSim
             if (measurement_count > 0) {
                 SAFE_ALOC_GPU(d_measurement_results, measurement_count * sizeof(int));
                 h_measurement_results = new int[measurement_count];
-                SAFE_ALOC_GPU(d_measurement_idx_counter, sizeof(int));
             }
         }
 
         void free_measurement_buffers() override {
             SAFE_FREE_GPU(d_measurement_results);
             delete[] h_measurement_results;
-            SAFE_FREE_GPU(d_measurement_idx_counter);
             d_measurement_results = nullptr;
             h_measurement_results = nullptr;
-            d_measurement_idx_counter = nullptr;
         }
 
         IdxType* totalResults = nullptr;
@@ -977,8 +976,9 @@ namespace NWQSim
 
     __device__ int p_shared;
     __device__ uint32_t row_sum; 
+    __device__ int measurement_idx_counter;
 
-    __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates, int seed)
+    __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates)
     {
         cg::grid_group grid = cg::this_grid();
         int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -991,12 +991,12 @@ namespace NWQSim
         uint32_t* z_arr = stab_gpu->z_bit_gpu;
         uint32_t* r_arr = stab_gpu->r_bit_gpu;
         uint32_t x, z;
+        uint32_t x_ctrl, z_ctrl;
         OP op_name;
         IdxType index;
         IdxType row_col_index;
         int a;
         int p;
-        uint32_t local_sum;
 
         //Initialize shared memory (per block)
         __shared__ int local_p_shared;
@@ -1007,11 +1007,15 @@ namespace NWQSim
             half_row = rows/2;
             scratch_row = rows-1;
             local_p_shared = rows;
+            if(blockIdx.x == 0)
+            {
+                measurement_idx_counter = 0; //Initialize measurement_idx to 0
+            }
         }
         
         // Initialize per-thread random state using thread index i and class seed
         curandState state;
-        curand_init(stab_gpu->seed, i, 0, &state);
+        curand_init(1234, i, 0, &state);
         
         // printf("Starting for loop!! \n\n");
         for (int k = 0; k < n_gates; k++) 
@@ -1062,8 +1066,8 @@ namespace NWQSim
                     x = x_arr[index];
                     z = z_arr[index];
 
-                    uint32_t x_ctrl = x_arr[row_col_index];
-                    uint32_t z_ctrl = z_arr[row_col_index];
+                    x_ctrl = x_arr[row_col_index];
+                    z_ctrl = z_arr[row_col_index];
 
                     //Phase
                     r_arr[i] ^= ((x_ctrl & z) & (x^z_ctrl^1));
@@ -1153,7 +1157,7 @@ namespace NWQSim
                         {
                             r_arr[p] = curand(&state) & 1;
                             z_arr[(p * cols) + a] = 1;
-                            int meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
+                            int meas_idx = atomicAdd(&measurement_idx_counter, 1);
                             stab_gpu->d_measurement_results[meas_idx] = r_arr[p];
                         }
                     }
@@ -1211,8 +1215,8 @@ namespace NWQSim
 
                         if (i == 0)
                         {
-                            int meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
-                            stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
+                            int meas_idx = atomicAdd(&measurement_idx_counter, 1);
+                            stab_gpu->d_measurement_results[meas_idx] = r_arr[p];
                         }
                     }
                     break;

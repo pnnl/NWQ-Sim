@@ -15,18 +15,30 @@
 
 int main() {
     int n_qubits = 10; // A few hundred qubits
+    int rounds = 5; // Number of rounds to simulate
+    
     double timer_cpu = 0;
     double timer_cuda = 0;
+    int num_measurements = 0;
 
     // Create a deterministic circuit
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
-        for (int i = 0; i < n_qubits; ++i) {
+    for(int i = 0; i < rounds; ++i) 
+    {
+        for (int i = 0; i < n_qubits; ++i) 
+        {
+            circuit->H(i);
+            circuit->S(i);
+            circuit->S(i);
             circuit->H(i);
         }
         // Add some measurement gates to test that part of the logic
-        for (int i = 0; i < n_qubits; ++i) {
+        for (int i = 0; i < n_qubits; ++i) 
+        {
             circuit->M(i);
+            num_measurements++;
         }
+    }
     
 
 
@@ -35,7 +47,6 @@ int main() {
     auto cuda_state = BackendManager::create_state("nvgpu", n_qubits, "stab");
 
     // Allocate measurement buffers for CUDA
-    int num_measurements = n_qubits;
     cuda_state->allocate_measurement_buffers(num_measurements);
 
     // Simulate on both backends

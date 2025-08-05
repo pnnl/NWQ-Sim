@@ -13,6 +13,7 @@
 inline int qubit_index(int i, int j, int grid_size) {
     return i * grid_size + j;
 }
+int num_measurements = 0;
 
 // X stabilizer measurements (alternating plaquettes)
 void measure_x_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distance) {
@@ -33,6 +34,7 @@ void measure_x_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
 
                 circuit->H(ancilla); 
                 circuit->M(ancilla); 
+                num_measurements++;
             }
         }
     }
@@ -53,6 +55,7 @@ void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
                 if (i-1 >= 0) circuit->CX(qubit_index(i-1, j, grid_size), ancilla);
 
                 circuit->M(ancilla); 
+                num_measurements++;
             }
         }
     }
@@ -65,8 +68,8 @@ int main()
     {
     int distance = d;
     int n_qubits = pow((2 * distance) - 1, 2);
-    int shots = 10;
     int rounds = 1;
+    num_measurements = 0;
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
     
     //Add surface code routines to the circuit
@@ -89,6 +92,9 @@ int main()
     // std::vector<std::shared_ptr<Circuit>> circuit2D = {circuit, circuit};
 
     std::cout << "Starting sim" << std::endl;
+
+    //Add classical registers
+    state->allocate_measurement_buffers(num_measurements);
 
     state->sim(circuit, timer);
     // state->simBitwise(circuit, timer);
