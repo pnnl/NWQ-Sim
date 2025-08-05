@@ -407,7 +407,7 @@ namespace NWQSim
             }
 
             // Convert to dense for return
-            return ComplexMatrix(rho * gamma_factor);
+            return ComplexMatrix(rho * (gamma_factor));
         }   
 #endif
 
