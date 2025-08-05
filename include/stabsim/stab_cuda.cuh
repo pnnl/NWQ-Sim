@@ -27,17 +27,6 @@
 #include <cuda.h>
 #include <memory>
 
-
-
-#define CHECK_CUDA_CALL(call) \
-    { \
-        cudaError_t err = call; \
-        if(err != cudaSuccess) { \
-            printf("CUDA Error: %s (code %d) at %s:%d\n", cudaGetErrorString(err), err, __FILE__, __LINE__); \
-            exit(EXIT_FAILURE); \
-        } \
-    }
-
 #ifdef FP64_TC_AVAILABLE
 #include <mma.h>
 #endif
@@ -78,12 +67,8 @@ namespace NWQSim
             //Space out the 2D vectors for x z and r
             reset_state();
 
-            rng.seed(Config::RANDOM_SEED);
-            dist = std::uniform_int_distribution<int>(0,1);
+            seed = Config::RANDOM_SEED;
 
-            SAFE_ALOC_HOST(singleResultHost, n*sizeof(int));
-            memset(singleResultHost, 0, n*sizeof(int));
-            SAFE_ALOC_GPU(singleResultGPU, n*sizeof(int));
             /*End initialization*/
             
             //Allocate the packed data to the GPU side using NVSHMEM and a tempRow for row swapping
@@ -259,51 +244,7 @@ namespace NWQSim
             }
             std::cout << "---------- ----------" << std::endl;
         }
-
-        // Function to check CUDA errors
-        void checkCudaError(cudaError_t error, const char* message) {
-            if(error != cudaSuccess) {
-                fprintf(stderr, "CUDA Error: %s: %s\n", message, cudaGetErrorString(error));
-                exit(EXIT_FAILURE);
-            }
-        }
-
-        // template <typename T>
-        // __global__ void PackTo32Col(const T* X, unsigned* B, int height, int width)
-        // {
-        //     unsigned Bval, laneid;//fetch lane−id
-        //     asm("mov.u32 %0, %%laneid;":"=r"(laneid));
-        //     #pragma unroll
-        //     for(int i = 0; i < WARP_SIZE; i++)
-        //     {
-        //         T f0 = X[(blockIdx.x * WARP_SIZE + i) * width + blockIdx.y * WARP_SIZE + laneid];
-        //         //rotate anticlockwise for Col packing
-        //         unsigned r0 = __brev(__ballot(f0> = 0));
-        //         if(laneid == i ) 
-        //             Bval = r0;
-        //     }
-        //     B[blockIdx.y * height + blockIdx.x * WARP_SIZE + laneid] = Bval;
-        // }
-        // __global__ void PackTo32Row(const int* input, unsigned* output, int width, int height) 
-        // {
-        //     int laneId = threadIdx.x; // Warp lane ID
-        //     int blockRow = blockIdx.x * 32; // Block row start
-        //     int blockCol = blockIdx.y * 32; // Block column start
-        //     if(blockRow + laneId < height) {
-        //         unsigned packed = 0;
-        //         for (int i = 0; i < 32; ++i) {
-        //             int colIdx = blockCol + i;
-        //             if(colIdx < width) {
-        //                 int bit = input[(blockRow + laneId) * width + colIdx];
-        //                 packed |= (bit > 0 ? 1 : 0) << (31 - i);
-        //             }
-        //         }
-        //         output[(blockRow + laneId) * (width / 32) + blockCol / 32] = packed;
-        //     }
-        // }
-
         
-
         //resets the tableau to a full identity
         void reset_state() override
         {
@@ -378,10 +319,9 @@ namespace NWQSim
             }
         }
 
-        //Convert a vector of 1's and 0's to an IdxType decimal number
         std::vector<int> get_measurement_results() override
         {
-            return measurement_results;  //Return a pointer to totalResults
+            return measurement_results;
         }
 
         //Get the stabilizers in the tableau, i.e. all of the Pauli strings that stabilize a certain circuit
@@ -418,262 +358,7 @@ namespace NWQSim
             }//For rows(pauli strings)
             return pauliStrings;
         }
-
-        //Sub-process in measurement gates
-        void rowsum(int h, int i)
-        {
-            int sum = 0;
-            for(int j = 0; j < n; j++)
-            {
-                //Sum every column in the row
-                if(x[i][j])
-                {
-                    if(z[i][j])
-                        sum += z[h][j] - x[h][j];
-                    else
-                        sum += z[h][j] * (2*x[h][j]-1);
-                }
-                else if(z[i][j])
-                    sum += x[h][j] * (1-2*z[h][j]);
-
-                //XOR x's and z's
-                x[h][j] = x[i][j] ^ x[h][j];
-                z[h][j] = z[i][j] ^ z[h][j];
-            }
-            sum += 2*r[h] + 2*r[i];
-
-            if(sum % 4 == 0)
-                r[h] = 0;
-            else
-                r[h] = 1;
-        } //End rowsum
-
-        //For shot based measurement
-        //h and i are row indices
-        void tempRowsum(int h, int i, std::vector<std::vector<int>>& temp_x, std::vector<std::vector<int>>& temp_z, std::vector<int>& temp_r)
-        {
-            int sum = 0;
-            for(int j = 0; j < n; j++)
-            {
-                //Sum every column in the row
-                if(temp_x[i][j])
-                {
-                    if(z[i][j])
-                        sum += temp_z[h][j] - temp_x[h][j];
-                    else
-                        sum += temp_z[h][j] * (2*temp_x[h][j]-1);
-                }
-                else if(temp_z[i][j])
-                    sum += temp_x[h][j] * (1-2*temp_z[h][j]);
-
-                //XOR x's and z's
-                temp_x[h][j] = temp_x[i][j] ^ temp_x[h][j];
-                temp_z[h][j] = temp_z[i][j] ^ temp_z[h][j];
-            }
-            sum += 2*temp_r[h] + 2*temp_r[i];
-
-            if(sum % 4 == 0)
-                temp_r[h] = 0;
-            else
-                temp_r[h] = 1;
-        } //End rowsum
-
-        int *getSingleResult() override{
-            return singleResultHost;
-        }
-
-        //Provides a bit/shot measurement output without affecting the original tableau
-        IdxType *measure_all(IdxType shots = 2048) override
-        {
-            //Each index of shotResults is a possible result from a full measurement, ex. 01100101 in an 8 qubit system
-            //The integer at that i is the number of times that result occured
-            SAFE_ALOC_HOST(totalResults, sizeof(IdxType) * shots);
-            memset(totalResults, 0, sizeof(IdxType) * shots);
-
-            int half_rows = rows >> 1;
-            
-            std::vector<std::vector<int>> temp_x;
-            std::vector<std::vector<int>> temp_z;
-            std::vector<int> temp_r;
-            for(int shot = 0; shot < shots; shot++)
-            {
-                //Make a copy of the class being measured so many shots can be performed
-                temp_x = x;
-                temp_z = z;
-                temp_r = r;
-                for(int a = 0; a < n; a++)
-                {
-                    int p = -1;
-                    for(int p_index = half_rows; p_index < rows-1; p_index++)
-                    {
-                        if(temp_x[p_index][a])
-                        {
-                            p = p_index;
-                            break;
-                        }
-                    }
-                    //A p such that x[p][a] = 1 exists
-                    if(p > -1) //Random
-                    {
-                        for(int i = 0; i < rows-1; i++)
-                        {
-                            if((x[i][a]) && (i != p))
-                            {
-                                tempRowsum(i, p, temp_x, temp_z, temp_r);
-                            }
-                        }
-                        temp_x[p-half_rows] = temp_x[p];
-                        temp_z[p-half_rows] = temp_z[p];
-                        //Change all the columns in row p to be 0
-                        for(int i = 0; i < n; i++)
-                        {
-                            temp_x[p][i] = 0;
-                            temp_z[p][i] = 0;                        
-                        }
-
-                        int randomBit = dist(rng);
-                        
-                        if(randomBit)
-                        {
-                            //std::cout << "Random result of 1" << std::endl;
-                            temp_r[p] = 1;
-                        }
-                        else
-                        {
-                            //std::cout << "Random result of 0" << std::endl;
-                            temp_r[p] = 0;
-                        }
-                        temp_z[p][a] = 1;
-
-                        totalResults[shot] |= (temp_r[p] << a);
-                        // std::cout << "Random measurement at qubit " << a << " value: " << (temp_r[p] << a) << std::endl;
-                    }
-                    else //Deterministic
-                    {
-                        //Set the scratch space row to be 0
-                        //i is the column indexer in this case
-                        for(int i = 0; i < n; i++)
-                        {
-                            temp_x[rows-1][i] = 0;
-                            temp_z[rows-1][i] = 0;
-                        }
-                        temp_r[rows-1] = 0;
-
-                        //Run rowsum subroutine
-                        for(int i = 0; i < half_rows; i++)
-                        {
-                            if(temp_x[i][a] == 1)
-                            {
-                                //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
-                                tempRowsum(rows-1, i+half_rows, temp_x, temp_z, temp_r);
-                            }
-                        }
-
-                        // std::cout << "Deterministc measurement at qubit " << a << " value: " << (temp_r[rows-1] << a) << std::endl;
-                        totalResults[shot] |=  (temp_r[rows-1] << a);
-                    } //End if else
-                } //End single shot for all qubits
-            }//End shots
-            return totalResults;
-        }//End measure_all
-
-        //Provides a bit/shot measurement output without affecting the original tableau
-        IdxType **measure_all_long(IdxType shots = 2048) override
-        {
-            //Each index of shotResults is a possible result from a full measurement, ex. 01100101 in an 8 qubit system
-            //The integer at that i is the number of times that result occured
-            totalResultsLong = new IdxType*[shots];
-            for (size_t i = 0; i < shots; i++) {
-                totalResultsLong[i] = new IdxType[((n+63)/64)]();  //Zero-initialize
-            }
-
-            int half_rows = rows >> 1;
-            
-            std::vector<std::vector<int>> temp_x;
-            std::vector<std::vector<int>> temp_z;
-            std::vector<int> temp_r;
-            for(int shot = 0; shot < shots; shot++)
-            {
-                //Make a copy of the class being measured so many shots can be performed
-                temp_x = x;
-                temp_z = z;
-                temp_r = r;
-                for(int a = 0; a < n; a++)
-                {
-                    int p = -1;
-                    for(int p_index = half_rows; p_index < rows-1; p_index++)
-                    {
-                        if(temp_x[p_index][a])
-                        {
-                            p = p_index;
-                            break;
-                        }
-                    }
-                    //A p such that x[p][a] = 1 exists
-                    if(p > -1) //Random
-                    {
-                        for(int i = 0; i < rows-1; i++)
-                        {
-                            if((x[i][a]) && (i != p))
-                            {
-                                tempRowsum(i, p, temp_x, temp_z, temp_r);
-                            }
-                        }
-                        temp_x[p-half_rows] = temp_x[p];
-                        temp_z[p-half_rows] = temp_z[p];
-                        //Change all the columns in row p to be 0
-                        for(int i = 0; i < n; i++)
-                        {
-                            temp_x[p][i] = 0;
-                            temp_z[p][i] = 0;                        
-                        }
-
-                        int randomBit = dist(rng);
-                        
-                        if(randomBit)
-                        {
-                            //std::cout << "Random result of 1" << std::endl;
-                            temp_r[p] = 1;
-                        }
-                        else
-                        {
-                            //std::cout << "Random result of 0" << std::endl;
-                            temp_r[p] = 0;
-                        }
-                        temp_z[p][a] = 1;
-
-                        totalResultsLong[shot][a/64] |=  (temp_r[rows-1] << (a%64));
-                        // std::cout << "Random measurement at qubit " << a << " value: " << (temp_r[p] << a) << std::endl;
-                    }
-                    else //Deterministic
-                    {
-                        //Set the scratch space row to be 0
-                        //i is the column indexer in this case
-                        for(int i = 0; i < n; i++)
-                        {
-                            temp_x[rows-1][i] = 0;
-                            temp_z[rows-1][i] = 0;
-                        }
-                        temp_r[rows-1] = 0;
-
-                        //Run rowsum subroutine
-                        for(int i = 0; i < half_rows; i++)
-                        {
-                            if(temp_x[i][a] == 1)
-                            {
-                                //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
-                                tempRowsum(rows-1, i+half_rows, temp_x, temp_z, temp_r);
-                            }
-                        }
-
-                        // std::cout << "Deterministc measurement at qubit " << a << " value: " << (temp_r[rows-1] << a) << std::endl;
-                        totalResultsLong[shot][a/64] |=  (temp_r[rows-1] << (a%64));
-                    } //End if else
-                } //End single shot for all qubits
-            }//End shots
-            return totalResultsLong;
-        }//End measure_all
-
+  
         //Simulate the gates from a circuit in the tableau
         void sim2D(std::shared_ptr<Circuit> circuit2D, std::vector<int> gate_chunks, double &sim_time) override
         {
@@ -775,8 +460,6 @@ namespace NWQSim
 
             //Copy bit data to GPU
             copy_bits_to_gpu();
-            singleResultHost = new int[n]();
-            cudaMemcpy(singleResultHost, singleResultGPU, n*sizeof(int), cudaMemcpyHostToDevice);
 
             std::cout << "Data copied" << std::endl;
 
@@ -850,11 +533,17 @@ namespace NWQSim
             //Launch with cooperative kernel
             cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda, blocksPerGrid, threadsPerBlock, args, 3* sizeof(int));
 
-            // simulation_kernel_cuda_bitwise<<<blocksPerGrid, threadsPerBlock>>>(stab_gpu, gates_gpu, n_gates);
-
             sim_timer.stop_timer();
-            // CHECK_CUDA_CALL(cudaPeekAtLastError());
             cudaSafeCall(cudaDeviceSynchronize());
+
+            if (cudaGetLastError() != cudaSuccess) {
+                cudaError_t err = cudaGetLastError();
+                if (err != cudaSuccess) {
+                    std::cerr << "CUDA error after kernel: " << cudaGetErrorString(err) << std::endl;
+                    throw std::runtime_error("CUDA kernel had an issue during execution.");
+                }
+            }
+
             /*End simulate*/
             sim_time += sim_timer.measure();
 
@@ -872,7 +561,6 @@ namespace NWQSim
             cudaCheckError();
             //Copy data to the CPU side and unpack
             copy_bits_from_gpu();
-            cudaMemcpy(singleResultHost, singleResultGPU, n*sizeof(int), cudaMemcpyDeviceToHost);
 
 
             if(Config::PRINT_SIM_TRACE)
@@ -893,6 +581,10 @@ namespace NWQSim
         IdxType measure(IdxType qubit) override
         {
             throw std::logic_error("measure Not implemented (STAB_GPU)");
+        }
+        IdxType *measure_all(IdxType repetition) override
+        {
+            throw std::logic_error("measure_all Not implemented (STAB_GPU)");
         }
         void set_initial(std::string fpath, std::string format) override
         {
@@ -955,14 +647,6 @@ namespace NWQSim
         uint32_t* z_bit_gpu = nullptr;
         uint32_t* r_bit_gpu = nullptr;
 
-        uint32_t* row_sum_gpu = nullptr;
-        // int* p_shared;
-
-        int* singleResultHost;
-        int* singleResultGPU;
-
-        int** shotResultHost;
-        int** shotResultGPU;
         int seed;
 
         int* d_measurement_results = nullptr;
@@ -1048,11 +732,9 @@ namespace NWQSim
             scratch_row = rows-1;
             local_p_shared = rows;
         }
-        __shared__ curandState state;
-        if(i == rows/2)
-        {
-            curand_init(1234, i, 0, &state);
-        }
+        curandState state;
+        curand_init(1234, i, 0, &state);
+
         
         // printf("Starting for loop!! \n\n");
         for (int k = 0; k < n_gates; k++) 
