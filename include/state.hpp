@@ -180,14 +180,13 @@ namespace NWQSim
         IdxType i_proc = 0; // process id
         ValType *buffer_state = nullptr;
         SimType sim_type;
-        std::vector<int> measurement_results;
 
         virtual std::vector<int> get_measurement_results() {
-            return measurement_results;
+            throw std::runtime_error("Get Measurement Results Not Implemented");
         }
 
         virtual void clear_measurement_results() {
-            measurement_results.clear();
+            throw std::runtime_error("Clear Measurement Results Not Implemented");
         }
     };
 

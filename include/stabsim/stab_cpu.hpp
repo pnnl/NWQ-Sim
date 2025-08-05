@@ -254,9 +254,9 @@ namespace NWQSim
         }
 
         //Convert a vector of 1's and 0's to an IdxType decimal number
-        IdxType *get_results() override
+        std::vector<int> get_measurement_results() override
         {
-            return totalResults;  //Return a pointer to totalResults
+            return m_results;
         }
 
         //Get the stabilizers in the tableau, i.e. all of the Pauli strings that stabilize the circuit
@@ -1290,6 +1290,10 @@ namespace NWQSim
         {
             throw std::logic_error("get_exp_z Not implemented (STAB_CPU)");
         }
+        IdxType *get_results() override
+        {
+            throw std::logic_error("get_results Not implemented (STAB_CPU)");
+        }
 
     protected:
         IdxType n;
@@ -1305,6 +1309,9 @@ namespace NWQSim
         std::vector<int> r_erasure;
         IdxType* totalResults = NULL;
         IdxType** totalResultsLong = NULL;
+
+        std::vector<int> m_results;
+
         double gamma_factor;
 
         std::mt19937 rng;
@@ -1913,7 +1920,7 @@ namespace NWQSim
                 // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
                 temp_result = r[rows-1];
             }
-            measurement_results.push_back(temp_result);
+            // measurement_results.push_back(temp_result);
             if(temp_result == 1) //Apply X to flip back to 0
             {
                 for(int i = 0; i < rows-1; i++)
@@ -2282,7 +2289,7 @@ namespace NWQSim
                             }
                             z[p][a] = 1;
 
-                            totalResults[0] += r[p] << a;
+                            m_results.push_back(r[p]);
                             // std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
                         }
                         //Deterministic
@@ -2306,7 +2313,7 @@ namespace NWQSim
                                 }
                             }
                             // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
-                            totalResults[0] += r[rows-1] << a;
+                            m_results.push_back(r[rows-1]);
                         }
                         break;
                     }
