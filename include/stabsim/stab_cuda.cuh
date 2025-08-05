@@ -52,7 +52,6 @@ namespace NWQSim
     class STAB_CUDA;
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates, int seed = 0);
     __global__ void simulation_kernel_cuda2D(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType gate_chunk);
-    __global__ void pauli_frame_sim(int* m_results, Gate* gates_gpu, IdxType n_gates, int n, int shots, int* x_frame, int* z_frame);
 
     class STAB_CUDA : public QuantumState
     {
@@ -268,42 +267,6 @@ namespace NWQSim
                 exit(EXIT_FAILURE);
             }
         }
-
-        // template <typename T>
-        // __global__ void PackTo32Col(const T* X, unsigned* B, int height, int width)
-        // {
-        //     unsigned Bval, laneid;//fetch lane−id
-        //     asm("mov.u32 %0, %%laneid;":"=r"(laneid));
-        //     #pragma unroll
-        //     for(int i = 0; i < WARP_SIZE; i++)
-        //     {
-        //         T f0 = X[(blockIdx.x * WARP_SIZE + i) * width + blockIdx.y * WARP_SIZE + laneid];
-        //         //rotate anticlockwise for Col packing
-        //         unsigned r0 = __brev(__ballot(f0> = 0));
-        //         if(laneid == i ) 
-        //             Bval = r0;
-        //     }
-        //     B[blockIdx.y * height + blockIdx.x * WARP_SIZE + laneid] = Bval;
-        // }
-        // __global__ void PackTo32Row(const int* input, unsigned* output, int width, int height) 
-        // {
-        //     int laneId = threadIdx.x; // Warp lane ID
-        //     int blockRow = blockIdx.x * 32; // Block row start
-        //     int blockCol = blockIdx.y * 32; // Block column start
-        //     if(blockRow + laneId < height) {
-        //         unsigned packed = 0;
-        //         for (int i = 0; i < 32; ++i) {
-        //             int colIdx = blockCol + i;
-        //             if(colIdx < width) {
-        //                 int bit = input[(blockRow + laneId) * width + colIdx];
-        //                 packed |= (bit > 0 ? 1 : 0) << (31 - i);
-        //             }
-        //         }
-        //         output[(blockRow + laneId) * (width / 32) + blockCol / 32] = packed;
-        //     }
-        // }
-
-        
 
         //resets the tableau to a full identity
         void reset_state() override
@@ -836,7 +799,8 @@ namespace NWQSim
                 printf("STABSim_gpu is running! Using %lld qubits.\n", n);
             }
 
-            void *args[] = {&stab_gpu, &gates_gpu, &n_gates, &seed};
+            // Use the class's seed member which is already copied to GPU
+            void *args[] = {&stab_gpu, &gates_gpu, &n_gates, &this->seed};
 
             /*Simulate*/
             std::cout << "\n -------------------- \n Simulation starting! \n -------------------- \n" << std::endl;
@@ -1044,11 +1008,10 @@ namespace NWQSim
             scratch_row = rows-1;
             local_p_shared = rows;
         }
-        __shared__ curandState state;
-        if(i == rows/2)
-        {
-            curand_init(1234, i, 0, &state);
-        }
+        
+        // Initialize per-thread random state using thread index i and class seed
+        curandState state;
+        curand_init(stab_gpu->seed, i, 0, &state);
         
         // printf("Starting for loop!! \n\n");
         for (int k = 0; k < n_gates; k++) 
@@ -1138,41 +1101,40 @@ namespace NWQSim
 
                     p = p_shared;
 
-                    if (p != rows)
+                    if(p != rows)
                     {
-                        // Random measurement
-                        if (x_arr[i * cols + a] && i != p)
+                        //Random measurement
+                        if(x_arr[i * cols + a] && i != p)
                         {
-                            // Parallel rowsum
+                            //Parallel rowsum
                             uint32_t local_sum = 0;
-                            uint32_t h = i;
                             uint32_t p_row = p;
 
-                            for (int j = 0; j < n_qubits; j++)
+                            for(int j = 0; j < n_qubits; j++)
                             {
-                                uint32_t h_idx = h * cols + j;
+                                uint32_t h_idx = i * cols + j;
                                 uint32_t p_idx = p_row * cols + j;
                                 uint32_t x_p = x_arr[p_idx];
                                 uint32_t z_p = z_arr[p_idx];
                                 uint32_t x_h = x_arr[h_idx];
                                 uint32_t z_h = z_arr[h_idx];
 
-                                if (x_p)
+                                if(x_p)
                                 {
-                                    if (z_p)
+                                    if(z_p)
                                         local_sum += z_h - x_h;
                                     else
                                         local_sum += z_h * (2 * x_h - 1);
                                 }
-                                else if (z_p)
+                                else if(z_p)
                                 {
                                     local_sum += x_h * (1 - 2 * z_h);
                                 }
                                 x_arr[h_idx] = x_p ^ x_h;
                                 z_arr[h_idx] = z_p ^ z_h;
                             }
-                            local_sum += 2 * r_arr[h] + 2 * r_arr[p_row];
-                            r_arr[h] = (local_sum % 4 == 0) ? 0 : 1;
+                            local_sum += 2 * r_arr[i] + 2 * r_arr[p_row];
+                            r_arr[i] = (local_sum % 4 == 0) ? 0 : 1;
                         }
 
                         grid.sync();
@@ -1325,82 +1287,6 @@ namespace NWQSim
             return;
         }
     }
-
-
-
-    // __global__ void pauli_frame_sim(int* m_results, Gate* gates_gpu, IdxType n_gates, int n, int shots)
-    // {
-    //     cg::grid_group grid = cg::this_grid();
-    //     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    //     IdxType rows = stab_gpu->rows;
-    //     IdxType cols = stab_gpu->cols;
-    //     if(i >= shots) return;
-    //     int x_frame[n](0);
-    //     int z_frame[n](0);
-    //     int r = 0;
-
-    //     OP op_name;
-
-    //     curandState state;
-    //     curand_init(1234, i, 0, &state);
-        
-    //     for (int k = 0; k < n_gates; k++) 
-    //     {
-    //         op_name = gates_gpu[k].op_name;
-    //         a = gates_gpu[k].qubit;
-            
-    //         grid.sync();
-
-    //         switch (op_name) 
-    //         {
-    //             case OP::H:
-    //                 int p = (x_frame[a] << 1) | z_frame[a];
-
-    //                 r ^= (p == 3);
-    //                 x_frame[a] = (p == 1);
-    //                 z_frame[a] = (p == 2); 
-
-    //                 break;
-
-    //             case OP::S:
-    //                 int p = (x_frame[a] << 1) | z_frame[a];
-
-    //                 r ^= (p == 3);
-    //                 z_frame[a] = !(p == 3);
-                    
-    //                 break;
-
-    //             case OP::CX:
-    //                 int cntrl = gates_gpu[k].cntrl;
-
-    //                 z_frame[cntrl] ^= z_frame[a];
-    //                 x_frame[a] ^= x_frame[cntrl];
-
-    //                 break;
-
-    //             case OP::M:
-    //                 if(x_frame[a]) //random
-    //                 {
-    //                     //Generate a random bit (0 or 1)
-    //                     r = curand(&state) & 1;
-
-    //                     //Update z to reflect a z measurement
-    //                     z_frame[a] = 1; 
-
-    //                     stab_gpu->singleResultGPU[a] = r_arr[p_shared];
-    //                 }
-    //                 else
-    //                 {
-                        
-    //                 }
-
-    //                 break;
-
-    //             default:
-    //                 break;
-    //         }
-    //     }
-    // }
 
 } //namespace NWQSim
 
