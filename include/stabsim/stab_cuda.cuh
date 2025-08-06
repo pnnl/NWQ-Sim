@@ -877,7 +877,7 @@ namespace NWQSim
                         {
                             r_arr[p] = curand(&state) & 1;
                             z_arr[(p * cols) + a] = 1;
-                            int meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
+                            int meas_idx = *stab_gpu->d_measurement_idx_counter + 1;
                             stab_gpu->d_measurement_results[meas_idx] = r_arr[p];
                         }
                     }
@@ -935,7 +935,7 @@ namespace NWQSim
 
                         if (i == 0)
                         {
-                            int meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
+                            int meas_idx = *stab_gpu->d_measurement_idx_counter + 1;
                             stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
                         }
                     }
