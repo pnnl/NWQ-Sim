@@ -228,6 +228,7 @@ namespace NWQSim
                 }
                 std::cout << "|" << r[i] << std::endl;
             }
+            std::cout << std::endl;
         }
 
         //Prints a 2n x m tableau matrix w/o phase bits
@@ -2239,6 +2240,12 @@ namespace NWQSim
                         break;
                     }
 
+                    case OP::RESET:
+                    {
+                        reset_routine(a);
+                        break;
+                    }
+                    
                     case OP::M:
                     {
                         int p = -1;
@@ -2317,11 +2324,7 @@ namespace NWQSim
                         }
                         break;
                     }
-                    case OP::RESET:
-                    {
-                        reset_routine(a);
-                        break;
-                    }
+
 
                     case OP::X:
                         //equiv to H S S H or H Z H

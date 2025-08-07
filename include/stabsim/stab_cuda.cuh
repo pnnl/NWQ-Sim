@@ -72,9 +72,9 @@ namespace NWQSim
             /*End initialization*/
             
             //Allocate the packed data to the GPU side using NVSHMEM and a tempRow for row swapping
-            SAFE_ALOC_GPU(x_packed_gpu, packed_matrix_size);
-            SAFE_ALOC_GPU(z_packed_gpu, packed_matrix_size);
-            SAFE_ALOC_GPU(r_packed_gpu, packed_r_size);
+            // SAFE_ALOC_GPU(x_packed_gpu, packed_matrix_size);
+            // SAFE_ALOC_GPU(z_packed_gpu, packed_matrix_size);
+            // SAFE_ALOC_GPU(r_packed_gpu, packed_r_size);
 
             SAFE_ALOC_GPU(x_bit_gpu, bit_matrix_size);
             SAFE_ALOC_GPU(z_bit_gpu, bit_matrix_size);
@@ -294,6 +294,7 @@ namespace NWQSim
                 }
                 std::cout << "|" << r[i] << std::endl;
             }
+            std::cout << std::endl;
         }
 
         //Prints a 2n x m tableau matrix w/o phase bits
@@ -321,6 +322,7 @@ namespace NWQSim
 
         std::vector<int> get_measurement_results() override
         {
+            std::cout << "Getting measurement results!" << measurement_results.size() << std::endl;
             return measurement_results;
         }
 
@@ -450,11 +452,13 @@ namespace NWQSim
         //Simulate the gates from a circuit in the tableau
         void sim(std::shared_ptr<Circuit> circuit, double &sim_time) override
         {
+            SAFE_ALOC_GPU(d_local_sums, cols * sizeof(uint32_t));
+            cudaMemset(d_local_sums, 0, cols * sizeof(uint32_t));
+
             STAB_CUDA *stab_gpu;
             SAFE_ALOC_GPU(stab_gpu, sizeof(STAB_CUDA));
-            //Copy the simulator instance to GPU
-            cudaSafeCall(cudaMemcpy(stab_gpu, this,
-                                    sizeof(STAB_CUDA), cudaMemcpyHostToDevice));
+            this->d_local_sums = d_local_sums;  // Set the pointer before copying
+
             
             gpu_timer sim_timer;
 
@@ -512,28 +516,43 @@ namespace NWQSim
             std::cout << "Blocks calculated" << std::endl;
             std::cout << "X blocks = "  << blocksPerGrid << std::endl;
 
+            // In sim() before creating stab_gpu:
+            // Allocate and initialize d_local_sums
+            
+
+            // Create and copy stab_gpu AFTER allocation
+
             /*Simulate*/
             if(Config::PRINT_SIM_TRACE)
             {
                 printf("STABSim_gpu is running! Using %lld qubits.\n", n);
             }
 
+
             void *args[] = {&stab_gpu, &gates_gpu, &n_gates, &seed};
+
+
+            // Initialize the measurement counter on the device to 0
+            if (d_measurement_idx_counter) {
+                int initial_count = 0;
+                cudaMemcpy(d_measurement_idx_counter, &initial_count, sizeof(int), cudaMemcpyHostToDevice);
+            }
+            //Copy the simulator instance to GPU
+            cudaSafeCall(cudaMemcpy(stab_gpu, this,
+                                    sizeof(STAB_CUDA), cudaMemcpyHostToDevice));
+
+            cudaDeviceSynchronize();  // Ensure the initialization is complete
+
 
             /*Simulate*/
             std::cout << "\n -------------------- \n Simulation starting! \n -------------------- \n" << std::endl;
             sim_timer.start_timer();
 
-            // Initialize the measurement counter on the device to 0
-            if (d_measurement_idx_counter) {
-                int initial_meas_count = 0;
-                cudaMemcpy(d_measurement_idx_counter, &initial_meas_count, sizeof(int), cudaMemcpyHostToDevice);
-            }
-
             //Launch with cooperative kernel
             cudaLaunchCooperativeKernel((void*)simulation_kernel_cuda, blocksPerGrid, threadsPerBlock, args, 3* sizeof(int));
 
             sim_timer.stop_timer();
+
             cudaSafeCall(cudaDeviceSynchronize());
 
             if (cudaGetLastError() != cudaSuccess) {
@@ -547,13 +566,18 @@ namespace NWQSim
             /*End simulate*/
             sim_time += sim_timer.measure();
 
+            // Add to free_measurement_buffers():
+            SAFE_FREE_GPU(d_local_sums);
+
             // Copy measurement results from device to host
             if (d_measurement_idx_counter) {
                 int num_measurements;
                 cudaMemcpy(&num_measurements, d_measurement_idx_counter, sizeof(int), cudaMemcpyDeviceToHost);
+                std::cout << "Number of measurements: " << num_measurements << std::endl;
                 if (num_measurements > 0) {
                     cudaMemcpy(h_measurement_results, d_measurement_results, num_measurements * sizeof(int), cudaMemcpyDeviceToHost);
-                    measurement_results.assign(h_measurement_results, h_measurement_results + num_measurements);
+                    measurement_results.resize(num_measurements);
+                    std::copy(h_measurement_results, h_measurement_results + num_measurements, measurement_results.begin());
                 }
             }
 
@@ -647,6 +671,8 @@ namespace NWQSim
         uint32_t* z_bit_gpu = nullptr;
         uint32_t* r_bit_gpu = nullptr;
 
+        uint32_t* d_local_sums = nullptr;
+
         int seed;
 
         int* d_measurement_results = nullptr;
@@ -714,21 +740,20 @@ namespace NWQSim
         uint32_t* x_arr = stab_gpu->x_bit_gpu;
         uint32_t* z_arr = stab_gpu->z_bit_gpu;
         uint32_t* r_arr = stab_gpu->r_bit_gpu;
+        uint32_t* global_sums = stab_gpu->d_local_sums;
         uint32_t x, z;
         OP op_name;
         IdxType index;
         IdxType row_col_index;
         int a;
         int p;
-        uint32_t local_sum;
+        uint32_t local_sum = 0;
 
         //Initialize shared memory (per block)
         __shared__ int local_p_shared;
-        __shared__ int half_row;
         __shared__ int scratch_row;
         if(threadIdx.x == 0)
         {
-            half_row = rows/2;
             scratch_row = rows-1;
             local_p_shared = rows;
         }
@@ -810,7 +835,7 @@ namespace NWQSim
                     }
                     grid.sync();
 
-                    if ((i >= half_row) && (x_arr[index]))
+                    if ((i >= cols) && (x_arr[index]))
                     {
                         atomicMin(&local_p_shared, i);
                     }
@@ -827,17 +852,15 @@ namespace NWQSim
                     if (p != rows)
                     {
                         // Random measurement
-                        if (x_arr[i * cols + a] && i != p)
+                        if (x_arr[index] && i != p)
                         {
                             // Parallel rowsum
                             uint32_t local_sum = 0;
-                            uint32_t h = i;
-                            uint32_t p_row = p;
 
                             for (int j = 0; j < n_qubits; j++)
                             {
-                                uint32_t h_idx = h * cols + j;
-                                uint32_t p_idx = p_row * cols + j;
+                                uint32_t h_idx = i * cols + j;
+                                uint32_t p_idx = p * cols + j;
                                 uint32_t x_p = x_arr[p_idx];
                                 uint32_t z_p = z_arr[p_idx];
                                 uint32_t x_h = x_arr[h_idx];
@@ -857,38 +880,40 @@ namespace NWQSim
                                 x_arr[h_idx] = x_p ^ x_h;
                                 z_arr[h_idx] = z_p ^ z_h;
                             }
-                            local_sum += 2 * r_arr[h] + 2 * r_arr[p_row];
-                            r_arr[h] = (local_sum % 4 == 0) ? 0 : 1;
+                            local_sum += 2 * r_arr[p] + 2 * r_arr[i];
+                            r_arr[i] = (local_sum % 4 == 0) ? 0 : 1;
                         }
 
                         grid.sync();
 
                         if (i < cols)
                         {
-                            index = (p * cols) + i;
-                            row_col_index = ((p - half_row) * cols) + i;
-                            x_arr[row_col_index] = x_arr[index];
-                            z_arr[row_col_index] = z_arr[index];
-                            x_arr[index] = 0;
-                            z_arr[index] = 0;
+                            uint32_t p_index = (p * cols) + i;
+                            row_col_index = ((p - cols) * cols) + i;
+                            x_arr[row_col_index] = x_arr[p_index];
+                            z_arr[row_col_index] = z_arr[p_index];
+                            x_arr[p_index] = 0;
+                            z_arr[p_index] = 0;
                         }
 
                         if (i == cols)
                         {
                             r_arr[p] = curand(&state) & 1;
                             z_arr[(p * cols) + a] = 1;
-                            int meas_idx = *stab_gpu->d_measurement_idx_counter + 1;
+                            uint32_t meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
                             stab_gpu->d_measurement_results[meas_idx] = r_arr[p];
                         }
+
+                        grid.sync();
                     }
                     else
                     {
                         // Deterministic measurement
                         if (i < cols)
                         {
-                            index = (scratch_row * cols) + i;
-                            x_arr[index] = 0;
-                            z_arr[index] = 0;
+                            uint32_t scratch_index = (scratch_row * cols) + i;
+                            x_arr[scratch_index] = 0;
+                            z_arr[scratch_index] = 0;
                         }
                         if (i == cols)
                         {
@@ -897,17 +922,103 @@ namespace NWQSim
 
                         grid.sync();
 
-                        if (x_arr[i * cols + a] && i < half_row)
+                        if(i < cols)
+                        {
+                            if(x_arr[index])
+                            {
+                                //Parallel rowsum
+                                local_sum = 0;
+                                uint32_t p_row = i + cols;
+
+                                for (int j = 0; j < n_qubits; j++)
+                                {
+                                    uint32_t h_idx = scratch_row * cols + j;
+                                    uint32_t p_idx = p_row * cols + j;
+                                    uint32_t x_p = x_arr[p_idx];
+                                    uint32_t z_p = z_arr[p_idx];
+                                    uint32_t x_h = x_arr[h_idx];
+                                    uint32_t z_h = z_arr[h_idx];
+
+                                    if (x_p)
+                                    {
+                                        if (z_p)
+                                            local_sum += z_h - x_h;
+                                        else
+                                            local_sum += z_h * (2 * x_h - 1);
+                                    }
+                                    else if (z_p)
+                                    {
+                                        local_sum += x_h * (1 - 2 * z_h);
+                                    }
+                                    x_arr[h_idx] = x_p ^ x_h;
+                                    z_arr[h_idx] = z_p ^ z_h;
+                                }
+                                global_sums[i] = local_sum + 2 * r_arr[p_row];
+                            }
+                            else
+                            {
+                                global_sums[i] = 0;
+                            }
+                        }
+
+                        grid.sync();
+                        
+                        if (i == 0) 
+                        {
+                            uint32_t total_sum = 2 * r_arr[scratch_row];
+                            for (int j = 0; j < cols; j++) {
+                                total_sum += global_sums[j];
+                            }
+                            r_arr[scratch_row] = (total_sum % 4 == 0) ? 0 : 1;
+
+                            int meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
+                            stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
+                        }
+
+                        grid.sync();
+                    }
+                    break;
+                }
+
+                case OP::RESET:
+                {
+                    grid.sync();
+                    if (threadIdx.x == 0)
+                    {
+                        local_p_shared = rows;
+                        if (blockIdx.x == 0)
+                        {
+                            p_shared = rows;
+                        }
+                    }
+                    grid.sync();
+
+                    if ((i >= cols) && (x_arr[index]))
+                    {
+                        atomicMin(&local_p_shared, i);
+                    }
+                    grid.sync();
+
+                    if (threadIdx.x == 0)
+                    {
+                        atomicMin(&p_shared, local_p_shared);
+                    }
+                    grid.sync();
+
+                    p = p_shared;
+
+                    if (p != rows)
+                    {
+                        // Random measurement
+                        if (x_arr[index] && i != p)
                         {
                             // Parallel rowsum
                             uint32_t local_sum = 0;
-                            uint32_t h = scratch_row;
-                            uint32_t p_row = i + half_row;
 
                             for (int j = 0; j < n_qubits; j++)
                             {
-                                uint32_t h_idx = h * cols + j;
-                                uint32_t p_idx = p_row * cols + j;
+                                uint32_t h_idx = i * cols + j;
+                                uint32_t p_idx = p * cols + j;
                                 uint32_t x_p = x_arr[p_idx];
                                 uint32_t z_p = z_arr[p_idx];
                                 uint32_t x_h = x_arr[h_idx];
@@ -927,17 +1038,113 @@ namespace NWQSim
                                 x_arr[h_idx] = x_p ^ x_h;
                                 z_arr[h_idx] = z_p ^ z_h;
                             }
-                            local_sum += 2 * r_arr[h] + 2 * r_arr[p_row];
-                            r_arr[h] = (local_sum % 4 == 0) ? 0 : 1;
+                            local_sum += 2 * r_arr[i] + 2 * r_arr[p];
+                            r_arr[i] = (local_sum % 4 == 0) ? 0 : 1;
                         }
 
                         grid.sync();
 
-                        if (i == 0)
+                        if (i < cols)
                         {
-                            int meas_idx = *stab_gpu->d_measurement_idx_counter + 1;
-                            stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
+                            uint32_t p_index = (p * cols) + i;
+                            row_col_index = ((p - cols) * cols) + i;
+                            x_arr[row_col_index] = x_arr[p_index];
+                            z_arr[row_col_index] = z_arr[p_index];
+                            x_arr[p_index] = 0;
+                            z_arr[p_index] = 0;
                         }
+
+                        if (i == cols)
+                        {
+                            r_arr[p] = curand(&state) & 1;
+                            z_arr[(p * cols) + a] = 1;
+                            // uint32_t meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
+                            // stab_gpu->d_measurement_results[meas_idx] = r_arr[p];
+                        }
+
+                        grid.sync();
+
+                        if(r_arr[p] == 1)
+                        {
+                            r_arr[i] ^= z_arr[index];
+                        }
+
+                        grid.sync();
+                    }
+                    else
+                    {
+                        // Deterministic measurement
+                        if (i < cols)
+                        {
+                            uint32_t scratch_index = (scratch_row * cols) + i;
+                            x_arr[scratch_index] = 0;
+                            z_arr[scratch_index] = 0;
+                        }
+                        if (i == cols)
+                        {
+                            r_arr[scratch_row] = 0;
+                        }
+
+                        grid.sync();
+
+                        if(i < cols)
+                        {
+                            if(x_arr[index])
+                            {
+                                // Parallel rowsum
+                                local_sum = 0;
+                                uint32_t p_row = i + cols;
+
+                                for (int j = 0; j < cols; j++)
+                                {
+                                    uint32_t h_idx = scratch_row * cols + j;
+                                    uint32_t p_idx = p_row * cols + j;
+                                    uint32_t x_p = x_arr[p_idx];
+                                    uint32_t z_p = z_arr[p_idx];
+                                    uint32_t x_h = x_arr[h_idx];
+                                    uint32_t z_h = z_arr[h_idx];
+
+                                    if (x_p)
+                                    {
+                                        if (z_p)
+                                            local_sum += z_h - x_h;
+                                        else
+                                            local_sum += z_h * (2 * x_h - 1);
+                                    }
+                                    else if (z_p)
+                                    {
+                                        local_sum += x_h * (1 - 2 * z_h);
+                                    }
+                                    x_arr[h_idx] = x_p ^ x_h;
+                                    z_arr[h_idx] = z_p ^ z_h;
+                                }
+                                global_sums[i] = local_sum + 2 * r_arr[p_row];
+                            }
+                            else
+                            {
+                                global_sums[i] = 0;
+                            }
+                        }
+
+                        grid.sync();
+                        
+                        if (i == 0) 
+                        {
+                            uint32_t total_sum = 2 * r_arr[scratch_row];
+                            for (int j = 0; j < cols; j++) {
+                                total_sum += global_sums[j];
+                            }
+                            r_arr[scratch_row] = (total_sum % 4 == 0) ? 0 : 1;
+                        }
+                        
+                        grid.sync();
+
+                        if(r_arr[scratch_row] == 1)
+                        {
+                            r_arr[i] ^= z_arr[index];
+                        }   
+                        grid.sync();
+
                     }
                     break;
                 }

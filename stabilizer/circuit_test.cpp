@@ -14,8 +14,8 @@
 #include "../include/stabsim/stab_cuda.cuh"
 
 int main() {
-    int n_qubits = 10; // A few hundred qubits
-    int rounds = 5; // Number of rounds to simulate
+    int n_qubits = 111; // A few hundred qubits
+    int rounds = 11; // Number of rounds to simulate
     
     double timer_cpu = 0;
     double timer_cuda = 0;
@@ -25,17 +25,23 @@ int main() {
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
     for(int i = 0; i < rounds; ++i) 
     {
-        for (int i = 0; i < n_qubits; ++i) 
+        for (int i = 0; i < n_qubits; i+=2) 
         {
+            circuit->CX(2, i);
             circuit->H(i);
             circuit->S(i);
             circuit->S(i);
             circuit->H(i);
+            circuit->CX(0, 1);
+            // circuit->RESET(0);
+            circuit->RESET(i%3);
         }
         // Add some measurement gates to test that part of the logic
         for (int i = 0; i < n_qubits; ++i) 
         {
+            circuit->CX(1, 2);
             circuit->M(i);
+            circuit->CX(1, 0);
             num_measurements++;
         }
     }
@@ -65,6 +71,9 @@ int main() {
     auto cuda_stabilizers = cuda_state->get_stabilizers();
     auto cpu_measurements = cpu_state->get_measurement_results();
     auto cuda_measurements = cuda_state->get_measurement_results();
+
+    // cpu_state->print_res_state();
+    // cuda_state->print_res_state();
     
 
     // Sort both vectors to ensure order doesn't matter
@@ -104,11 +113,11 @@ int main() {
         }
     }
 
-    for (int i = 0; i < n_qubits; ++i) {
-        std::cout << "Match at " << i << ": "
-                    << "CPU=" << cpu_measurements[i] << ", "
-                    << "CUDA=" << cuda_measurements[i] << std::endl;
-    }
+    // for (int i = 0; i < n_qubits; ++i) {
+    //     std::cout << "Match at " << i << ": "
+    //                 << "CPU=" << cpu_measurements[i] << ", "
+    //                 << "CUDA=" << cuda_measurements[i] << std::endl;
+    // }
 
     if (match) {
         std::cout << "Validation PASSED: Stabilizers and measurements match." << std::endl;

@@ -25,7 +25,7 @@ void measure_x_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
             {
                 int ancilla = qubit_index(i, j, grid_size);
                 
-                circuit->H(ancilla); 
+                circuit->H(ancilla);
 
                 if (i+1 < grid_size) circuit->CX(ancilla, qubit_index(i+1, j, grid_size));
                 if (i-1 >= 0) circuit->CX(ancilla, qubit_index(i-1, j, grid_size));
@@ -64,59 +64,64 @@ void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
 
 int main()
 {
-    for(int d = 49; d < 52; d+=2)
+    for(int d = 3; d < 99; d+=2)
     {
-    int distance = d;
-    int n_qubits = pow((2 * distance) - 1, 2);
-    int rounds = 1;
-    num_measurements = 0;
-    auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
-    
-    //Add surface code routines to the circuit
-    for(int i = 0; i < rounds; i++)
-    {
-        measure_x_stabilizers(circuit, distance);
-        measure_z_stabilizers(circuit, distance);
-    }
+        int distance = d;
+        int n_qubits = pow((2 * distance) - 1, 2);
+        int rounds = 1;
+        num_measurements = 0;
+        auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
+        
+        //Add surface code routines to the circuit
+        for(int i = 0; i < rounds; i++)
+        {
+            measure_x_stabilizers(circuit, distance);
+            measure_z_stabilizers(circuit, distance);
+        }
 
-    
-    std::string backend = "nvgpu";
-    std::string sim_method = "stab";
-    double timer = 0;
-    
-    /*Create T and Measurement Tableaus with only stabilizers. T starts empty, M starts as identity.*/
-    std::cout << "Creating state" << std::endl;
-    auto state = BackendManager::create_state(backend, n_qubits, sim_method);
+        
+        std::string backend = "nvgpu";
+        std::string sim_method = "stab";
+        double timer = 0;
+        
+        /*Create T and Measurement Tableaus with only stabilizers. T starts empty, M starts as identity.*/
+        std::cout << "Creating state" << std::endl;
+        auto state = BackendManager::create_state(backend, n_qubits, sim_method);
 
-    
-    // std::vector<std::shared_ptr<Circuit>> circuit2D = {circuit, circuit};
+        
+        // std::vector<std::shared_ptr<Circuit>> circuit2D = {circuit, circuit};
 
-    std::cout << "Starting sim" << std::endl;
+        std::cout << "Starting sim" << std::endl;
 
-    //Add classical registers
-    state->allocate_measurement_buffers(num_measurements);
+        //Add classical registers
+        state->allocate_measurement_buffers(num_measurements);
 
-    state->sim(circuit, timer);
-    // state->simBitwise(circuit, timer);
-    // state->print_res_state();
-    // NWQSim::IdxType *results = state->measure_all(shots);
-    // for(int i = 0; i < shots; i++)
-    //     std::cout << "Result " << i << ": " << results[i] << std::endl;
+        state->sim(circuit, timer);
+        // state->simBitwise(circuit, timer);
+        // state->print_res_state();
+        // NWQSim::IdxType *results = state->measure_all(shots);
+        // for(int i = 0; i < shots; i++)
+        //     std::cout << "Result " << i << ": " << results[i] << std::endl;
+
+        auto cuda_measurements = state->get_measurement_results();
+        // for (int i = 0; i < num_measurements; i++)
+        // {
+        //     std::cout << "Measurement " << i << ": " << cuda_measurements[i] << std::endl;
+        // }
 
 
-    std::ostringstream filename;
-    filename << "/people/garn195/NWQ-Sim/stabilizer/surface_code_improved/" << backend << "_" << sim_method << "_" << distance << ".txt";
-    std::ofstream outfile(filename.str());
-    if (!outfile) {
-        std::cerr << "Error opening file: " << filename.str() << std::endl;
-    }
+        std::ostringstream filename;
+        filename << "/people/garn195/NWQ-Sim/stabilizer/surface_code_improved/" << backend << "_" << sim_method << "_" << distance << ".txt";
+        std::ofstream outfile(filename.str());
+        if (!outfile) {
+            std::cerr << "Error opening file: " << filename.str() << std::endl;
+        }
 
-    outfile << "nvgpu" << std::endl;
-    outfile << timer/1000.0 << std::endl;
-    outfile << distance << std::endl;
-    outfile << rounds << std::endl;
-    outfile << n_qubits << std::endl;
-    
+        outfile << "nvgpu" << std::endl;
+        outfile << timer/1000.0 << std::endl;
+        outfile << distance << std::endl;
+        outfile << rounds << std::endl;
+        outfile << n_qubits << std::endl;
     }
 
     return 0;
