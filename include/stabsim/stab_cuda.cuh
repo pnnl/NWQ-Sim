@@ -728,6 +728,7 @@ namespace NWQSim
     __device__ int p_shared;
     __device__ uint32_t row_sum; 
 
+
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates, int seed)
     {
         cg::grid_group grid = cg::this_grid();
@@ -835,12 +836,14 @@ namespace NWQSim
                     }
                     grid.sync();
 
+                    //In-block
                     if ((i >= cols) && (x_arr[index]))
                     {
                         atomicMin(&local_p_shared, i);
                     }
                     grid.sync();
 
+                    //In-grid
                     if (threadIdx.x == 0)
                     {
                         atomicMin(&p_shared, local_p_shared);
