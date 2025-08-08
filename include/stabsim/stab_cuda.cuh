@@ -725,8 +725,25 @@ namespace NWQSim
         }
     }; //End tableau class
 
-    __device__ int p_shared;
+    __device__ int global_p;
     __device__ uint32_t row_sum; 
+    __device__ uint32_t total_sum;
+
+    __inline__ __device__ uint32_t warp_sum(uint32_t* input, IdxType& array_size, int& lane_id) 
+    {
+        uint32_t local_sum = 0;
+        
+        // Each thread in warp processes multiple elements with stride
+        for (int i = lane_id; i < array_size; i += 32) {
+            local_sum += input[i];
+        }
+        
+        // Warp-level reduction of the partial sums
+        uint32_t total = __reduce_add_sync(__activemask(), local_sum);
+        
+        // Only first thread in warp returns the result
+        return (lane_id == 0) ? total : 0;
+    }
 
 
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates, int seed)
@@ -737,12 +754,15 @@ namespace NWQSim
         IdxType cols = stab_gpu->cols;
         if(i >= rows-1) return;
 
+        int lane_id = i % 32;
+        int warp_id = i / 32;
+
         int n_qubits = stab_gpu->n;
         uint32_t* x_arr = stab_gpu->x_bit_gpu;
         uint32_t* z_arr = stab_gpu->z_bit_gpu;
         uint32_t* r_arr = stab_gpu->r_bit_gpu;
         uint32_t* global_sums = stab_gpu->d_local_sums;
-        uint32_t x, z;
+        uint32_t x, z, x_ctrl, z_ctrl;
         OP op_name;
         IdxType index;
         IdxType row_col_index;
@@ -751,12 +771,11 @@ namespace NWQSim
         uint32_t local_sum = 0;
 
         //Initialize shared memory (per block)
-        __shared__ int local_p_shared;
+        __shared__ int block_p_shared;
         __shared__ int scratch_row;
         if(threadIdx.x == 0)
         {
             scratch_row = rows-1;
-            local_p_shared = rows;
         }
         curandState state;
         curand_init(1234, i, 0, &state);
@@ -811,8 +830,8 @@ namespace NWQSim
                     x = x_arr[index];
                     z = z_arr[index];
 
-                    uint32_t x_ctrl = x_arr[row_col_index];
-                    uint32_t z_ctrl = z_arr[row_col_index];
+                    x_ctrl = x_arr[row_col_index];
+                    z_ctrl = z_arr[row_col_index];
 
                     //Phase
                     r_arr[i] ^= ((x_ctrl & z) & (x^z_ctrl^1));
@@ -825,39 +844,40 @@ namespace NWQSim
 
                 case OP::M:
                 {
-                    grid.sync();
-                    if (threadIdx.x == 0)
+                    if(threadIdx.x == 0)
                     {
-                        local_p_shared = rows;
+                        block_p_shared = rows;
                         if (blockIdx.x == 0)
                         {
-                            p_shared = rows;
+                            global_p = rows;
+                            total_sum = 0;
                         }
                     }
-                    grid.sync();
+                    __syncthreads();
 
                     //In-block
                     if ((i >= cols) && (x_arr[index]))
                     {
-                        atomicMin(&local_p_shared, i);
+                        atomicMin(&block_p_shared, i);
                     }
                     grid.sync();
 
                     //In-grid
                     if (threadIdx.x == 0)
                     {
-                        atomicMin(&p_shared, local_p_shared);
+                        atomicMin(&global_p, block_p_shared);
                     }
                     grid.sync();
 
-                    p = p_shared;
+                    p = global_p;
 
                     if (p != rows)
                     {
-                        // Random measurement
-                        if (x_arr[index] && i != p)
+                        //Random measurement
+                        //If the stabilizer anticommutes, update it (aside from p)
+                        if(x_arr[index] && i != p)
                         {
-                            // Parallel rowsum
+                            //Many rowsums
                             uint32_t local_sum = 0;
 
                             for (int j = 0; j < n_qubits; j++)
@@ -889,7 +909,7 @@ namespace NWQSim
 
                         grid.sync();
 
-                        if (i < cols)
+                        if(i < cols)
                         {
                             uint32_t p_index = (p * cols) + i;
                             row_col_index = ((p - cols) * cols) + i;
@@ -898,7 +918,6 @@ namespace NWQSim
                             x_arr[p_index] = 0;
                             z_arr[p_index] = 0;
                         }
-
                         if (i == cols)
                         {
                             r_arr[p] = curand(&state) & 1;
@@ -912,13 +931,13 @@ namespace NWQSim
                     else
                     {
                         // Deterministic measurement
-                        if (i < cols)
+                        if(i < cols)
                         {
                             uint32_t scratch_index = (scratch_row * cols) + i;
                             x_arr[scratch_index] = 0;
                             z_arr[scratch_index] = 0;
                         }
-                        if (i == cols)
+                        if(i == cols)
                         {
                             r_arr[scratch_row] = 0;
                         }
@@ -933,7 +952,7 @@ namespace NWQSim
                                 local_sum = 0;
                                 uint32_t p_row = i + cols;
 
-                                for (int j = 0; j < n_qubits; j++)
+                                for(int j = 0; j < n_qubits; j++)
                                 {
                                     uint32_t h_idx = scratch_row * cols + j;
                                     uint32_t p_idx = p_row * cols + j;
@@ -965,57 +984,59 @@ namespace NWQSim
                         }
 
                         grid.sync();
-                        
-                        if (i == 0) 
+
+                        if(i < 32) //First warp does the final reduction
                         {
-                            uint32_t total_sum = 2 * r_arr[scratch_row];
-                            for (int j = 0; j < cols; j++) {
-                                total_sum += global_sums[j];
+                            uint32_t total = warp_sum(global_sums, cols, lane_id);                       
+                            if (i == 0) 
+                            {
+                                total += 2 * r_arr[scratch_row];
+                                r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1;
+                                
+                                int meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
+                                stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
                             }
-                            r_arr[scratch_row] = (total_sum % 4 == 0) ? 0 : 1;
-
-                            int meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
-                            stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
                         }
-
-                        grid.sync();
                     }
                     break;
                 }
 
                 case OP::RESET:
                 {
-                    grid.sync();
-                    if (threadIdx.x == 0)
+                    if(threadIdx.x == 0)
                     {
-                        local_p_shared = rows;
+                        block_p_shared = rows;
                         if (blockIdx.x == 0)
                         {
-                            p_shared = rows;
+                            global_p = rows;
+                            total_sum = 0;
                         }
                     }
-                    grid.sync();
+                    __syncthreads();
 
+                    //In-block
                     if ((i >= cols) && (x_arr[index]))
                     {
-                        atomicMin(&local_p_shared, i);
+                        atomicMin(&block_p_shared, i);
                     }
                     grid.sync();
 
+                    //In-grid
                     if (threadIdx.x == 0)
                     {
-                        atomicMin(&p_shared, local_p_shared);
+                        atomicMin(&global_p, block_p_shared);
                     }
                     grid.sync();
 
-                    p = p_shared;
+                    p = global_p;
 
                     if (p != rows)
                     {
-                        // Random measurement
-                        if (x_arr[index] && i != p)
+                        //Random measurement
+                        //If the stabilizer anticommutes, update it (aside from p)
+                        if(x_arr[index] && i != p)
                         {
-                            // Parallel rowsum
+                            //Many rowsums
                             uint32_t local_sum = 0;
 
                             for (int j = 0; j < n_qubits; j++)
@@ -1041,13 +1062,13 @@ namespace NWQSim
                                 x_arr[h_idx] = x_p ^ x_h;
                                 z_arr[h_idx] = z_p ^ z_h;
                             }
-                            local_sum += 2 * r_arr[i] + 2 * r_arr[p];
+                            local_sum += 2 * r_arr[p] + 2 * r_arr[i];
                             r_arr[i] = (local_sum % 4 == 0) ? 0 : 1;
                         }
 
                         grid.sync();
 
-                        if (i < cols)
+                        if(i < cols)
                         {
                             uint32_t p_index = (p * cols) + i;
                             row_col_index = ((p - cols) * cols) + i;
@@ -1056,20 +1077,12 @@ namespace NWQSim
                             x_arr[p_index] = 0;
                             z_arr[p_index] = 0;
                         }
-
                         if (i == cols)
                         {
                             r_arr[p] = curand(&state) & 1;
                             z_arr[(p * cols) + a] = 1;
-                            // uint32_t meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
-                            // stab_gpu->d_measurement_results[meas_idx] = r_arr[p];
-                        }
-
-                        grid.sync();
-
-                        if(r_arr[p] == 1)
-                        {
-                            r_arr[i] ^= z_arr[index];
+                            uint32_t meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
+                            stab_gpu->d_measurement_results[meas_idx] = r_arr[p];
                         }
 
                         grid.sync();
@@ -1077,13 +1090,13 @@ namespace NWQSim
                     else
                     {
                         // Deterministic measurement
-                        if (i < cols)
+                        if(i < cols)
                         {
                             uint32_t scratch_index = (scratch_row * cols) + i;
                             x_arr[scratch_index] = 0;
                             z_arr[scratch_index] = 0;
                         }
-                        if (i == cols)
+                        if(i == cols)
                         {
                             r_arr[scratch_row] = 0;
                         }
@@ -1094,11 +1107,11 @@ namespace NWQSim
                         {
                             if(x_arr[index])
                             {
-                                // Parallel rowsum
+                                //Parallel rowsum
                                 local_sum = 0;
                                 uint32_t p_row = i + cols;
 
-                                for (int j = 0; j < cols; j++)
+                                for(int j = 0; j < n_qubits; j++)
                                 {
                                     uint32_t h_idx = scratch_row * cols + j;
                                     uint32_t p_idx = p_row * cols + j;
@@ -1130,14 +1143,18 @@ namespace NWQSim
                         }
 
                         grid.sync();
-                        
-                        if (i == 0) 
+
+                        if(i < 32) //First warp does the reduction
                         {
-                            uint32_t total_sum = 2 * r_arr[scratch_row];
-                            for (int j = 0; j < cols; j++) {
-                                total_sum += global_sums[j];
+                            uint32_t total = warp_sum(global_sums, cols, lane_id);                       
+                            if (i == 0) 
+                            {
+                                total += 2 * r_arr[scratch_row];
+                                r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1;
+                                
+                                int meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
+                                stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
                             }
-                            r_arr[scratch_row] = (total_sum % 4 == 0) ? 0 : 1;
                         }
                         
                         grid.sync();

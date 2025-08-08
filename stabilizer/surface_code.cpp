@@ -64,7 +64,7 @@ void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
 
 int main()
 {
-    for(int d = 3; d < 99; d+=2)
+    for(int d = 49; d < 52; d+=2)
     {
         int distance = d;
         int n_qubits = pow((2 * distance) - 1, 2);

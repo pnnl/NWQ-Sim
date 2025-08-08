@@ -14,8 +14,8 @@
 #include "../include/stabsim/stab_cuda.cuh"
 
 int main() {
-    int n_qubits = 10; // A few hundred qubits
-    int rounds = 1; // Number of rounds to simulate
+    int n_qubits = 1111; // A few hundred qubits
+    int rounds = 33; // Number of rounds to simulate
     
     double timer_cpu = 0;
     double timer_cuda = 0;
@@ -25,27 +25,27 @@ int main() {
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
     for(int i = 0; i < rounds; ++i) 
     {
-        // for (int i = 0; i < n_qubits; i+=2) 
-        // {
-        //     circuit->CX(2, i);
-        //     circuit->H(i);
-        //     circuit->S(i);
-        //     circuit->S(i);
-        //     circuit->H(i);
-        //     circuit->CX(0, 1);
-        //     // circuit->RESET(0);
-        //     circuit->RESET(i%3);
-        // }
-        circuit->H(5);
-        circuit->M(5);
+        for (int i = 0; i < n_qubits; i+=2) 
+        {
+            circuit->CX(2, i);
+            circuit->H(i);
+            circuit->S(i);
+            circuit->S(i);
+            circuit->H(i);
+            circuit->CX(0, 1);
+            // circuit->RESET(0);
+            // circuit->RESET(i%3);
+        }
+        // circuit->H(5);
+        // circuit->M(5);
         // Add some measurement gates to test that part of the logic
-        // for (int i = 0; i < n_qubits; ++i) 
-        // {
-        //     circuit->CX(1, 2);
-        //     circuit->M(i);
-        //     circuit->CX(1, 0);
-        //     num_measurements++;
-        // }
+        for (int i = 0; i < n_qubits; ++i) 
+        {
+            circuit->CX(1, 2);
+            circuit->M(i);
+            // circuit->CX(1, 0);
+            num_measurements++;
+        }
     }
     
 
@@ -74,8 +74,8 @@ int main() {
     auto cpu_measurements = cpu_state->get_measurement_results();
     auto cuda_measurements = cuda_state->get_measurement_results();
 
-    cpu_state->print_res_state();
-    cuda_state->print_res_state();
+    // cpu_state->print_res_state();
+    // cuda_state->print_res_state();
     
 
     // Sort both vectors to ensure order doesn't matter
