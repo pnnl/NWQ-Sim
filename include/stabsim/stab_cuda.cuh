@@ -742,14 +742,14 @@ namespace NWQSim
         uint32_t total = __reduce_add_sync(__activemask(), local_sum);
         
         // Only first thread in warp returns the result
-        return (lane_id == 0) ? total : 0;
+        return total;
     }
 
 
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates, int seed)
     {
         cg::grid_group grid = cg::this_grid();
-        int i = blockIdx.x * blockDim.x + threadIdx.x;
+        IdxType i = blockIdx.x * blockDim.x + threadIdx.x;
         IdxType rows = stab_gpu->rows;
         IdxType cols = stab_gpu->cols;
         if(i >= rows-1) return;
@@ -757,7 +757,7 @@ namespace NWQSim
         int lane_id = i % 32;
         int warp_id = i / 32;
 
-        int n_qubits = stab_gpu->n;
+        IdxType n_qubits = stab_gpu->n;
         uint32_t* x_arr = stab_gpu->x_bit_gpu;
         uint32_t* z_arr = stab_gpu->z_bit_gpu;
         uint32_t* r_arr = stab_gpu->r_bit_gpu;
@@ -765,7 +765,6 @@ namespace NWQSim
         uint32_t x, z, x_ctrl, z_ctrl;
         OP op_name;
         IdxType index;
-        IdxType row_col_index;
         int a;
         int p;
         uint32_t local_sum = 0;
@@ -825,7 +824,8 @@ namespace NWQSim
                     break;
 
                 case OP::CX:
-                    row_col_index = i * cols + gates_gpu[k].ctrl;
+                {
+                    IdxType row_col_index = i * cols + gates_gpu[k].ctrl;
 
                     x = x_arr[index];
                     z = z_arr[index];
@@ -839,8 +839,8 @@ namespace NWQSim
                     //Entry
                     x_arr[index] = x ^ x_ctrl;
                     z_arr[row_col_index] = z ^ z_ctrl;
-
                     break;
+                }
 
                 case OP::M:
                 {
@@ -882,8 +882,8 @@ namespace NWQSim
 
                             for (int j = 0; j < n_qubits; j++)
                             {
-                                uint32_t h_idx = i * cols + j;
-                                uint32_t p_idx = p * cols + j;
+                                IdxType h_idx = i * cols + j;
+                                IdxType p_idx = p * cols + j;
                                 uint32_t x_p = x_arr[p_idx];
                                 uint32_t z_p = z_arr[p_idx];
                                 uint32_t x_h = x_arr[h_idx];
@@ -911,8 +911,8 @@ namespace NWQSim
 
                         if(i < cols)
                         {
-                            uint32_t p_index = (p * cols) + i;
-                            row_col_index = ((p - cols) * cols) + i;
+                            IdxType p_index = (p * cols) + i;
+                            IdxType row_col_index = ((p - cols) * cols) + i;
                             x_arr[row_col_index] = x_arr[p_index];
                             z_arr[row_col_index] = z_arr[p_index];
                             x_arr[p_index] = 0;
@@ -922,7 +922,7 @@ namespace NWQSim
                         {
                             r_arr[p] = curand(&state) & 1;
                             z_arr[(p * cols) + a] = 1;
-                            uint32_t meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
+                            int meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
                             stab_gpu->d_measurement_results[meas_idx] = r_arr[p];
                         }
 
@@ -933,7 +933,7 @@ namespace NWQSim
                         // Deterministic measurement
                         if(i < cols)
                         {
-                            uint32_t scratch_index = (scratch_row * cols) + i;
+                            IdxType scratch_index = (scratch_row * cols) + i;
                             x_arr[scratch_index] = 0;
                             z_arr[scratch_index] = 0;
                         }
@@ -950,12 +950,12 @@ namespace NWQSim
                             {
                                 //Parallel rowsum
                                 local_sum = 0;
-                                uint32_t p_row = i + cols;
+                                IdxType p_row = i + cols;
 
                                 for(int j = 0; j < n_qubits; j++)
                                 {
-                                    uint32_t h_idx = scratch_row * cols + j;
-                                    uint32_t p_idx = p_row * cols + j;
+                                    IdxType h_idx = scratch_row * cols + j;
+                                    IdxType p_idx = p_row * cols + j;
                                     uint32_t x_p = x_arr[p_idx];
                                     uint32_t z_p = z_arr[p_idx];
                                     uint32_t x_h = x_arr[h_idx];
@@ -1041,8 +1041,8 @@ namespace NWQSim
 
                             for (int j = 0; j < n_qubits; j++)
                             {
-                                uint32_t h_idx = i * cols + j;
-                                uint32_t p_idx = p * cols + j;
+                                IdxType h_idx = i * cols + j;
+                                IdxType p_idx = p * cols + j;
                                 uint32_t x_p = x_arr[p_idx];
                                 uint32_t z_p = z_arr[p_idx];
                                 uint32_t x_h = x_arr[h_idx];
@@ -1070,8 +1070,8 @@ namespace NWQSim
 
                         if(i < cols)
                         {
-                            uint32_t p_index = (p * cols) + i;
-                            row_col_index = ((p - cols) * cols) + i;
+                            IdxType p_index = (p * cols) + i;
+                            IdxType row_col_index = ((p - cols) * cols) + i;
                             x_arr[row_col_index] = x_arr[p_index];
                             z_arr[row_col_index] = z_arr[p_index];
                             x_arr[p_index] = 0;
@@ -1081,7 +1081,7 @@ namespace NWQSim
                         {
                             r_arr[p] = curand(&state) & 1;
                             z_arr[(p * cols) + a] = 1;
-                            uint32_t meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
+                            int meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
                             stab_gpu->d_measurement_results[meas_idx] = r_arr[p];
                         }
 
@@ -1092,7 +1092,7 @@ namespace NWQSim
                         // Deterministic measurement
                         if(i < cols)
                         {
-                            uint32_t scratch_index = (scratch_row * cols) + i;
+                            IdxType scratch_index = (scratch_row * cols) + i;
                             x_arr[scratch_index] = 0;
                             z_arr[scratch_index] = 0;
                         }
@@ -1109,12 +1109,12 @@ namespace NWQSim
                             {
                                 //Parallel rowsum
                                 local_sum = 0;
-                                uint32_t p_row = i + cols;
+                                IdxType p_row = i + cols;
 
                                 for(int j = 0; j < n_qubits; j++)
                                 {
-                                    uint32_t h_idx = scratch_row * cols + j;
-                                    uint32_t p_idx = p_row * cols + j;
+                                    IdxType h_idx = scratch_row * cols + j;
+                                    IdxType p_idx = p_row * cols + j;
                                     uint32_t x_p = x_arr[p_idx];
                                     uint32_t z_p = z_arr[p_idx];
                                     uint32_t x_h = x_arr[h_idx];
