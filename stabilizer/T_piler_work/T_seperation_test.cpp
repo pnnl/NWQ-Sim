@@ -18,8 +18,8 @@ namespace fs = std::filesystem;
 
 int main()
 {
-    std::string inputFolder = "/people/garn195/NWQ-Sim/stabilizer/qft_sk";//Input folder path
-    std::string outputFolder = "/people/garn195/NWQ-Sim/stabilizer/QFT_transpilation_data";//Output folder path
+    std::string inputFolder = "/people/garn195/NWQ-Sim/stabilizer/T_piler_work/nwqec_circs";//Input folder path
+    std::string outputFolder = "/people/garn195/NWQ-Sim/stabilizer/T_piler_work/nwqec_data";//Output folder path
 
     // Create the output folder if it doesn't exist
     fs::create_directories(outputFolder);
