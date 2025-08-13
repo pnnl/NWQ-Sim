@@ -475,51 +475,36 @@ namespace NWQSim
 
             cudaDeviceProp prop;
             cudaGetDeviceProperties(&prop, 0);
+
             printf("Max grid size: (%d, %d, %d)\n", prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2]);
             printf("Max threads per block: %d\n", prop.maxThreadsPerBlock);
             printf("Device Name: %s\n", prop.name);
             printf("Max Blocks per Multiprocessor: %d\n", prop.maxThreadsPerMultiProcessor);
             printf("Number of SMs: %d\n", prop.multiProcessorCount);
 
-            int maxBlocks;
+            int threadsPerBlock = prop.maxThreadsPerBlock; //1024
+            int maxBlocksPerSM;
             cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-                &maxBlocks, /* out: max active blocks */
+                &maxBlocksPerSM, /* out: max active blocks */
                 (void*)simulation_kernel_cuda, /* kernel */
-                1024, /* threads per block */
+                threadsPerBlock, /* threads per block */
                 3*sizeof(int) /* shared memory per block */
             );
 
-            printf("Max active blocks per SM: %d\n", maxBlocks);
-            maxBlocks = prop.multiProcessorCount;
+            printf("Max active blocks per SM: %d\n", maxBlocksPerSM);
+            int maxBlocks = prop.multiProcessorCount * maxBlocksPerSM;
             printf("Total max cooperative blocks: %d\n", maxBlocks);
             cudaFuncAttributes attr;
             cudaFuncGetAttributes(&attr, simulation_kernel_cuda);
             printf("Registers per thread: %d\n", attr.numRegs);
 
-
             int minGridSize, blockSize;
             cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda, 3* sizeof(int), 0);
             printf("Max block size: %d\n", blockSize);
-            int threadsPerBlockX = 1024;
-
-            int threadsPerBlock = (threadsPerBlockX);
-            int blocksPerGrid = ((rows-1 + threadsPerBlockX - 1) / threadsPerBlockX);
-            // int blocksPerGrid = 132;
-
-
-            if(blocksPerGrid > maxBlocks)
-            {
-                fprintf(stderr, "Error: Attempting to launch more blocks than can fit on the GPU. Cooperative kernel requires 1 block per SM.\n", maxBlocks);
-                exit(EXIT_FAILURE);  // Exit the program if more than 1 block per SM is attempted
-            }
-
-            std::cout << "Blocks calculated" << std::endl;
-            std::cout << "X blocks = "  << blocksPerGrid << std::endl;
+            int blocksPerGrid = maxBlocks;
 
             // In sim() before creating stab_gpu:
             // Allocate and initialize d_local_sums
-            
-
             // Create and copy stab_gpu AFTER allocation
 
             /*Simulate*/
@@ -746,17 +731,20 @@ namespace NWQSim
     }
 
 
+
+        //if (i==0) printf("====== rows:%llu, cols:%llu, blockDim.x:%u, gridDim.x:%u\n", rows, cols, blockDim.x, gridDim.x);
+
+    __launch_bounds__(1024, 1)
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates, int seed)
     {
         cg::grid_group grid = cg::this_grid();
         IdxType i = blockIdx.x * blockDim.x + threadIdx.x;
         IdxType rows = stab_gpu->rows;
         IdxType cols = stab_gpu->cols;
-        if(i >= rows-1) return;
 
         int lane_id = i % 32;
         int warp_id = i / 32;
-
+        int n_warps = blockDim.x * gridDim.x / 32;
         IdxType n_qubits = stab_gpu->n;
         uint32_t* x_arr = stab_gpu->x_bit_gpu;
         uint32_t* z_arr = stab_gpu->z_bit_gpu;
@@ -767,7 +755,7 @@ namespace NWQSim
         IdxType index;
         int a;
         int p;
-        uint32_t local_sum = 0;
+        int local_sum = 0;
 
         //Initialize shared memory (per block)
         __shared__ int block_p_shared;
@@ -779,91 +767,99 @@ namespace NWQSim
         curandState state;
         curand_init(1234, i, 0, &state);
 
-        
-        // printf("Starting for loop!! \n\n");
+
         for (int k = 0; k < n_gates; k++) 
         {
             op_name = gates_gpu[k].op_name;
             a = gates_gpu[k].qubit;
             index = i * cols + a;
-
+            
             switch (op_name) 
             {
                 case OP::H:
-                    x = x_arr[index];
-                    z = z_arr[index];
-                    //Phase
-                    r_arr[i] ^= (x & z);
-
-                    //Entry -- swap x and z bits
-                    x_arr[index] = z;
-                    z_arr[index] = x;
+                    if (i < rows-1)
+                    {
+                        x = x_arr[index];
+                        z = z_arr[index];
+                        //Phase
+                        r_arr[i] ^= (x & z);
+                        //Entry -- swap x and z bits
+                        x_arr[index] = z;
+                        z_arr[index] = x;
+                    }
                     break;
 
                 case OP::S:
-                    x = x_arr[index];
-                    z = z_arr[index];
-
-                    //Phase
-                    r_arr[i] ^= (x & z);
-
-                    //Entry
-                    z_arr[index] = z ^ x;
-                    // if(i == 0) printf("S\n\n");
+                    if (i < rows-1)
+                    {
+                        x = x_arr[index];
+                        z = z_arr[index];
+                        //Phase
+                        r_arr[i] ^= (x & z);
+                        //Entry
+                        z_arr[index] = z ^ x;
+                        // if(i == 0) printf("S\n\n");
+                    }
                     break;
 
                 case OP::SDG:
-                    x = x_arr[index];
-                    z = z_arr[index];
-
-                    //Phase
-                    r_arr[i] ^= (x ^ (x & z));
-
-                    //Entry
-                    z_arr[index] = z ^ x;
+                    if (i < rows-1)
+                    {
+                        x = x_arr[index];
+                        z = z_arr[index];
+                        //Phase
+                        r_arr[i] ^= (x ^ (x & z));
+                        //Entry
+                        z_arr[index] = z ^ x;
+                    }
                     break;
 
                 case OP::CX:
                 {
-                    IdxType row_col_index = i * cols + gates_gpu[k].ctrl;
-
-                    x = x_arr[index];
-                    z = z_arr[index];
-
-                    x_ctrl = x_arr[row_col_index];
-                    z_ctrl = z_arr[row_col_index];
-
-                    //Phase
-                    r_arr[i] ^= ((x_ctrl & z) & (x^z_ctrl^1));
-
-                    //Entry
-                    x_arr[index] = x ^ x_ctrl;
-                    z_arr[row_col_index] = z ^ z_ctrl;
+                    if (i < rows-1)
+                    {
+                        IdxType row_col_index = i * cols + gates_gpu[k].ctrl;
+                        x = x_arr[index];
+                        z = z_arr[index];
+                        x_ctrl = x_arr[row_col_index];
+                        z_ctrl = z_arr[row_col_index];
+                        //Phase
+                        r_arr[i] ^= ((x_ctrl & z) & (x^z_ctrl^1));
+                        //Entry
+                        x_arr[index] = x ^ x_ctrl;
+                        z_arr[row_col_index] = z ^ z_ctrl;
+                    }
                     break;
                 }
 
                 case OP::M:
                 {
-                    if(threadIdx.x == 0)
+                    if (i < rows-1)
                     {
-                        block_p_shared = rows;
-                        if (blockIdx.x == 0)
+                        if(threadIdx.x == 0)
                         {
-                            global_p = rows;
-                            total_sum = 0;
+                            block_p_shared = rows;
+                            if (blockIdx.x == 0)
+                            {
+                                global_p = rows;
+                                total_sum = 0;
+                            }
                         }
-                    }
-                    __syncthreads();
-
-                    //In-block
-                    if ((i >= cols) && (x_arr[index]))
-                    {
-                        atomicMin(&block_p_shared, i);
                     }
                     grid.sync();
 
+                    //In-block
+                    if (i < rows-1)
+                    {
+                        if ((i >= cols) && (x_arr[index]))
+                        {
+                            atomicMin(&block_p_shared, i);
+                        }
+                    }
+                    __syncthreads(); //block sync
+
                     //In-grid
-                    if (threadIdx.x == 0)
+                    if ( (i < rows-1) && threadIdx.x == 0)
                     {
                         atomicMin(&global_p, block_p_shared);
                     }
@@ -875,41 +871,63 @@ namespace NWQSim
                     {
                         //Random measurement
                         //If the stabilizer anticommutes, update it (aside from p)
-                        if(x_arr[index] && i != p)
+
+                        for (IdxType local_i = warp_id; local_i < rows-1; local_i += n_warps)
                         {
-                            //Many rowsums
-                            uint32_t local_sum = 0;
-
-                            for (int j = 0; j < n_qubits; j++)
+                            IdxType local_index = local_i * cols + a;
+                            if (local_i != p && x_arr[local_index])
                             {
-                                IdxType h_idx = i * cols + j;
-                                IdxType p_idx = p * cols + j;
-                                uint32_t x_p = x_arr[p_idx];
-                                uint32_t z_p = z_arr[p_idx];
-                                uint32_t x_h = x_arr[h_idx];
-                                uint32_t z_h = z_arr[h_idx];
+                                //Many rowsums
+                                int local_sum = 0;
+                                for (int j = lane_id; j < n_qubits; j+=32)
+                                {
+                                    IdxType h_idx = local_i * cols + j;
+                                    IdxType p_idx = p * cols + j;
+                                    uint32_t x_p = x_arr[p_idx];
+                                    uint32_t z_p = z_arr[p_idx];
+                                    uint32_t x_h = x_arr[h_idx];
+                                    uint32_t z_h = z_arr[h_idx];
 
-                                if (x_p)
-                                {
-                                    if (z_p)
-                                        local_sum += z_h - x_h;
-                                    else
-                                        local_sum += z_h * (2 * x_h - 1);
+                                    /*
+                                    if (x_p)
+                                    {
+                                        if (z_p)
+                                            local_sum += z_h - x_h;
+                                        else
+                                            local_sum += z_h * (2 * x_h - 1);
+                                    }
+                                    else if (z_p)
+                                    {
+                                        local_sum += x_h * (1 - 2 * z_h);
+                                    }
+
+                                    */
+
+                                    local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
+                                        + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
+
+
+                                    x_arr[h_idx] = x_p ^ x_h;
+                                    z_arr[h_idx] = z_p ^ z_h;
                                 }
-                                else if (z_p)
+                                //merge warp-wise local_sum
+                                for (int offset = 16; offset > 0; offset /= 2) 
                                 {
-                                    local_sum += x_h * (1 - 2 * z_h);
+                                    local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
                                 }
-                                x_arr[h_idx] = x_p ^ x_h;
-                                z_arr[h_idx] = z_p ^ z_h;
+                                //per head-lane owns the merged local_sum and performs adjustment
+                                if (lane_id == 0) 
+                                {
+                                    local_sum += 2 * r_arr[p] + 2 * r_arr[local_i];
+                                    r_arr[local_i] = (local_sum % 4 == 0) ? 0 : 1;
+
+                                }
                             }
-                            local_sum += 2 * r_arr[p] + 2 * r_arr[i];
-                            r_arr[i] = (local_sum % 4 == 0) ? 0 : 1;
-                        }
 
+                        }
                         grid.sync();
 
-                        if(i < cols)
+                        if((i < rows-1) && (i < cols))
                         {
                             IdxType p_index = (p * cols) + i;
                             IdxType row_col_index = ((p - cols) * cols) + i;
@@ -918,7 +936,8 @@ namespace NWQSim
                             x_arr[p_index] = 0;
                             z_arr[p_index] = 0;
                         }
-                        if (i == cols)
+
+                        if ((i < rows-1) && (i == cols))
                         {
                             r_arr[p] = curand(&state) & 1;
                             z_arr[(p * cols) + a] = 1;
@@ -931,28 +950,28 @@ namespace NWQSim
                     else
                     {
                         // Deterministic measurement
-                        if(i < cols)
+                        if((i < rows-1) && (i < cols))
                         {
                             IdxType scratch_index = (scratch_row * cols) + i;
                             x_arr[scratch_index] = 0;
                             z_arr[scratch_index] = 0;
                         }
-                        if(i == cols)
+                        if ((i < rows-1) && (i == cols))
                         {
                             r_arr[scratch_row] = 0;
                         }
-
                         grid.sync();
 
-                        if(i < cols)
+                        for (IdxType local_i = warp_id; local_i < min(rows-1,cols); local_i += n_warps)
                         {
-                            if(x_arr[index])
+                            IdxType local_index = local_i * cols + a;
+                            if (x_arr[local_index])
                             {
                                 //Parallel rowsum
-                                local_sum = 0;
-                                IdxType p_row = i + cols;
+                                uint32_t local_sum = 0;
+                                IdxType p_row = local_i + cols;
 
-                                for(int j = 0; j < n_qubits; j++)
+                                for (int j = lane_id; j < n_qubits; j+=32)
                                 {
                                     IdxType h_idx = scratch_row * cols + j;
                                     IdxType p_idx = p_row * cols + j;
@@ -960,69 +979,73 @@ namespace NWQSim
                                     uint32_t z_p = z_arr[p_idx];
                                     uint32_t x_h = x_arr[h_idx];
                                     uint32_t z_h = z_arr[h_idx];
-
-                                    if (x_p)
-                                    {
-                                        if (z_p)
-                                            local_sum += z_h - x_h;
-                                        else
-                                            local_sum += z_h * (2 * x_h - 1);
-                                    }
-                                    else if (z_p)
-                                    {
-                                        local_sum += x_h * (1 - 2 * z_h);
-                                    }
+                                    local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
+                                        + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
                                     x_arr[h_idx] = x_p ^ x_h;
                                     z_arr[h_idx] = z_p ^ z_h;
                                 }
-                                global_sums[i] = local_sum + 2 * r_arr[p_row];
+                                //merge warp-wise local_sum
+                                for (int offset = 16; offset > 0; offset /= 2) 
+                                {
+                                    local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
+                                }
+                                //per head-lane owns the merged local_sum and performs adjustment
+                                if (lane_id == 0) 
+                                    global_sums[local_i] = local_sum + 2 * r_arr[p_row];
                             }
                             else
                             {
-                                global_sums[i] = 0;
-                            }
-                        }
-
-                        grid.sync();
-
-                        if(i < 32) //First warp does the final reduction
-                        {
-                            uint32_t total = warp_sum(global_sums, cols, lane_id);                       
-                            if (i == 0) 
-                            {
-                                total += 2 * r_arr[scratch_row];
-                                r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1;
-                                
-                                int meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
-                                stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
+                                if (lane_id == 0) global_sums[local_i] = 0;
                             }
                         }
                     }
+
+                    grid.sync();
+                        
+
+                    if((i < rows-1) && (i < 32)) //First warp does the final reduction
+                    {
+                        uint32_t total = warp_sum(global_sums, cols, lane_id);                       
+                        if (i == 0) 
+                        {
+                            total += 2 * r_arr[scratch_row];
+                            r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1;
+
+                            int meas_idx = atomicAdd(stab_gpu->d_measurement_idx_counter, 1);
+                            stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
+                        }
+                    }
+
+
                     break;
                 }
 
                 case OP::RESET:
                 {
-                    if(threadIdx.x == 0)
-                    {
-                        block_p_shared = rows;
-                        if (blockIdx.x == 0)
-                        {
-                            global_p = rows;
-                            total_sum = 0;
-                        }
-                    }
-                    __syncthreads();
 
-                    //In-block
-                    if ((i >= cols) && (x_arr[index]))
+                    if (i < rows-1)
                     {
-                        atomicMin(&block_p_shared, i);
+                        if(threadIdx.x == 0)
+                        {
+                            block_p_shared = rows;
+                            if (blockIdx.x == 0)
+                            {
+                                global_p = rows;
+                                total_sum = 0;
+                            }
+                        }
                     }
                     grid.sync();
 
+                    //In-block
+                    if ( (i < rows-1) && (i >= cols) && (x_arr[index]))
+                    {
+                        atomicMin(&block_p_shared, i);
+                    }
+                    __syncthreads(); //block sync
+
                     //In-grid
-                    if (threadIdx.x == 0)
+                    if ( (i < rows-1) && threadIdx.x == 0)
                     {
                         atomicMin(&global_p, block_p_shared);
                     }
@@ -1034,7 +1057,7 @@ namespace NWQSim
                     {
                         //Random measurement
                         //If the stabilizer anticommutes, update it (aside from p)
-                        if(x_arr[index] && i != p)
+                        if( (i < rows-1) && x_arr[index] && i != p)
                         {
                             //Many rowsums
                             uint32_t local_sum = 0;
@@ -1068,7 +1091,7 @@ namespace NWQSim
 
                         grid.sync();
 
-                        if(i < cols)
+                        if((i < rows-1) && (i < cols))
                         {
                             IdxType p_index = (p * cols) + i;
                             IdxType row_col_index = ((p - cols) * cols) + i;
@@ -1077,7 +1100,7 @@ namespace NWQSim
                             x_arr[p_index] = 0;
                             z_arr[p_index] = 0;
                         }
-                        if (i == cols)
+                        if ((i < rows-1) && (i == cols))
                         {
                             r_arr[p] = curand(&state) & 1;
                             z_arr[(p * cols) + a] = 1;
@@ -1090,20 +1113,20 @@ namespace NWQSim
                     else
                     {
                         // Deterministic measurement
-                        if(i < cols)
+                        if((i < rows-1) && (i < cols))
                         {
                             IdxType scratch_index = (scratch_row * cols) + i;
                             x_arr[scratch_index] = 0;
                             z_arr[scratch_index] = 0;
                         }
-                        if(i == cols)
+                        if ((i < rows-1) && (i == cols))
                         {
                             r_arr[scratch_row] = 0;
                         }
 
                         grid.sync();
 
-                        if(i < cols)
+                        if((i < rows-1) && (i < cols))
                         {
                             if(x_arr[index])
                             {
@@ -1144,7 +1167,7 @@ namespace NWQSim
 
                         grid.sync();
 
-                        if(i < 32) //First warp does the reduction
+                        if((i < rows-1) && (i < 32)) //First warp does the final reduction
                         {
                             uint32_t total = warp_sum(global_sums, cols, lane_id);                       
                             if (i == 0) 
@@ -1159,7 +1182,7 @@ namespace NWQSim
                         
                         grid.sync();
 
-                        if(r_arr[scratch_row] == 1)
+                        if((i < rows-1) && (r_arr[scratch_row] == 1))
                         {
                             r_arr[i] ^= z_arr[index];
                         }   
@@ -1173,6 +1196,8 @@ namespace NWQSim
                     printf("Non-Clifford or unrecognized gate: %d\n", op_name);
             }
         }
+        
+        //if (threadIdx.x == 0 && blockIdx.x == 0) printf("Kernel is done!\n");
         // printf("Kernel is done!\n");
     }//end kernel
 
