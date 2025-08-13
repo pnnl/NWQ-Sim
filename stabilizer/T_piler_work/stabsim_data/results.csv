@@ -1,0 +1,7 @@
+circuit,time_ms,t_gates_after
+adder_n10,28.906,32
+adder_n4,1.754,4
+multiplier_n15,95.431,42
+multiplier_n45,71156.557,396
+qft_n18_iter1,520.099,1333
+qft_n18_iter2,5128.153,11463
