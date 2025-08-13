@@ -984,12 +984,12 @@ namespace NWQSim
                                     x_arr[h_idx] = x_p ^ x_h;
                                     z_arr[h_idx] = z_p ^ z_h;
                                 }
-                                //merge warp-wise local_sum
+                                //Merge warp-wise local_sum
                                 for (int offset = 16; offset > 0; offset /= 2) 
                                 {
                                     local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
                                 }
-                                //per head-lane owns the merged local_sum and performs adjustment
+                                //Per head-lane owns the merged local_sum and performs adjustment
                                 if (lane_id == 0) 
                                     global_sums[local_i] = local_sum + 2 * r_arr[p_row];
                             }
