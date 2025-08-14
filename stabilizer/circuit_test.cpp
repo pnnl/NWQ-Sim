@@ -14,8 +14,8 @@
 #include "../include/stabsim/stab_cuda.cuh"
 
 int main() {
-    int n_qubits = 777; // A few hundred qubits
-    int rounds = 3; // Number of rounds to simulate
+    int n_qubits = 1001; // A few hundred qubits
+    int rounds = 33; // Number of rounds to simulate
     
     double timer_cpu = 0;
     double timer_cuda = 0;
@@ -49,16 +49,30 @@ int main() {
                 int q = qubit_dist(rng);
                 switch (gate) 
                 {
-                    case 0: circuit->H(q); break;
+                    case 0: 
+                    {
+                        circuit->H(q);
+                        circuit->S(q);
+                        circuit->S(q);
+                        circuit->H(q);
+                        break;
+                    }
                     case 1: circuit->S(q); break;
-                    // case 3: circuit->RESET(q); break;
-                    case 4: 
+                    case 2: circuit->RESET(q); break;
+                    case 3: 
                     {
                         circuit->M(q); 
                         num_measurements++; 
                         break;
                     }
-                    default: circuit->H(q); break; // fallback
+                    default: 
+                    {
+                        circuit->H(q);
+                        circuit->S(q);
+                        circuit->S(q);
+                        circuit->H(q);
+                        break; // fallback
+                    }
                 }
             }
         }

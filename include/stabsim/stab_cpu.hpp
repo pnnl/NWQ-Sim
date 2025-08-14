@@ -2249,6 +2249,78 @@ namespace NWQSim
                         break;
                     }
 
+
+                    case OP::M:
+                    {
+                        int p = -1;
+                        for(int p_index = half_rows; p_index < rows-1; p_index++)
+                        {  
+                            //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
+                            if(x[p_index][a])
+                            {
+                                p = p_index;
+                                break;
+                            }
+                        }
+                        // std::cout << "p = " << p << std::endl;
+                        //A p such that x[p][a] = 1 exists
+                        //Random
+                        if(p > -1)
+                        {
+                            for(int i = 0; i < rows-1; i++)
+                            {
+                                // std::cout << "x = " << x[i][a] << std::endl;
+                                if((x[i][a]) && (i != p))
+                                {
+                                    rowsum(i, p);
+                                }
+                            }
+                            
+                            x[p-half_rows] = x[p];
+                            z[p-half_rows] = z[p];
+                            //Change all the columns in row p to be 0
+                            for(int i = 0; i < n; i++)
+                            {
+                                x[p][i] = 0;
+                                z[p][i] = 0;                        
+                            }
+
+                            int randomBit = prng_bit(seed, measurement_count);
+                            // std::cout << "Seed for measurement " << measurement_count << ": " << seed << std::endl;
+                            r[p] = randomBit;
+                            z[p][a] = 1;
+
+                            m_results.push_back(randomBit);
+                            measurement_count++;
+                            // std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
+                        }
+                        //Deterministic
+                        else
+                        {
+                            //Set the scratch space row to be 0
+                            //i is the column indexer in this case
+                            for(int i = 0; i < n; i++)
+                            {
+                                x[rows-1][i] = 0;
+                                z[rows-1][i] = 0;
+                            }
+                            r[rows-1] = 0;
+
+                            //Run rowsum subroutine
+                            for(int i = 0; i < half_rows; i++)
+                            {
+                                if(x[i][a] == 1)
+                                {
+                                    rowsum(rows-1, i+half_rows);
+                                }
+                            }
+                            // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
+                            m_results.push_back(r[rows-1]);
+                            measurement_count++;
+                        }
+                        break;
+                    }
+                    
                     case OP::RESET:
                     {
                         int p = -1;
@@ -2332,76 +2404,6 @@ namespace NWQSim
                         break;
                     }
                     
-                    case OP::M:
-                    {
-                        int p = -1;
-                        for(int p_index = half_rows; p_index < rows-1; p_index++)
-                        {  
-                            //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
-                            if(x[p_index][a])
-                            {
-                                p = p_index;
-                                break;
-                            }
-                        }
-                        // std::cout << "p = " << p << std::endl;
-                        //A p such that x[p][a] = 1 exists
-                        //Random
-                        if(p > -1)
-                        {
-                            for(int i = 0; i < rows-1; i++)
-                            {
-                                // std::cout << "x = " << x[i][a] << std::endl;
-                                if((x[i][a]) && (i != p))
-                                {
-                                    rowsum(i, p);
-                                }
-                            }
-                            
-                            x[p-half_rows] = x[p];
-                            z[p-half_rows] = z[p];
-                            //Change all the columns in row p to be 0
-                            for(int i = 0; i < n; i++)
-                            {
-                                x[p][i] = 0;
-                                z[p][i] = 0;                        
-                            }
-
-                            int randomBit = prng_bit(seed, measurement_count);
-                            // std::cout << "Seed for measurement " << measurement_count << ": " << seed << std::endl;
-                            r[p] = randomBit;
-                            z[p][a] = 1;
-
-                            m_results.push_back(randomBit);
-                            measurement_count++;
-                            // std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
-                        }
-                        //Deterministic
-                        else
-                        {
-                            //Set the scratch space row to be 0
-                            //i is the column indexer in this case
-                            for(int i = 0; i < n; i++)
-                            {
-                                x[rows-1][i] = 0;
-                                z[rows-1][i] = 0;
-                            }
-                            r[rows-1] = 0;
-
-                            //Run rowsum subroutine
-                            for(int i = 0; i < half_rows; i++)
-                            {
-                                if(x[i][a] == 1)
-                                {
-                                    rowsum(rows-1, i+half_rows);
-                                }
-                            }
-                            // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
-                            m_results.push_back(r[rows-1]);
-                            measurement_count++;
-                        }
-                        break;
-                    }
 
 
                     case OP::X:
