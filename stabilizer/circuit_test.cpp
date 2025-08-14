@@ -14,8 +14,8 @@
 #include "../include/stabsim/stab_cuda.cuh"
 
 int main() {
-    int n_qubits = 1111; // A few hundred qubits
-    int rounds = 33; // Number of rounds to simulate
+    int n_qubits = 7; // A few hundred qubits
+    int rounds = 1; // Number of rounds to simulate
     
     double timer_cpu = 0;
     double timer_cuda = 0;
@@ -27,14 +27,19 @@ int main() {
     {
         for (int i = 0; i < n_qubits; i+=2) 
         {
+            circuit->M(i%5);
+            num_measurements++;
+
+            circuit->H(i);
+            circuit->S(i);
+            circuit->S(i);
+            circuit->H(i);
             circuit->CX(2, i);
-            circuit->H(i);
-            circuit->S(i);
-            circuit->S(i);
-            circuit->H(i);
             circuit->CX(0, 1);
-            // circuit->RESET(0);
-            // circuit->RESET(i%3);
+            
+            circuit->RESET(i%3);
+            circuit->H(i%7);
+
         }
         // circuit->H(5);
         // circuit->M(5);
@@ -42,8 +47,10 @@ int main() {
         for (int i = 0; i < n_qubits; ++i) 
         {
             circuit->CX(1, 2);
+            circuit->S(i);
             circuit->M(i);
-            // circuit->CX(1, 0);
+            circuit->CX(1, 0);
+            circuit->RESET(i%10);
             num_measurements++;
         }
     }

@@ -46,17 +46,6 @@ namespace NWQSim
         {
             throw std::runtime_error("2D Sim Not Implemented");
         }
-        virtual void simBitwise(std::shared_ptr<Circuit> circuit, double &sim_time)
-        {
-            throw std::runtime_error("Bitwise Sim Not Implemented");
-        }
-        virtual void simBitwise1D(std::shared_ptr<Circuit> circuit, double &sim_time)
-        {
-            throw std::runtime_error("Bitwise Sim Not Implemented");
-        }
-
-
-
 
         virtual IdxType *get_results() = 0;
         virtual IdxType measure(IdxType qubit) = 0;

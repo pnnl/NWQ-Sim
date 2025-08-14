@@ -64,7 +64,7 @@ void measure_z_stabilizers(std::shared_ptr<NWQSim::Circuit> circuit, int distanc
 
 int main()
 {
-    for(int d = 49; d < 52; d+=2)
+    for(int d = 49; d < 50; d+=2)
     {
         int distance = d;
         int n_qubits = pow((2 * distance) - 1, 2);
@@ -78,6 +78,7 @@ int main()
             measure_x_stabilizers(circuit, distance);
             measure_z_stabilizers(circuit, distance);
         }
+        std::cout << "Circuit created with " << num_measurements << " measurements." << std::endl;
 
         
         std::string backend = "nvgpu";

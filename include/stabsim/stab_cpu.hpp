@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../state.hpp"
+#include "./src/prng.hpp"
 
 #include "../nwq_util.hpp"
 #include "../gate.hpp"
@@ -52,6 +53,8 @@ namespace NWQSim
             rng.seed(rd());
             dist = std::uniform_int_distribution<int>(0,1);
             random_float = std::uniform_real_distribution<double>(0.0, 1.0);
+            measurement_count = 0;  // initialize
+            seed = 0;
 
 
             has_destabilizers = true;
@@ -130,6 +133,8 @@ namespace NWQSim
             rng.seed(rd());
             dist = std::uniform_int_distribution<int>(0,1);
             random_float = std::uniform_real_distribution<double>(0.0, 1.0);
+            seed = 0;
+            measurement_count = 0;
 
 
             has_destabilizers = true;
@@ -202,6 +207,8 @@ namespace NWQSim
         void set_seed(IdxType s) override
         {
             rng.seed(s);
+            seed = s;
+            measurement_count = 0;
         }
 
         //Prints the tableau including phase
@@ -1315,6 +1322,8 @@ namespace NWQSim
 
         double gamma_factor;
 
+        IdxType seed; //used to align random measurements with GPU
+        int32_t measurement_count; //used to align random measurements with GPU
         std::mt19937 rng;
         std::uniform_int_distribution<int> dist;
         std::uniform_real_distribution<double> random_float;
@@ -2242,7 +2251,84 @@ namespace NWQSim
 
                     case OP::RESET:
                     {
-                        reset_routine(a);
+                        int p = -1;
+                        int temp_result = 0;
+                        int half_rows = rows/2;
+
+                        for(int p_index = half_rows; p_index < rows-1; p_index++)
+                        {  
+                            //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
+                            if(x[p_index][a])
+                            {
+                                p = p_index;
+                                break;
+                            }
+                        }
+                        // std::cout << "p = " << p << std::endl;
+                        //A p such that x[p][a] = 1 exists
+                        //Random
+                        if(p > -1)
+                        {
+                            for(int i = 0; i < rows-1; i++)
+                            {
+                                // std::cout << "x = " << x[i][a] << std::endl;
+                                if((x[i][a]) && (i != p))
+                                {
+                                    rowsum(i, p);
+                                }
+                            }
+                            
+                            x[p-half_rows] = x[p];
+                            z[p-half_rows] = z[p];
+                            //Change all the columns in row p to be 0
+                            for(int i = 0; i < n; i++)
+                            {
+                                x[p][i] = 0;
+                                z[p][i] = 0;                        
+                            }
+
+                            int randomBit = prng_bit(seed, measurement_count);
+                            // std::cout << "Seed for measurement " << measurement_count << ": " << seed << std::endl;
+                            r[p] = randomBit;
+                            z[p][a] = 1;
+
+                            temp_result = r[p];
+                            // std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
+                        }
+                        //Deterministic
+                        else
+                        {
+                            //Set the scratch space row to be 0
+                            //i is the column indexer in this case
+                            for(int i = 0; i < n; i++)
+                            {
+                                x[rows-1][i] = 0;
+                                z[rows-1][i] = 0;
+                            }
+                            r[rows-1] = 0;
+
+                            //Run rowsum subroutine
+                            for(int i = 0; i < half_rows; i++)
+                            {
+                                if(x[i][a] == 1)
+                                {
+                                    rowsum(rows-1, i+half_rows);
+                                }
+                            }
+                            // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
+                            temp_result = r[rows-1];
+                        }
+                        // measurement_results.push_back(temp_result);
+                        if(temp_result == 1) //Apply X to flip back to 0
+                        {
+                            for(int i = 0; i < rows-1; i++)
+                            {
+                                // z[i][a] ^= x[i][a]; 
+                                r[i] ^= z[i][a];
+
+                                // r[i] ^= z[i][a];
+                            }
+                        }
                         break;
                     }
                     
@@ -2281,22 +2367,13 @@ namespace NWQSim
                                 z[p][i] = 0;                        
                             }
 
-                            //Generate and display a random number
-                            int randomBit = dist(rng);
-                            
-                            if(randomBit)
-                            {
-                                //std::cout << "Random result of 1" << std::endl;
-                                r[p] = 1;
-                            }
-                            else
-                            {
-                                //std::cout << "Random result of 0" << std::endl;
-                                r[p] = 0;
-                            }
+                            int randomBit = prng_bit(seed, measurement_count);
+                            // std::cout << "Seed for measurement " << measurement_count << ": " << seed << std::endl;
+                            r[p] = randomBit;
                             z[p][a] = 1;
 
-                            m_results.push_back(r[p]);
+                            m_results.push_back(randomBit);
+                            measurement_count++;
                             // std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
                         }
                         //Deterministic
@@ -2321,6 +2398,7 @@ namespace NWQSim
                             }
                             // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
                             m_results.push_back(r[rows-1]);
+                            measurement_count++;
                         }
                         break;
                     }
