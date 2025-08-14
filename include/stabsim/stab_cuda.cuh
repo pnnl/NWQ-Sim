@@ -842,7 +842,7 @@ namespace NWQSim
                     grid.sync();
 
                     //In-block
-                    if (i < scratch_row)
+                    if ((i < scratch_row))
                     {
                         if ((i >= cols) && (x_arr[index]))
                         {
@@ -864,59 +864,38 @@ namespace NWQSim
                     {
                         //Random measurement
                         //If the stabilizer anticommutes, update it (aside from p)
-
-                        for (IdxType local_i = warp_id; local_i < scratch_row; local_i += n_warps)
+                        if(x_arr[index] && (i != p) && (i < scratch_row))
                         {
-                            IdxType local_index = local_i * cols + a;
-                            if (local_i != p && x_arr[local_index])
+                            //Many rowsums
+                            int32_t local_sum = 0;
+
+                            for (int32_t j = 0; j < n_qubits; j++)
                             {
-                                //Many rowsums
-                                int32_t local_sum = 0;
-                                for (int32_t j = lane_id; j < n_qubits; j+=32)
+                                IdxType h_idx = i * cols + j;
+                                IdxType p_idx = p * cols + j;
+                                int32_t x_p = x_arr[p_idx];
+                                int32_t z_p = z_arr[p_idx];
+                                int32_t x_h = x_arr[h_idx];
+                                int32_t z_h = z_arr[h_idx];
+
+                                if (x_p)
                                 {
-                                    IdxType h_idx = local_i * cols + j;
-                                    IdxType p_idx = p * cols + j;
-                                    int32_t x_p = x_arr[p_idx];
-                                    int32_t z_p = z_arr[p_idx];
-                                    int32_t x_h = x_arr[h_idx];
-                                    int32_t z_h = z_arr[h_idx];
-
-                                    /*
-                                    if (x_p)
-                                    {
-                                        if (z_p)
-                                            local_sum += z_h - x_h;
-                                        else
-                                            local_sum += z_h * (2 * x_h - 1);
-                                    }
-                                    else if (z_p)
-                                    {
-                                        local_sum += x_h * (1 - 2 * z_h);
-                                    }
-                                    */
-
-                                    local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
-                                        + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
-
-
-                                    x_arr[h_idx] = x_p ^ x_h;
-                                    z_arr[h_idx] = z_p ^ z_h;
+                                    if (z_p)
+                                        local_sum += z_h - x_h;
+                                    else
+                                        local_sum += z_h * (2 * x_h - 1);
                                 }
-                                //merge warp-wise local_sum
-                                for (int32_t offset = 16; offset > 0; offset /= 2) 
+                                else if (z_p)
                                 {
-                                    local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
+                                    local_sum += x_h * (1 - 2 * z_h);
                                 }
-                                //per head-lane owns the merged local_sum and performs adjustment
-                                if (lane_id == 0) 
-                                {
-                                    local_sum += 2 * r_arr[p] + 2 * r_arr[local_i];
-                                    r_arr[local_i] = (local_sum % 4 == 0) ? 0 : 1;
-
-                                }
+                                x_arr[h_idx] = x_p ^ x_h;
+                                z_arr[h_idx] = z_p ^ z_h;
                             }
-
+                            local_sum += 2 * r_arr[p] + 2 * r_arr[i];
+                            r_arr[i] = (local_sum % 4 == 0) ? 0 : 1;
                         }
+
                         grid.sync();
 
                         if(i < cols)
@@ -945,28 +924,28 @@ namespace NWQSim
                     else
                     {
                         // Deterministic measurement
-                        if((i < scratch_row) && (i < cols))
+                        if(i < cols)
                         {
                             IdxType scratch_index = (scratch_row * cols) + i;
                             x_arr[scratch_index] = 0;
                             z_arr[scratch_index] = 0;
                         }
-                        if ((i < scratch_row) && (i == cols))
+                        if(i == cols)
                         {
                             r_arr[scratch_row] = 0;
                         }
+ 
                         grid.sync();
-
-                        for (IdxType local_i = warp_id; local_i < cols; local_i += n_warps)
+ 
+                        if(i < cols)
                         {
-                            IdxType local_index = local_i * cols + a;
-                            if (x_arr[local_index])
+                            if(x_arr[index])
                             {
                                 //Parallel rowsum
                                 int32_t local_sum = 0;
-                                IdxType p_row = local_i + cols;
-
-                                for (int32_t j = lane_id; j < n_qubits; j+=32)
+                                IdxType p_row = i + cols;
+ 
+                                for(int j = 0; j < n_qubits; j++)
                                 {
                                     IdxType h_idx = scratch_row * cols + j;
                                     IdxType p_idx = p_row * cols + j;
@@ -974,120 +953,7 @@ namespace NWQSim
                                     int32_t z_p = z_arr[p_idx];
                                     int32_t x_h = x_arr[h_idx];
                                     int32_t z_h = z_arr[h_idx];
-
-
-
-                                    local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
-                                        + (1 - x_p) * z_p * x_h * (1 - 2 * z_h); //AL version
-
-                                    // local_sum += ((x_h * z_p) - (x_p * z_h) + (2 * x_h * x_p * z_h) - 
-                                    //         (2 * x_h * x_p * z_p) - (2 * x_h * z_h * z_p) + (2 * x_p * z_h * z_p)) & 3;
-
-                                    // local_sum += ((x_h * z_p) - (x_p * z_h) + (2 * x_h * x_p * z_h) - 
-                                    //         (2 * x_h * x_p * z_p) - (2 * x_h * z_h * z_p) + (2 * x_p * z_h * z_p)) & 3;
-
-                                    x_arr[h_idx] = x_p ^ x_h;
-                                    z_arr[h_idx] = z_p ^ z_h;
-                                }
-                                //Merge warp-wise local_sum
-                                for (int32_t offset = 16; offset > 0; offset /= 2) 
-                                {
-                                    local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
-                                }
-                                //Per head-lane owns the merged local_sum and performs adjustment
-                                if (lane_id == 0)
-                                {
-                                    printf("global_sums[%lld] = %d + 2 * %d\n", local_i, local_sum, r_arr[p_row]);
-                                    global_sums[local_i] = local_sum + 2 * r_arr[p_row];
-                                }
-                            }
-                            else
-                            {
-                                if (lane_id == 0) 
-                                {
-                                    printf("global_sums[%lld] = 0\n", local_i);
-                                    global_sums[local_i] = 0;
-                                }
-                            }
-                        }
-
-                        grid.sync();
-
-                        if(i < 32) //First warp does the final reduction
-                        {
-                            int32_t total = warp_sum(global_sums, cols, lane_id);                       
-                            if (i == 0) 
-                            {
-                                total += 2 * r_arr[scratch_row];
-                                r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1;
-
-                                int32_t meas_idx = *d_measurement_idx_counter;
-                                stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
-                                *d_measurement_idx_counter = meas_idx + 1;
-                            }
-                        }
-                    }
-
-                    break;
-                }
-
-                case OP::RESET:
-                {
-                    if (i < scratch_row)
-                    {
-                        if(threadIdx.x == 0)
-                        {
-                            block_p_shared = rows;
-                            if (blockIdx.x == 0)
-                            {
-                                global_p = rows;
-                                total_sum = 0;
-                            }
-                        }
-                    }
-                    grid.sync();
-
-                    //In-block
-                    if (i < scratch_row)
-                    {
-                        if ((i >= cols) && (x_arr[index]))
-                        {
-                            atomicMin(&block_p_shared, i);
-                        }
-                    }
-                    __syncthreads(); //block sync
-
-                    //In-grid
-                    if ( (i < scratch_row) && threadIdx.x == 0)
-                    {
-                        atomicMin(&global_p, block_p_shared);
-                    }
-                    grid.sync();
-
-                    p = global_p;
-
-                    if (p != rows)
-                    {
-                        //Random measurement
-                        //If the stabilizer anticommutes, update it (aside from p)
-
-                        for (IdxType local_i = warp_id; local_i < scratch_row; local_i += n_warps)
-                        {
-                            IdxType local_index = local_i * cols + a;
-                            if (local_i != p && x_arr[local_index])
-                            {
-                                //Many rowsums
-                                int32_t local_sum = 0;
-                                for (int32_t j = lane_id; j < n_qubits; j+=32)
-                                {
-                                    IdxType h_idx = local_i * cols + j;
-                                    IdxType p_idx = p * cols + j;
-                                    int32_t x_p = x_arr[p_idx];
-                                    int32_t z_p = z_arr[p_idx];
-                                    int32_t x_h = x_arr[h_idx];
-                                    int32_t z_h = z_arr[h_idx];
-
-                                    /*
+ 
                                     if (x_p)
                                     {
                                         if (z_p)
@@ -1099,113 +965,17 @@ namespace NWQSim
                                     {
                                         local_sum += x_h * (1 - 2 * z_h);
                                     }
-
-                                    */
-
-                                    local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
-                                        + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
-
-
                                     x_arr[h_idx] = x_p ^ x_h;
                                     z_arr[h_idx] = z_p ^ z_h;
                                 }
-                                //merge warp-wise local_sum
-                                for (int32_t offset = 16; offset > 0; offset /= 2) 
-                                {
-                                    local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
-                                }
-                                //per head-lane owns the merged local_sum and performs adjustment
-                                if (lane_id == 0) 
-                                {
-                                    local_sum += 2 * r_arr[p] + 2 * r_arr[local_i];
-                                    r_arr[local_i] = (local_sum % 4 == 0) ? 0 : 1;
-
-                                }
-                            }
-
-                        }
-                        grid.sync();
-
-                        if(i < cols)
-                        {
-                            IdxType p_index = (p * cols) + i;
-                            IdxType row_col_index = ((p - cols) * cols) + i;
-                            x_arr[row_col_index] = x_arr[p_index];
-                            z_arr[row_col_index] = z_arr[p_index];
-                            x_arr[p_index] = 0;
-                            z_arr[p_index] = 0;
-                        }
-
-                        if (i == cols)
-                        {
-                            // printf("Seed for reset %d: %d\n", meas_idx, seed);
-                            int32_t meas_idx = *d_measurement_idx_counter;
-                            int bit = prng_bit(seed, meas_idx);
-                            r_arr[p] = bit;
-                            z_arr[(p * cols) + a] = 1;
-                        }
-
-                        grid.sync();
-
-                        if((i < scratch_row) && (r_arr[p] == 1))
-                        {
-                            r_arr[i] ^= z_arr[index];
-                        }   
-                    }
-                    else
-                    {
-                        // Deterministic measurement
-                        if((i < scratch_row) && (i < cols))
-                        {
-                            IdxType scratch_index = (scratch_row * cols) + i;
-                            x_arr[scratch_index] = 0;
-                            z_arr[scratch_index] = 0;
-                        }
-                        if ((i < scratch_row) && (i == cols))
-                        {
-                            r_arr[scratch_row] = 0;
-                        }
-                        grid.sync();
-
-                        for (IdxType local_i = warp_id; local_i < cols; local_i += n_warps)
-                        {
-                            IdxType local_index = local_i * cols + a;
-                            if (x_arr[local_index])
-                            {
-                                //Parallel rowsum
-                                int32_t local_sum = 0;
-                                IdxType p_row = local_i + cols;
-
-                                for (int32_t j = lane_id; j < n_qubits; j+=32)
-                                {
-                                    IdxType h_idx = scratch_row * cols + j;
-                                    IdxType p_idx = p_row * cols + j;
-                                    int32_t x_p = x_arr[p_idx];
-                                    int32_t z_p = z_arr[p_idx];
-                                    int32_t x_h = x_arr[h_idx];
-                                    int32_t z_h = z_arr[h_idx];
-                                    local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
-                                        + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
-                                    x_arr[h_idx] = x_p ^ x_h;
-                                    z_arr[h_idx] = z_p ^ z_h;
-                                }
-                                //Merge warp-wise local_sum
-                                for (int32_t offset = 16; offset > 0; offset /= 2) 
-                                {
-                                    local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
-                                }
-                                //Per head-lane owns the merged local_sum and performs adjustment
-                                if (lane_id == 0)
-                                {
-                                    // printf("global_sums[%lld] = %d + 2 * %d\n", local_i, local_sum, r_arr[p_row]);
-                                    global_sums[local_i] = local_sum + 2 * r_arr[p_row];
-                                }
+                                global_sums[i] = local_sum + 2 * r_arr[p_row];
                             }
                             else
                             {
-                                if (lane_id == 0) global_sums[local_i] = 0;
+                                global_sums[i] = 0;
                             }
                         }
+ 
 
                         grid.sync();
 
@@ -1214,21 +984,221 @@ namespace NWQSim
                             int32_t total = warp_sum(global_sums, cols, lane_id);                       
                             if (i == 0) 
                             {
+                                int32_t meas_idx = atomicAdd(d_measurement_idx_counter, 1);
                                 total += 2 * r_arr[scratch_row];
                                 r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1;
+
+                                stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
                             }
                         }
 
                         grid.sync();
-
-                        if((i < scratch_row) && (r_arr[scratch_row] == 1))
-                        {
-                            r_arr[i] ^= z_arr[index];
-                        }
                     }
 
                     break;
                 }
+
+                // case OP::RESET:
+                // {
+                //     if (i < scratch_row)
+                //     {
+                //         if(threadIdx.x == 0)
+                //         {
+                //             block_p_shared = rows;
+                //             if (blockIdx.x == 0)
+                //             {
+                //                 global_p = rows;
+                //                 total_sum = 0;
+                //             }
+                //         }
+                //     }
+                //     grid.sync();
+
+                //     //In-block
+                //     if (i < scratch_row)
+                //     {
+                //         if ((i >= cols) && (x_arr[index]))
+                //         {
+                //             atomicMin(&block_p_shared, i);
+                //         }
+                //     }
+                //     __syncthreads(); //block sync
+
+                //     //In-grid
+                //     if ( (i < scratch_row) && threadIdx.x == 0)
+                //     {
+                //         atomicMin(&global_p, block_p_shared);
+                //     }
+                //     grid.sync();
+
+                //     p = global_p;
+
+                //     if (p != rows)
+                //     {
+                //         //Random measurement
+                //         //If the stabilizer anticommutes, update it (aside from p)
+
+                //         for (IdxType local_i = warp_id; local_i < scratch_row; local_i += n_warps)
+                //         {
+                //             IdxType local_index = local_i * cols + a;
+                //             if (local_i != p && x_arr[local_index])
+                //             {
+                //                 //Many rowsums
+                //                 int32_t local_sum = 0;
+                //                 for (int32_t j = lane_id; j < n_qubits; j+=32)
+                //                 {
+                //                     IdxType h_idx = local_i * cols + j;
+                //                     IdxType p_idx = p * cols + j;
+                //                     int32_t x_p = x_arr[p_idx];
+                //                     int32_t z_p = z_arr[p_idx];
+                //                     int32_t x_h = x_arr[h_idx];
+                //                     int32_t z_h = z_arr[h_idx];
+
+                //                     /*
+                //                     if (x_p)
+                //                     {
+                //                         if (z_p)
+                //                             local_sum += z_h - x_h;
+                //                         else
+                //                             local_sum += z_h * (2 * x_h - 1);
+                //                     }
+                //                     else if (z_p)
+                //                     {
+                //                         local_sum += x_h * (1 - 2 * z_h);
+                //                     }
+
+                //                     */
+
+                //                     local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
+                //                         + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
+
+                //                     // if(local_sum != 0)
+                //                     // {
+                //                     //     printf("Local sum at %lld: %d\n", i, local_sum);
+                //                     // }
+                //                     x_arr[h_idx] = x_p ^ x_h;
+                //                     z_arr[h_idx] = z_p ^ z_h;
+                //                 }
+                //                 //merge warp-wise local_sum
+                //                 for (int32_t offset = 16; offset > 0; offset /= 2) 
+                //                 {
+                //                     local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
+                //                 }
+                //                 //per head-lane owns the merged local_sum and performs adjustment
+                //                 if (lane_id == 0) 
+                //                 {
+                //                     local_sum += 2 * r_arr[p] + 2 * r_arr[local_i];
+                //                     r_arr[local_i] = (local_sum % 4 == 0) ? 0 : 1;
+
+                //                 }
+                //             }
+
+                //         }
+                //         grid.sync();
+
+                //         if(i < cols)
+                //         {
+                //             IdxType p_index = (p * cols) + i;
+                //             IdxType row_col_index = ((p - cols) * cols) + i;
+                //             x_arr[row_col_index] = x_arr[p_index];
+                //             z_arr[row_col_index] = z_arr[p_index];
+                //             x_arr[p_index] = 0;
+                //             z_arr[p_index] = 0;
+                //         }
+
+                //         if (i == cols)
+                //         {
+                //             // printf("Seed for reset %d: %d\n", meas_idx, seed);
+                //             int32_t meas_idx = *d_measurement_idx_counter;
+                //             int bit = prng_bit(seed, meas_idx);
+                //             r_arr[p] = bit;
+                //             z_arr[(p * cols) + a] = 1;
+                //         }
+
+                //         grid.sync();
+
+                //         if((i < scratch_row) && (r_arr[p] == 1))
+                //         {
+                //             r_arr[i] ^= z_arr[index];
+                //         }   
+                //     }
+                //     else
+                //     {
+                //         // Deterministic measurement
+                //         if((i < scratch_row) && (i < cols))
+                //         {
+                //             IdxType scratch_index = (scratch_row * cols) + i;
+                //             x_arr[scratch_index] = 0;
+                //             z_arr[scratch_index] = 0;
+                //         }
+                //         if ((i < scratch_row) && (i == cols))
+                //         {
+                //             r_arr[scratch_row] = 0;
+                //         }
+                //         grid.sync();
+
+                //         for (IdxType local_i = warp_id; local_i < cols; local_i += n_warps)
+                //         {
+                //             IdxType local_index = local_i * cols + a;
+                //             if (x_arr[local_index])
+                //             {
+                //                 //Parallel rowsum
+                //                 int32_t local_sum = 0;
+                //                 IdxType p_row = local_i + cols;
+
+                //                 for (int32_t j = lane_id; j < n_qubits; j+=32)
+                //                 {
+                //                     IdxType h_idx = scratch_row * cols + j;
+                //                     IdxType p_idx = p_row * cols + j;
+                //                     int32_t x_p = x_arr[p_idx];
+                //                     int32_t z_p = z_arr[p_idx];
+                //                     int32_t x_h = x_arr[h_idx];
+                //                     int32_t z_h = z_arr[h_idx];
+                //                     local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
+                //                         + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
+                //                     x_arr[h_idx] = x_p ^ x_h;
+                //                     z_arr[h_idx] = z_p ^ z_h;
+                //                 }
+                //                 //Merge warp-wise local_sum
+                //                 for (int32_t offset = 16; offset > 0; offset /= 2) 
+                //                 {
+                //                     local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
+                //                 }
+                //                 //Per head-lane owns the merged local_sum and performs adjustment
+                //                 if (lane_id == 0)
+                //                 {
+                //                     // printf("global_sums[%lld] = %d + 2 * %d\n", local_i, local_sum, r_arr[p_row]);
+                //                     global_sums[local_i] = local_sum + 2 * r_arr[p_row];
+                //                 }
+                //             }
+                //             else
+                //             {
+                //                 if (lane_id == 0) global_sums[local_i] = 0;
+                //             }
+                //         }
+
+                //         grid.sync();
+
+                //         if(i < 32) //First warp does the final reduction
+                //         {
+                //             int32_t total = warp_sum(global_sums, cols, lane_id);                       
+                //             if (i == 0) 
+                //             {
+                //                 total += 2 * r_arr[scratch_row];
+                //                 r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1;
+                //             }
+                //         }
+
+                //         grid.sync();
+
+                //         if((i < scratch_row) && (r_arr[scratch_row] == 1))
+                //         {
+                //             r_arr[i] ^= z_arr[index];
+                //         }
+                //     }
+
+                //     break;
+                // }
 
                 default:
                     printf("Non-Clifford or unrecognized gate: %d\n", op_name);
