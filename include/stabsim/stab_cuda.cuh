@@ -884,8 +884,8 @@ namespace NWQSim
                                     local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
                                         + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
 
-                                    x_arr[h_idx] = x_p ^ x_h;
-                                    z_arr[h_idx] = z_p ^ z_h;
+                                    atomicXor(&x_arr[h_idx], x_p);
+                                    atomicXor(&z_arr[h_idx], z_p);
                                 }
                                 //merge warp-wise local_sum
                                 for (int32_t offset = 16; offset > 0; offset /= 2) 
@@ -929,7 +929,7 @@ namespace NWQSim
                             z_arr[(global_p * cols) + a] = 1;
 
                             stab_gpu->d_measurement_results[meas_idx] = bit;
-                            printf("Random measurement %d: %d\n", meas_idx, bit);
+                            // printf("Random measurement %d: %d\n", meas_idx, bit);
                             atomicAdd(d_measurement_idx_counter, 1);
                         }
 
@@ -968,8 +968,6 @@ namespace NWQSim
                                     int32_t x_h = x_arr[h_idx];
                                     int32_t z_h = z_arr[h_idx];
 
-
-                                    // local_sum += x_p * z_h + z_p * x_h;
                                     local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
                                         + (1 - x_p) * z_p * x_h * (1 - 2 * z_h); //AL version
 
@@ -979,8 +977,8 @@ namespace NWQSim
                                     // local_sum += ((x_h * z_p) - (x_p * z_h) + (2 * x_h * x_p * z_h) - 
                                     //         (2 * x_h * x_p * z_p) - (2 * x_h * z_h * z_p) + (2 * x_p * z_h * z_p)) & 3;
 
-                                    x_arr[h_idx] = x_p ^ x_h;
-                                    z_arr[h_idx] = z_p ^ z_h;
+                                    atomicXor(&x_arr[h_idx], x_p);
+                                    atomicXor(&z_arr[h_idx], z_p);
                                 }
                                 //Merge warp-wise local_sum
                                 for (int32_t offset = 16; offset > 0; offset /= 2) 
@@ -990,10 +988,10 @@ namespace NWQSim
                                 //Per head-lane owns the merged local_sum and performs adjustment
                                 if (lane_id == 0)
                                 {
-                                    // if(local_sum!= 0)
-                                    // {
-                                    //     printf("Determ local_sum: %d, measurement index: %d\n", local_sum, *d_measurement_idx_counter);
-                                    // }
+                                    if(local_sum!= 0)
+                                    {
+                                        printf("Determ local_sum: %d, measurement index: %d\n", local_sum, *d_measurement_idx_counter);
+                                    }
                                     // printf("global_sums[%lld] = %d + 2 * %d\n", local_i, local_sum, r_arr[p_row]);
                                     global_sums[local_i] = local_sum + 2 * r_arr[p_row];
                                 }
@@ -1016,10 +1014,10 @@ namespace NWQSim
               
                             if (i == 0) 
                             {
-                                if((total% 4 != 0) && (abs(total%4) != 2))
-                                {
-                                    printf("Impossible Determ total: %d, measurement index: %d\n", total, *d_measurement_idx_counter);
-                                }     
+                                // if((total% 4 != 0) && (abs(total%4) != 2))
+                                // {
+                                //     printf("Impossible Determ total: %d, measurement index: %d\n", total, *d_measurement_idx_counter);
+                                // }     
 
                                 total += 2 * r_arr[scratch_row];
 
@@ -1027,7 +1025,7 @@ namespace NWQSim
 
                                 int32_t meas_idx = *d_measurement_idx_counter;
                                 stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
-                                printf("Determ measurement %d: %d\n", meas_idx, r_arr[scratch_row]);
+                                // printf("Determ measurement %d: %d\n", meas_idx, r_arr[scratch_row]);
                                 *d_measurement_idx_counter = meas_idx + 1;
                             }
                         }

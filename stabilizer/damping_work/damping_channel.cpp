@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
         timer = 0;
         stab_state->sim(circuit, timer);
         total_time += timer;
-        if(!qasm_exists)
+        if(n_qubits < 8 && !qasm_exists)
             avgDM += stab_state->get_density_matrix();
         stab_state->reset_state();
     }

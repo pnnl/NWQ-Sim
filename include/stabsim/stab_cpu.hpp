@@ -2293,7 +2293,7 @@ namespace NWQSim
                             r[p] = randomBit;
                             z[p][a] = 1;
                             
-                            std::cout << "Random measurement " << measurement_count << ": " << randomBit << std::endl;
+                            // std::cout << "Random measurement " << measurement_count << ": " << randomBit << std::endl;
                             m_results.push_back(randomBit);
                             measurement_count++;
                         }
@@ -2317,7 +2317,7 @@ namespace NWQSim
                                     rowsum(rows-1, i+half_rows);
                                 }
                             }
-                            std::cout << "Determ measurement " << measurement_count << ": " << r[rows-1] << std::endl;
+                            // std::cout << "Determ measurement " << measurement_count << ": " << r[rows-1] << std::endl;
                             m_results.push_back(r[rows-1]);
                             measurement_count++;
                         }

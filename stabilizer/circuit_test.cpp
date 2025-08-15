@@ -104,8 +104,8 @@ int main() {
     auto cpu_measurements = cpu_state->get_measurement_results();
     auto cuda_measurements = cuda_state->get_measurement_results();
 
-    // cpu_state->print_res_state();
-    // cuda_state->print_res_state();
+    cpu_state->print_res_state();
+    cuda_state->print_res_state();
     
 
     // Sort both vectors to ensure order doesn't matter
