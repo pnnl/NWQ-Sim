@@ -713,8 +713,6 @@ namespace NWQSim
     }; //End tableau class
 
     __device__ int32_t global_p;
-    __device__ int32_t row_sum; 
-    __device__ int32_t total_sum;
 
     __inline__ __device__ int32_t warp_sum(int32_t* input, IdxType& array_size, int& lane_id) 
     {
@@ -754,7 +752,6 @@ namespace NWQSim
         int32_t x, z, x_ctrl, z_ctrl;
         OP op_name;
         int32_t a;
-        int32_t p;
 
         //Initialize shared memory (per block)
         __shared__ int32_t block_p_shared;
@@ -827,6 +824,8 @@ namespace NWQSim
 
                 case OP::M:
                 {
+                    grid.sync();
+
                     if (i < scratch_row)
                     {
                         if(threadIdx.x == 0)
@@ -835,7 +834,6 @@ namespace NWQSim
                             if (blockIdx.x == 0)
                             {
                                 global_p = rows;
-                                total_sum = 0;
                             }
                         }
                     }
@@ -849,33 +847,34 @@ namespace NWQSim
                             atomicMin(&block_p_shared, i);
                         }
                     }
-                    __syncthreads(); //block sync
+                    grid.sync(); //__syncthreads block sync
 
                     //In-grid
                     if ( (i < scratch_row) && threadIdx.x == 0)
                     {
                         atomicMin(&global_p, block_p_shared);
                     }
+
                     grid.sync();
 
-                    p = global_p;
 
-                    if (p != rows)
+                    if (global_p != rows)
                     {
+                        // if(i == 0) printf("GPU p = %d\n", global_p);
                         //Random measurement
                         //If the stabilizer anticommutes, update it (aside from p)
 
                         for (IdxType local_i = warp_id; local_i < scratch_row; local_i += n_warps)
                         {
                             IdxType local_index = local_i * cols + a;
-                            if (local_i != p && x_arr[local_index])
+                            if (local_i != global_p && x_arr[local_index])
                             {
                                 //Many rowsums
                                 int32_t local_sum = 0;
                                 for (int32_t j = lane_id; j < n_qubits; j+=32)
                                 {
                                     IdxType h_idx = local_i * cols + j;
-                                    IdxType p_idx = p * cols + j;
+                                    IdxType p_idx = global_p * cols + j;
                                     int32_t x_p = x_arr[p_idx];
                                     int32_t z_p = z_arr[p_idx];
                                     int32_t x_h = x_arr[h_idx];
@@ -896,9 +895,12 @@ namespace NWQSim
                                 //per head-lane owns the merged local_sum and performs adjustment
                                 if (lane_id == 0) 
                                 {
-                                    local_sum += 2 * r_arr[p] + 2 * r_arr[local_i];
+                                    local_sum += 2 * r_arr[global_p] + 2 * r_arr[local_i];
+                                    if((local_sum % 4 != 0) && (abs(local_sum % 4) != 2))
+                                    {
+                                        printf("Impossible Rand local_sum: %d, measurement index: %d\n", local_sum, *d_measurement_idx_counter);
+                                    }     
                                     r_arr[local_i] = (local_sum % 4 == 0) ? 0 : 1;
-
                                 }
                             }
 
@@ -907,23 +909,28 @@ namespace NWQSim
 
                         if(i < cols)
                         {
-                            IdxType p_index = (p * cols) + i;
-                            IdxType row_col_index = ((p - cols) * cols) + i;
-                            x_arr[row_col_index] = x_arr[p_index];
-                            z_arr[row_col_index] = z_arr[p_index];
+                            IdxType p_index = (global_p * cols) + i;
+                            IdxType destab_index = ((global_p - cols) * cols) + i;
+                            x_arr[destab_index] = x_arr[p_index];
+                            z_arr[destab_index] = z_arr[p_index];
                             x_arr[p_index] = 0;
                             z_arr[p_index] = 0;
                         }
 
+                        grid.sync();
+
                         if (i == cols)
                         {
                             // Draw bit deterministically from seed and measurement index
-                            int32_t meas_idx = atomicAdd(d_measurement_idx_counter, 1);
+                            int32_t meas_idx = d_measurement_idx_counter[0];
                             // printf("Seed for measurement %d: %d\n", meas_idx, seed);
                             int bit = prng_bit(seed, meas_idx);
-                            r_arr[p] = bit;
-                            z_arr[(p * cols) + a] = 1;
+                            r_arr[global_p] = bit;
+                            z_arr[(global_p * cols) + a] = 1;
+
                             stab_gpu->d_measurement_results[meas_idx] = bit;
+                            printf("Random measurement %d: %d\n", meas_idx, bit);
+                            atomicAdd(d_measurement_idx_counter, 1);
                         }
 
                         grid.sync();
@@ -962,7 +969,7 @@ namespace NWQSim
                                     int32_t z_h = z_arr[h_idx];
 
 
-
+                                    // local_sum += x_p * z_h + z_p * x_h;
                                     local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
                                         + (1 - x_p) * z_p * x_h * (1 - 2 * z_h); //AL version
 
@@ -983,10 +990,10 @@ namespace NWQSim
                                 //Per head-lane owns the merged local_sum and performs adjustment
                                 if (lane_id == 0)
                                 {
-                                    if(local_sum!= 0)
-                                    {
-                                        printf("Determ local_sum: %d, measurement index: %d\n", local_sum, *d_measurement_idx_counter);
-                                    }
+                                    // if(local_sum!= 0)
+                                    // {
+                                    //     printf("Determ local_sum: %d, measurement index: %d\n", local_sum, *d_measurement_idx_counter);
+                                    // }
                                     // printf("global_sums[%lld] = %d + 2 * %d\n", local_i, local_sum, r_arr[p_row]);
                                     global_sums[local_i] = local_sum + 2 * r_arr[p_row];
                                 }
@@ -1009,15 +1016,18 @@ namespace NWQSim
               
                             if (i == 0) 
                             {
-                                if((total% 4 != 0) && (total%4 != 2))
+                                if((total% 4 != 0) && (abs(total%4) != 2))
                                 {
                                     printf("Impossible Determ total: %d, measurement index: %d\n", total, *d_measurement_idx_counter);
                                 }     
+
                                 total += 2 * r_arr[scratch_row];
+
                                 r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1;
 
                                 int32_t meas_idx = *d_measurement_idx_counter;
                                 stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
+                                printf("Determ measurement %d: %d\n", meas_idx, r_arr[scratch_row]);
                                 *d_measurement_idx_counter = meas_idx + 1;
                             }
                         }
@@ -1036,7 +1046,6 @@ namespace NWQSim
                             if (blockIdx.x == 0)
                             {
                                 global_p = rows;
-                                total_sum = 0;
                             }
                         }
                     }
@@ -1057,11 +1066,10 @@ namespace NWQSim
                     {
                         atomicMin(&global_p, block_p_shared);
                     }
+
                     grid.sync();
 
-                    p = global_p;
-
-                    if (p != rows)
+                    if (global_p != rows)
                     {
                         //Random measurement
                         //If the stabilizer anticommutes, update it (aside from p)
@@ -1069,14 +1077,14 @@ namespace NWQSim
                         for (IdxType local_i = warp_id; local_i < scratch_row; local_i += n_warps)
                         {
                             IdxType local_index = local_i * cols + a;
-                            if (local_i != p && x_arr[local_index])
+                            if (local_i != global_p && x_arr[local_index])
                             {
                                 //Many rowsums
                                 int32_t local_sum = 0;
                                 for (int32_t j = lane_id; j < n_qubits; j+=32)
                                 {
                                     IdxType h_idx = local_i * cols + j;
-                                    IdxType p_idx = p * cols + j;
+                                    IdxType p_idx = global_p * cols + j;
                                     int32_t x_p = x_arr[p_idx];
                                     int32_t z_p = z_arr[p_idx];
                                     int32_t x_h = x_arr[h_idx];
@@ -1097,7 +1105,7 @@ namespace NWQSim
                                 //per head-lane owns the merged local_sum and performs adjustment
                                 if (lane_id == 0) 
                                 {
-                                    local_sum += 2 * r_arr[p] + 2 * r_arr[local_i];
+                                    local_sum += 2 * r_arr[global_p] + 2 * r_arr[local_i];
                                     r_arr[local_i] = (local_sum % 4 == 0) ? 0 : 1;
 
                                 }
@@ -1108,8 +1116,8 @@ namespace NWQSim
 
                         if(i < cols)
                         {
-                            IdxType p_index = (p * cols) + i;
-                            IdxType row_col_index = ((p - cols) * cols) + i;
+                            IdxType p_index = (global_p * cols) + i;
+                            IdxType row_col_index = ((global_p - cols) * cols) + i;
                             x_arr[row_col_index] = x_arr[p_index];
                             z_arr[row_col_index] = z_arr[p_index];
                             x_arr[p_index] = 0;
@@ -1122,13 +1130,13 @@ namespace NWQSim
                             int32_t meas_idx = *d_measurement_idx_counter;
                             // printf("Seed for measurement %d: %d\n", meas_idx, seed);
                             int bit = prng_bit(seed, meas_idx);
-                            r_arr[p] = bit;
-                            z_arr[(p * cols) + a] = 1;
+                            r_arr[global_p] = bit;
+                            z_arr[(global_p * cols) + a] = 1;
                         }
 
                         grid.sync();
 
-                        if((i < scratch_row) && (r_arr[p] == 1))
+                        if((i < scratch_row) && (r_arr[global_p] == 1))
                         {
                             r_arr[i] ^= z_arr[index];
                         }   

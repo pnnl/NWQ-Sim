@@ -14,8 +14,8 @@
 #include "../include/stabsim/stab_cuda.cuh"
 
 int main() {
-    int n_qubits = 1001; // A few hundred qubits
-    int rounds = 33; // Number of rounds to simulate
+    int n_qubits = 11; // A few hundred qubits
+    int rounds = 9; // Number of rounds to simulate
     
     double timer_cpu = 0;
     double timer_cuda = 0;
@@ -52,13 +52,13 @@ int main() {
                     case 0: 
                     {
                         circuit->H(q);
-                        circuit->S(q);
-                        circuit->S(q);
-                        circuit->H(q);
+                        // circuit->S(q);
+                        // circuit->S(q);
+                        // circuit->H(q);
                         break;
                     }
                     case 1: circuit->S(q); break;
-                    case 2: circuit->RESET(q); break;
+                    // case 2: circuit->RESET(q); break;
                     case 3: 
                     {
                         circuit->M(q); 
@@ -113,21 +113,23 @@ int main() {
     std::sort(cuda_stabilizers.begin(), cuda_stabilizers.end());
 
     bool match = true;
-    // if (cpu_stabilizers.size() != cuda_stabilizers.size()) {
-    //     std::cerr << "Mismatch in number of stabilizers: "
-    //                 << "CPU=" << cpu_stabilizers.size() << ", "
-    //                 << "CUDA=" << cuda_stabilizers.size() << std::endl;
-    //     match = false;
-    // } else {
-    //     for (size_t i = 0; i < cpu_stabilizers.size(); ++i) {
-    //         if (cpu_stabilizers[i] != cuda_stabilizers[i]) {
-    //             std::cerr << "Mismatch in stabilizer at index " << i << ":\n"
-    //                         << "  CPU: " << cpu_stabilizers[i] << "\n"
-    //                         << "  CUDA:" << cuda_stabilizers[i] << std::endl;
-    //             match = false;
-    //         }
-    //     }
-    // }
+    if (cpu_stabilizers.size() != cuda_stabilizers.size()) {
+        std::cerr << "Mismatch in number of stabilizers: "
+                    << "CPU=" << cpu_stabilizers.size() << ", "
+                    << "CUDA=" << cuda_stabilizers.size() << std::endl;
+        match = false;
+    } 
+    else 
+    {
+        for (size_t i = 0; i < cpu_stabilizers.size(); ++i) {
+            if (cpu_stabilizers[i] != cuda_stabilizers[i]) {
+                std::cerr << "Mismatch in stabilizer at index " << i << ":\n"
+                            << "  CPU: " << cpu_stabilizers[i] << "\n"
+                            << "  CUDA:" << cuda_stabilizers[i] << std::endl;
+                match = false;
+            }
+        }
+    }
 
     if (cpu_measurements.size() != cuda_measurements.size()) {
         std::cerr << "Mismatch in number of measurements: "

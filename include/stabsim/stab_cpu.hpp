@@ -824,10 +824,12 @@ namespace NWQSim
             }
             sum += 2*r[i] + 2*r[h];
 
-            if(sum % 4 == 0)
-                r[h] = 0;
-            else
-                r[h] = 1;
+            if((sum % 4 != 0) && (abs(sum % 4) != 2))
+            {
+                printf("Impossible sum: %d, measurement index: %d\n", sum, measurement_count);
+            }
+
+            r[h] = (sum % 4 == 0) ? 0 : 1;
 
             // std::cout << "r[" << h << "]" <<  " after if = " <<  r[h] << std::endl;
 
@@ -2267,6 +2269,7 @@ namespace NWQSim
                         //Random
                         if(p > -1)
                         {
+                            // std::cout << "CPU p = " << p << std::endl;
                             for(int i = 0; i < rows-1; i++)
                             {
                                 // std::cout << "x = " << x[i][a] << std::endl;
@@ -2289,10 +2292,10 @@ namespace NWQSim
                             // std::cout << "Seed for measurement " << measurement_count << ": " << seed << std::endl;
                             r[p] = randomBit;
                             z[p][a] = 1;
-
+                            
+                            std::cout << "Random measurement " << measurement_count << ": " << randomBit << std::endl;
                             m_results.push_back(randomBit);
                             measurement_count++;
-                            // std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
                         }
                         //Deterministic
                         else
@@ -2314,7 +2317,7 @@ namespace NWQSim
                                     rowsum(rows-1, i+half_rows);
                                 }
                             }
-                            // std::cout << "Deterministc measurement at qubit " << a << " value: " << (r[rows-1] << a) << std::endl;
+                            std::cout << "Determ measurement " << measurement_count << ": " << r[rows-1] << std::endl;
                             m_results.push_back(r[rows-1]);
                             measurement_count++;
                         }
