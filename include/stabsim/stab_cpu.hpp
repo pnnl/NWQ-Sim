@@ -822,13 +822,13 @@ namespace NWQSim
                 x[h][j] = x[i][j] ^ x[h][j];
                 z[h][j] = z[i][j] ^ z[h][j];
             }
-            sum += 2*r[i] + 2*r[h];
 
-            // if((sum % 4 != 0))
+            // if((sum % 4 != 0) && (abs(sum % 4) != 2))
             // {
-            //     printf("Sum: %d, measurement index: %d\n", sum, measurement_count);
+            //     printf("m%d tot: %d\n", measurement_count, sum);
             // }
 
+            sum += 2*r[i] + 2*r[h];
             r[h] = (sum % 4 == 0) ? 0 : 1;
 
             // std::cout << "r[" << h << "]" <<  " after if = " <<  r[h] << std::endl;
@@ -1967,7 +1967,7 @@ namespace NWQSim
                         for(int i = 0; i < rows-1; i++)
                         {
                             //Phase
-                            r[i] = r[i]^ (x[i][a] & z[i][b]) & (x[i][b]^z[i][a]^1);
+                            r[i] = r[i] ^ (x[i][a] & z[i][b] & (x[i][b]^z[i][a]^1));
 
                             //Entry
                             x[i][b] ^= x[i][a];
