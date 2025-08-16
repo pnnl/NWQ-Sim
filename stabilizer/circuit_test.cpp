@@ -14,7 +14,7 @@
 #include "../include/stabsim/stab_cuda.cuh"
 
 int main() {
-    int n_qubits = 11; // A few hundred qubits
+    int n_qubits = 111; // A few hundred qubits
     int rounds = 3; // Number of rounds to simulate
     
     double timer_cpu = 0;

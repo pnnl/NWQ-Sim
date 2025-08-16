@@ -87,8 +87,6 @@ namespace NWQSim
 
         ~STAB_CUDA()
         {
-
-
             SAFE_FREE_HOST_CUDA(x_packed_cpu);
             SAFE_FREE_HOST_CUDA(z_packed_cpu);
             SAFE_FREE_HOST_CUDA(r_packed_cpu);
@@ -451,8 +449,8 @@ namespace NWQSim
         //Simulate the gates from a circuit in the tableau
         void sim(std::shared_ptr<Circuit> circuit, double &sim_time) override
         {
-            SAFE_ALOC_GPU(d_local_sums, 2*cols * sizeof(int32_t));
-            cudaMemset(d_local_sums, 0, 2*cols * sizeof(int32_t));
+            SAFE_ALOC_GPU(d_local_sums, cols * sizeof(int32_t));
+            cudaMemset(d_local_sums, 0, cols * sizeof(int32_t));
 
             STAB_CUDA *stab_gpu;
             SAFE_ALOC_GPU(stab_gpu, sizeof(STAB_CUDA));
@@ -714,21 +712,33 @@ namespace NWQSim
 
     __device__ int32_t global_p;
 
-    // __inline__ __device__ int32_t warp_sum(int32_t* input, IdxType& array_size, int& lane_id) 
-    // {
-    //     int32_t local_sum = 0;
+    __inline__ __device__ void global_32_reduction(int32_t* input, int32_t& lane_id, IdxType& i) 
+    {
+        //Warp-level reduction of a large array smaller than the threads available, down to an array of size/32
+
+        int32_t local = input[i];
+
+        int32_t total = __reduce_add_sync(__activemask(), local);
+
+        if(lane_id == 0) 
+            input[i >> 5] = total; //Overwrite the first size/32 values
+    }
+
+    __inline__ __device__ int32_t singular_reduction(int32_t* input, int32_t& lane_id, IdxType max_index)
+    {
+        int32_t local_sum = 0;
         
-    //     // Each thread in warp processes multiple elements with stride
-    //     for (int32_t i = lane_id; i < array_size; i += 32) {
-    //         local_sum += input[i];
-    //     }
+        // Each thread in warp processes multiple elements with stride 32
+        for (uint32_t j = lane_id; j < max_index; j <<= 5) {
+            local_sum += input[j];
+        }
         
-    //     // Warp-level reduction of the partial sums
-    //     int32_t total = __reduce_add_sync(__activemask(), local_sum);
+        // Warp-level reduction of the partial sums
+        int32_t total = __reduce_add_sync(__activemask(), local_sum);
         
-    //     // Only first thread in warp returns the result
-    //     return total;
-    // }
+        // All threads return the result, but only the first should be used
+        return total;
+    }
 
     // if (i==0) printf("====== rows:%llu, cols:%llu, blockDim.x:%u, gridDim.x:%u\n", rows, cols, blockDim.x, gridDim.x);
 
@@ -748,6 +758,7 @@ namespace NWQSim
         int32_t* z_arr = stab_gpu->z_bit_gpu;
         int32_t* r_arr = stab_gpu->r_bit_gpu;
         int32_t* global_sums = stab_gpu->d_local_sums;
+        
         int* d_measurement_idx_counter = stab_gpu->d_measurement_idx_counter;
         int32_t x, z, x_ctrl, z_ctrl;
         OP op_name;
@@ -850,7 +861,7 @@ namespace NWQSim
                     grid.sync(); //__syncthreads block sync
 
                     //In-grid
-                    if ( (i < scratch_row) && threadIdx.x == 0)
+                    if ((i < scratch_row) && threadIdx.x == 0)
                     {
                         atomicMin(&global_p, block_p_shared);
                     }
@@ -892,7 +903,7 @@ namespace NWQSim
                                 {
                                     local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
                                 }
-                                //per head-lane_id owns the merged local_sum and performs adjustment
+                                //per head-lane owns the merged local_sum and performs adjustment
                                 if (lane_id == 0) 
                                 {
                                     local_sum += 2 * r_arr[global_p] + 2 * r_arr[local_i];
@@ -951,72 +962,64 @@ namespace NWQSim
                             r_arr[scratch_row] = 0;
                         }
 
-                        grid.sync();
-
-                        
-
                         /*
                             Parallelized inner-row summation begins here
                         */
-                        
-                        for(int k = 0; k < cols; k++)
+                        int32_t thread_sum = 0;
+                        bool anticommutation;
+
+                        grid.sync();
+                        for(int k = 0; k < cols; k++)/*This turns out to be necessary for r_arr[scratch row] 
+                                                        because thread_sum can be negative rarely */
                         {
+                            //Only process where the destabilizer anticommutes
+                            anticommutation = (x_arr[k * cols + a] != 0);
+
                             grid.sync();
                             
-                            // Each thread computes its local value if valid
-                            int32_t local = 0;
-                            bool thread_active = (i < cols) && (x_arr[k * cols + a] != 0);
-
-                            if(thread_active)
+                            if(anticommutation && (i < cols))
                             {
-                                global_sums[i] = 0;
+                                thread_sum = 0;
                                 IdxType p_idx = (k+cols) * cols + i;
-                                IdxType h_idx = scratch_index;
+                                IdxType h_idx = scratch_row * cols + i;
                                 int32_t x_p = x_arr[p_idx];
                                 int32_t z_p = z_arr[p_idx];
                                 int32_t x_h = x_arr[h_idx];
                                 int32_t z_h = z_arr[h_idx];
-
-                                local = x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
-                                    + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
-
+                                thread_sum = x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
+                                    + (1 - x_p) * z_p * x_h * (1 - 2 * z_h); //AL version
                                 x_arr[h_idx] ^= x_p;
                                 z_arr[h_idx] ^= z_p;
+                                global_sums[i] = thread_sum;
                             }
 
-
-
-                            // Warp-level reduction: only threads with i < cols participate
-                            unsigned mask = __ballot_sync(0xffffffff, i < cols);
-                            if(mask)
-                            {
-                                for(int offset = 16; offset > 0; offset >>= 1)
-                                    local += __shfl_down_sync(mask, local, offset);
-                            }
-
-                            // Lane 0 writes a partial sum (write 0 if warp had no active threads)
-                            if((lane_id == 0) && thread_active)
-                                global_sums[warp_id] = local;
-
-                            // ---- grid-wide sync: must be executed by all threads ----
                             grid.sync();
 
-                            // Single warp sums all partials
-                            if(warp_id == 0)
+                            if(anticommutation && (i < cols)) //Do the final reduction
                             {
-                                int32_t sum = 0;
-                                for(int j = lane_id; j < n_warps; j += 32)
-                                    sum += global_sums[j];
-
-                                for(int offset = 16; offset > 0; offset >>= 1)
-                                    sum += __shfl_down_sync(0xffffffff, sum, offset);
-
-                                if(lane_id == 0)
-                                    r_arr[scratch_row] = ((sum + 2*r_arr[scratch_row] + 2*r_arr[k+cols]) % 4) ? 0 : 1;
+                                // for(int j = 0; j < cols; j++) // <-- slow reduction
+                                //     total += global_sums[j];  
+                                // total = singular_reduction(global_sums, cols, lane_id); // <-- slow but less slow
+                                global_32_reduction(global_sums, lane_id, i);
                             }
-                        }
 
-                        grid.sync();
+                            grid.sync();
+
+                            if(anticommutation && (i < 32))
+                            {
+                                int32_t total = singular_reduction(global_sums, lane_id, cols/32);
+                                if(i == 0)
+                                {
+                                    total += 2 * r_arr[k+cols] + 2 * r_arr[scratch_row];
+                                    r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1; //Key recursive update
+                                }
+                            }
+
+                            anticommutation = false;
+
+                            grid.sync();
+                    
+                        } //End for loop over rows
 
                         if(i == 0) //Return the measurement outcome
                         {
@@ -1132,7 +1135,7 @@ namespace NWQSim
                 //                 {
                 //                     local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
                 //                 }
-                //                 //per head-lane_id owns the merged local_sum and performs adjustment
+                //                 //per head-lane owns the merged local_sum and performs adjustment
                 //                 if (lane_id == 0) 
                 //                 {
                 //                     local_sum += 2 * r_arr[global_p] + 2 * r_arr[local_i];
@@ -1225,7 +1228,7 @@ namespace NWQSim
                 //                 {
                 //                     local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
                 //                 }
-                //                 //Per head-lane_id owns the merged local_sum and performs adjustment
+                //                 //Per head-lane owns the merged local_sum and performs adjustment
                 //                 if (lane_id == 0)
                 //                 {
                 //                     if(local_sum!= 0)
