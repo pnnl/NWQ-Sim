@@ -824,10 +824,10 @@ namespace NWQSim
             }
             sum += 2*r[i] + 2*r[h];
 
-            if((sum % 4 != 0) && (abs(sum % 4) != 2))
-            {
-                printf("Impossible sum: %d, measurement index: %d\n", sum, measurement_count);
-            }
+            // if((sum % 4 != 0))
+            // {
+            //     printf("Sum: %d, measurement index: %d\n", sum, measurement_count);
+            // }
 
             r[h] = (sum % 4 == 0) ? 0 : 1;
 
@@ -2362,7 +2362,7 @@ namespace NWQSim
                                 z[p][i] = 0;                        
                             }
 
-                            int randomBit = prng_bit(seed, measurement_count);
+                            int randomBit = 0;//prng_bit(seed, measurement_count);
                             // std::cout << "Seed for measurement " << measurement_count << ": " << seed << std::endl;
                             r[p] = randomBit;
                             z[p][a] = 1;

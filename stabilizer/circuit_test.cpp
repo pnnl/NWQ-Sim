@@ -15,7 +15,7 @@
 
 int main() {
     int n_qubits = 11; // A few hundred qubits
-    int rounds = 9; // Number of rounds to simulate
+    int rounds = 3; // Number of rounds to simulate
     
     double timer_cpu = 0;
     double timer_cuda = 0;
@@ -104,8 +104,9 @@ int main() {
     auto cpu_measurements = cpu_state->get_measurement_results();
     auto cuda_measurements = cuda_state->get_measurement_results();
 
-    cpu_state->print_res_state();
-    cuda_state->print_res_state();
+    // std::cout << circuit->to_string() << std::endl;
+    // cpu_state->print_res_state();
+    // cuda_state->print_res_state();
     
 
     // Sort both vectors to ensure order doesn't matter
