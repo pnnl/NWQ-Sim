@@ -2362,7 +2362,7 @@ namespace NWQSim
                                 z[p][i] = 0;                        
                             }
 
-                            int randomBit = 0;//prng_bit(seed, measurement_count);
+                            int randomBit = prng_bit(seed, measurement_count);
                             // std::cout << "Seed for measurement " << measurement_count << ": " << seed << std::endl;
                             r[p] = randomBit;
                             z[p][a] = 1;

@@ -98,6 +98,8 @@ namespace NWQSim
             SAFE_FREE_GPU(x_bit_gpu);
             SAFE_FREE_GPU(z_bit_gpu);
             SAFE_FREE_GPU(r_bit_gpu);
+            SAFE_FREE_GPU(gates_gpu);
+            SAFE_FREE_GPU(d_local_sums);
         }
 
         //Packs down 32 rows in each column and flattens
@@ -555,7 +557,6 @@ namespace NWQSim
             sim_time += sim_timer.measure();
 
             // Add to free_measurement_buffers():
-            SAFE_FREE_GPU(d_local_sums);
 
             // Copy measurement results from device to host
             if (d_measurement_idx_counter) {
@@ -585,6 +586,9 @@ namespace NWQSim
             }
 
             SAFE_FREE_GPU(gates_gpu);
+            SAFE_FREE_GPU(d_local_sums);
+            SAFE_FREE_GPU(stab_gpu);
+
 
             //=========================================
         }
@@ -857,16 +861,18 @@ namespace NWQSim
                             atomicMin(&block_p_shared, i);
                         }
                     }
-                    __syncthreads(); //block sync
+                    grid.sync(); //block sync
 
                     //In-grid
-                    if ( (i < scratch_row) && threadIdx.x == 0)
+                    if ((i < scratch_row) && threadIdx.x == 0)
                     {
                         atomicMin(&global_p, block_p_shared);
                     }
                     grid.sync();
 
                     p = global_p;
+
+                    grid.sync();
 
                     if (p != rows)
                     {
@@ -875,8 +881,7 @@ namespace NWQSim
 
                         for (IdxType local_i = warp_id; local_i < scratch_row; local_i += n_warps)
                         {
-                            IdxType local_index = local_i * cols + a;
-                            if (local_i != p && x_arr[local_index])
+                            if (local_i != p && x_arr[local_i * cols + a])
                             {
                                 //Many rowsums
                                 int32_t local_sum = 0;
@@ -889,43 +894,30 @@ namespace NWQSim
                                     int32_t x_h = x_arr[h_idx];
                                     int32_t z_h = z_arr[h_idx];
 
-                                    /*
-                                    if (x_p)
-                                    {
-                                        if (z_p)
-                                            local_sum += z_h - x_h;
-                                        else
-                                            local_sum += z_h * (2 * x_h - 1);
-                                    }
-                                    else if (z_p)
-                                    {
-                                        local_sum += x_h * (1 - 2 * z_h);
-                                    }
-                                    */
-
                                     local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
                                         + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
 
-
-                                    atomicXor(&x_arr[h_idx], x_p);
-                                    atomicXor(&z_arr[h_idx], z_p);
+                                    x_arr[h_idx] ^= x_p;
+                                    z_arr[h_idx] ^= z_p;
                                 }
+                                // __syncthreads();
                                 //merge warp-wise local_sum
                                 for (int32_t offset = 16; offset > 0; offset /= 2) 
                                 {
                                     local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
                                 }
+                                // __syncthreads();
                                 //per head-lane owns the merged local_sum and performs adjustment
                                 if (lane_id == 0) 
                                 {
                                     // if((local_sum % 4 != 0) && (abs(local_sum % 2) != 0))
-                                    //     printf("m%d local = %d\n", *d_measurement_idx_counter, local_sum);
+                                    //     printf("random m%d local = %d\n", *d_measurement_idx_counter, local_sum);
                                     local_sum += 2 * r_arr[p] + 2 * r_arr[local_i];
                                     r_arr[local_i] = (local_sum % 4 == 0) ? 0 : 1;
-
                                 }
                             }
                         }
+
                         grid.sync();
 
                         if(i < cols)
@@ -935,25 +927,24 @@ namespace NWQSim
                             x_arr[row_col_index] = x_arr[p_index];
                             z_arr[row_col_index] = z_arr[p_index];
                             x_arr[p_index] = 0;
-                            z_arr[p_index] = 0;
+                            
+                            if(i == (p-cols)) z_arr[p_index] = 1;
+                            if(i != (p-cols)) z_arr[p_index] = 0;
                         }
 
                         if (i == cols)
                         {
-                            // Draw bit deterministically from seed and measurement index
-                            int32_t meas_idx = atomicAdd(d_measurement_idx_counter, 1);
+                            // Draw bit from seed and measurement index
+                            int32_t meas_idx = *d_measurement_idx_counter;
                             // printf("Seed for measurement %d: %d\n", meas_idx, seed);
                             int bit = prng_bit(seed, meas_idx);
                             r_arr[p] = bit;
-                            z_arr[(p * cols) + a] = 1;
                             stab_gpu->d_measurement_results[meas_idx] = bit;
+                            *d_measurement_idx_counter = meas_idx + 1;
                         }
-
-                        grid.sync();
                     }
                     else
-                    {
-                        // Deterministic measurement
+                    {   // Deterministic measurement
                         if((i < scratch_row) && (i < cols))
                         {
                             IdxType scratch_index = (scratch_row * cols) + i;
@@ -966,211 +957,213 @@ namespace NWQSim
                         }
                         grid.sync();
 
-                        for (IdxType local_i = warp_id; local_i < cols; local_i += n_warps)
+
+
+                        /*
+                        Dr. Li's version
+                        */
+
+                        // for (IdxType local_i = warp_id; local_i < cols; local_i += n_warps)
+                        // {
+                        //     IdxType local_index = local_i * cols + a;
+                        //     if (x_arr[local_index])
+                        //     {
+                        //         //Parallel rowsum
+                        //         int32_t local_sum = 0;
+                        //         IdxType p_row = local_i + cols;
+
+                        //         for (int32_t j = lane_id; j < n_qubits; j+=32)
+                        //         {
+                        //             IdxType h_idx = scratch_row * cols + j;
+                        //             IdxType p_idx = p_row * cols + j;
+                        //             int32_t x_p = x_arr[p_idx];
+                        //             int32_t z_p = z_arr[p_idx];
+                        //             int32_t x_h = x_arr[h_idx];
+                        //             int32_t z_h = z_arr[h_idx];
+
+                        //             local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
+                        //                 + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
+
+                        //             atomicXor(&x_arr[h_idx], x_p);
+                        //             atomicXor(&z_arr[h_idx], z_p);
+                        //         }
+                        //         //Merge warp-wise local_sum
+                        //         for (int32_t offset = 16; offset > 0; offset /= 2) 
+                        //         {
+                        //             local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
+                        //         }
+                        //         //Per head-lane owns the merged local_sum and performs adjustment
+                        //         if (lane_id == 0)
+                        //         {
+                        //             // printf("global_sums[%lld] = %d + 2 * %d\n", local_i, local_sum, r_arr[p_row]);
+                        //             global_sums[local_i] = local_sum + 2 * r_arr[p_row];
+                        //         }
+                        //     }
+                        //     else
+                        //     {
+                        //         if (lane_id == 0) 
+                        //         {
+                        //             // printf("global_sums[%lld] = 0\n", local_i);
+                        //             global_sums[local_i] = 0;
+                        //         }
+                        //     }
+                        // }
+
+                        // grid.sync();
+
+                        // if(i < 32) //First warp does the final reduction
+                        // {
+                        //     int32_t total = singular_reduction(global_sums, lane_id, cols);                       
+                        //     if (i == 0) 
+                        //     {
+                        //         if((total % 4 != 0) && (abs(total % 2) != 0))
+                        //             printf("determ m%d total = %d\n", *d_measurement_idx_counter, total);
+                                
+                        //         total += 2 * r_arr[scratch_row];
+                        //         r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1;
+
+                        //         int32_t meas_idx = *d_measurement_idx_counter;
+                        //         stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
+                        //         *d_measurement_idx_counter = meas_idx + 1;
+                        //     }
+                        // }
+
+
+                        /*
+                            End Dr. Li version
+                        */
+
+
+                        /*
+                            Analytically recursion-safe version
+                        */
+
+                        // for(int k = 0; k < cols; k++)/*This turns out to be necessary for r_arr[scratch row] 
+                        //                                 because thread_sum can be negative rarely */
+                        // {
+                        //     //Only process where the destabilizer anticommutes
+                        //     bool anticommutation = (x_arr[k * cols + a] != 0);
+                        //     int32_t thread_sum = 0;
+                            
+                        //     if(anticommutation && (i < cols))
+                        //     {
+                        //         global_sums[i] = 0;
+                        //         IdxType p_idx = (k+cols) * cols + i;
+                        //         IdxType h_idx = scratch_row * cols + i;
+                        //         int32_t x_p = x_arr[p_idx];
+                        //         int32_t z_p = z_arr[p_idx];
+                        //         int32_t x_h = x_arr[h_idx];
+                        //         int32_t z_h = z_arr[h_idx];
+                        //         thread_sum = x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
+                        //             + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
+                        //         x_arr[h_idx] ^= x_p;
+                        //         z_arr[h_idx] ^= z_p;
+                        //         global_sums[i] = thread_sum;
+                        //     }
+
+                        //     grid.sync();
+
+                        //     if(anticommutation && (i < cols)) //Do the final reduction
+                        //     {
+                        //         // for(int j = 0; j < cols; j++) // <-- slow reduction
+                        //         //     total += global_sums[j];  
+                        //         // total = singular_reduction(global_sums, cols, lane_id); // <-- slow but less slow
+                        //         // global_32_reduction(global_sums, lane_id, i);
+
+                        //         int32_t local = global_sums[i];
+
+                        //         int32_t total = __reduce_add_sync(__activemask(), local);
+
+                        //         if(lane_id == 0) 
+                        //             global_sums[i/32] = total; //Overwrite the first size/32 values
+                        //     }
+
+                        //     grid.sync();
+
+                        //     if(anticommutation && (i < 32))
+                        //     {
+                        //         int32_t local_sum = 0;
+
+                        //         for (int32_t j = lane_id; j < cols/32; j+=32) {
+                        //             local_sum += global_sums[j];
+                        //         }                                
+                                
+                        //         // Warp-level reduction of the partial sums
+                        //         int32_t total = __reduce_add_sync(__activemask(), local_sum);
+
+                        //         if(i == 0)
+                        //         {
+                        //             if((total % 4 != 0) && (abs(total % 2) != 0))
+                        //                 printf("determ m%d total = %d\n", *d_measurement_idx_counter, total);
+                        //             total += 2 * r_arr[k+cols] + 2 * r_arr[scratch_row];
+                        //             r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1; //Key recursive update
+                        //         }
+                        //     }
+
+                        //     anticommutation = false;
+
+                        //     grid.sync();
+                    
+                        // } //End for loop over rows
+
+                        // if(i == 0) //Return the measurement outcome
+                        // {
+                        //     int32_t meas_idx = *d_measurement_idx_counter;
+                        //     stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
+                        //     *d_measurement_idx_counter = meas_idx + 1;
+                        // }
+
+                        /*
+                        End Recursion Safe version 
+                        */
+
+                        /*
+                        Direct match version
+                        This directly matches stab-cpu as a sanity check
+                        */
+
+                        if(i == 0)
                         {
-                            IdxType local_index = local_i * cols + a;
-                            if (x_arr[local_index])
+                            for(int k = 0; k < cols; k++)
                             {
-                                //Parallel rowsum
-                                int32_t local_sum = 0;
-                                IdxType p_row = local_i + cols;
-
-                                for (int32_t j = lane_id; j < n_qubits; j+=32)
+                                if(x_arr[k * cols + a])
                                 {
-                                    IdxType h_idx = scratch_row * cols + j;
-                                    IdxType p_idx = p_row * cols + j;
-                                    int32_t x_p = x_arr[p_idx];
-                                    int32_t z_p = z_arr[p_idx];
-                                    int32_t x_h = x_arr[h_idx];
-                                    int32_t z_h = z_arr[h_idx];
-
-
-
-                                    local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
-                                        + (1 - x_p) * z_p * x_h * (1 - 2 * z_h); //AL version
-
-                                    // local_sum += ((x_h * z_p) - (x_p * z_h) + (2 * x_h * x_p * z_h) - 
-                                    //         (2 * x_h * x_p * z_p) - (2 * x_h * z_h * z_p) + (2 * x_p * z_h * z_p)) & 3;
-
-                                    // local_sum += ((x_h * z_p) - (x_p * z_h) + (2 * x_h * x_p * z_h) - 
-                                    //         (2 * x_h * x_p * z_p) - (2 * x_h * z_h * z_p) + (2 * x_p * z_h * z_p)) & 3;
-
-                                    atomicXor(&x_arr[h_idx], x_p);
-                                    atomicXor(&z_arr[h_idx], z_p);
-                                }
-                                //Merge warp-wise local_sum
-                                for (int32_t offset = 16; offset > 0; offset /= 2) 
-                                {
-                                    local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
-                                }
-                                //Per head-lane owns the merged local_sum and performs adjustment
-                                if (lane_id == 0)
-                                {
-                                    // printf("global_sums[%lld] = %d + 2 * %d\n", local_i, local_sum, r_arr[p_row]);
-                                    global_sums[local_i] = local_sum + 2 * r_arr[p_row];
+                                    IdxType p_row = k + cols;
+                                    int32_t local_sum = 0;
+                                    for(int j = 0; j < cols; j++)
+                                    {
+                                        IdxType h_idx = scratch_row * cols + j;
+                                        IdxType p_idx = p_row * cols + j;
+                                        int32_t x_p = x_arr[p_idx];
+                                        int32_t z_p = z_arr[p_idx];
+                                        int32_t x_h = x_arr[h_idx];
+                                        int32_t z_h = z_arr[h_idx];
+                                        local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
+                                            + (1 - x_p) * z_p * x_h * (1 - 2 * z_h); //AL version
+                                        x_arr[h_idx] ^= x_p;
+                                        z_arr[h_idx] ^= z_p;
+                                    }
+                                    // if((total % 4 != 0) && (abs(total % 2) != 0))
+                                    //     printf("determ m%d tot: %d\n", *d_measurement_idx_counter, local_sum);
+                                    local_sum = local_sum + 2 * r_arr[scratch_row] + 2 * r_arr[p_row];
+                                    r_arr[scratch_row] = (local_sum % 4 == 0) ? 0 : 1;
                                 }
                             }
-                            else
-                            {
-                                if (lane_id == 0) 
-                                {
-                                    // printf("global_sums[%lld] = 0\n", local_i);
-                                    global_sums[local_i] = 0;
-                                }
-                            }
+                            int32_t meas_idx = *d_measurement_idx_counter;
+                            stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
+                            *d_measurement_idx_counter = meas_idx + 1;
                         }
+
+                        /*End Sanity Check Version*/
 
                         grid.sync();
-
-                        if(i < 32) //First warp does the final reduction
-                        {
-                            int32_t total = singular_reduction(global_sums, lane_id, cols);                       
-                            if (i == 0) 
-                            {
-                                // if((total % 4 != 0) && (abs(total % 2) != 0))
-                                //     printf("m%d total = %d\n", *d_measurement_idx_counter, total);
-                                
-                                total += 2 * r_arr[scratch_row];
-                                r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1;
-
-                                int32_t meas_idx = *d_measurement_idx_counter;
-                                stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
-                                *d_measurement_idx_counter = meas_idx + 1;
-                            }
-                        }
-                    }
-
+                    }//End deterministic logic
                     break;
-                }
+                }//End M
 
                 /*
-                    Parallelized inner-row summation begins here
+                End sanity check verison
                 */
-
-
-
-
-                /*
-                Recursion safe version
-                */
-
-                // int32_t thread_sum = 0;
-                // bool anticommutation;
-
-                // grid.sync();
-                // for(int k = 0; k < cols; k++)/*This turns out to be necessary for r_arr[scratch row] 
-                //                                 because thread_sum can be negative rarely */
-                // {
-                //     //Only process where the destabilizer anticommutes
-                //     anticommutation = (x_arr[k * cols + a] != 0);
-                    
-                //     if(anticommutation && (i < cols))
-                //     {
-                //         thread_sum = 0;
-                //         IdxType p_idx = (k+cols) * cols + i;
-                //         IdxType h_idx = scratch_row * cols + i;
-                //         int32_t x_p = x_arr[p_idx];
-                //         int32_t z_p = z_arr[p_idx];
-                //         int32_t x_h = x_arr[h_idx];
-                //         int32_t z_h = z_arr[h_idx];
-                //         thread_sum = x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
-                //             + (1 - x_p) * z_p * x_h * (1 - 2 * z_h); //AL version
-                //         x_arr[h_idx] ^= x_p;
-                //         z_arr[h_idx] ^= z_p;
-                //         global_sums[i] = thread_sum;
-                //     }
-
-                //     __syncthreads();
-
-                //     if(anticommutation && (i < cols)) //Do the final reduction
-                //     {
-                //         // for(int j = 0; j < cols; j++) // <-- slow reduction
-                //         //     total += global_sums[j];  
-                //         // total = singular_reduction(global_sums, cols, lane_id); // <-- slow but less slow
-                //         // global_32_reduction(global_sums, lane_id, i);
-
-                //         int32_t local = global_sums[i];
-
-                //         int32_t total = __reduce_add_sync(__activemask(), local);
-
-                //         if(lane_id == 0) 
-                //             global_sums[i/32] = total; //Overwrite the first size/32 values
-                //     }
-
-                //     grid.sync();
-
-                //     if(anticommutation && (i < 32))
-                //     {
-                //         // int32_t total = singular_reduction(global_sums, lane_id, cols/32);
-                //         int32_t local_sum = 0;
-
-                //         // Each thread in warp processes multiple elements with stride 32
-                //         for (int32_t j = lane_id; j < cols/32; j+=32) {
-                //             local_sum += global_sums[j];
-                //         }                                
-                        
-                //         // Warp-level reduction of the partial sums
-                //         int32_t total = __reduce_add_sync(__activemask(), local_sum);
-
-                //         if(i == 0)
-                //         {
-                //             if(total%4 != 0)
-                //                 printf("m%d total = %d\n", *d_measurement_idx_counter, total);
-                //             total += 2 * r_arr[k+cols] + 2 * r_arr[scratch_row];
-                //             r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1; //Key recursive update
-                //         }
-                //     }
-
-                //     anticommutation = false;
-
-                //     grid.sync();
-            
-                // } //End for loop over rows
-
-                // if(i == 0) //Return the measurement outcome
-                // {
-                //     int32_t meas_idx = *d_measurement_idx_counter;
-                //     stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
-                //     *d_measurement_idx_counter = meas_idx + 1;
-                // }
-
-
-                /*
-                Direct match version
-                This directly matches stab-cpu as a sanity check
-                */
-
-                // if(i == 0)
-                // {
-                //     for(int k = 0; k < cols; k++)
-                //     {
-                //         if(x_arr[k * cols + a])
-                //         {
-                //             IdxType p_row = k + cols;
-                //             int32_t local_sum = 0;
-                //             for(int j = 0; j < cols; j++)
-                //             {
-                //                 IdxType h_idx = scratch_row * cols + j;
-                //                 IdxType p_idx = p_row * cols + j;
-                //                 int32_t x_p = x_arr[p_idx];
-                //                 int32_t z_p = z_arr[p_idx];
-                //                 int32_t x_h = x_arr[h_idx];
-                //                 int32_t z_h = z_arr[h_idx];
-                //                 local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
-                //                     + (1 - x_p) * z_p * x_h * (1 - 2 * z_h); //AL version
-                //                 x_arr[h_idx] ^= x_p;
-                //                 z_arr[h_idx] ^= z_p;
-                //             }
-                //             if(local_sum%4 != 0)
-                //                 printf("m%d tot: %d\n", *d_measurement_idx_counter, local_sum);
-                //             local_sum = local_sum + 2 * r_arr[scratch_row] + 2 * r_arr[p_row];
-                //             r_arr[scratch_row] = (local_sum % 4 == 0) ? 0 : 1;
-                //         }
-                //     }
-                //     int32_t meas_idx = *d_measurement_idx_counter;
-                //     stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
-                //     *d_measurement_idx_counter = meas_idx + 1;
-                // }
 
                 // case OP::RESET:
                 // {
@@ -1375,10 +1368,10 @@ namespace NWQSim
                 //         {
                 //             r_arr[i] ^= z_arr[index];
                 //         }
-                //     }
 
+                //     }//End deterministic logic
                 //     break;
-                // }
+                // }//End RESET
 
                 default:
                     printf("Non-Clifford or unrecognized gate: %d\n", op_name);
