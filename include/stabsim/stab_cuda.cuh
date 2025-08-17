@@ -999,8 +999,11 @@ namespace NWQSim
                                 //Per head-lane owns the merged local_sum and contributes to the final sum
                                 if (lane_id == 0)
                                 {
-                                    int32_t row_term = ((((local_sum + 2*r_arr[p_row])%4)==0) ? 0:1);
-                                    atomicAdd(&smuggle_scratch, row_term);
+                                    int32_t row_term = 2*((((local_sum + 2*r_arr[p_row])%4)==0) ? 0:1);
+
+                                    //The length of the queue for this atomicAdd is \Theta(n/32) (or O(n/32) if we don't let 0's contribute)
+                                    atomicAdd(&smuggle_scratch, row_term); //Only one add per warp.
+
                                     // printf("global_sums[%lld] = %d + 2 * %d\n", local_i, local_sum, r_arr[p_row]);
                                     // global_sums[local_i] = local_sum + 2 * r_arr[p_row];
                                     // printf("m%d sum: %d\n", *d_measurement_idx_counter, global_sums[local_i]%4);
@@ -1012,7 +1015,7 @@ namespace NWQSim
                             // {
                             //     if (lane_id == 0) 
                             //     {
-                            //         // printf("global_sums[%lld] = 0\n", local_i);
+                            //         printf("global_sums[%lld] = 0\n", local_i);
                             //         global_sums[local_i] = 0;
                             //     }
                             // }
@@ -1022,7 +1025,7 @@ namespace NWQSim
 
                         // if(i < 32) //First warp does the final reduction
                         // {
-                            // int32_t total = singular_reduction(global_sums, lane_id, cols);                       
+                        // int32_t total = singular_reduction(global_sums, lane_id, cols);                       
                         if(i == 0) 
                         {
                             // if((total % 4 != 0) && (abs(total % 2) != 0))
@@ -1036,6 +1039,7 @@ namespace NWQSim
                             // printf("m%d r_scratch = %d\n", *d_measurement_idx_counter, r_arr[scratch_row]);
 
                             int32_t meas_idx = atomicAdd(d_measurement_idx_counter, 1);
+                            stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
                             stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
                         }
                         // }
@@ -1096,6 +1100,7 @@ namespace NWQSim
                         //     {
                         //         int32_t local_sum = 0;
 
+                        //         //Sum with stride 32
                         //         for (int32_t j = lane_id; j < cols/32; j+=32) {
                         //             local_sum += global_sums[j];
                         //         }                                
@@ -1105,14 +1110,14 @@ namespace NWQSim
 
                         //         if(i == 0)
                         //         {
-                        //             printf("m%d sum: %d\n", *d_measurement_idx_counter, total);
-                        //             printf("r[i]%d: %d\n", *d_measurement_idx_counter, r_arr[k+cols]); 
+                        //             // printf("m%d sum: %d\n", *d_measurement_idx_counter, total);
+                        //             // printf("r[i]%d: %d\n", *d_measurement_idx_counter, r_arr[k+cols]); 
+                        //             atomicAdd(&smuggle_scratch, 2*(((total+(2*r_arr[k+cols]))%4 == 0) ? 0:1));
+                        //             // total += 2 * r_arr[k+cols] + 2 * r_arr[scratch_row];
+                        //             // printf("m%d tot: %d\n", *d_measurement_idx_counter, total);
 
-                        //             total += 2 * r_arr[k+cols] + 2 * r_arr[scratch_row];
-                        //             printf("m%d tot: %d\n", *d_measurement_idx_counter, total);
-
-                        //             r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1; //Key recursive update
-                        //             printf("r[h]%d: %d\n", *d_measurement_idx_counter, r_arr[scratch_row]);
+                        //             // r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1; //Key recursive update
+                        //             // printf("r[h]%d: %d\n", *d_measurement_idx_counter, r_arr[scratch_row]);
                         //         }
                         //     }
 
@@ -1124,6 +1129,7 @@ namespace NWQSim
 
                         // if(i == 0) //Return the measurement outcome
                         // {
+                        //     r_arr[scratch_row] = (smuggle_scratch%4 == 0) ? 0:1;
                         //     int32_t meas_idx = *d_measurement_idx_counter;
                         //     stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
                         //     *d_measurement_idx_counter = meas_idx + 1;
