@@ -319,7 +319,7 @@ namespace NWQSim
             }
         }
 
-        std::vector<int> get_measurement_results() override
+        std::vector<int32_t> get_measurement_results() override
         {
             std::cout << "Getting measurement results: " << measurement_results.size() << " measurements" << std::endl;
             return measurement_results;
@@ -487,7 +487,7 @@ namespace NWQSim
                 &maxBlocksPerSM, /* out: max active blocks */
                 (void*)simulation_kernel_cuda, /* kernel */
                 threadsPerBlock, /* threads per block */
-                sizeof(int) /* shared memory per block */
+                0 /* shared memory per block */
             );
 
             printf("Max active blocks per SM: %d\n", maxBlocksPerSM);
@@ -523,7 +523,7 @@ namespace NWQSim
             // Initialize the measurement counter on the device to 0
             if (d_measurement_idx_counter) {
                 int32_t initial_count = 0;
-                cudaMemcpy(d_measurement_idx_counter, &initial_count, sizeof(int), cudaMemcpyHostToDevice);
+                cudaMemcpy(d_measurement_idx_counter, &initial_count, sizeof(int32_t), cudaMemcpyHostToDevice);
             }
             //Copy the simulator instance to GPU
             cudaSafeCall(cudaMemcpy(stab_gpu, this,
@@ -561,10 +561,10 @@ namespace NWQSim
             // Copy measurement results from device to host
             if (d_measurement_idx_counter) {
                 int32_t num_measurements;
-                cudaMemcpy(&num_measurements, d_measurement_idx_counter, sizeof(int), cudaMemcpyDeviceToHost);
+                cudaMemcpy(&num_measurements, d_measurement_idx_counter, sizeof(int32_t), cudaMemcpyDeviceToHost);
                 // std::cout << "Number of measurements: " << num_measurements << std::endl;
                 if (num_measurements > 0) {
-                    cudaMemcpy(h_measurement_results, d_measurement_results, num_measurements * sizeof(int), cudaMemcpyDeviceToHost);
+                    cudaMemcpy(h_measurement_results, d_measurement_results, num_measurements * sizeof(int32_t), cudaMemcpyDeviceToHost);
                     measurement_results.resize(num_measurements);
                     std::copy(h_measurement_results, h_measurement_results + num_measurements, measurement_results.begin());
                 }
@@ -586,6 +586,9 @@ namespace NWQSim
             }
 
             SAFE_FREE_GPU(gates_gpu);
+            SAFE_FREE_GPU(d_measurement_idx_counter);
+            SAFE_FREE_GPU(d_measurement_results);
+
             SAFE_FREE_GPU(d_local_sums);
             SAFE_FREE_GPU(stab_gpu);
 
@@ -667,9 +670,9 @@ namespace NWQSim
 
         IdxType seed;
 
-        int* d_measurement_results = nullptr;
-        int* h_measurement_results = nullptr;
-        int* d_measurement_idx_counter = nullptr;
+        int32_t* d_measurement_results = nullptr;
+        int32_t* h_measurement_results = nullptr;
+        int32_t* d_measurement_idx_counter = nullptr;
         int32_t measurement_count = 0;
 
         void allocate_measurement_buffers(int32_t max_measurements) override {
@@ -679,9 +682,9 @@ namespace NWQSim
             measurement_count = max_measurements;
 
             if (measurement_count > 0) {
-                SAFE_ALOC_GPU(d_measurement_results, measurement_count * sizeof(int));
-                h_measurement_results = new int[measurement_count];
-                SAFE_ALOC_GPU(d_measurement_idx_counter, sizeof(int));
+                SAFE_ALOC_GPU(d_measurement_results, measurement_count * sizeof(int32_t));
+                h_measurement_results = new int32_t[measurement_count];
+                SAFE_ALOC_GPU(d_measurement_idx_counter, sizeof(int32_t));
             }
         }
 
@@ -741,11 +744,13 @@ namespace NWQSim
         int32_t total = __reduce_add_sync(__activemask(), local_sum);
         
         // All threads return the result, but only the first should be used
-        return total;
+        if((lane_id) == 0) return total;
+        return 0;
     }
 
     // if (i==0) printf("====== rows:%llu, cols:%llu, blockDim.x:%u, gridDim.x:%u\n", rows, cols, blockDim.x, gridDim.x);
 
+    __device__ int32_t smuggle_scratch;
     __launch_bounds__(1024, 1)
     __global__ void simulation_kernel_cuda(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType n_gates, int32_t seed)
     {
@@ -897,8 +902,8 @@ namespace NWQSim
                                     local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
                                         + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
 
-                                    x_arr[h_idx] ^= x_p;
-                                    z_arr[h_idx] ^= z_p;
+                                    atomicXor(&x_arr[h_idx], x_p);
+                                    atomicXor(&z_arr[h_idx], z_p);
                                 }
                                 // __syncthreads();
                                 //merge warp-wise local_sum
@@ -932,15 +937,14 @@ namespace NWQSim
                             if(i != (p-cols)) z_arr[p_index] = 0;
                         }
 
-                        if (i == cols)
+                        if (i == 0)
                         {
                             // Draw bit from seed and measurement index
-                            int32_t meas_idx = *d_measurement_idx_counter;
+                            int32_t meas_idx = atomicAdd(d_measurement_idx_counter, 1);
                             // printf("Seed for measurement %d: %d\n", meas_idx, seed);
-                            int bit = prng_bit(seed, meas_idx);
+                            int32_t bit = prng_bit(seed, meas_idx);
                             r_arr[p] = bit;
                             stab_gpu->d_measurement_results[meas_idx] = bit;
-                            *d_measurement_idx_counter = meas_idx + 1;
                         }
                     }
                     else
@@ -951,81 +955,89 @@ namespace NWQSim
                             x_arr[scratch_index] = 0;
                             z_arr[scratch_index] = 0;
                         }
-                        if ((i < scratch_row) && (i == cols))
+                        if(i == 0)
                         {
                             r_arr[scratch_row] = 0;
+                            smuggle_scratch = 0;
                         }
                         grid.sync();
-
 
 
                         /*
                         Dr. Li's version
                         */
 
-                        // for (IdxType local_i = warp_id; local_i < cols; local_i += n_warps)
-                        // {
-                        //     IdxType local_index = local_i * cols + a;
-                        //     if (x_arr[local_index])
-                        //     {
-                        //         //Parallel rowsum
-                        //         int32_t local_sum = 0;
-                        //         IdxType p_row = local_i + cols;
+                        for (IdxType local_i = warp_id; local_i < cols; local_i += n_warps) //capture all the stabilizer rows (num stabilizer rows == num cols)
+                        {
+                            IdxType local_index = local_i * cols + a;
+                            if (x_arr[local_index])
+                            {
+                                //Parallel rowsum
+                                int32_t local_sum = 0;
+                                IdxType p_row = local_i + cols;
 
-                        //         for (int32_t j = lane_id; j < n_qubits; j+=32)
-                        //         {
-                        //             IdxType h_idx = scratch_row * cols + j;
-                        //             IdxType p_idx = p_row * cols + j;
-                        //             int32_t x_p = x_arr[p_idx];
-                        //             int32_t z_p = z_arr[p_idx];
-                        //             int32_t x_h = x_arr[h_idx];
-                        //             int32_t z_h = z_arr[h_idx];
+                                for (int32_t j = lane_id; j < n_qubits; j+=32) //Capture all the columns in a row
+                                {
+                                    IdxType h_idx = scratch_row * cols + j;
+                                    IdxType p_idx = p_row * cols + j;
+                                    int32_t x_p = x_arr[p_idx];
+                                    int32_t z_p = z_arr[p_idx];
+                                    int32_t x_h = x_arr[h_idx];
+                                    int32_t z_h = z_arr[h_idx];
 
-                        //             local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
-                        //                 + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
+                                    local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
+                                        + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
 
-                        //             atomicXor(&x_arr[h_idx], x_p);
-                        //             atomicXor(&z_arr[h_idx], z_p);
-                        //         }
-                        //         //Merge warp-wise local_sum
-                        //         for (int32_t offset = 16; offset > 0; offset /= 2) 
-                        //         {
-                        //             local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
-                        //         }
-                        //         //Per head-lane owns the merged local_sum and performs adjustment
-                        //         if (lane_id == 0)
-                        //         {
-                        //             // printf("global_sums[%lld] = %d + 2 * %d\n", local_i, local_sum, r_arr[p_row]);
-                        //             global_sums[local_i] = local_sum + 2 * r_arr[p_row];
-                        //         }
-                        //     }
-                        //     else
-                        //     {
-                        //         if (lane_id == 0) 
-                        //         {
-                        //             // printf("global_sums[%lld] = 0\n", local_i);
-                        //             global_sums[local_i] = 0;
-                        //         }
-                        //     }
-                        // }
+                                    atomicXor(&x_arr[h_idx], x_p);
+                                    atomicXor(&z_arr[h_idx], z_p);
+                                }
+                                //Merge warp-wise local_sum
+                                for (int32_t offset = 16; offset > 0; offset /= 2) 
+                                {
+                                    local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
+                                }
+                                //Per head-lane owns the merged local_sum and contributes to the final sum
+                                if (lane_id == 0)
+                                {
+                                    int32_t row_term = ((((local_sum + 2*r_arr[p_row])%4)==0) ? 0:1);
+                                    atomicAdd(&smuggle_scratch, row_term);
+                                    // printf("global_sums[%lld] = %d + 2 * %d\n", local_i, local_sum, r_arr[p_row]);
+                                    // global_sums[local_i] = local_sum + 2 * r_arr[p_row];
+                                    // printf("m%d sum: %d\n", *d_measurement_idx_counter, global_sums[local_i]%4);
 
-                        // grid.sync();
+                                    // if((((global_sums[local_i]+2*smuggle_scratch)%4) == 0) ? false:true) atomicXor(&smuggle_scratch, 1);
+                                }
+                            }
+                            // else
+                            // {
+                            //     if (lane_id == 0) 
+                            //     {
+                            //         // printf("global_sums[%lld] = 0\n", local_i);
+                            //         global_sums[local_i] = 0;
+                            //     }
+                            // }
+                        }
+
+                        grid.sync();
 
                         // if(i < 32) //First warp does the final reduction
                         // {
-                        //     int32_t total = singular_reduction(global_sums, lane_id, cols);                       
-                        //     if (i == 0) 
-                        //     {
-                        //         if((total % 4 != 0) && (abs(total % 2) != 0))
-                        //             printf("determ m%d total = %d\n", *d_measurement_idx_counter, total);
-                                
-                        //         total += 2 * r_arr[scratch_row];
-                        //         r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1;
+                            // int32_t total = singular_reduction(global_sums, lane_id, cols);                       
+                        if(i == 0) 
+                        {
+                            // if((total % 4 != 0) && (abs(total % 2) != 0))
+                            //     printf("determ m%d total = %d\n", *d_measurement_idx_counter, total);
+                            // printf("m%d sum: %d\n", *d_measurement_idx_counter, total);
 
-                        //         int32_t meas_idx = *d_measurement_idx_counter;
-                        //         stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
-                        //         *d_measurement_idx_counter = meas_idx + 1;
-                        //     }
+                            // total += 2 * smuggle_scratch;
+
+                            // printf("r[h]%d: %d\n", *d_measurement_idx_counter, r_arr[scratch_row]);
+                            r_arr[scratch_row] = ((smuggle_scratch%4) == 0) ? 0: 1;
+                            // printf("m%d r_scratch = %d\n", *d_measurement_idx_counter, r_arr[scratch_row]);
+
+                            int32_t meas_idx = atomicAdd(d_measurement_idx_counter, 1);
+                            stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
+                        }
                         // }
 
 
@@ -1093,10 +1105,14 @@ namespace NWQSim
 
                         //         if(i == 0)
                         //         {
-                        //             if((total % 4 != 0) && (abs(total % 2) != 0))
-                        //                 printf("determ m%d total = %d\n", *d_measurement_idx_counter, total);
+                        //             printf("m%d sum: %d\n", *d_measurement_idx_counter, total);
+                        //             printf("r[i]%d: %d\n", *d_measurement_idx_counter, r_arr[k+cols]); 
+
                         //             total += 2 * r_arr[k+cols] + 2 * r_arr[scratch_row];
+                        //             printf("m%d tot: %d\n", *d_measurement_idx_counter, total);
+
                         //             r_arr[scratch_row] = (total % 4 == 0) ? 0 : 1; //Key recursive update
+                        //             printf("r[h]%d: %d\n", *d_measurement_idx_counter, r_arr[scratch_row]);
                         //         }
                         //     }
 
@@ -1122,37 +1138,37 @@ namespace NWQSim
                         This directly matches stab-cpu as a sanity check
                         */
 
-                        if(i == 0)
-                        {
-                            for(int k = 0; k < cols; k++)
-                            {
-                                if(x_arr[k * cols + a])
-                                {
-                                    IdxType p_row = k + cols;
-                                    int32_t local_sum = 0;
-                                    for(int j = 0; j < cols; j++)
-                                    {
-                                        IdxType h_idx = scratch_row * cols + j;
-                                        IdxType p_idx = p_row * cols + j;
-                                        int32_t x_p = x_arr[p_idx];
-                                        int32_t z_p = z_arr[p_idx];
-                                        int32_t x_h = x_arr[h_idx];
-                                        int32_t z_h = z_arr[h_idx];
-                                        local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
-                                            + (1 - x_p) * z_p * x_h * (1 - 2 * z_h); //AL version
-                                        x_arr[h_idx] ^= x_p;
-                                        z_arr[h_idx] ^= z_p;
-                                    }
-                                    // if((total % 4 != 0) && (abs(total % 2) != 0))
-                                    //     printf("determ m%d tot: %d\n", *d_measurement_idx_counter, local_sum);
-                                    local_sum = local_sum + 2 * r_arr[scratch_row] + 2 * r_arr[p_row];
-                                    r_arr[scratch_row] = (local_sum % 4 == 0) ? 0 : 1;
-                                }
-                            }
-                            int32_t meas_idx = *d_measurement_idx_counter;
-                            stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
-                            *d_measurement_idx_counter = meas_idx + 1;
-                        }
+                        // if(i == 0)
+                        // {
+                        //     for(int k = 0; k < cols; k++)
+                        //     {
+                        //         if(x_arr[k * cols + a])
+                        //         {
+                        //             IdxType p_row = k + cols;
+                        //             int32_t local_sum = 0;
+                        //             for(int j = 0; j < cols; j++)
+                        //             {
+                        //                 IdxType h_idx = scratch_row * cols + j;
+                        //                 IdxType p_idx = p_row * cols + j;
+                        //                 int32_t x_p = x_arr[p_idx];
+                        //                 int32_t z_p = z_arr[p_idx];
+                        //                 int32_t x_h = x_arr[h_idx];
+                        //                 int32_t z_h = z_arr[h_idx];
+                        //                 local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
+                        //                     + (1 - x_p) * z_p * x_h * (1 - 2 * z_h); //AL version
+                        //                 x_arr[h_idx] ^= x_p;
+                        //                 z_arr[h_idx] ^= z_p;
+                        //             }
+                        //             // if((total % 4 != 0) && (abs(total % 2) != 0))
+                        //             //     printf("determ m%d tot: %d\n", *d_measurement_idx_counter, local_sum);
+                        //             local_sum = local_sum + 2 * r_arr[scratch_row] + 2 * r_arr[p_row];
+                        //             r_arr[scratch_row] = (local_sum % 4 == 0) ? 0 : 1;
+                        //         }
+                        //     }
+                        //     int32_t meas_idx = *d_measurement_idx_counter;
+                        //     stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
+                        //     *d_measurement_idx_counter = meas_idx + 1;
+                        // }
 
                         /*End Sanity Check Version*/
 

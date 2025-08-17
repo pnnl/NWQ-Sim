@@ -262,7 +262,7 @@ namespace NWQSim
         }
 
         //Convert a vector of 1's and 0's to an IdxType decimal number
-        std::vector<int> get_measurement_results() override
+        std::vector<int32_t> get_measurement_results() override
         {
             return m_results;
         }
@@ -827,9 +827,21 @@ namespace NWQSim
             // {
             //     printf("m%d tot: %d\n", measurement_count, sum);
             // }
+            // printf("m%d sum: %d\n", measurement_count, sum);
+            // printf("r[i]%d: %d\n", measurement_count, r[i]);
 
-            sum += 2*r[i] + 2*r[h];
+
+            sum += 2*r[i];
+
+            // printf("m%d sum: %d\n", measurement_count, sum);
+
+            sum += 2*r[h];
+            //  printf("m%d sum: %d\n", *d_measurement_idx_counter, total);
+
+            // printf("m%d tot: %d\n", measurement_count, sum);
+            
             r[h] = (sum % 4 == 0) ? 0 : 1;
+            // printf("r[h]%d: %d\n", measurement_count, r[h]);
 
             // std::cout << "r[" << h << "]" <<  " after if = " <<  r[h] << std::endl;
 
@@ -1320,7 +1332,7 @@ namespace NWQSim
         IdxType* totalResults = NULL;
         IdxType** totalResultsLong = NULL;
 
-        std::vector<int> m_results;
+        std::vector<int32_t> m_results;
 
         double gamma_factor;
 

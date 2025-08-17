@@ -170,7 +170,7 @@ namespace NWQSim
         ValType *buffer_state = nullptr;
         SimType sim_type;
 
-        virtual std::vector<int> get_measurement_results() {
+        virtual std::vector<int32_t> get_measurement_results() {
             throw std::runtime_error("Get Measurement Results Not Implemented");
         }
 

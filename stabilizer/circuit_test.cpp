@@ -13,9 +13,10 @@
 #include "../include/stabsim/stab_cpu.hpp"
 #include "../include/stabsim/stab_cuda.cuh"
 
-int main() {
-    int n_qubits = 999; // A few hundred qubits
-    int rounds = 255; // Number of rounds to simulate
+int main() 
+{
+    int n_qubits = 9; //9 // A few hundred qubits 
+    int rounds = 2; //2 // Number of rounds to simulate
     
     double timer_cpu = 0;
     double timer_cuda = 0;
@@ -52,9 +53,7 @@ int main() {
                     case 0: 
                     {
                         circuit->H(q);
-                        // circuit->S(q);
-                        // circuit->S(q);
-                        // circuit->H(q);
+
                         break;
                     }
                     case 1: circuit->S(q); break;
@@ -77,6 +76,11 @@ int main() {
             }
         }
     }
+    // circuit->M(0);
+    // circuit->M(7);
+    // circuit->M(8);
+    // num_measurements+=3;
+
     // for(int i = 0; i < rounds; i++)
     // {
     //     for(int j = 0; j < n_qubits; j++)
@@ -87,6 +91,8 @@ int main() {
     //     }
     // }
     
+
+
 
 
     // Create CPU and GPU states
@@ -114,13 +120,13 @@ int main() {
     auto cuda_measurements = cuda_state->get_measurement_results();
 
     // std::cout << circuit->to_string() << std::endl;
-    // cpu_state->print_res_state();
-    // cuda_state->print_res_state();
+    cpu_state->print_res_state();
+    cuda_state->print_res_state();
     
 
     // Sort both vectors to ensure order doesn't matter
-    std::sort(cpu_stabilizers.begin(), cpu_stabilizers.end());
-    std::sort(cuda_stabilizers.begin(), cuda_stabilizers.end());
+    // std::sort(cpu_stabilizers.begin(), cpu_stabilizers.end());
+    // std::sort(cuda_stabilizers.begin(), cuda_stabilizers.end());
 
     bool match = true;
     std::string stab_test(n_qubits, 'I');
@@ -140,17 +146,17 @@ int main() {
                     << "CUDA=" << cuda_stabilizers.size() << std::endl;
         match = false;
     } 
-    else 
-    // {
-    //     for (size_t i = 0; i < cpu_stabilizers.size(); ++i) {
-    //         if (cpu_stabilizers[i] != cuda_stabilizers[i]) {
-    //             std::cerr << "Mismatch in stabilizer at index " << i << ":\n"
-    //                         << "  CPU: " << cpu_stabilizers[i] << "\n"
-    //                         << "  CUDA:" << cuda_stabilizers[i] << std::endl;
-    //             match = false;
-    //         }
-    //     }
-    // }
+    else
+    {
+        for (size_t i = 0; i < cpu_stabilizers.size(); ++i) {
+            if (cpu_stabilizers[i] != cuda_stabilizers[i]) {
+                std::cerr << "Mismatch in stabilizer at index " << i << ":\n"
+                            << "  CPU: " << cpu_stabilizers[i] << "\n"
+                            << "  CUDA:" << cuda_stabilizers[i] << std::endl;
+                match = false;
+            }
+        }
+    }
 
     if (cpu_measurements.size() != cuda_measurements.size()) {
         std::cerr << "Mismatch in number of measurements: "
@@ -170,8 +176,8 @@ int main() {
         }
     }
 
-    // for (int i = 0; i < n_qubits; ++i) {
-    //     std::cout << "Match at " << i << ": "
+    // for (int i = 0; i < cpu_measurements.size(); ++i) {
+    //     std::cout << "M" << i << ": "
     //                 << "CPU=" << cpu_measurements[i] << ", "
     //                 << "CUDA=" << cuda_measurements[i] << std::endl;
     // }
