@@ -829,11 +829,10 @@ namespace NWQSim
             // }
             // printf("m%d sum: %d\n", measurement_count, sum);
             // printf("r[i]%d: %d\n", measurement_count, r[i]);
+            
 
 
             sum += 2*r[i];
-
-            // printf("m%d sum: %d\n", measurement_count, sum);
 
             sum += 2*r[h];
             //  printf("m%d sum: %d\n", *d_measurement_idx_counter, total);
@@ -841,6 +840,7 @@ namespace NWQSim
             // printf("m%d tot: %d\n", measurement_count, sum);
             
             r[h] = (sum % 4 == 0) ? 0 : 1;
+
             // printf("r[h]%d: %d\n", measurement_count, r[h]);
 
             // std::cout << "r[" << h << "]" <<  " after if = " <<  r[h] << std::endl;
@@ -2269,6 +2269,7 @@ namespace NWQSim
                         int p = -1;
                         for(int p_index = half_rows; p_index < rows-1; p_index++)
                         {  
+                            // printf("x at p_index = %d, qubit=%d ", x[p_index][a], a);
                             //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
                             if(x[p_index][a])
                             {
@@ -2288,6 +2289,8 @@ namespace NWQSim
                                 if((x[i][a]) && (i != p))
                                 {
                                     rowsum(i, p);
+                                    // printf("rand r%d row%d\n", r[i], i);
+
                                 }
                             }
                             
@@ -2301,6 +2304,8 @@ namespace NWQSim
                             }
 
                             int randomBit = prng_bit(seed, measurement_count);
+                            // printf("rand m%d, res%d\n",  measurement_count, randomBit);
+
                             // std::cout << "Seed for measurement " << measurement_count << ": " << seed << std::endl;
                             r[p] = randomBit;
                             z[p][a] = 1;
@@ -2326,11 +2331,14 @@ namespace NWQSim
                             {
                                 if(x[i][a] == 1)
                                 {
+                                    // printf("r[row]%d ", r[i+half_rows]);
                                     rowsum(rows-1, i+half_rows);
+                                    // printf("determ r%d row%lld\n", r[rows-1], i+half_rows);
                                 }
                             }
                             // std::cout << "Determ measurement " << measurement_count << ": " << r[rows-1] << std::endl;
                             m_results.push_back(r[rows-1]);
+                            // printf("determ m%d, res%d\n",  measurement_count, r[rows-1]);
                             measurement_count++;
                         }
                         break;

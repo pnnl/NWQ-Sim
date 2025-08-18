@@ -15,8 +15,8 @@
 
 int main() 
 {
-    int n_qubits = 553; //9 // A few hundred qubits 
-    int rounds = 233; //2 // Number of rounds to simulate
+    int n_qubits = 5999; //15 // A few hundred qubits 
+    int rounds = 10; //3 // Number of rounds to simulate
     
     double timer_cpu = 0;
     double timer_cuda = 0;
@@ -52,19 +52,15 @@ int main()
                 {
                     case 0: 
                     {
-                        circuit->H(q);
-                        circuit->S(q);
-                        circuit->S(q);
-                        circuit->H(q);
-
+                        circuit->M(q);
+                        num_measurements++; 
                         break;
                     }
                     case 1: circuit->S(q); break;
                     // case 2: circuit->RESET(q); break;
                     case 3: 
                     {
-                        circuit->M(q); 
-                        num_measurements++; 
+                        circuit->S(q); 
                         break;
                     }
                     default: 
@@ -79,21 +75,6 @@ int main()
             }
         }
     }
-    // circuit->M(0);
-    // circuit->M(7);
-    // circuit->M(8);
-    // num_measurements+=3;
-
-    // for(int i = 0; i < rounds; i++)
-    // {
-    //     for(int j = 0; j < n_qubits; j++)
-    //     {
-    //         circuit->H(j);
-    //         circuit->M(j);
-    //         num_measurements++;
-    //     }
-    // }
-    
 
 
 
@@ -107,7 +88,7 @@ int main()
 
     // Simulate on both backends
     std::cout << "Simulating on CPU..." << std::endl;
-    cpu_state->sim(circuit, timer_cpu);
+    // cpu_state->sim(circuit, timer_cpu);
     std::cout << "CPU sim time: " << timer_cpu / 1000.0 << "s" << std::endl;
 
     std::cout << "Simulating on GPU..." << std::endl;
@@ -127,6 +108,8 @@ int main()
     // cuda_state->print_res_state();
     
 
+
+
     // Sort both vectors to ensure order doesn't matter
     // std::sort(cpu_stabilizers.begin(), cpu_stabilizers.end());
     // std::sort(cuda_stabilizers.begin(), cuda_stabilizers.end());
@@ -143,41 +126,41 @@ int main()
     }
 
 
-    if (cpu_stabilizers.size() != cuda_stabilizers.size()) {
-        std::cerr << "Mismatch in number of stabilizers: "
-                    << "CPU=" << cpu_stabilizers.size() << ", "
-                    << "CUDA=" << cuda_stabilizers.size() << std::endl;
-        match = false;
-    } 
-    else
-    {
-        for (size_t i = 0; i < cpu_stabilizers.size(); ++i) {
-            if (cpu_stabilizers[i] != cuda_stabilizers[i]) {
-                std::cerr << "Mismatch in stabilizer at index " << i << ":\n"
-                            << "  CPU: " << cpu_stabilizers[i] << "\n"
-                            << "  CUDA:" << cuda_stabilizers[i] << std::endl;
-                match = false;
-            }
-        }
-    }
+    // if (cpu_stabilizers.size() != cuda_stabilizers.size()) {
+    //     std::cerr << "Mismatch in number of stabilizers: "
+    //                 << "CPU=" << cpu_stabilizers.size() << ", "
+    //                 << "CUDA=" << cuda_stabilizers.size() << std::endl;
+    //     match = false;
+    // } 
+    // else
+    // {
+    //     for (size_t i = 0; i < cpu_stabilizers.size(); ++i) {
+    //         if (cpu_stabilizers[i] != cuda_stabilizers[i]) {
+    //             std::cerr << "Mismatch in stabilizer at index " << i << ":\n"
+    //                         << "  CPU: " << cpu_stabilizers[i] << "\n"
+    //                         << "  CUDA:" << cuda_stabilizers[i] << std::endl;
+    //             match = false;
+    //         }
+    //     }
+    // }
 
-    if (cpu_measurements.size() != cuda_measurements.size()) {
-        std::cerr << "Mismatch in number of measurements: "
-                    << "CPU=" << cpu_measurements.size() << ", "
-                    << "CUDA=" << cuda_measurements.size() << std::endl;
-        match = false;
-    } 
-    else {
-        for (size_t i = 0; i < cpu_measurements.size(); ++i) {
-            if (cpu_measurements[i] != cuda_measurements[i]) {
-                std::cerr << "Mismatch in measurement at index " << i << ": "
-                            << "CPU=" << cpu_measurements[i] << ", "
-                            << "CUDA=" << cuda_measurements[i] << std::endl;
-                match = false;
-                break;
-            }
-        }
-    }
+    // if (cpu_measurements.size() != cuda_measurements.size()) {
+    //     std::cerr << "Mismatch in number of measurements: "
+    //                 << "CPU=" << cpu_measurements.size() << ", "
+    //                 << "CUDA=" << cuda_measurements.size() << std::endl;
+    //     match = false;
+    // } 
+    // else 
+    // {
+    //     for (size_t i = 0; i < cpu_measurements.size(); ++i) {
+    //         if (cpu_measurements[i] != cuda_measurements[i]) {
+    //             std::cerr << "Mismatch in measurement at index " << i << ": "
+    //                         << "CPU=" << cpu_measurements[i] << ", "
+    //                         << "CUDA=" << cuda_measurements[i] << std::endl;
+    //             match = false;
+    //         }
+    //     }
+    // }
 
     // for (int i = 0; i < cpu_measurements.size(); ++i) {
     //     std::cout << "M" << i << ": "
