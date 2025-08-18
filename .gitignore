@@ -60,8 +60,9 @@ CMakeCache.txt
 *.iml
 
 #Ignore stabilizer testing files
-/stabilizer/legacy_graphics
-/stabilizer/legacy_runtime_data
-/stabilizer/legacy_T_data
+/stabilizer/previous_graphics
+/stabilizer/previous_runtime_data
+/stabilizer/previous_T_data
+/stabilizer/old_tests
 /stabilizer/damping_work/qasm_circuits
 
