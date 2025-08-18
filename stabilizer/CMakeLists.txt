@@ -49,6 +49,57 @@ endif()
 
 
 
+set(SOURCE_FILE "stabsim_honeycomb.cpp")
+
+add_executable(stabisim_honeycomb stabisim_honeycomb.cpp)
+target_compile_features(stabisim_honeycomb PRIVATE cxx_std_17)
+
+
+
+# Link against OpenMP if available
+if(OpenMP_FOUND)
+    target_link_libraries(stabisim_honeycomb PUBLIC OpenMP::OpenMP_CXX)
+    target_compile_definitions(stabisim_honeycomb PUBLIC OMP_ENABLED)
+endif()
+
+# Link against MPI if available
+if(MPI_FOUND)
+    target_link_libraries(stabisim_honeycomb PUBLIC MPI::MPI_CXX)
+    target_compile_definitions(stabisim_honeycomb PUBLIC MPI_ENABLED)
+endif()
+
+# If CUDA Toolkit is available, set the CUDA standard and definitions
+if(CUDAToolkit_FOUND)
+    enable_language(CUDA)
+    set_source_files_properties(${SOURCE_FILE} PROPERTIES LANGUAGE CUDA)
+
+    # Define CUDA_ENABLED for the C++ executable
+    # target_compile_definitions(backendManager PRIVATE CUDA_ENABLED)
+    set(ENV{MY_CUDA_ARCH} "80")
+
+    target_compile_features(stabisim_honeycomb PRIVATE cuda_std_17)
+    #target_link_libraries(stabisim_honeycomb PUBLIC CUDA::cudart)
+    target_compile_definitions(stabisim_honeycomb PUBLIC CUDA_ENABLED)
+
+    # If NVSHMEM is available, link against it and set the definitions
+    if(NVSHMEM_FOUND AND TARGET nvshmem::nvshmem)
+        set_target_properties(stabisim_honeycomb PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+        target_link_libraries(stabisim_honeycomb PUBLIC nvshmem::nvshmem)
+        target_compile_definitions(stabisim_honeycomb PUBLIC CUDA_MPI_ENABLED)
+    endif()
+endif()
+
+if(HIP_FOUND)
+    enable_language(HIP)
+    set_source_files_properties(${SOURCE_FILE} PROPERTIES LANGUAGE HIP)
+
+    # target_compile_features(stabisim_honeycomb PRIVATE hip_std_17)
+    target_compile_definitions(stabisim_honeycomb PUBLIC HIP_ENABLED)
+
+endif()
+
+
+
 
 set(SOURCE_FILE "surface_code.cpp")
 
