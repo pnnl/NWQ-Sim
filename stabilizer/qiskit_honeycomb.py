@@ -10,8 +10,8 @@ def benchmark_honeycomb_qiskit():
     """Benchmark honeycomb code circuits using Qiskit with stabilizer method"""
     
     # Input and output directories
-    input_dir = "/Users/garn195/Library/CloudStorage/OneDrive-PNNL/Project_Repositories/NWQ-Sim/stabilizer/honeycomb_bench/"
-    output_dir = "/Users/garn195/Library/CloudStorage/OneDrive-PNNL/Project_Repositories/NWQ-Sim/stabilizer/honeycomb_bench/"
+    input_dir = "honeycomb_bench/"
+    output_dir = "honeycomb_bench/"
     os.makedirs(output_dir, exist_ok=True)
     
     # Test parameters - only varying distance
