@@ -58,7 +58,7 @@ def transpile_to_pbc_with_timeout(circ: zx.Circuit, timeout_sec: int):
 
 def process_folder(input_folder: Path, output_folder: Path, timeout_sec: int) -> None:
     output_folder.mkdir(parents=True, exist_ok=True)
-    results_csv = output_folder / "results.csv"
+    results_csv = output_folder / "results2.csv"
 
     rows = [("circuit", "time_ms", "t_gates_after")]
 
@@ -93,6 +93,15 @@ def process_folder(input_folder: Path, output_folder: Path, timeout_sec: int) ->
 
         rows.append((name, f"{dt_ms:.3f}", t_after))
         print(f"[OK] {name}: time={dt_ms:.2f} ms, T={t_after}")
+
+    # After the loop, write all collected rows to the CSV file
+    try:
+        with open(results_csv, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerows(rows)
+        print(f"\n[OK] Wrote {len(rows) - 1} results to {results_csv}")
+    except Exception as e:
+        print(f"[ERROR] Could not write results to {results_csv}: {e}")
 
 
 def main():

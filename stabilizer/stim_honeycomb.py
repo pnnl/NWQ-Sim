@@ -15,7 +15,7 @@ def benchmark_honeycomb_stim():
     """Benchmark honeycomb code circuits using Stim"""
     
     # Create output directory if it doesn't exist
-    output_dir = "/Users/garn195/Library/CloudStorage/OneDrive-PNNL/Project_Repositories/NWQ-Sim/stabilizer/honeycomb_bench/"
+    output_dir = "honeycomb_bench/"
     os.makedirs(output_dir, exist_ok=True)
     
     # Test parameters - only varying distance
