@@ -1,5 +1,6 @@
 #ifndef VQE_STATE
 #define VQE_STATE
+#include <random>
 #include "state.hpp"
 #include "observable/pauli_operator.hpp"
 #include "utils.hpp"
@@ -11,6 +12,10 @@
 #include <memory>
 #include <cmath>
 #include <vector>
+#include <iomanip>
+#include <iostream>
+#include <numeric>
+#include <algorithm>
 
 namespace NWQSim
 {
@@ -49,7 +54,7 @@ namespace NWQSim
                                       hamil(h),
                                       ansatz(a),
                                       callback(_callback),
-                                      g_est(seed),
+                                      g_est(seed ? seed : static_cast<IdxType>(std::random_device{}())),
                                       optimizer_algorithm(_optimizer_algorithm),
                                       optimizer_settings(opt_settings)
                                       {
@@ -142,6 +147,9 @@ namespace NWQSim
         ValType ene_curr = energy(params); // starting energy
         initial_ene = ene_curr;
         // get the single-direction starting vector
+        
+        // Reseed SPSA so each call uses a fresh random direction unless caller passed a nonzero seed
+        g_est.reseed(static_cast<uint64_t>(std::random_device{}()));
         g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, params, gradient, delta, n_grad_est);
         iteration = 0;
         // until we reach a local minimum, descend along the starting gradient 
@@ -236,7 +244,168 @@ namespace NWQSim
           // }
       }
 
-      // Function declarations (overloaded by backends) 
+      /**
+       * @brief  True Gradient Descent using Finite Differences
+       * @note   Similar to follow_fixed_gradient but uses true gradients instead of SPSA
+       * @param  x0: Initial parameter vector (input)
+       * @param  initial_ene: Initial energy (output)
+       * @param  final_ene: Final energy of local minimum (output)
+       * @param  num_iterations: Number of iterations before convergence (output)
+       * @param  delta: Step size for finite difference gradient computation
+       * @param  eta: Gradient descent step size
+       * @param  max_iterations: Maximum number of iterations (default: 1000)
+       * @param  verbose: Print iteration details
+       * @retval Parameter map with final values
+       */
+      virtual std::vector<std::pair<std::string, ValType>> follow_true_gradient(const std::vector<ValType>& x0, ValType& initial_ene, ValType& final_ene, IdxType& num_iterations, ValType delta, ValType eta, IdxType max_iterations = 100, bool verbose = false) {
+        Config::PRINT_SIM_TRACE = false;
+        local_result = 9; // MZ: initial flag
+
+        // Initialize finite difference gradient estimator
+        FiniteDifference fd_estimator;
+
+        // Initialize data structures
+        std::vector<ValType> gradient(x0.size());
+        std::vector<ValType> params(x0);
+        ValType ene_curr = energy(params); // starting energy
+        ValType ene_prev = ene_curr; // initialize to current energy
+        initial_ene = ene_curr;
+
+        // Adaptive learning rate parameters
+        ValType eta_current = eta; // current learning rate
+        ValType eta_min = eta * 1e-5; // minimum learning rate
+        ValType eta_max = eta * 10.0; // maximum learning rate
+        ValType eta_increase_factor = 1.1; // factor to increase eta when making progress
+        ValType eta_decrease_factor = 0.5; // factor to decrease eta when overshooting
+        int consecutive_improvements = 0; // track consecutive energy improvements
+
+        iteration = 0;
+
+        // Gradient descent loop
+        do {
+          // Compute true gradient using finite differences
+          fd_estimator.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, params, gradient, delta, 1);
+
+          // Compute gradient norm for convergence check
+          double grad_norm = std::sqrt(std::accumulate(gradient.begin(), gradient.end(), 0.0, [] (ValType a, ValType b) {
+            return a + b * b;
+          }));
+
+          // Print iteration info if verbose
+          if ((process_rank == 0) && verbose) {
+            if (iteration == 0) {
+              std::cout << "\n----------- True Gradient Descent -----------\n" << std::left
+                        << std::setw(8) << " Iter."
+                        << std::setw(17) << "Objective Value"
+                        << std::setw(12) << "Grad. Norm"
+                        << std::setw(12) << "Learn. Rate"
+                        << std::endl;
+              std::cout << std::string(53, '-') << std::endl;
+            }
+            std::cout << std::left << " "
+                      << std::setw(7) << iteration
+                      << std::setw(17) << std::fixed << std::setprecision(12) << ene_curr
+                      << std::setw(12) << std::fixed << std::setprecision(8) << grad_norm
+                      << std::setw(12) << std::fixed << std::setprecision(8) << eta_current
+                      << std::endl;
+          }
+
+          // Check for convergence (small gradient norm)
+          if (grad_norm < 1e-8) {
+            if (verbose && process_rank == 0) {
+              std::cout << "Converged: gradient norm below threshold" << std::endl;
+            }
+            local_result = 0;
+            break;
+          }
+
+          // Gradient descent step with current learning rate
+          for (size_t i = 0; i < params.size(); i++) {
+            params[i] -= eta_current * gradient[i];
+          }
+
+          // Store previous energy before computing new one
+          ene_prev = ene_curr;
+          ene_curr = energy(params);
+
+          // Adaptive learning rate adjustment
+          if (ene_curr < ene_prev) {
+            // Energy decreased - good step
+            consecutive_improvements++;
+
+            // If we've had several consecutive improvements, increase learning rate
+            if (consecutive_improvements >= 3 && eta_current < eta_max) {
+              eta_current = std::min(eta_current * eta_increase_factor, eta_max);
+              if (verbose && process_rank == 0) {
+                std::cout << "Increasing learning rate to " << eta_current << std::endl;
+              }
+            }
+          } else {
+            // Energy increased or stayed same - bad step, reduce learning rate
+            consecutive_improvements = 0;
+
+            // Undo the step
+            for (size_t i = 0; i < params.size(); i++) {
+              params[i] += eta_current * gradient[i];
+            }
+
+            // Reduce learning rate
+            eta_current = std::max(eta_current * eta_decrease_factor, eta_min);
+
+            if (verbose && process_rank == 0) {
+              std::cout << "Energy increased, reducing learning rate to " << eta_current << std::endl;
+            }
+
+            // Check if learning rate is too small (convergence)
+            if (eta_current <= eta_min) {
+              ene_curr = ene_prev; // restore previous energy
+              if (verbose && process_rank == 0) {
+                std::cout << "Learning rate too small, converged to local minimum" << std::endl;
+              }
+              local_result = 0; // reach local gradient minimum
+              break;
+            }
+
+            // Try the step again with reduced learning rate
+            for (size_t i = 0; i < params.size(); i++) {
+              params[i] -= eta_current * gradient[i];
+            }
+            ene_curr = energy(params);
+
+            // If still no improvement, accept current position and continue
+            if (ene_curr >= ene_prev) {
+              for (size_t i = 0; i < params.size(); i++) {
+                params[i] += eta_current * gradient[i]; // undo step
+              }
+              ene_curr = ene_prev; // restore previous energy
+              if (verbose && process_rank == 0) {
+                std::cout << "Local minimum reached: energy stopped decreasing" << std::endl;
+              }
+              local_result = 0; // reach local gradient minimum
+              break;
+            }
+          }
+
+          iteration++;
+
+        } while(iteration < max_iterations);
+
+        num_iterations = iteration;
+        final_ene = ene_curr;
+
+        // Set final parameters in ansatz
+        ansatz->setParams(params);
+
+        if (verbose && process_rank == 0) {
+          std::cout << "True gradient descent completed after " << iteration << " iterations" << std::endl;
+          std::cout << "Final energy: " << final_ene << std::endl;
+          std::cout << "Final learning rate: " << eta_current << " (initial: " << eta << ")" << std::endl;
+        }
+
+        return ansatz->getFermionicOperatorParameters();
+      }
+
+      // Function declarations (overloaded by backends)
       virtual void call_simulator() {};
       virtual void call_simulator(std::shared_ptr<Ansatz> _measurement, bool reset) {};
       virtual void set_exp_gate(std::shared_ptr<Ansatz> circuit, ObservableList* o, std::vector<IdxType>& zmasks, std::vector<ValType>& coeffs) {

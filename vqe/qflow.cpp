@@ -43,8 +43,9 @@ int show_help() {
   std::cout << UNDERLINE << "OPTIONAL (Local Gradient Follower)" << CLOSEUNDERLINE << std::endl;
   std::cout << "--local               Use local gradient follower pipeline." << std::endl;
   std::cout << "-g, --grad-samples    SPSA gradient samples." << std::endl;
-  std::cout << "--delta               Perturbation magnitude for SPSA. Defaults to 1e-4." << std::endl;
-  std::cout << "--eta                 Gradient descent step size. Defaults to 1e-3." << std::endl;
+  // std::cout << "--delta               Perturbation magnitude for SPSA. Defaults to 1e-4." << std::endl;
+  std::cout << "--delta               Perturbation for central finite difference, [f(x+delta)-f(x-delta)]/2delta. Defaults to 1e-2." << std::endl;
+  std::cout << "--eta                 Gradient descent step size. Defaults to 1." << std::endl;
   std::cout << UNDERLINE << "LEGACY" << CLOSEUNDERLINE << std::endl;
   std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme. (Deprecated, true by default)" << std::endl;
   std::cout << "--optimizer-config    (Same as --opt-config) Path to config file for NLOpt optimizer parameters" << std::endl; // MZ: not sure why this is different from main.cpp. I keep the one in the main.cpp as it is shorter.
@@ -79,8 +80,8 @@ int parse_args(int argc, char** argv,
   n_trials = 1;
   settings.max_evals = 100;
   seed = time(0);
-  delta = 1e-4;
-  eta = 1e-3;
+  delta = 1e-2;
+  eta = 1;
   use_xacc = true;
   local = false;
   verbose = false;
@@ -302,14 +303,22 @@ void optimize_ansatz(const VQEBackendManager& manager,
 
   auto start_time = std::chrono::high_resolution_clock::now(); // MZ: time the optimization
   if (local) {
-  param_tuple = state->follow_fixed_gradient(params, 
-                                              initial_ene, 
-                                              final_ene, 
-                                              num_iterations, 
-                                              delta, 
-                                              eta, 
-                                              num_trials,
-                                              verbose);
+    // param_tuple = state->follow_fixed_gradient(params, 
+    //                                             initial_ene, 
+    //                                             final_ene, 
+    //                                             num_iterations, 
+    //                                             delta, 
+    //                                             eta, 
+    //                                             num_trials,
+    //                                             verbose);
+
+    param_tuple = state->follow_true_gradient(params, 
+                                                initial_ene, 
+                                                final_ene, 
+                                                num_iterations, 
+                                                delta, 
+                                                eta, 
+                                                verbose);
 
   } else {
     ansatz->setParams(params);

@@ -35,7 +35,8 @@ namespace NWQSim {
       std::mt19937_64 random_engine;
       std::bernoulli_distribution distribution;
     public:
-      SPSA(IdxType seed): GradientEstimator("SPSA"), random_engine(seed), distribution(0.5) {}; 
+      SPSA(IdxType seed): GradientEstimator("SPSA"), random_engine(seed), distribution(0.5) {}
+      void reseed(uint64_t s) { random_engine.seed(s); }; 
       virtual void estimate(Function function_oracle, const std::vector<ValType>& x, std::vector<ValType>& grad, ValType epsilon) override {
         estimate(function_oracle, x, grad, epsilon, 1);
       }
@@ -43,7 +44,7 @@ namespace NWQSim {
       virtual void estimate(Function function_oracle, const std::vector<ValType>& x, std::vector<ValType>& grad, ValType epsilon, IdxType n_trials = 1) override {
         std::vector<ValType> delta (x.size());
         grad.resize(x.size());
-        std::fill(grad.begin(), grad.end(), 0);
+        std::fill(grad.begin(), grad.end(), ValType{0});
         for (size_t i = 0; i < n_trials; i++) {
 
           std::generate(delta.begin(), delta.end(), [&] () {return epsilon * (distribution(random_engine) ? 1. : -1.);});
@@ -62,6 +63,42 @@ namespace NWQSim {
       };
 
   };
+
+  class FiniteDifference: public GradientEstimator {
+    /**
+     * Finite Difference Gradient Estimator
+     *  Computes the true gradient using central finite differences.
+     *  For each parameter i: grad[i] = (f(x + h*e_i) - f(x - h*e_i)) / (2*h)
+     *  where e_i is the i-th unit vector and h is the step size.
+     */
+    public:
+      FiniteDifference(): GradientEstimator("FiniteDifference") {}
+
+      virtual void estimate(Function function_oracle, const std::vector<ValType>& x, std::vector<ValType>& grad, ValType epsilon) override {
+        estimate(function_oracle, x, grad, epsilon, 1);
+      }
+
+      virtual void estimate(Function function_oracle, const std::vector<ValType>& x, std::vector<ValType>& grad, ValType epsilon, IdxType n_evals = 1) override {
+        grad.resize(x.size());
+        std::fill(grad.begin(), grad.end(), ValType{0});
+
+        // Compute finite difference gradient for each parameter
+        for (size_t i = 0; i < x.size(); i++) {
+          std::vector<ValType> x_plus = x;
+          std::vector<ValType> x_minus = x;
+
+          // Perturb the i-th parameter
+          x_plus[i] += epsilon;
+          x_minus[i] -= epsilon;
+
+          // Compute central difference
+          ValType f_plus = function_oracle(x_plus);
+          ValType f_minus = function_oracle(x_minus);
+          grad[i] = (f_plus - f_minus) / (2.0 * epsilon);
+        }
+      }
+  };
+
   }; // namespace VQE
 }; // namespace NWQSim
 

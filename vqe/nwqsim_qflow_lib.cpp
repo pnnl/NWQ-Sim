@@ -59,14 +59,15 @@ double optimize_ansatz(const VQEBackendManager &manager,
     long long num_iterations = 0;
     state->initialize();
 
-    state->follow_fixed_gradient(params,
-                                 initial_ene,
-                                 final_ene,
-                                 num_iterations,
-                                 delta,
-                                 eta,
-                                 num_trials,
-                                 verbose);
+    // Use custom true gradient descent instead of SPSA gradient
+    state->follow_true_gradient(params,
+                                initial_ene,
+                                final_ene,
+                                num_iterations,
+                                delta,
+                                eta,
+                                num_trials,
+                                verbose);
 
     return final_ene;
 }
@@ -161,8 +162,8 @@ std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim
     settings.ubound = PI;
 
     nlopt::algorithm algo = (nlopt::algorithm)nlopt_algorithm_from_string("LN_COBYLA");
-    double delta = 1e-4;
-    double eta = 1e-3;
+    double delta = 1e-2;
+    double eta = 1;
     unsigned seed = time(0);
     bool use_xacc = true;
     bool verbose = false;
