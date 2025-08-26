@@ -55,6 +55,7 @@ namespace NWQSim
                                       ansatz(a),
                                       callback(_callback),
                                       g_est(seed ? seed : static_cast<IdxType>(std::random_device{}())),
+                                      // g_est(),
                                       optimizer_algorithm(_optimizer_algorithm),
                                       optimizer_settings(opt_settings)
                                       {
@@ -136,7 +137,8 @@ namespace NWQSim
        * @param  n_grad_est: Number of gradient estimates for SPSA average (higher=more accurate but slower)
        * @retval 
        */
-      virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& initial_ene, ValType& final_ene, IdxType& num_iterations, ValType delta, ValType eta, IdxType n_grad_est, bool verbose) {
+      virtual std::vector<std::pair<std::string, ValType>> follow_fixed_gradient(const std::vector<ValType>& x0, ValType& initial_ene, ValType& final_ene, IdxType& num_iterations, 
+                                                                                ValType delta, ValType eta, IdxType n_grad_est, bool verbose) {
         Config::PRINT_SIM_TRACE = false;
         local_result = 9; // MZ: initial flag
         // initialize data structures
@@ -149,7 +151,7 @@ namespace NWQSim
         // get the single-direction starting vector
         
         // Reseed SPSA so each call uses a fresh random direction unless caller passed a nonzero seed
-        g_est.reseed(static_cast<uint64_t>(std::random_device{}()));
+        // g_est.reseed(static_cast<uint64_t>(std::random_device{}()));
         g_est.estimate([&] (const std::vector<double>& xval) { return energy(xval);}, params, gradient, delta, n_grad_est);
         iteration = 0;
         // until we reach a local minimum, descend along the starting gradient 
@@ -164,7 +166,7 @@ namespace NWQSim
             if (iteration == 0) {
               std::cout << "\n----------- Iteration Summary -----------\n" << std::left
                         << std::setw(8) << " Iter."
-                        << std::setw(17) << "Objective Value"
+                        << std::setw(20) << "Objective Value"
                         << std::setw(12) << "Grad. Norm"
                         << std::endl;
               std::cout << std::string(41, '-') << std::endl;
@@ -174,7 +176,7 @@ namespace NWQSim
             }));
             std::cout << std::left << " "
                       << std::setw(7) << iteration
-                      << std::setw(17) << std::fixed << std::setprecision(12) << ene_curr
+                      << std::setw(20) << std::fixed << std::setprecision(12) << ene_curr
                       << std::setw(12) << std::fixed << std::setprecision(8) << grad_norm
                       << std::endl;
           }
@@ -244,6 +246,12 @@ namespace NWQSim
           // }
       }
 
+
+      //------------------------------------------------------------------------
+
+
+
+
       /**
        * @brief  True Gradient Descent using Finite Differences
        * @note   Similar to follow_fixed_gradient but uses true gradients instead of SPSA
@@ -254,10 +262,12 @@ namespace NWQSim
        * @param  delta: Step size for finite difference gradient computation
        * @param  eta: Gradient descent step size
        * @param  max_iterations: Maximum number of iterations (default: 1000)
-       * @param  verbose: Print iteration details
+       * @param  verbose: Print iteration details 
        * @retval Parameter map with final values
        */
-      virtual std::vector<std::pair<std::string, ValType>> follow_true_gradient(const std::vector<ValType>& x0, ValType& initial_ene, ValType& final_ene, IdxType& num_iterations, ValType delta, ValType eta, IdxType max_iterations = 100, bool verbose = false) {
+      virtual std::vector<std::pair<std::string, ValType>> follow_true_gradient(const std::vector<ValType>& x0, ValType& initial_ene, ValType& final_ene, 
+                                                                                  IdxType& num_iterations, ValType delta, ValType eta, 
+                                                                                  IdxType max_iterations = 100, bool verbose = false) {
         Config::PRINT_SIM_TRACE = false;
         local_result = 9; // MZ: initial flag
 
@@ -281,6 +291,9 @@ namespace NWQSim
 
         iteration = 0;
 
+        // Store initial gradient norm for relative convergence check
+        ValType initial_grad_norm = 0.0;
+
         // Gradient descent loop
         do {
           // Compute true gradient using finite differences
@@ -291,12 +304,17 @@ namespace NWQSim
             return a + b * b;
           }));
 
+          // Store initial gradient norm for relative threshold
+          if (iteration == 0) {
+            initial_grad_norm = grad_norm;
+          }
+
           // Print iteration info if verbose
           if ((process_rank == 0) && verbose) {
             if (iteration == 0) {
-              std::cout << "\n----------- True Gradient Descent -----------\n" << std::left
+              std::cout << "\n----------- Finite Difference Gradient Descent -----------\n" << std::left
                         << std::setw(8) << " Iter."
-                        << std::setw(17) << "Objective Value"
+                        << std::setw(20) << "Objective Value"
                         << std::setw(12) << "Grad. Norm"
                         << std::setw(12) << "Learn. Rate"
                         << std::endl;
@@ -304,16 +322,17 @@ namespace NWQSim
             }
             std::cout << std::left << " "
                       << std::setw(7) << iteration
-                      << std::setw(17) << std::fixed << std::setprecision(12) << ene_curr
+                      << std::setw(20) << std::fixed << std::setprecision(12) << ene_curr
                       << std::setw(12) << std::fixed << std::setprecision(8) << grad_norm
                       << std::setw(12) << std::fixed << std::setprecision(8) << eta_current
                       << std::endl;
           }
 
-          // Check for convergence (small gradient norm)
-          if (grad_norm < 1e-8) {
+          // Check for convergence using relative gradient norm threshold
+          ValType relative_grad_threshold = 1e-6 * std::max(initial_grad_norm, 1e-8);
+          if (grad_norm < relative_grad_threshold) {
             if (verbose && process_rank == 0) {
-              std::cout << "Converged: gradient norm below threshold" << std::endl;
+              std::cout << "Converged: gradient norm below relative threshold (" << relative_grad_threshold << ")" << std::endl;
             }
             local_result = 0;
             break;
@@ -405,6 +424,10 @@ namespace NWQSim
         return ansatz->getFermionicOperatorParameters();
       }
 
+      //------------------------------------------------------------------------
+
+
+
       // Function declarations (overloaded by backends)
       virtual void call_simulator() {};
       virtual void call_simulator(std::shared_ptr<Ansatz> _measurement, bool reset) {};
@@ -469,6 +492,7 @@ namespace NWQSim
         std::shared_ptr<Ansatz> measurement;               // circuit to measure expectation values
         std::shared_ptr<Hamiltonian> hamil;                // target system Hamiltonian
         SPSA g_est;                                        // stochastic gradient estimator
+        // FiniteDifference g_est;                            // finite difference gradient estimator
         IdxType process_rank;                              // process rank (used by MPI/NVGPU_MPI backends)
         bool compute_gradient;                             // flag to compute gradient (depends on optimizer selected)
         Callback callback;                                 // callback function for terminal updates

@@ -283,10 +283,11 @@ In the QFlow algorithm, we repeatedly perform single-direction gradient descent 
 The `build/vqe/nwq_qflow` binary provides a command line interface, the same as `nwq_vqe` (before ADAPT-VQE portion). The specific options differ for local graident follower:
 ```
 NWQ-VQE QFlow Options
---local               Use local gradient follower pipeline.
+--localfd             Use local gradient follower pipeline (Finite Differences).
+--localspsa           Use local gradient follower pipeline (SPSA).
 -g, --grad-samples    SPSA gradient samples.
---delta               Perturbation magnitude for SPSA. Defaults to 1e-4.
---eta                 Gradient descent step size. Defaults to 1e-3.
+--delta               Perturbation magnitude for SPSA and Central Finite Difference, [f(x+delta)-f(x-delta)]/2delta. Defaults to 1e-2."
+--eta                 Gradient descent step size. Defaults to 1.
 ```
 `--delta` and `--eta` are QFlow-specific parameters which control the gradient descent procedure (TODO: implement adaptive stepsize line search). `--delta` is used to perturb parameter vectors to compute the empirical gradient using SPSA, whereas `--eta` controls the descent stepsize. The algorithm descends the gradient from the (random) initial point until it finds a minimum, then returns.
 

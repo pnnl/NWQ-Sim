@@ -41,12 +41,14 @@ int show_help() {
   std::cout << "--maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)" << std::endl;
   std::cout << "--stopval             Cutoff function value for optimizer. Defaults to -MAXFLOAT (off)" << std::endl;
   std::cout << UNDERLINE << "OPTIONAL (Local Gradient Follower)" << CLOSEUNDERLINE << std::endl;
-  std::cout << "--local               Use local gradient follower pipeline." << std::endl;
+  std::cout << "--localspsa           Use local gradient follower pipeline (SPSA)." << std::endl;
+  std::cout << "--localfd             Use local gradient follower pipeline (Finite Differences)." << std::endl;
   std::cout << "-g, --grad-samples    SPSA gradient samples." << std::endl;
   // std::cout << "--delta               Perturbation magnitude for SPSA. Defaults to 1e-4." << std::endl;
-  std::cout << "--delta               Perturbation for central finite difference, [f(x+delta)-f(x-delta)]/2delta. Defaults to 1e-2." << std::endl;
+  std::cout << "--delta               Perturbation magnitude for SPSA and Central Finite Difference, [f(x+delta)-f(x-delta)]/2delta. Defaults to 1e-2." << std::endl;
   std::cout << "--eta                 Gradient descent step size. Defaults to 1." << std::endl;
   std::cout << UNDERLINE << "LEGACY" << CLOSEUNDERLINE << std::endl;
+  std::cout << "--local               Use local gradient follower pipeline (SPSA)." << std::endl;
   std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme. (Deprecated, true by default)" << std::endl;
   std::cout << "--optimizer-config    (Same as --opt-config) Path to config file for NLOpt optimizer parameters" << std::endl; // MZ: not sure why this is different from main.cpp. I keep the one in the main.cpp as it is shorter.
   std::cout << "--origin              Use old implementatin of UCCSD for VQE (more parameters) or ADAPT-VQE (also incorrect symmetries). Default to false." << std::endl;
@@ -66,6 +68,7 @@ int parse_args(int argc, char** argv,
                 int& n_trials,
                 bool& use_xacc,
                 bool& local,
+                std::string& local_grad_type,
                 bool& verbose,
                 uint64_t& symm_level,
                 unsigned& seed,
@@ -84,6 +87,7 @@ int parse_args(int argc, char** argv,
   eta = 1;
   use_xacc = true;
   local = false;
+  local_grad_type="PS";
   verbose = false;
   symm_level = 0;
   settings.lbound = -PI;
@@ -113,6 +117,15 @@ int parse_args(int argc, char** argv,
       n_particles = std::atoll(argv[++i]);
     } else 
     if (argname == "--local") {
+      local = true;
+      local_grad_type = "SPSA"; // Legacy
+    } else
+    if (argname == "--localspsa") {
+      local_grad_type = "SPSA";
+      local = true;
+    } else
+    if (argname == "--localfd") {
+      local_grad_type = "FD";
       local = true;
     } else
     if (argname == "-g" || argname == "--grad-samples") {
@@ -279,6 +292,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
                      int num_trials,
                      std::vector<double>& params,
                      bool local,
+                     std::string& local_grad_type,
                      bool verbose,
                      double delta,
                      double eta,
@@ -303,23 +317,27 @@ void optimize_ansatz(const VQEBackendManager& manager,
 
   auto start_time = std::chrono::high_resolution_clock::now(); // MZ: time the optimization
   if (local) {
-    // param_tuple = state->follow_fixed_gradient(params, 
-    //                                             initial_ene, 
-    //                                             final_ene, 
-    //                                             num_iterations, 
-    //                                             delta, 
-    //                                             eta, 
-    //                                             num_trials,
-    //                                             verbose);
-
-    param_tuple = state->follow_true_gradient(params, 
-                                                initial_ene, 
-                                                final_ene, 
-                                                num_iterations, 
-                                                delta, 
-                                                eta, 
-                                                verbose);
-
+    if (local_grad_type == "SPSA") {
+      param_tuple = state->follow_fixed_gradient(params, 
+                                                  initial_ene, 
+                                                  final_ene, 
+                                                  num_iterations, 
+                                                  delta, 
+                                                  eta, 
+                                                  num_trials,
+                                                  verbose);
+    } else if (local_grad_type == "FD") {
+      param_tuple = state->follow_true_gradient(params, 
+                                                  initial_ene, 
+                                                  final_ene, 
+                                                  num_iterations, 
+                                                  delta, 
+                                                  eta, 
+                                                  num_trials,
+                                                  verbose);
+      } else {
+        throw std::runtime_error("Invalid local gradient type");
+      }
   } else {
     ansatz->setParams(params);
     if (settings.max_evals > 0) 
@@ -359,7 +377,7 @@ void optimize_ansatz(const VQEBackendManager& manager,
       NWQSim::safe_print("Circuit Stats          : %lld depth, %lld 1Q gates, %lld 2Q gates, %.3f gate density\n", final_metrics.depth, final_metrics.one_q_gates, final_metrics.two_q_gates, final_metrics.gate_density);
       std::string ter_rea;
       if (local) {
-        ter_rea = "Optimization terminated: "+get_termination_reason_local(state->get_optresult())+"\n";
+        ter_rea = "Optimization terminated: "+get_termination_reason_local(state->get_localresult())+"\n";
       } else {
         ter_rea = "Optimization terminated: "+get_termination_reason(state->get_optresult())+"\n";
       }
@@ -395,11 +413,12 @@ int main(int argc, char** argv) {
   unsigned seed;
   uint64_t symm_level;
   bool use_xacc, local, verbose;
+  std::string local_grad_type;
   int n_trials;
   NWQSim::VQE::PoolType pool;
 
   if (parse_args(argc, argv, manager, hamil_path, backend, amplitudes,  n_part, algo, settings, 
-                 n_trials, use_xacc, local, verbose, symm_level, 
+                 n_trials, use_xacc, local, local_grad_type, verbose, symm_level, 
                   seed, delta, eta, pool)) {
 //   if (parse_args(argc, argv, manager, hamil_path, backend, amplitudes, n_part, algo, settings, n_trials, use_xacc, local, verbose, seed, delta, eta)) {
     return 1;
@@ -442,7 +461,7 @@ int main(int argc, char** argv) {
   ansatz->buildAnsatz();
   std::vector<double> params;
   NWQSim::safe_print("Beginning the loop...\n");
-  optimize_ansatz(manager, backend, amplitudes, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta, symm_level); //MZ: add symmetry level for printout info only
+  optimize_ansatz(manager, backend, amplitudes, hamil, ansatz, settings, algo, seed, n_trials, params, local, local_grad_type, verbose, delta, eta, symm_level); //MZ: add symmetry level for printout info only
 //   optimize_ansatz(manager, backend, amplitudes, hamil, ansatz, settings, algo, seed, n_trials, params, local, verbose, delta, eta);
 #ifdef MPI_ENABLED
   if (backend == "MPI" || backend == "NVGPU_MPI")
