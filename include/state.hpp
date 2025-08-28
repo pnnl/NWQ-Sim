@@ -46,10 +46,16 @@ namespace NWQSim
         {
             throw std::runtime_error("2D Sim Not Implemented");
         }
-
+        virtual void sim_batch(std::shared_ptr<NWQSim::Circuit> circuit, IdxType shots, std::vector<std::vector<int32_t>>& all_results, double &sim_time)
+        {
+            throw std::runtime_error("Sim Batch Not Implemented");
+        }
         virtual IdxType *get_results() = 0;
         virtual IdxType measure(IdxType qubit) = 0;
-        virtual IdxType *measure_all(IdxType repetition) = 0;
+        virtual IdxType *measure_all(IdxType repetition)
+        {
+            throw std::runtime_error("Measure all not implemented.");
+        }
         virtual IdxType **measure_all_long(IdxType shots = 2048)
         {
             throw std::runtime_error("Measure all for results >64 bits not implemented.");

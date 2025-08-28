@@ -60,7 +60,7 @@ def plot_data(all_data):
     plt.plot(distance_qiskit, sim_times_qiskit, "<-", label="Qiskit ('stabilizer')", linestyle="--", color="deepskyblue", markersize=6)
     plt.plot(distance_stim, sim_times_stim, ">-", label="Stim", linestyle="--", color="green", markersize=6)
 
-    plt.plot(distance_stab, sim_times_stab, "v-", label="QuECO (This Work)", linestyle="-", color="darkorange", markersize=6)
+    plt.plot(distance_stab, sim_times_stab, "v-", label="STABSim", linestyle="-", color="red", markersize=6)
 
     # Find where STAB-GPU overtakes Stim
     # crossover_distance = None
@@ -123,7 +123,7 @@ def plot_data(all_data):
     plt.tight_layout()
 
     # Save the plot as a PDF, ensuring all elements fit
-    plt.savefig("/people/garn195/NWQ-Sim/stabilizer/graphics/random_improved.pdf", format="pdf", bbox_inches='tight', dpi=1000)
+    plt.savefig("/Users/garn195/Library/CloudStorage/OneDrive-PNNL/Project_Repositories/NWQ-Sim/stabilizer/graphics/random_improved.pdf", format="pdf", bbox_inches='tight', dpi=1000)
 
     plt.show()
 

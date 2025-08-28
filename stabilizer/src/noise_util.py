@@ -34,6 +34,103 @@ PAULI_DOUBLE = [
     ("Z", "I"), ("Z", "X"), ("Z", "Y"), ("Z", "Z"),
 ]
 
+def stim_to_qasm_with_depolarize_noise(circuit: stim.Circuit) -> str:
+    """
+    Converts a stim circuit with DEPOLARIZE1/DEPOLARIZE2/DAMP instructions 
+    to a QASM 2.0 string, defining custom gates for these noise channels.
+    """
+    qasm_body = ""
+    has_depolarize1 = False
+    has_depolarize2 = False
+    has_damp = False
+
+    for instruction in circuit:
+        name = instruction.name
+        targets = instruction.targets_copy()
+        args = instruction.gate_args_copy()
+
+        if name == "DEPOLARIZE1":
+            has_depolarize1 = True
+            gate_name = "dep1"
+            params = f"({args[0]})"
+            for target in targets:
+                qasm_body += f"{gate_name}{params} q[{target.value}];\n"
+        elif name == "DEPOLARIZE2":
+            has_depolarize2 = True
+            gate_name = "dep2"
+            params = f"({args[0]})"
+            # DEPOLARIZE2 targets pairs of qubits
+            for i in range(0, len(targets), 2):
+                q1 = targets[i].value
+                q2 = targets[i+1].value
+                qasm_body += f"{gate_name}{params} q[{q1}],q[{q2}];\n"
+        elif name == "AMPLITUDE_DAMP": # Correct stim name is AMPLITUDE_DAMP
+            has_damp = True
+            gate_name = "damp"
+            # DAMP in this context will be represented by AMPLITUDE_DAMP(p)
+            # We will model it as damp(p1, p2) where p1=p, p2=0 for simplicity
+            # as the user requested two parameters.
+            params = f"({args[0]}, 0)" 
+            for target in targets:
+                qasm_body += f"{gate_name}{params} q[{target.value}];\n"
+        # NEW: map Stim PAULI_CHANNEL_1 to custom QASM gate chan1(px,py,pz) q[i];
+        elif name == "PAULI_CHANNEL_1":
+            gate_name = "chan1"
+            # Expect 3 args: pX, pY, pZ (missing values default to 0)
+            a = list(args)
+            while len(a) < 3:
+                a.append(0.0)
+            params = f"({a[0]},{a[1]},{a[2]})"
+            for target in targets:
+                qasm_body += f"{gate_name}{params} q[{target.value}];\n"
+        # NEW: map Stim PAULI_CHANNEL_2 to custom QASM gate chan2(p1,...,p15) q[i],q[j];
+        elif name == "PAULI_CHANNEL_2":
+            gate_name = "chan2"
+            # Forward all provided probabilities in order
+            a = list(args)
+            params = "(" + ",".join(str(x) for x in a) + ")"
+            if len(targets) % 2 != 0:
+                raise ValueError("PAULI_CHANNEL_2 requires an even number of targets (pairs)")
+            for i in range(0, len(targets), 2):
+                q1 = targets[i].value
+                q2 = targets[i+1].value
+                qasm_body += f"{gate_name}{params} q[{q1}],q[{q2}];\n"
+        else:
+            # For other instructions, use stim's built-in QASM conversion
+            # but handle instructions it can't convert.
+            temp_circ = stim.Circuit()
+            temp_circ.append(instruction)
+            try:
+                # Get QASM for a single instruction, skipping headers
+                qasm_lines = temp_circ.to_qasm(open_qasm_version=2).splitlines()
+                for line in qasm_lines:
+                    # Append only the actual gate operations
+                    if 'q[' in line and not line.startswith(('qreg', 'creg', 'OPENQASM', 'include')):
+                         qasm_body += line + "\n"
+            except ValueError:
+                # Ignore instructions that have no QASM equivalent
+                if name not in ["DETECTOR", "OBSERVABLE_INCLUDE", "SHIFT_COORDS", "TICK"]:
+                     qasm_body += f"# Unsupported for QASM: {name}\n"
+
+    # --- Assemble the full QASM string ---
+    num_qubits = circuit.num_qubits
+    qasm_header = "OPENQASM 2.0;\n"
+    qasm_header += 'include "qelib1.inc";\n'
+    
+    # Add custom gate declarations if they were used
+    # if has_depolarize1:
+    #     qasm_header += "gate dep1(p) q;\n"
+    # if has_depolarize2:
+    #     qasm_header += "gate dep2(p) q1, q2;\n"
+    # if has_damp:
+    #     qasm_header += "gate damp(p1, p2) q;\n"
+    # chan1 / chan2 are parsed directly by our reader, no need to declare here.
+        
+    qasm_header += f"qreg q[{num_qubits}];\n"
+    qasm_header += f"creg c[{num_qubits}];\n"
+
+    return qasm_header + qasm_body
+
 def remove_noise_statements(circuit: stim.Circuit) -> stim.Circuit:
     """
     Remove all noise instructions from the input stim.Circuit.
@@ -368,6 +465,7 @@ class ErrorModel:
 
             # 5) 其它门：直接抄过去
             circ_lines.append(f"{name} {target_str}")
+            # print(circ_lines)
 
         self.noisy_circ = stim.Circuit("\n".join(circ_lines))
         return self.noisy_circ
