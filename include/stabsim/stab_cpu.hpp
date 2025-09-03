@@ -2026,6 +2026,7 @@ namespace NWQSim
             {
                 auto gate = gates[k];
                 int a = gate.qubit;
+                // std::cout << "Damping inactivated rrrrrr " << gate.gamma << std::endl;
 
                 switch (gate.op_name)
                 {
@@ -2080,15 +2081,17 @@ namespace NWQSim
                         break;
 
                     case OP::DAMP:
-                        // std::cout << "Gamma " << gate.gamma << std::endl;
+                        // std::cout << "Damping activated rrrrrr " << gate.gamma << std::endl;
                         switch(damping_generator(gate.lam/2, gate.gamma))
                         {
                             case 0: //Do nothing
                                 break;
                             case 1: //Apply Z
+                                // std::cout << "zzz " << std::endl;
                                 apply_Z(a);
                                 break;
                             case 2: //Reset to |0>
+                                // std::cout << "rrrrßß " << std::endl;
                                 reset_routine(a);
                                 break;
                             default:
@@ -2098,13 +2101,13 @@ namespace NWQSim
                         break;
                     case OP::CHAN1:
                     {
-                        std::cerr<< "CHAN1 reached in sim!: " << std::endl;
+                        // std::cerr<< "CHAN1 reached in sim!: " << std::endl;
                         const auto& probs = gate.channel_probabilities;
                         if (probs.size() < 3) {
                             std::cerr << "CHAN1: missing probabilities, size=" << probs.size() << std::endl;
                             break;
                         }
-                        std::cerr<< "gate prob: " << probs[2] << std::endl;
+                        // std::cerr<< "gate prob: " << probs[2] << std::endl;
 
                         double monte = random_float(rng);
                         monte -= gate.channel_probabilities[0];

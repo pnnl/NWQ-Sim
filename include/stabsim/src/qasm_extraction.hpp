@@ -5,10 +5,10 @@
 #include <iomanip>
 #include <regex>
 
-#include "../../include/backendManager.hpp"
-#include "../../include/state.hpp"
-#include "../../include/circuit.hpp"
-#include "../../include/nwq_util.hpp"
+#include "../../backendManager.hpp"
+#include "../../state.hpp"
+#include "../../circuit.hpp"
+#include "../../nwq_util.hpp"
 
 int extractQubitIndex(const std::string& qubitStr) 
 {
@@ -169,7 +169,7 @@ bool appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
                 qubit1 = extractQubitIndex(qubitStr);
                 if (qubit1 != -1) circuit->RESET(qubit1);
             }
-            else if (gate == "damp")
+            else if(gate == "damp")
             {
                 auto params = extract_params(gate_full);
                 std::string qubitStr;
@@ -211,8 +211,8 @@ bool appendQASMToCircuit(std::shared_ptr<NWQSim::Circuit>& circuit, const std::s
                 std::string qubitStr;
                 lineStream >> qubitStr;
                 qubit1 = extractQubitIndex(qubitStr);
-                std::cerr << "[qasm_extraction] chan1 q=" << qubit1
-                          << " params=" << params.size() << std::endl; // stderr
+                // std::cerr << "[qasm_extraction] chan1 q=" << qubit1
+                //           << " params=" << params.size() << std::endl; // stderr
                 if (qubit1 != -1)
                 {
                     // std::cout<< "CHAN1 reached in extract!: "  << params[1] << std::endl;

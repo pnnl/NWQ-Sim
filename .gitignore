@@ -65,11 +65,12 @@ CMakeCache.txt
 /stabilizer/previous_T_data
 /stabilizer/old_tests
 /stabilizer/damping_work/qasm_circuits
-<<<<<<< HEAD
-=======
 /stabilizer/random_bench/
 /stabilizer/random_bench_new/
 /stabilizer/random_bench_dense/
 /stabilizer/fowler_improved/
->>>>>>> 50b85f1 (gitignore)
+
+/stabilizer/damping_work/relay_bp_decoding/relay/examples/bb_code_qasm/
+/stabilizer/damping_work/relay_bp_decoding/relay/tests/
+/stabilizer/damping_work/surface_code_qasm/
 

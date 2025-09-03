@@ -11,6 +11,7 @@ NOISE_GATES = {
     "X_ERROR", "Y_ERROR", "Z_ERROR",
     "DEPOLARIZE1", "DEPOLARIZE2",
     "PAULI_CHANNEL_1", "PAULI_CHANNEL_2",
+    "AMPLITUDE_DAMP",  # allow in settings; we won't emit into Stim text
     "E",  # Correlated Pauli error
 }
 
@@ -34,17 +35,23 @@ PAULI_DOUBLE = [
     ("Z", "I"), ("Z", "X"), ("Z", "Y"), ("Z", "Z"),
 ]
 
+# ...existing code...
+# ...existing code...
 def stim_to_qasm_with_depolarize_noise(circuit: stim.Circuit) -> str:
     """
-    Converts a stim circuit with DEPOLARIZE1/DEPOLARIZE2/DAMP instructions 
+    Converts a stim circuit with DEPOLARIZE1/DEPOLARIZE2/AMPLITUDE_DAMP instructions 
     to a QASM 2.0 string, defining custom gates for these noise channels.
+
+    Note: REPEAT blocks are unsupported in QASM; we unroll them by using
+    circuit.flattened() so all operations are emitted explicitly.
     """
     qasm_body = ""
     has_depolarize1 = False
     has_depolarize2 = False
     has_damp = False
 
-    for instruction in circuit:
+    # Unroll REPEAT blocks by flattening the circuit
+    for instruction in circuit.flattened():
         name = instruction.name
         targets = instruction.targets_copy()
         args = instruction.gate_args_copy()
@@ -64,29 +71,25 @@ def stim_to_qasm_with_depolarize_noise(circuit: stim.Circuit) -> str:
                 q1 = targets[i].value
                 q2 = targets[i+1].value
                 qasm_body += f"{gate_name}{params} q[{q1}],q[{q2}];\n"
-        elif name == "AMPLITUDE_DAMP": # Correct stim name is AMPLITUDE_DAMP
+        elif name == "AMPLITUDE_DAMP":  # map Stim op (if present) to QASM damp
             has_damp = True
             gate_name = "damp"
-            # DAMP in this context will be represented by AMPLITUDE_DAMP(p)
-            # We will model it as damp(p1, p2) where p1=p, p2=0 for simplicity
-            # as the user requested two parameters.
-            params = f"({args[0]}, 0)" 
+            a = list(args)
+            while len(a) < 2:
+                a.append(0.0)
+            params = f"({a[0]}, {a[1]})"
             for target in targets:
                 qasm_body += f"{gate_name}{params} q[{target.value}];\n"
-        # NEW: map Stim PAULI_CHANNEL_1 to custom QASM gate chan1(px,py,pz) q[i];
         elif name == "PAULI_CHANNEL_1":
             gate_name = "chan1"
-            # Expect 3 args: pX, pY, pZ (missing values default to 0)
             a = list(args)
             while len(a) < 3:
                 a.append(0.0)
             params = f"({a[0]},{a[1]},{a[2]})"
             for target in targets:
                 qasm_body += f"{gate_name}{params} q[{target.value}];\n"
-        # NEW: map Stim PAULI_CHANNEL_2 to custom QASM gate chan2(p1,...,p15) q[i],q[j];
         elif name == "PAULI_CHANNEL_2":
             gate_name = "chan2"
-            # Forward all provided probabilities in order
             a = list(args)
             params = "(" + ",".join(str(x) for x in a) + ")"
             if len(targets) % 2 != 0:
@@ -96,19 +99,15 @@ def stim_to_qasm_with_depolarize_noise(circuit: stim.Circuit) -> str:
                 q2 = targets[i+1].value
                 qasm_body += f"{gate_name}{params} q[{q1}],q[{q2}];\n"
         else:
-            # For other instructions, use stim's built-in QASM conversion
-            # but handle instructions it can't convert.
+            # Fallback: rely on Stim's per-instruction QASM conversion
             temp_circ = stim.Circuit()
             temp_circ.append(instruction)
             try:
-                # Get QASM for a single instruction, skipping headers
                 qasm_lines = temp_circ.to_qasm(open_qasm_version=2).splitlines()
                 for line in qasm_lines:
-                    # Append only the actual gate operations
                     if 'q[' in line and not line.startswith(('qreg', 'creg', 'OPENQASM', 'include')):
                          qasm_body += line + "\n"
             except ValueError:
-                # Ignore instructions that have no QASM equivalent
                 if name not in ["DETECTOR", "OBSERVABLE_INCLUDE", "SHIFT_COORDS", "TICK"]:
                      qasm_body += f"# Unsupported for QASM: {name}\n"
 
@@ -116,16 +115,6 @@ def stim_to_qasm_with_depolarize_noise(circuit: stim.Circuit) -> str:
     num_qubits = circuit.num_qubits
     qasm_header = "OPENQASM 2.0;\n"
     qasm_header += 'include "qelib1.inc";\n'
-    
-    # Add custom gate declarations if they were used
-    # if has_depolarize1:
-    #     qasm_header += "gate dep1(p) q;\n"
-    # if has_depolarize2:
-    #     qasm_header += "gate dep2(p) q1, q2;\n"
-    # if has_damp:
-    #     qasm_header += "gate damp(p1, p2) q;\n"
-    # chan1 / chan2 are parsed directly by our reader, no need to declare here.
-        
     qasm_header += f"qreg q[{num_qubits}];\n"
     qasm_header += f"creg c[{num_qubits}];\n"
 
@@ -312,13 +301,14 @@ class ErrorModel:
                         "For two_qubit, error_statements must be 'DEPOLARIZE2(...)' or 'PAULI_CHANNEL_2(...)'."
                     )
             else:
-                # allow single qubit Pauli or depolarize1 or pauli_channel_1
+                # allow single-qubit Pauli or depolarize1 or pauli_channel_1 or amplitude_damp
                 if not (s.startswith("X_ERROR") or s.startswith("Y_ERROR") or s.startswith("Z_ERROR") or
-                        s.startswith("DEPOLARIZE1") or s.startswith("PAULI_CHANNEL_1")):
+                        s.startswith("DEPOLARIZE1") or s.startswith("PAULI_CHANNEL_1") or
+                        s.startswith("AMPLITUDE_DAMP")):
                     raise ValueError(
-                        f"For {error_place}, error_statements must be single-qubit Pauli error or 'DEPOLARIZE1(...)' or 'PAULI_CHANNEL_1(...)'."
+                        f"For {error_place}, error_statements must be single-qubit Pauli error, 'DEPOLARIZE1(...)', 'PAULI_CHANNEL_1(...)', or 'AMPLITUDE_DAMP(p_phase,p_amp)'."
                     )
-            self._error_settings[error_place] = error_statements
+            self._error_settings[error_place] = s
         else:
             self._error_settings[error_place] = None
         return
@@ -399,9 +389,8 @@ class ErrorModel:
         circ_lines: list[str] = []
 
         for inst in self.noiseless_circ:
-            # print(inst)
             name = inst.name.upper()
-            targets = [str(t.value) for t in inst.targets_copy()] #type: ignore
+            targets = [str(t.value) for t in inst.targets_copy()]  # type: ignore
             target_str = " ".join(targets)
             # print(name)
 
@@ -433,14 +422,17 @@ class ErrorModel:
                 circ_lines.append(f"{name} {target_str}")
                 err_stmt = self._error_settings["Single_qubit"]
                 if err_stmt:
-                    circ_lines.append(f"{err_stmt} {target_str}")
+                    # Skip injecting AMPLITUDE_DAMP into Stim text; will inject in QASM later
+                    if not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP"):
+                        circ_lines.append(f"{err_stmt} {target_str}")
                 continue
 
             if name in {"I"}:
                 circ_lines.append(f"{name} {target_str}")
                 err_stmt = self._error_settings["Identity"]
                 if err_stmt:
-                    circ_lines.append(f"{err_stmt} {target_str}")
+                    if not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP"):
+                        circ_lines.append(f"{err_stmt} {target_str}")
                 continue
 
             # ────────────────────────────────────────────────────────────────
@@ -448,7 +440,7 @@ class ErrorModel:
             # ────────────────────────────────────────────────────────────────
             if name.startswith("M") and self._error_config["Measurement"]:
                 err_stmt = self._error_settings["Measurement"]
-                if err_stmt:
+                if err_stmt and (not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP")):
                     circ_lines.append(f"{err_stmt} {target_str}")
                 circ_lines.append(f"{name} {target_str}")
                 continue
@@ -459,7 +451,7 @@ class ErrorModel:
             if name in {"R", "RX", "RY", "RZ"} and self._error_config["Reset"]:
                 circ_lines.append(f"{name} {target_str}")
                 err_stmt = self._error_settings["Reset"]
-                if err_stmt:
+                if err_stmt and (not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP")):
                     circ_lines.append(f"{err_stmt} {target_str}")
                 continue
 
@@ -943,6 +935,128 @@ def dem_det_coords(dem_text: str) -> Dict[int, Tuple[int,int]]:
 
     return det_map
 
+
+# --- Injection of AMPLITUDE_DAMP into QASM based on ErrorModel settings ---
+
+def _parse_amp_damp_args(stmt: Optional[str]) -> Optional[tuple[float, float]]:
+    if not stmt:
+        return None
+    s = stmt.strip().upper()
+    if not s.startswith("AMPLITUDE_DAMP"):
+        return None
+    try:
+        inside = s[s.find("(") + 1:s.find(")")]
+        parts = [p.strip() for p in inside.split(',') if p.strip()]
+        if not parts:
+            return None
+        p1 = float(parts[0])
+        p2 = float(parts[1]) if len(parts) > 1 else 0.0
+        return (p1, p2)
+    except Exception:
+        return None
+
+def inject_amplitude_damp(qasm_text: str, error_model: "ErrorModel") -> str:
+    """Insert damp(p1,p2) to mimic Stim ordering for amplitude damping.
+    Policy requested:
+    - After the FIRST contiguous round of RESET statements, inject damp AFTER each of those resets.
+    - Thereafter, inject damp BEFORE every measurement (M/measure) – including lines that have M; RESET pairs.
+    Other noise channels are unaffected. Trailing // comments preserved.
+    """
+    import re as _re
+
+    p_meas = _parse_amp_damp_args(error_model._error_settings.get("Measurement"))
+    p_reset = _parse_amp_damp_args(error_model._error_settings.get("Reset"))
+    # If neither configured, nothing to do
+    if not p_meas and not p_reset:
+        return qasm_text
+
+    def _pick_post_reset_params():
+        # Prefer Reset args for post-reset injection; fallback to Measurement
+        return p_reset or p_meas
+
+    def _pick_pre_meas_params():
+        # Prefer Measurement args for pre-measure injection; fallback to Reset
+        return p_meas or p_reset
+
+    meas_stmt_re = _re.compile(r"^(?:m|measure)\s+(q\[\d+\])(?:\s*->\s*rec\[\d+\])?$", _re.IGNORECASE)
+    reset_stmt_re = _re.compile(r"^reset\s+(q\[\d+\])$", _re.IGNORECASE)
+    indent_re = _re.compile(r"^(\s*)")
+
+    out_lines: list[str] = []
+
+    # Track the first contiguous block of RESET statements
+    in_first_reset_block = False
+    first_reset_block_done = False
+
+    for raw_line in qasm_text.splitlines():
+        # Preserve completely empty lines
+        if not raw_line.strip():
+            out_lines.append(raw_line)
+            continue
+
+        # Split trailing comment (// ...)
+        code_part = raw_line
+        comment_part = ""
+        cidx = raw_line.find("//")
+        if cidx != -1:
+            code_part = raw_line[:cidx]
+            comment_part = raw_line[cidx:]
+
+        # If the line contains only comment after stripping code_part
+        if not code_part.strip():
+            out_lines.append(raw_line)
+            continue
+
+        indent_match = indent_re.match(code_part)
+        indent = indent_match.group(1) if indent_match else ""
+
+        # Split into statements while preserving order; we will re-emit per statement
+        stmts = [s.strip() for s in code_part.split(';') if s.strip()]
+
+        for stmt in stmts:
+            r = reset_stmt_re.match(stmt)
+            if r:
+                qtok = r.group(1)
+                # Seeing reset: if first block not finished, we are inside it
+                if not first_reset_block_done:
+                    in_first_reset_block = True
+                # Emit RESET
+                out_lines.append(f"{indent}{stmt};")
+                # If inside first contiguous reset block, inject POST-RESET damp
+                if in_first_reset_block:
+                    p = _pick_post_reset_params()
+                    if p:
+                        out_lines.append(f"{indent}damp({p[0]},{p[1]}) {qtok};")
+                # Do not inject for later resets (handled before measurements instead)
+                continue
+
+            m = meas_stmt_re.match(stmt)
+            if m:
+                qtok = m.group(1)
+                # Any non-reset breaks the initial reset block if it was in progress
+                if in_first_reset_block and not first_reset_block_done:
+                    in_first_reset_block = False
+                    first_reset_block_done = True
+                # Inject PRE-MEAS damp (for all subsequent rounds)
+                p = _pick_pre_meas_params()
+                if p:
+                    out_lines.append(f"{indent}damp({p[0]},{p[1]}) {qtok};")
+                # Emit MEAS after the damp
+                out_lines.append(f"{indent}{stmt};")
+                continue
+
+            # Any other statement: end the first reset block if we were in it
+            if in_first_reset_block and not first_reset_block_done:
+                in_first_reset_block = False
+                first_reset_block_done = True
+
+            out_lines.append(f"{indent}{stmt};")
+
+        # Attach trailing comment as its own line to avoid corrupting code layout
+        if comment_part:
+            out_lines.append(f"{indent}{comment_part}")
+
+    return "\n".join(out_lines)
 
 if __name__ == '__main__':
     # Test code that constructs an example circuit with DEPOLARIZE1 on multiple targets,
