@@ -422,6 +422,10 @@ namespace NWQSim
             {
                 mod_qubits.push_back(q);
             }
+            for (auto p : g.channel_probabilities)
+            {
+                channel_probabilities.push_back(p);
+            }
         }
 
         ~Gate() {}
