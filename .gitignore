@@ -36,6 +36,7 @@ __pycache__/
 /lib64/
 /share/
 /pyvenv.cfg
+.venv-py312
 
 # Ignore Visual Studio Code settings
 .vscode/
