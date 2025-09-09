@@ -163,7 +163,7 @@ namespace NWQSim
         {
             throw std::runtime_error("Apply Gate Not Implemented");
         }
-        virtual void allocate_measurement_buffers(int max_measurements)
+        virtual void allocate_measurement_buffers(IdxType max_measurements)
         {
             throw std::runtime_error("Allocate Measurement Buffers Not Implemented");
         }

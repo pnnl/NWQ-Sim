@@ -18,10 +18,21 @@
 #include "include/nwq_util.hpp"
 
 #include "include/stabsim/src/qasm_extraction.hpp"
+// ...existing includes...
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <cstdlib>
+// ...existing code...
+
+using IdxType = long long int;
 namespace NWQSim{
-void sim_batch(std::shared_ptr<NWQSim::Circuit> circuit, IdxType shots, std::vector<std::vector<int32_t>>& all_results, int n, double &sim_time)
+void sim_batch(std::shared_ptr<NWQSim::Circuit> circuit,
+               IdxType shots,
+               const std::string& out_path,
+               int n,
+               double &sim_time)
 {
-    // std::cerr << "In sim batch!" << std::endl;
     // MPI rank/size
     int world_rank = 0, world_size = 1;
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
@@ -31,23 +42,134 @@ void sim_batch(std::shared_ptr<NWQSim::Circuit> circuit, IdxType shots, std::vec
     IdxType base = shots / world_size;
     IdxType rem  = shots % world_size;
     IdxType local_count = base + (world_rank < rem ? 1 : 0);
-    IdxType local_start = world_rank * base + std::min<IdxType>(world_rank, rem);
+    IdxType local_start = static_cast<IdxType>(world_rank) * base + static_cast<IdxType>(std::min<IdxType>(world_rank, rem));
 
-    // Local simulation
+    // Simulator
     cpu_timer sim_timer; sim_timer.start_timer();
     double tmp_timer = 0.0;
     auto sim = BackendManager::create_state("CPU", n, "stab");
+    // Optional pre-allocation (kept as-is)
+    sim->allocate_measurement_buffers(shots * 1872); // informed guesstimate
 
-    std::vector<std::vector<int32_t>> local_results;
-    local_results.reserve(static_cast<size_t>(local_count));
-
-    for (IdxType j = 0; j < local_count; ++j) {
-        IdxType g = local_start + j; // global shot index
-        sim->set_seed(static_cast<IdxType>(g));
+    // Probe first local shot to learn measurement length
+    std::vector<int32_t> first_meas;
+    long long mlen_local_ll = -1LL;
+    if (local_count > 0) {
+        IdxType g0 = local_start;
+        sim->set_seed(static_cast<IdxType>(g0));
         sim->sim(circuit, tmp_timer);
-        local_results.push_back(sim->get_measurement_results());
+        first_meas = sim->get_measurement_results();
+        mlen_local_ll = static_cast<long long>(first_meas.size());
         sim->reset_state();
     }
+
+    // Agree on measurement length across ranks
+    long long mlen_max_ll = 0;
+    MPI_Allreduce(&mlen_local_ll, &mlen_max_ll, 1, MPI_LONG_LONG, MPI_MAX, MPI_COMM_WORLD);
+
+    long long big_ll = std::numeric_limits<long long>::max();
+    long long mlen_min_local_ll = (mlen_local_ll >= 0) ? mlen_local_ll : big_ll;
+    long long mlen_min_ll = 0;
+    MPI_Allreduce(&mlen_min_local_ll, &mlen_min_ll, 1, MPI_LONG_LONG, MPI_MIN, MPI_COMM_WORLD);
+    if (mlen_min_ll == big_ll) mlen_min_ll = 0; // all empty
+
+    if (mlen_min_ll != mlen_max_ll && mlen_min_ll != 0) {
+        if (world_rank == 0) {
+            std::cerr << "Error: measurement length mismatch across MPI ranks." << std::endl;
+        }
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+    IdxType mlen = static_cast<IdxType>(mlen_max_ll);
+
+    // Open output file collectively and pre-size it (binary + header)
+    MPI_File fh;
+    MPI_File_open(MPI_COMM_WORLD,
+                  const_cast<char*>(out_path.c_str()),
+                  MPI_MODE_CREATE | MPI_MODE_WRONLY,
+                  MPI_INFO_NULL, &fh);
+
+    // Header: magic 'NWQB' (u32), version (u32), mlen (u64), shots (u64)
+    const uint32_t MAGIC = 0x4E575142u; // 'NWQB'
+    const uint32_t VERSION = 1u;
+    const MPI_Offset header_bytes = static_cast<MPI_Offset>(sizeof(uint32_t) * 2 + sizeof(uint64_t) * 2); // 24 bytes
+
+    const IdxType bytes_per_shot_idx = (mlen + 7) / 8;
+    const MPI_Offset bytes_per_shot = static_cast<MPI_Offset>(bytes_per_shot_idx);
+    const MPI_Offset total_bytes = header_bytes + static_cast<MPI_Offset>(shots) * bytes_per_shot;
+
+    if (world_rank == 0) {
+        uint8_t hdr[24];
+        std::memset(hdr, 0, sizeof(hdr));
+        uint64_t mlen64  = static_cast<uint64_t>(mlen);
+        uint64_t shots64 = static_cast<uint64_t>(shots);
+        std::memcpy(hdr + 0,  &MAGIC,   sizeof(uint32_t));
+        std::memcpy(hdr + 4,  &VERSION, sizeof(uint32_t));
+        std::memcpy(hdr + 8,  &mlen64,  sizeof(uint64_t));
+        std::memcpy(hdr + 16, &shots64, sizeof(uint64_t));
+        MPI_Status st;
+        MPI_File_write_at(fh, 0, hdr, static_cast<int>(sizeof(hdr)), MPI_BYTE, &st);
+        // Log header info for debugging alignment with reader
+        std::cout << "NWQB header v" << VERSION
+                  << ": mlen=" << mlen
+                  << ", shots=" << shots
+                  << ", bytes_per_shot=" << static_cast<unsigned long long>((mlen + 7) / 8)
+                  << std::endl;
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_File_set_size(fh, total_bytes);
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    // Pack one shot’s bits into little-endian bytes
+    auto pack_shot_le = [mlen](const std::vector<int32_t>& v, uint8_t* out) {
+        const size_t B = static_cast<size_t>((mlen + 7) / 8);
+        std::memset(out, 0, B);
+        const size_t avail = v.size();
+        for (IdxType k = 0; k < mlen; ++k) {
+            if (static_cast<size_t>(k) < avail && v[static_cast<size_t>(k)] != 0) {
+                out[static_cast<size_t>(k >> 3)] |= static_cast<uint8_t>(1u << (k & 7));
+            }
+        }
+    };
+
+    // Chunked write to reduce MPI calls
+    IdxType chunk_shots = 8192; // configurable: export NWQSIM_IO_CHUNK_SHOTS=16384
+    if (const char* env_chunk = std::getenv("NWQSIM_IO_CHUNK_SHOTS")) {
+        long long v = std::atoll(env_chunk);
+        if (v > 0) chunk_shots = static_cast<IdxType>(v);
+    }
+
+    // Start with the probed first shot (if any)
+    IdxType j0 = 0;
+    if (local_count > 0) {
+        while (j0 < local_count) {
+            IdxType blk = std::min(chunk_shots, local_count - j0);
+            std::vector<uint8_t> buf(static_cast<size_t>(blk) * static_cast<size_t>(bytes_per_shot));
+
+            for (IdxType t = 0; t < blk; ++t) {
+                std::vector<int32_t> meas;
+                if (j0 == 0 && t == 0) {
+                    meas.swap(first_meas);
+                } else {
+                    IdxType g = local_start + j0 + t;
+                    sim->set_seed(static_cast<IdxType>(g));
+                    sim->sim(circuit, tmp_timer);
+                    meas = sim->get_measurement_results();
+                    sim->reset_state();
+                }
+                uint8_t* dst = buf.data() + static_cast<size_t>(t) * static_cast<size_t>(bytes_per_shot);
+                pack_shot_le(meas, dst);
+            }
+
+            MPI_Offset off = header_bytes + (static_cast<MPI_Offset>(local_start + j0)) * bytes_per_shot;
+            MPI_Status st;
+            // buf.size() << INT_MAX due to chunking
+            MPI_File_write_at(fh, off, buf.data(), static_cast<int>(buf.size()), MPI_BYTE, &st);
+
+            j0 += blk;
+        }
+    }
+
+    MPI_File_close(&fh);
 
     sim_timer.stop_timer();
     double local_time = sim_timer.measure();
@@ -55,83 +177,12 @@ void sim_batch(std::shared_ptr<NWQSim::Circuit> circuit, IdxType shots, std::vec
     MPI_Reduce(&local_time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     if (world_rank == 0) {
         sim_time = max_time;
-    }
-
-    // Determine measurement length; ensure consistent across ranks
-    int mlen_local = local_results.empty() ? -1 : static_cast<int>(local_results[0].size());
-    int mlen_max = 0;
-    MPI_Allreduce(&mlen_local, &mlen_max, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
-
-    int big = std::numeric_limits<int>::max();
-    int mlen_min_local = local_results.empty() ? big : mlen_local;
-    int mlen_min = 0;
-    MPI_Allreduce(&mlen_min_local, &mlen_min, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-    if (mlen_min == big) mlen_min = 0; // all empty (shouldn't happen if shots>0)
-
-    if (mlen_min != mlen_max && mlen_min != 0) {
-        if (world_rank == 0) {
-            std::cerr << "Error: measurement length mismatch across MPI ranks." << std::endl;
-        }
-        MPI_Abort(MPI_COMM_WORLD, 1);
-    }
-    int mlen = mlen_max;
-
-    // Flatten local results for gather
-    std::vector<int32_t> local_flat;
-    local_flat.resize(static_cast<size_t>(local_count) * mlen);
-    for (IdxType j = 0; j < local_count; ++j) {
-        const auto &v = local_results[static_cast<size_t>(j)];
-        for (int k = 0; k < mlen; ++k) {
-            local_flat[static_cast<size_t>(j) * mlen + k] = v[static_cast<size_t>(k)];
-        }
-    }
-
-    // Gather counts
-    int local_count_i = static_cast<int>(local_count);
-    std::vector<int> recv_counts;
-    if (world_rank == 0) recv_counts.resize(world_size, 0);
-    MPI_Gather(&local_count_i, 1, MPI_INT,
-               world_rank == 0 ? recv_counts.data() : nullptr, 1, MPI_INT,
-               0, MPI_COMM_WORLD);
-
-    // Prepare Gatherv parameters on root
-    std::vector<int> displs_elems; // element displacements (in ints)
-    std::vector<int> recv_counts_elems;
-    std::vector<int32_t> recv_flat; // flattened buffer on root
-    if (world_rank == 0) {
-        displs_elems.resize(world_size, 0);
-        recv_counts_elems.resize(world_size, 0);
-        int offset_elems = 0;
-        for (int r = 0; r < world_size; ++r) {
-            displs_elems[r] = offset_elems;
-            recv_counts_elems[r] = recv_counts[r] * mlen;
-            offset_elems += recv_counts_elems[r];
-        }
-        recv_flat.resize(static_cast<size_t>(offset_elems));
-    }
-
-    // Gather all results to root
-    int send_elems = local_count_i * mlen;
-    MPI_Gatherv(local_flat.data(), send_elems, MPI_INT,
-                world_rank == 0 ? recv_flat.data() : nullptr,
-                world_rank == 0 ? recv_counts_elems.data() : nullptr,
-                world_rank == 0 ? displs_elems.data() : nullptr,
-                MPI_INT, 0, MPI_COMM_WORLD);
-
-    if (world_rank == 0) {
-        // Reconstruct all_results in global shot order
-        all_results.clear();
-        all_results.resize(shots);
-        for (IdxType g = 0; g < shots; ++g) {
-            all_results[static_cast<size_t>(g)].assign(
-                recv_flat.begin() + static_cast<IdxType>(g) * mlen,
-                recv_flat.begin() + static_cast<IdxType>(g + 1) * mlen
-            );
-        }
+        std::cout << "Total C++ simulation time: " << sim_time << "s" << std::endl;
     }
 }
-}
+} // namespace NWQSim
 
+// ...existing main...
 int main(int argc, char* argv[]) {
     // Initialize MPI
     MPI_Init(&argc, &argv);
@@ -141,50 +192,24 @@ int main(int argc, char* argv[]) {
 
     if (argc < 5) {
         if (world_rank == 0) {
-            std::cerr << "Usage: " << argv[0] << " <qubits> <shots> <qasm filepath> <measurement filepath>\n";
+            std::cerr << "Usage: " << argv[0] << " <n_qubits> <shots> <qasm_file> <out_path>\n";
         }
         MPI_Finalize();
         return 1;
     }
 
     int n_qubits = std::atoi(argv[1]);
-    int iters = std::atoi(argv[2]);
-
-    auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
-
+    IdxType iters = static_cast<IdxType>(std::atoll(argv[2]));
     std::string qasmfile = argv[3];
-    appendQASMToCircuit(circuit, qasmfile, n_qubits);
     std::string m_filepath = argv[4];
 
-    std::ofstream out_file;
-    if (world_rank == 0) {
-        out_file.open(m_filepath);
-        if (!out_file.is_open()) {
-            std::cerr << "Error opening measurement_results.txt" << std::endl;
-            MPI_Finalize();
-            return 1;
-        }
-    }
+    auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
+    appendQASMToCircuit(circuit, qasmfile, n_qubits);
 
-    std::vector<std::vector<int32_t>> all_measurements; // only used on rank 0
     double total_time = 0.0;
 
-    // Distribute simulation across MPI processes
-    all_measurements.resize(world_rank == 0 ? iters : 0);
-    // std::cerr << "Starting sim batch!!" << std::endl;
-    NWQSim::sim_batch(circuit, iters, all_measurements, n_qubits, total_time);
-
-    // Rank 0 writes results
-    if (world_rank == 0) {
-        for (const auto& measurements : all_measurements) {
-            for (size_t j = 0; j < measurements.size(); ++j) {
-                out_file << measurements[j] << (j == measurements.size() - 1 ? "" : " ");
-            }
-            out_file << "\n";
-        }
-        out_file.close();
-        std::cout << "Total C++ simulation time: " << total_time / 1000 << "s" << std::endl;
-    }
+    // Parallel simulation and direct MPI-IO writing (no root gather)
+    NWQSim::sim_batch(circuit, iters, m_filepath, n_qubits, total_time);
 
     MPI_Finalize();
     return 0;

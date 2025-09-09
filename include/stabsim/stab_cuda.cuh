@@ -675,18 +675,18 @@ namespace NWQSim
         int32_t* d_measurement_results = nullptr;
         int32_t* h_measurement_results = nullptr;
         int32_t* d_measurement_idx_counter = nullptr;
-        int32_t measurement_count = 0;
+        IdxType measurement_count = 0;
 
-        void allocate_measurement_buffers(int32_t max_measurements) override {
+        void allocate_measurement_buffers(IdxType max_measurements) override {
             if (measurement_count == max_measurements && d_measurement_results != nullptr) return;
             
             free_measurement_buffers();
             measurement_count = max_measurements;
 
             if (measurement_count > 0) {
-                SAFE_ALOC_GPU(d_measurement_results, measurement_count * sizeof(int32_t));
-                h_measurement_results = new int32_t[measurement_count];
-                SAFE_ALOC_GPU(d_measurement_idx_counter, sizeof(int32_t));
+                SAFE_ALOC_GPU(d_measurement_results, measurement_count * sizeof(IdxType));
+                h_measurement_results = new IdxType[measurement_count];
+                SAFE_ALOC_GPU(d_measurement_idx_counter, sizeof(IdxType));
             }
         }
 

@@ -128,14 +128,17 @@ namespace NWQSim
         
             seed = 0;
             measurement_count = 0;
-            std::vector<int32_t>().swap(m_results);
+
+            m_results.clear();
+            m_results.reserve(est_measurements);
 
             has_destabilizers = true;
+        }
 
-            // This was causing a double-free. Memory is now managed in measure_all.
-            // SAFE_FREE_HOST(totalResults);
-            // SAFE_ALOC_HOST(totalResults, sizeof(IdxType));
-            // memset(totalResults, 0, sizeof(IdxType));
+        void allocate_measurement_buffers(IdxType measurements) override 
+        {
+            est_measurements = measurements;
+            m_results.reserve(est_measurements);
         }
 
         //Apply gates to a stabilizer-only tableau
@@ -1333,7 +1336,8 @@ namespace NWQSim
         double gamma_factor;
 
         IdxType seed; //used to align random measurements with GPU
-        int32_t measurement_count; //used to align random measurements with GPU
+        IdxType measurement_count; //used to align random measurements with GPU
+        IdxType est_measurements = 0;
         std::mt19937 rng;
         std::uniform_int_distribution<int> dist;
         std::uniform_real_distribution<double> random_float;
