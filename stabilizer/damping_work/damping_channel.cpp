@@ -1,6 +1,5 @@
 #define EIGEN
 
-
 #include <string>
 #include <complex>
 #include <iostream>
@@ -13,7 +12,7 @@
 #include "../../include/circuit.hpp"
 #include "../../include/nwq_util.hpp"
 
-#include "../src/qasm_extraction.hpp"
+#include "../../include/stabsim/src/qasm_extraction.hpp"
 
 void print_dm(double num, ComplexMatrix rho, double total_time) 
 {

@@ -5,7 +5,7 @@
 #include "config.hpp"
 
 #ifdef EIGEN
-#include "../stabilizer/src/pauli_math.hpp"
+#include "stabsim/src/pauli_math.hpp"
 #endif
 
 #include "private/gate_factory/sv_gate.hpp"
