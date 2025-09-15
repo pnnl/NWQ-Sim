@@ -19,6 +19,7 @@
 #include <stdexcept>
 #include <vector>
 #include <set>
+// #include "../xsimd/xsimd.hpp"
 
 namespace NWQSim
 {
@@ -59,14 +60,12 @@ namespace NWQSim
 
             has_destabilizers = true;
 
-            SAFE_ALOC_HOST(totalResults, sizeof(IdxType));
-            memset(totalResults, 0, sizeof(IdxType));
         }
 
         ~STAB_CPU()
         {
             // Release for CPU side
-            SAFE_FREE_HOST(totalResults);
+            // SAFE_FREE_HOST(totalResults);
         }
 
         IdxType get_qubits() override
@@ -112,7 +111,6 @@ namespace NWQSim
             rows = 2*n+1;
             cols = n;
             stabCounts = n;
-            dm_sign = 1;
             for (auto& row : x) {
                 std::fill(row.begin(), row.end(), 0);
             }
@@ -128,18 +126,20 @@ namespace NWQSim
                 x[i][i] = 1;
                 z[i+n][i] = 1;
             }
-            
-            std::random_device rd;
-            rng.seed(rd());
-            dist = std::uniform_int_distribution<int>(0,1);
-            random_float = std::uniform_real_distribution<double>(0.0, 1.0);
+        
             seed = 0;
             measurement_count = 0;
 
+            m_results.clear();
+            m_results.reserve(est_measurements);
 
             has_destabilizers = true;
+        }
 
-            memset(totalResults, 0, sizeof(IdxType));
+        void allocate_measurement_buffers(IdxType measurements) override 
+        {
+            est_measurements = measurements;
+            m_results.reserve(est_measurements);
         }
 
         //Apply gates to a stabilizer-only tableau
@@ -877,224 +877,227 @@ namespace NWQSim
         } //End rowsum
 
         //For shot based measurement
-        void tempRowsum(int h, int i, std::vector<std::vector<int>>& temp_x, std::vector<std::vector<int>>& temp_z, std::vector<int>& temp_r)
-        {
-            int sum = 0;
-            for(int j = 0; j < n; j++)
-            {
-                //Sum every column in the row
-                if(temp_x[i][j])
-                {
-                    if(z[i][j])
-                        sum += temp_z[h][j] - temp_x[h][j];
-                    else
-                        sum += temp_z[h][j] * (2*temp_x[h][j]-1);
-                }
-                else if(temp_z[i][j])
-                    sum += temp_x[h][j] * (1-2*temp_z[h][j]);
+        // void tempRowsum(int h, int i, std::vector<std::vector<int>>& temp_x, std::vector<std::vector<int>>& temp_z, std::vector<int>& temp_r)
+        // {
+        //     int sum = 0;
+        //     for(int j = 0; j < n; j++)
+        //     {
+        //         //Sum every column in the row
+        //         if(temp_x[i][j])
+        //         {
+        //             if(z[i][j])
+        //                 sum += temp_z[h][j] - temp_x[h][j];
+        //             else
+        //                 sum += temp_z[h][j] * (2*temp_x[h][j]-1);
+        //         }
+        //         else if(temp_z[i][j])
+        //             sum += temp_x[h][j] * (1-2*temp_z[h][j]);
 
-                //XOR x's and z's
-                temp_x[h][j] = temp_x[i][j] ^ temp_x[h][j];
-                temp_z[h][j] = temp_z[i][j] ^ temp_z[h][j];
-            }
-            sum = sum + 2*temp_r[h] + 2*temp_r[i];
+        //         //XOR x's and z's
+        //         temp_x[h][j] = temp_x[i][j] ^ temp_x[h][j];
+        //         temp_z[h][j] = temp_z[i][j] ^ temp_z[h][j];
+        //     }
+        //     sum = sum + 2*temp_r[h] + 2*temp_r[i];
 
-            if(sum % 4 == 0)
-                temp_r[h] = 0;
-            else
-                temp_r[h] = 1;
-        } //End rowsum
+        //     if(sum % 4 == 0)
+        //         temp_r[h] = 0;
+        //     else
+        //         temp_r[h] = 1;
+        // } //End rowsum
 
-        //Provides a bit/shot measurement output without affecting the original tableau
-        IdxType *measure_all(IdxType shots = 2048) override
-        {
-            //Each index of shotResults is a possible result from a full measurement, ex. 01100101 in an 8 qubit system
-            //The integer at that position is the number of times that result occured
-            SAFE_FREE_HOST(totalResults);
-            SAFE_ALOC_HOST(totalResults, sizeof(IdxType) * shots);
-            memset(totalResults, 0, sizeof(IdxType) * shots);
+        // //Provides a bit/shot measurement output without affecting the original tableau
+        // IdxType *measure_all(IdxType shots = 2048) override
+        // {
+        //     //Each index of shotResults is a possible result from a full measurement, ex. 01100101 in an 8 qubit system
+        //     //The integer at that position is the number of times that result occured
+        //     if (totalResults != nullptr) {
+        //         SAFE_FREE_HOST(totalResults);
+        //     }
+        //     SAFE_ALOC_HOST(totalResults, sizeof(IdxType) * shots);
+        //     memset(totalResults, 0, sizeof(IdxType) * shots);
 
-            int half_rows = rows >> 1;
+        //     int half_rows = rows >> 1;
             
-            for(int shot = 0; shot < shots; shot++)
-            {
-                //Make a copy of the class being measured so many shots can be performed
-                std::vector<std::vector<int>> temp_x = x;
-                std::vector<std::vector<int>> temp_z = z;
-                std::vector<int> temp_r = r;
-                for(int a = 0; a < n; a++)
-                {  
-                    int p = -1;
-                    for(int p_index = half_rows; p_index < rows-1; p_index++)
-                    {  
-                        //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
-                        if(temp_x[p_index][a])
-                        {
-                            p = p_index;
-                            break;
-                        }
-                    }
-                    //A p such that x[p][a] = 1 exists
-                    if(p > -1)
-                    {
-                        for(int i = 0; i < rows-1; i++)
-                        {
-                            if((x[i][a]) && (i != p))
-                            {
-                                tempRowsum(i, p, temp_x, temp_z, temp_r);
-                            }
-                        }
-                        temp_x[p-half_rows] = temp_x[p];
-                        temp_z[p-half_rows] = temp_z[p];
-                        //Change all the columns in row p to be 0
-                        for(int i = 0; i < n; i++)
-                        {
-                            temp_x[p][i] = 0;
-                            temp_z[p][i] = 0;                        
-                        }
+        //     for(int shot = 0; shot < shots; shot++)
+        //     {
+        //         //Make a copy of the class being measured so many shots can be performed
+        //         std::vector<std::vector<int>> temp_x = x;
+        //         std::vector<std::vector<int>> temp_z = z;
+        //         std::vector<int> temp_r = r;
+        //         for(int a = 0; a < n; a++)
+        //         {  
+        //             int p = -1;
+        //             for(int p_index = half_rows; p_index < rows-1; p_index++)
+        //             {  
+        //                 //std::cout << "x at [" << p_index << "][" << a << "] = " << x[p_index][a] << std::endl;
+        //                 if(temp_x[p_index][a])
+        //                 {
+        //                     p = p_index;
+        //                     break;
+        //                 }
+        //             }
+        //             //A p such that x[p][a] = 1 exists
+        //             if(p > -1)
+        //             {
+        //                 for(int i = 0; i < rows-1; i++)
+        //                 {
+        //                     if((x[i][a]) && (i != p))
+        //                     {
+        //                         tempRowsum(i, p, temp_x, temp_z, temp_r);
+        //                     }
+        //                 }
+        //                 temp_x[p-half_rows] = temp_x[p];
+        //                 temp_z[p-half_rows] = temp_z[p];
+        //                 //Change all the columns in row p to be 0
+        //                 for(int i = 0; i < n; i++)
+        //                 {
+        //                     temp_x[p][i] = 0;
+        //                     temp_z[p][i] = 0;                        
+        //                 }
 
-                        int randomBit = dist(rng);
+        //                 int randomBit = dist(rng);
                         
-                        if(randomBit)
-                        {
-                            //std::cout << "Random result of 1" << std::endl;
-                            temp_r[p] = 1;
-                        }
-                        else
-                        {
-                            //std::cout << "Random result of 0" << std::endl;
-                            temp_r[p] = 0;
-                        }
-                        temp_z[p][a] = 1;
+        //                 if(randomBit)
+        //                 {
+        //                     //std::cout << "Random result of 1" << std::endl;
+        //                     temp_r[p] = 1;
+        //                 }
+        //                 else
+        //                 {
+        //                     //std::cout << "Random result of 0" << std::endl;
+        //                     temp_r[p] = 0;
+        //                 }
+        //                 temp_z[p][a] = 1;
 
-                        totalResults[shot] |= (temp_r[p] << a);
-                        // std::cout << "Random measurement at qubit " << a << " value: " << (temp_r[p] << a) << std::endl;
-                    }
-                    else
-                    {
-                        //Set the scratch space row to be 0
-                        //i is the column indexer in this case
-                        for(int i = 0; i < n; i++)
-                        {
-                            temp_x[rows-1][i] = 0;
-                            temp_z[rows-1][i] = 0;
-                        }
-                        temp_r[rows-1] = 0;
+        //                 totalResults[shot] |= (temp_r[p] << a);
+        //                 // std::cout << "Random measurement at qubit " << a << " value: " << (temp_r[p] << a) << std::endl;
+        //             }
+        //             else
+        //             {
+        //                 //Set the scratch space row to be 0
+        //                 //i is the column indexer in this case
+        //                 for(int i = 0; i < n; i++)
+        //                 {
+        //                     temp_x[rows-1][i] = 0;
+        //                     temp_z[rows-1][i] = 0;
+        //                 }
+        //                 temp_r[rows-1] = 0;
 
-                        //Run rowsum subroutine
-                        for(int i = 0; i < half_rows; i++)
-                        {
-                            if(temp_x[i][a] == 1)
-                            {
-                                //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
-                                tempRowsum(rows-1, i+half_rows, temp_x, temp_z, temp_r);
-                            }
-                        }
+        //                 //Run rowsum subroutine
+        //                 for(int i = 0; i < half_rows; i++)
+        //                 {
+        //                     if(temp_x[i][a] == 1)
+        //                     {
+        //                         //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
+        //                         tempRowsum(rows-1, i+half_rows, temp_x, temp_z, temp_r);
+        //                     }
+        //                 }
 
-                        // std::cout << "Deterministc measurement at qubit " << a << " value: " << (temp_r[rows-1] << a) << std::endl;
-                        totalResults[shot] |=  (temp_r[rows-1] << a);
-                    } //End if else
-                } //End single shot for all qubits
-            }//End shots
-            return totalResults;
-        }//End measure_all
+        //                 // std::cout << "Deterministc measurement at qubit " << a << " value: " << (temp_r[rows-1] << a) << std::endl;
+        //                 totalResults[shot] |=  (temp_r[rows-1] << a);
+        //             } //End if else
+        //         } //End single shot for all qubits
+        //         m_results.push_back(totalResults[shot]);
+        //     }//End shots
+        //     return totalResults;
+        // }//End measure_all
 
-        //Provides a bit/shot measurement output without affecting the original tableau
-        IdxType **measure_all_long(IdxType shots = 2048) override
-        {
-            //Each index of shotResults is a possible result from a full measurement, ex. 01100101 in an 8 qubit system
-            //The integer at that i is the number of times that result occured
-            totalResultsLong = new IdxType*[shots];
-            for (size_t i = 0; i < shots; i++) {
-                totalResultsLong[i] = new IdxType[((n+63)/64)]();  //Zero-initialize
-            }
+        // //Provides a bit/shot measurement output without affecting the original tableau
+        // IdxType **measure_all_long(IdxType shots = 2048) override
+        // {
+        //     //Each index of shotResults is a possible result from a full measurement, ex. 01100101 in an 8 qubit system
+        //     //The integer at that i is the number of times that result occured
+        //     totalResultsLong = new IdxType*[shots];
+        //     for (size_t i = 0; i < shots; i++) {
+        //         totalResultsLong[i] = new IdxType[((n+63)/64)]();  //Zero-initialize
+        //     }
 
-            int half_rows = rows >> 1;
+        //     int half_rows = rows >> 1;
             
-            std::vector<std::vector<int>> temp_x;
-            std::vector<std::vector<int>> temp_z;
-            std::vector<int> temp_r;
-            for(int shot = 0; shot < shots; shot++)
-            {
-                //Make a copy of the class being measured so many shots can be performed
-                temp_x = x;
-                temp_z = z;
-                temp_r = r;
-                for(int a = 0; a < n; a++)
-                {  
-                    int p = -1;
-                    for(int p_index = half_rows; p_index < rows-1; p_index++)
-                    {  
-                        if(temp_x[p_index][a])
-                        {
-                            p = p_index;
-                            break;
-                        }
-                    }
-                    //A p such that x[p][a] = 1 exists
-                    if(p > -1) //Random
-                    {
-                        for(int i = 0; i < rows-1; i++)
-                        {
-                            if((x[i][a]) && (i != p))
-                            {
-                                tempRowsum(i, p, temp_x, temp_z, temp_r);
-                            }
-                        }
-                        temp_x[p-half_rows] = temp_x[p];
-                        temp_z[p-half_rows] = temp_z[p];
-                        //Change all the columns in row p to be 0
-                        for(int i = 0; i < n; i++)
-                        {
-                            temp_x[p][i] = 0;
-                            temp_z[p][i] = 0;                        
-                        }
+        //     std::vector<std::vector<int>> temp_x;
+        //     std::vector<std::vector<int>> temp_z;
+        //     std::vector<int> temp_r;
+        //     for(int shot = 0; shot < shots; shot++)
+        //     {
+        //         //Make a copy of the class being measured so many shots can be performed
+        //         temp_x = x;
+        //         temp_z = z;
+        //         temp_r = r;
+        //         for(int a = 0; a < n; a++)
+        //         {  
+        //             int p = -1;
+        //             for(int p_index = half_rows; p_index < rows-1; p_index++)
+        //             {  
+        //                 if(temp_x[p_index][a])
+        //                 {
+        //                     p = p_index;
+        //                     break;
+        //                 }
+        //             }
+        //             //A p such that x[p][a] = 1 exists
+        //             if(p > -1) //Random
+        //             {
+        //                 for(int i = 0; i < rows-1; i++)
+        //                 {
+        //                     if((x[i][a]) && (i != p))
+        //                     {
+        //                         tempRowsum(i, p, temp_x, temp_z, temp_r);
+        //                     }
+        //                 }
+        //                 temp_x[p-half_rows] = temp_x[p];
+        //                 temp_z[p-half_rows] = temp_z[p];
+        //                 //Change all the columns in row p to be 0
+        //                 for(int i = 0; i < n; i++)
+        //                 {
+        //                     temp_x[p][i] = 0;
+        //                     temp_z[p][i] = 0;                        
+        //                 }
 
-                        int randomBit = dist(rng);
+        //                 int randomBit = dist(rng);
                         
-                        if(randomBit)
-                        {
-                            //std::cout << "Random result of 1" << std::endl;
-                            temp_r[p] = 1;
-                        }
-                        else
-                        {
-                            //std::cout << "Random result of 0" << std::endl;
-                            temp_r[p] = 0;
-                        }
-                        temp_z[p][a] = 1;
+        //                 if(randomBit)
+        //                 {
+        //                     //std::cout << "Random result of 1" << std::endl;
+        //                     temp_r[p] = 1;
+        //                 }
+        //                 else
+        //                 {
+        //                     //std::cout << "Random result of 0" << std::endl;
+        //                     temp_r[p] = 0;
+        //                 }
+        //                 temp_z[p][a] = 1;
 
-                        totalResultsLong[shot][a/64] |=  (temp_r[rows-1] << (a%64));
-                        // std::cout << "Random measurement at qubit " << a << " value: " << (temp_r[p] << a) << std::endl;
-                    }
-                    else //Deterministic
-                    {
-                        //Set the scratch space row to be 0
-                        //i is the column indexer in this case
-                        for(int i = 0; i < n; i++)
-                        {
-                            temp_x[rows-1][i] = 0;
-                            temp_z[rows-1][i] = 0;
-                        }
-                        temp_r[rows-1] = 0;
+        //                 totalResultsLong[shot][a/64] |=  (temp_r[rows-1] << (a%64));
+        //                 // std::cout << "Random measurement at qubit " << a << " value: " << (temp_r[p] << a) << std::endl;
+        //             }
+        //             else //Deterministic
+        //             {
+        //                 //Set the scratch space row to be 0
+        //                 //i is the column indexer in this case
+        //                 for(int i = 0; i < n; i++)
+        //                 {
+        //                     temp_x[rows-1][i] = 0;
+        //                     temp_z[rows-1][i] = 0;
+        //                 }
+        //                 temp_r[rows-1] = 0;
 
-                        //Run rowsum subroutine
-                        for(int i = 0; i < half_rows; i++)
-                        {
-                            if(temp_x[i][a] == 1)
-                            {
-                                //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
-                                tempRowsum(rows-1, i+half_rows, temp_x, temp_z, temp_r);
-                            }
-                        }
+        //                 //Run rowsum subroutine
+        //                 for(int i = 0; i < half_rows; i++)
+        //                 {
+        //                     if(temp_x[i][a] == 1)
+        //                     {
+        //                         //std::cout << "Perform rowsum at " << i << " + n" << std::endl;
+        //                         tempRowsum(rows-1, i+half_rows, temp_x, temp_z, temp_r);
+        //                     }
+        //                 }
 
-                        // std::cout << "Deterministc measurement at qubit " << a << " value: " << (temp_r[rows-1] << a) << std::endl;
-                        totalResultsLong[shot][a/64] |=  (temp_r[rows-1] << (a%64));
-                    } //End if else
-                } //End single shot for all qubits
-            }//End shots
-            return totalResultsLong;
-        }//End measure_all
+        //                 // std::cout << "Deterministc measurement at qubit " << a << " value: " << (temp_r[rows-1] << a) << std::endl;
+        //                 totalResultsLong[shot][a/64] |=  (temp_r[rows-1] << (a%64));
+        //             } //End if else
+        //         } //End single shot for all qubits
+        //     }//End shots
+        //     return totalResultsLong;
+        // }//End measure_all
 
         //Simulate the gates from a circuit in the tableau
         void sim(std::shared_ptr<NWQSim::Circuit> circuit, double &sim_time) override
@@ -1319,7 +1322,6 @@ namespace NWQSim
 
     protected:
         IdxType n;
-        int dm_sign;
         int stabCounts;
         IdxType rows;
         IdxType cols;
@@ -1329,18 +1331,139 @@ namespace NWQSim
         std::vector<std::vector<int>> x_erasure;
         std::vector<std::vector<int>> z_erasure;
         std::vector<int> r_erasure;
-        IdxType* totalResults = NULL;
-        IdxType** totalResultsLong = NULL;
 
         std::vector<int32_t> m_results;
 
         double gamma_factor;
 
         IdxType seed; //used to align random measurements with GPU
-        int32_t measurement_count; //used to align random measurements with GPU
+        IdxType measurement_count; //used to align random measurements with GPU
+        IdxType est_measurements = 0;
         std::mt19937 rng;
         std::uniform_int_distribution<int> dist;
         std::uniform_real_distribution<double> random_float;
+
+        void apply_X(int q)
+        {
+            for(int i = 0; i < rows-1; i++)
+            {
+                r[i] ^= z[i][q];
+            }
+        }
+        void apply_Y(int q)
+        {
+            for(int i = 0; i < rows-1; i++)
+            {
+                r[i] ^= (x[i][q] ^ z[i][q]);
+            }
+        }
+        void apply_Z(int q)
+        {
+            for(int i = 0; i < rows-1; i++)
+            {
+                r[i] ^= x[i][q];
+            }
+        }
+
+        // void rowsum_simd(int h, int i)
+        // {
+        //     using batch_type = xsimd::batch<int>;
+        //     const std::size_t batch_size = batch_type::size;
+            
+        //     batch_type sum_batch(0);
+
+        //     std::size_t j = 0;
+        //     for (; j + batch_size <= n; j += batch_size)
+        //     {
+        //         batch_type x_i = batch_type::load_unaligned(&x[i][j]);
+        //         batch_type z_i = batch_type::load_unaligned(&z[i][j]);
+        //         batch_type x_h = batch_type::load_unaligned(&x[h][j]);
+        //         batch_type z_h = batch_type::load_unaligned(&z[h][j]);
+
+        //         // Vectorized sum calculation based on conditions
+        //         batch_type term1 = (z_h - x_h) & (x_i & z_i);
+        //         batch_type term2 = (z_h * (2 * x_h - 1)) & (x_i & ~z_i);
+        //         batch_type term3 = (x_h * (1 - 2 * z_h)) & (~x_i & z_i);
+        //         sum_batch += term1 + term2 + term3;
+
+        //         // Vectorized XOR operations
+        //         x_h ^= x_i;
+        //         z_h ^= z_i;
+
+        //         x_h.store_unaligned(&x[h][j]);
+        //         z_h.store_unaligned(&z[h][j]);
+        //     }
+
+        //     // Scalar part for remaining elements
+        //     int sum = xsimd::hadd(sum_batch);
+        //     for (; j < n; ++j)
+        //     {
+        //         if (x[i][j] == 1 && z[i][j] == 1)
+        //             sum += z[h][j] - x[h][j];
+        //         else if (x[i][j] == 1 && z[i][j] == 0)
+        //             sum += z[h][j] * (2 * x[h][j] - 1);
+        //         else if (x[i][j] == 0 && z[i][j] == 1)
+        //             sum += x[h][j] * (1 - 2 * z[h][j]);
+
+        //         x[h][j] = x[i][j] ^ x[h][j];
+        //         z[h][j] = z[i][j] ^ z[h][j];
+        //     }
+
+        //     sum += 2 * r[i];
+        //     sum += 2 * r[h];
+        //     r[h] = (sum % 4 == 0) ? 0 : 1;
+        // }
+
+        // void batched_M()
+        // {
+        //     int p = -1;
+        //     for (int p_index = cols; p_index < rows - 1; p_index++)
+        //     {
+        //         if (x[p_index][a])
+        //         {
+        //             p = p_index;
+        //             break;
+        //         }
+        //     }
+
+        //     if (p > -1) // Random case
+        //     {
+        //         for (int i = 0; i < rows - 1; i++)
+        //         {
+        //             if ((x[i][a]) && (i != p))
+        //             {
+        //                 rowsum_simd(i, p);
+        //             }
+        //         }
+        //         x[p - cols] = x[p];
+        //         z[p - cols] = z[p];
+        //         std::fill(x[p].begin(), x[p].end(), 0);
+        //         std::fill(z[p].begin(), z[p].end(), 0);
+
+        //         int randomBit = prng_bit(seed, measurement_count);
+        //         r[p] = randomBit;
+        //         z[p][a] = 1;
+        //         m_results.push_back(randomBit);
+        //         measurement_count++;
+        //     }
+        //     else // Deterministic case
+        //     {
+        //         std::fill(x[rows - 1].begin(), x[rows - 1].end(), 0);
+        //         std::fill(z[rows - 1].begin(), z[rows - 1].end(), 0);
+        //         r[rows - 1] = 0;
+
+        //         for (int i = 0; i < cols; i++)
+        //         {
+        //             if (x[i][a] == 1)
+        //             {
+        //                 rowsum_simd(rows - 1, i + cols);
+        //             }
+        //         }
+        //         m_results.push_back(r[rows - 1]);
+        //         measurement_count++;
+        //     }
+        // }
+
 
         //Function to swap two rows of the tableau
         void swapRows(int row1, int row2) {
@@ -1716,7 +1839,7 @@ namespace NWQSim
             
             c1 = abs(c1);
             double sum = c0 + c1 + c2;
-            gamma_factor = sum;
+            // gamma_factor = sum;
             c0 = c0/sum;
             c1 = c1/sum;
             c2 = c2/sum;
@@ -1732,7 +1855,7 @@ namespace NWQSim
             temp = temp - c1;
             if(temp < 0) 
             {
-                gamma_factor *= -1;
+                // gamma_factor *= -1;
                 return 1;
             }
             temp = temp - c2;
@@ -1744,6 +1867,50 @@ namespace NWQSim
             {
                 std::cerr << "Impossible monte" << std::endl;
                 return 3;
+            }
+        }
+
+        int comb_generator(double p_exc, double p_rel, double p_pha)
+        {
+            double monte = random_float(rng);
+            double c0 = 0.5 * (1.0-p_rel+sqrt(1.0-p_rel));
+            double c1 = 0.5 * (1.0-p_rel-sqrt(1.0-p_rel));
+            double c2 = p_rel;
+
+            double c0_tot = (1 - p_pha) * c0 + p_pha * c1;
+            double c1_tot = p_pha * c0 + (1 - p_pha) * c1;
+            double c2_tot = c2-p_exc;
+            double c3_tot = p_exc;
+
+            double temp = monte - c0_tot;
+            if(temp < 0) 
+            {
+                // std::cout << " C0_tot chosen: " << c0_tot;
+                return 0;
+            }
+            
+            temp = temp - c1_tot;
+            if(temp < 0) 
+            {
+                // std::cout << " C1_tot chosen: " << c1_tot;
+                return 1;
+            }
+            temp = temp - c2_tot;
+            if(temp < 0) 
+            {
+                // std::cout << " C2_tot chosen: " << c2_tot;
+                return 2;
+            }
+            temp = temp - c3_tot;
+            if(temp < 0) 
+            {
+                // std::cout << " C2_tot chosen: " << c2_tot;
+                return 3;
+            }
+            else 
+            {
+                std::cerr << "Impossible monte" << std::endl;
+                return 4;
             }
         }
 
@@ -1947,13 +2114,7 @@ namespace NWQSim
             // measurement_results.push_back(temp_result);
             if(temp_result == 1) //Apply X to flip back to 0
             {
-                for(int i = 0; i < rows-1; i++)
-                {
-                    // z[i][a] ^= x[i][a]; 
-                    r[i] ^= z[i][a];
-
-                    // r[i] ^= z[i][a];
-                }
+                apply_X(a);
             }
         }
 
@@ -1969,6 +2130,7 @@ namespace NWQSim
             {
                 auto gate = gates[k];
                 int a = gate.qubit;
+                // std::cout << "Damping inactivated rrrrrr " << gate.gamma << std::endl;
 
                 switch (gate.op_name)
                 {
@@ -2023,20 +2185,153 @@ namespace NWQSim
                         break;
 
                     case OP::DAMP:
-                        // std::cout << "Gamma " << gate.gamma << std::endl;
+                        // std::cout << "Damping activated rrrrrr " << gate.gamma << std::endl;
                         switch(damping_generator(gate.lam/2, gate.gamma))
                         {
                             case 0: //Do nothing
                                 break;
                             case 1: //Apply Z
-                                for(int i = 0; i < rows-1; i++)
-                                {
-                                    //Phase
-                                    r[i] ^= x[i][a];
-                                }
+                                // std::cout << "zzz " << std::endl;
+                                apply_Z(a);
+                                break;
+                            case 2: //Reset to |0>
+                                // std::cout << "rrrrßß " << std::endl;
+                                reset_routine(a);
+                                break;
+                            default:
+                                std::logic_error("Invalid damping result");
+                                exit(1);
+                        }
+                        break;
+                    case OP::CHAN1:
+                    {
+                        // std::cerr<< "CHAN1 reached in sim!: " << std::endl;
+                        const auto& probs = gate.channel_probabilities;
+                        if (probs.size() < 3) {
+                            std::cerr << "CHAN1: missing probabilities, size=" << probs.size() << std::endl;
+                            break;
+                        }
+                        // std::cerr<< "gate prob: " << probs[2] << std::endl;
+
+                        double monte = random_float(rng);
+                        monte -= gate.channel_probabilities[0];
+                        if(monte < 0){apply_X(a); break;}
+                        monte -= gate.channel_probabilities[1];
+                        if(monte < 0){apply_Y(a); break;}
+                        monte -= gate.channel_probabilities[2];
+                        if(monte < 0){apply_Z(a); break;}
+
+                        break;
+                    }
+                    case OP::CHAN2:
+                    {
+
+                        int b = gate.ctrl;
+                        double monte = random_float(rng);
+
+                        monte -= gate.channel_probabilities[0];
+                        if(monte < 0){apply_X(a); break;}
+                        monte -= gate.channel_probabilities[1];
+                        if(monte < 0){apply_X(a); apply_X(b); break;}
+                        monte -= gate.channel_probabilities[2];
+                        if(monte < 0){apply_X(a); apply_Y(b); break;}
+                        monte -= gate.channel_probabilities[3];
+                        if(monte < 0){apply_X(a); apply_Z(b); break;}
+                        monte -= gate.channel_probabilities[4];
+                        if(monte < 0){apply_Y(a); break;}
+                        monte -= gate.channel_probabilities[5];
+                        if(monte < 0){apply_Y(a); apply_X(b); break;}
+                        monte -= gate.channel_probabilities[6];
+                        if(monte < 0){apply_Y(a); apply_Y(b); break;}
+                        monte -= gate.channel_probabilities[7];
+                        if(monte < 0){apply_Y(a); apply_Z(b); break;}
+                        monte -= gate.channel_probabilities[8];
+                        if(monte < 0){apply_Z(a); break;}
+                        monte -= gate.channel_probabilities[9];
+                        if(monte < 0){apply_Z(a); apply_X(b); break;}
+                        monte -= gate.channel_probabilities[10];
+                        if(monte < 0){apply_Z(a); apply_Y(b); break;}
+                        monte -= gate.channel_probabilities[11];
+                        if(monte < 0){apply_Z(a); apply_Z(b); break;}
+                        monte -= gate.channel_probabilities[12];
+                        if(monte < 0){apply_X(b); break;}
+                        monte -= gate.channel_probabilities[13];
+                        if(monte < 0){apply_Y(b); break;}
+                        monte -= gate.channel_probabilities[14];
+                        if(monte < 0){apply_Z(b); break;}
+
+                        break;
+                    }
+                    case OP::DEP1:
+                    {
+                        double monte = random_float(rng);
+                        double p = gate.theta/3;
+                        monte -= p;
+                        if(monte < 0){apply_X(a); break;}
+                        monte -= p;
+                        if(monte < 0){apply_Y(a); break;}
+                        monte -= p;
+                        if(monte < 0){apply_Z(a); break;}
+                        
+                        break;
+                    }
+
+                    case OP::DEP2:
+                    {
+                        int b = gate.ctrl;
+                        double monte = random_float(rng);
+                        double p = gate.theta/15;
+
+                        monte -= p;
+                        if(monte < 0){apply_X(a); break;}
+                        monte -= p;
+                        if(monte < 0){apply_X(a); apply_X(b); break;}
+                        monte -= p;
+                        if(monte < 0){apply_X(a); apply_Y(b); break;}
+                        monte -= p;
+                        if(monte < 0){apply_X(a); apply_Z(b); break;}
+                        monte -= p;
+                        if(monte < 0){apply_Y(a); break;}
+                        monte -= p;
+                        if(monte < 0){apply_Y(a); apply_X(b); break;}
+                        monte -= p;
+                        if(monte < 0){apply_Y(a); apply_Y(b); break;}
+                        monte -= p;
+                        if(monte < 0){apply_Y(a); apply_Z(b); break;}
+                        monte -= p;
+                        if(monte < 0){apply_Z(a); break;}
+                        monte -= p;
+                        if(monte < 0){apply_Z(a); apply_X(b); break;}
+                        monte -= p;
+                        if(monte < 0){apply_Z(a); apply_Y(b); break;}
+                        monte -= p;
+                        if(monte < 0){apply_Z(a); apply_Z(b); break;}
+                        monte -= p;
+                        if(monte < 0){apply_X(b); break;}
+                        monte -= p;
+                        if(monte < 0){apply_Y(b); break;}
+                        monte -= p;
+                        if(monte < 0){apply_Z(b); break;}
+
+                        break;
+                    }
+
+                    
+                    case OP::COMB:
+                        // std::cout << "Gamma " << gate.gamma << std::endl;
+                        switch(comb_generator(gate.phi, gate.gamma, gate.lam/2))
+                        {
+                            case 0: //Do nothing
+                                break;
+                            case 1: //Apply Z
+                                apply_Z(a);
                                 break;
                             case 2: //Reset to |0>
                                 reset_routine(a);
+                                break;
+                            case 3: //Reset to |1>
+                                reset_routine(a);
+                                apply_X(a);
                                 break;
                             default:
                                 std::logic_error("Invalid damping result");
@@ -2073,6 +2368,33 @@ namespace NWQSim
                                 //Phase
                                 r[i] ^= x[i][a];
                             }
+                        }
+                        break;
+
+                    case OP::EXC:
+                        // std::cout << "Gamma " << gate.gamma << std::endl;
+                        switch(T1_gen(gate.gamma))
+                        {
+                            case 0: //Do nothing
+                                break;
+                            case 1: //Apply Z
+                                for(int i = 0; i < rows-1; i++)
+                                {
+                                    //Phase
+                                    r[i] ^= x[i][a];
+                                }
+                                break;
+                            case 2: 
+                                reset_routine(a); //Reset to |0>
+                                for(int i = 0; i < rows-1; i++) //Apply X
+                                {
+                                    //Phase
+                                    r[i] ^= z[i][a];
+                                }
+                                break;
+                            default:
+                                std::logic_error("Invalid damping result");
+                                exit(1);
                         }
                         break;
 
@@ -2263,7 +2585,6 @@ namespace NWQSim
                         break;
                     }
 
-
                     case OP::M:
                     {
                         int p = -1;
@@ -2416,52 +2737,32 @@ namespace NWQSim
                         // measurement_results.push_back(temp_result);
                         if(temp_result == 1) //Apply X to flip back to 0
                         {
-                            for(int i = 0; i < rows-1; i++)
-                            {
-                                // z[i][a] ^= x[i][a]; 
-                                r[i] ^= z[i][a];
-
-                                // r[i] ^= z[i][a];
-                            }
+                            apply_X(a);
                         }
                         break;
                     }
                     
-
-
                     case OP::X:
                         //equiv to H S S H or H Z H
-                        for(int i = 0; i < rows-1; i++)
-                        {
-                            r[i] ^= z[i][a];
-                        }
+                        apply_X(a);
                         break;
         
                     case OP::Y:
                         //equiv to Z X
-                        for(int i = 0; i < rows-1; i++)
-                        {
-                            r[i] = r[i] ^ x[i][a] ^ z[i][a];
-                        }
+                        apply_Y(a);
                         break;
 
                     case OP::Z:
                         //equiv to S S gates
-                        for(int i = 0; i < rows-1; i++)
-                        {
-                            //Phase
-                            r[i] ^= x[i][a];
-                        }
+                        apply_Z(a);
                         break;
-                    
-
                         
-                    case OP::MA:
-                        measure_all();
-                        break;
+                    // case OP::MA:
+                    //     measure_all();
+                    //     break;
                     
                     default:
-                        std::cout << "Non-Clifford or unrecognized gate: "
+                        std::cerr << "Non-Clifford or unrecognized gate: "
                                     << OP_NAMES[gate.op_name] << std::endl;
                         std::logic_error("Invalid gate type");
                         exit(1);

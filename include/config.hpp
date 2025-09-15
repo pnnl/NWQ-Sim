@@ -8,7 +8,7 @@
 
 namespace NWQSim::Config
 {
-    inline bool PRINT_SIM_TRACE = true;
+    inline bool PRINT_SIM_TRACE = false;
     inline bool ENABLE_NOISE = false;
     inline bool ENABLE_FUSION = true;
     inline bool ENABLE_TENSOR_CORE = false;

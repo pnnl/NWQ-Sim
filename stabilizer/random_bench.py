@@ -123,7 +123,7 @@ def plot_data(all_data):
     plt.tight_layout()
 
     # Save the plot as a PDF, ensuring all elements fit
-    plt.savefig("/people/garn195/NWQ-Sim/stabilizer/graphics/random_improved.pdf", format="pdf", bbox_inches='tight', dpi=1000)
+    plt.savefig("/Users/garn195/Library/CloudStorage/OneDrive-PNNL/Project_Repositories/NWQ-Sim/stabilizer/graphics/random_improved.pdf", format="pdf", bbox_inches='tight', dpi=1000)
 
     plt.show()
 

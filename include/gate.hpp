@@ -197,7 +197,15 @@ namespace NWQSim
          ******************************************/
         DAMP,
         /******************************************
-         * T1 >= T2 Exact T1/T2 Probability Damping, T2 < T1 Quasiprobability T1/T2 Damping
+        * T1 >= T2 Exact T1/T2 Probability Damping, T2 < T1 Quasiprobability T1/T2 Damping
+        * See Pauli damping model -> sean.garner@pnnl.gov
+        ******************************************/
+        CHAN1,
+        CHAN2,
+        DEP1,
+        DEP2,
+        COMB,
+        /******************************************
          * See Pauli damping model -> sean.garner@pnnl.gov
          ******************************************/
         T1,
@@ -208,6 +216,11 @@ namespace NWQSim
         T2,
         /******************************************
          * T2 Probability Distribution Damping
+         * See Pauli damping model -> sean.garner@pnnl.gov
+         ******************************************/
+        EXC,
+        /******************************************
+         * Excitation Probability Distribution Damping
          * See Pauli damping model -> sean.garner@pnnl.gov
          ******************************************/
         ECR,
@@ -322,8 +335,14 @@ namespace NWQSim
         "CP",
         "CU",
         "DAMP",
+        "CHAN1",
+        "CHAN2",
+        "DEP1",
+        "DEP2",
+        "COMB",
         "T1",
         "T2",
+        "EXC",
         "ECR",
         "RXX",
         "RYY",
@@ -363,6 +382,7 @@ namespace NWQSim
         std::string mod_noise;
         ValType mod_value;
         std::vector<IdxType> mod_qubits;
+        std::vector<double> channel_probabilities;
 
         Gate(enum OP _op_name,
              IdxType _qubit,
@@ -401,6 +421,10 @@ namespace NWQSim
             for (auto q : g.mod_qubits)
             {
                 mod_qubits.push_back(q);
+            }
+            for (auto p : g.channel_probabilities)
+            {
+                channel_probabilities.push_back(p);
             }
         }
 

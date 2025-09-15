@@ -1,5 +1,5 @@
-#include "../../../Eigen/Dense"
-#include "../../../Eigen/Sparse"
+#include "../../../../Eigen/Dense"
+#include "../../../../Eigen/Sparse"
 
 //Using dynamic Eigen MatrixXd to streamline calculations
 using Matrix = Eigen::MatrixXd;

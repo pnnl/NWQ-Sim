@@ -514,6 +514,59 @@ namespace NWQSim
             // std::cout << "Gate" << G.gateToString();
             gates->push_back(G);
         }
+        void CHAN1(IdxType qubit, std::vector<double> channel_probabilities)
+        {
+            /******************************************
+             * Pauli depolarizing noise
+             ******************************************/
+            Gate G(OP::CHAN1, qubit, -1, 1);
+            // std::cout << "Gate" << G.gateToString();
+            for (auto p : channel_probabilities)
+            {
+                G.channel_probabilities.push_back(p);
+            }
+            gates->push_back(G);
+        }
+        void CHAN2(IdxType qubit, IdxType ctrl, std::vector<double> channel_probabilities)
+        {
+            /******************************************
+             * Pauli depolarizing noise
+             ******************************************/
+            Gate G(OP::CHAN2, qubit, ctrl, 2);
+            // std::cout << "Gate" << G.gateToString();
+            for (auto p : channel_probabilities)
+            {
+                G.channel_probabilities.push_back(p);
+            }
+            gates->push_back(G);
+        }
+        void DEP1(IdxType qubit, ValType theta)
+        {
+            /******************************************
+             * Pauli depolarizing noise
+             ******************************************/
+            Gate G(OP::DEP1, qubit, -1, 1, theta);
+            // std::cout << "Gate" << G.gateToString();
+            gates->push_back(G);
+        }
+        void DEP2(IdxType qubit, IdxType ctrl, ValType theta)
+        {
+            /******************************************
+             * Pauli depolarizing noise
+             ******************************************/
+            Gate G(OP::DEP2, qubit, ctrl, 2, theta);
+            // std::cout << "Gate" << G.gateToString();
+            gates->push_back(G);
+        }
+        void COMB(IdxType qubit, ValType phi, ValType lambda, ValType gamma)
+        {       
+            /******************************************
+             * T1/T2 damping
+             ******************************************/
+            Gate G(OP::COMB, qubit, -1, 1, 0, phi, lambda, gamma);
+            // std::cout << "Gate" << G.gateToString();
+            gates->push_back(G);
+        }
         void T1(IdxType qubit, ValType gamma)
         {       
             /******************************************
@@ -532,6 +585,24 @@ namespace NWQSim
             // std::cout << "Gate" << G.gateToString();
             gates->push_back(G);
         }
+        void EXC(IdxType qubit, ValType phi)
+        {       
+            /******************************************
+             * Excitation
+             ******************************************/
+            Gate G(OP::T1, qubit, -1, 1, 0, phi);
+            // std::cout << "Gate" << G.gateToString();
+            gates->push_back(G);
+        }
+        // void EXC(IdxType qubit, ValType lambda, ValType gamma)
+        // {       
+        //     /******************************************
+        //      * Excitation
+        //      ******************************************/
+        //     Gate G(OP::DAMP, qubit, -1, 1, 0, 0, lambda, gamma);
+        //     // std::cout << "Gate" << G.gateToString();
+        //     gates->push_back(G);
+        // }
         void ECR(IdxType ctrl, IdxType qubit)
         {
             /******************************************
