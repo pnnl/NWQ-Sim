@@ -60,7 +60,7 @@ def plot_data(all_data):
     plt.plot(distance_qiskit, sim_times_qiskit, "<-", label="Qiskit ('stabilizer')", linestyle="--", color="deepskyblue", markersize=6)
     plt.plot(distance_stim, sim_times_stim, ">-", label="Stim", linestyle="--", color="green", markersize=6)
 
-    plt.plot(distance_stab, sim_times_stab, "v-", label="QuECO", linestyle="-", color="darkorange", markersize=6)
+    plt.plot(distance_stab, sim_times_stab, "v-", label="STABSim", linestyle="-", color="red", markersize=6)
 
     # Find where STAB-GPU overtakes Stim
     # crossover_distance = None
