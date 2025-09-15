@@ -147,25 +147,41 @@ void sim_stream_write(std::shared_ptr<NWQSim::Circuit> circuit,
     uint64_t local_count = base + (static_cast<uint64_t>(world_rank) < rem ? 1 : 0);
     uint64_t local_start = static_cast<uint64_t>(world_rank) * base + std::min<uint64_t>(world_rank, rem);
 
-    bool binary = false;
+    bool binary_bitpacked = false;   // format=1
+    bool binary_rawbytes  = false;   // format=2 (NEW: 1 byte per measurement bit)
+    bool text_legacy      = false;   // no header
+
+    // Determine mode from extension first
     if (outfile.size() >= 4) {
         std::string ext = outfile.substr(outfile.size()-4);
-        if (ext == ".bin") binary = true;
+        if (ext == ".bin") binary_bitpacked = true; // default .bin -> bitpacked
     }
+    // Environment override
     const char *env_fmt = std::getenv("NWQSIM_OUTPUT_FORMAT");
     if (env_fmt) {
         std::string fmt(env_fmt);
-        if (fmt == "bin" || fmt == "BIN" || fmt == "binary") binary = true;
-        if (fmt == "txt" || fmt == "text") binary = false;
+        for (auto &c: fmt) c = (char)std::tolower(c);
+        if (fmt == "bin" || fmt == "bit" || fmt == "bitpacked") {
+            binary_bitpacked = true; binary_rawbytes = false; text_legacy = false;
+        } else if (fmt == "raw" || fmt == "rawbytes") {
+            binary_bitpacked = false; binary_rawbytes = true; text_legacy = false;
+        } else if (fmt == "txt" || fmt == "text") {
+            binary_bitpacked = false; binary_rawbytes = false; text_legacy = true;
+        }
+    }
+    if (!binary_bitpacked && !binary_rawbytes && !text_legacy) {
+        // default if nothing chosen
+        binary_bitpacked = true; // keep previous behavior by default
     }
 
-    if (world_rank == 0 && !binary) {
-        std::cerr << "[info] Using legacy text output (large for big shots). Set NWQSIM_OUTPUT_FORMAT=bin or use .bin suffix for compact format.\n";
+    if (world_rank == 0) {
+        if (text_legacy) std::cerr << "[info] Output format = TEXT legacy (large).\n";
+        else if (binary_bitpacked) std::cerr << "[info] Output format = BIN bit-packed (format=1).\n";
+        else if (binary_rawbytes) std::cerr << "[info] Output format = BIN RAW bytes (format=2, debugging friendly).\n";
     }
 
     // Open MPI file collectively
-    MPI_File fh;
-    MPI_File_open(MPI_COMM_WORLD, outfile.c_str(), MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
+    MPI_File fh; MPI_File_open(MPI_COMM_WORLD, outfile.c_str(), MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
 
     auto sim = BackendManager::create_state("CPU", n_qubits, "stab");
     double tmp_timer = 0.0;
@@ -173,21 +189,16 @@ void sim_stream_write(std::shared_ptr<NWQSim::Circuit> circuit,
 
     size_t mlen = 0; // measurement length
     size_t stride = 0; // per-shot bytes
-    const size_t header_size = binary ? 64 : 0; // reserve header only for binary
+    const size_t header_size = (text_legacy ? 0 : 64);
+    std::vector<int32_t> meas_first;
 
-    std::vector<int32_t> meas_first; // store first measurement (if any) until after header written
-
-    // Phase 1: simulate first local shot (if any) to discover measurement length
     if (local_count > 0) {
         sim->set_seed(local_start);
         sim->sim(circuit, tmp_timer);
         meas_first = sim->get_measurement_results();
         mlen = meas_first.size();
     }
-
-    // Allreduce to ensure consistent mlen across ranks
-    uint64_t mlen_local = mlen;
-    uint64_t mlen_min = 0, mlen_max = 0;
+    uint64_t mlen_local = mlen, mlen_min = 0, mlen_max = 0;
     MPI_Allreduce(&mlen_local, &mlen_min, 1, MPI_UINT64_T, MPI_MIN, MPI_COMM_WORLD);
     MPI_Allreduce(&mlen_local, &mlen_max, 1, MPI_UINT64_T, MPI_MAX, MPI_COMM_WORLD);
     if (mlen_min != mlen_max) {
@@ -196,64 +207,54 @@ void sim_stream_write(std::shared_ptr<NWQSim::Circuit> circuit,
     }
     mlen = mlen_max;
 
-    if (binary) {
-        stride = (mlen + 7) / 8; // packed bits
-        if (world_rank == 0) {
-            std::vector<unsigned char> header(header_size, 0);
-            const char magic[8] = {'N','W','Q','B','I','N','0','1'};
-            std::memcpy(header.data(), magic, 8);
-            std::memcpy(header.data()+8,  &n_qubits, sizeof(uint64_t));
-            std::memcpy(header.data()+16, &shots,    sizeof(uint64_t));
-            std::memcpy(header.data()+24, &mlen,     sizeof(uint64_t));
-            uint64_t fmt = 1ULL; // bit-packed format flag
-            std::memcpy(header.data()+32, &fmt, sizeof(uint64_t));
-            MPI_File_write_at(fh, 0, header.data(), (int)header.size(), MPI_BYTE, MPI_STATUS_IGNORE);
-        }
-    } else {
-        stride = 2 * mlen; // fixed width line (digits + spaces + final newline) => 2*mlen bytes
+    uint64_t fmt_flag = 0; // 0 unused, 1 = bitpacked, 2 = rawbytes
+    if (binary_bitpacked) {
+        stride = (mlen + 7) / 8; fmt_flag = 1;
+    } else if (binary_rawbytes) {
+        stride = mlen; fmt_flag = 2; // 1 byte per bit
+    } else { // text
+        stride = 2 * mlen; // digits + spaces
     }
 
-    MPI_Barrier(MPI_COMM_WORLD); // ensure header written before data
+    if (!text_legacy && world_rank == 0) {
+        std::vector<unsigned char> header(header_size, 0);
+        const char magic[8] = {'N','W','Q','B','I','N','0','1'}; // unchanged
+        std::memcpy(header.data(), magic, 8);
+        std::memcpy(header.data()+8,  &n_qubits, sizeof(uint64_t));
+        std::memcpy(header.data()+16, &shots,    sizeof(uint64_t));
+        std::memcpy(header.data()+24, &mlen,     sizeof(uint64_t));
+        std::memcpy(header.data()+32, &fmt_flag, sizeof(uint64_t));
+        MPI_File_write_at(fh, 0, header.data(), (int)header.size(), MPI_BYTE, MPI_STATUS_IGNORE);
+    }
 
-    // Helper buffers
-    std::vector<unsigned char> bin_buf(binary ? stride : 0);
-    std::vector<char> txt_buf(binary ? 0 : stride, '\n');
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    std::vector<unsigned char> bin_buf((binary_bitpacked||binary_rawbytes)? stride : 0);
+    std::vector<char> txt_buf(text_legacy ? stride : 0, '\n');
 
     auto write_measurement = [&](uint64_t g_shot, const std::vector<int32_t>& mv){
         MPI_Offset base_off = (MPI_Offset)header_size + (MPI_Offset)g_shot * (MPI_Offset)stride;
-        if (binary) {
+        if (binary_bitpacked) {
             std::fill(bin_buf.begin(), bin_buf.end(), 0);
             for (size_t k = 0; k < mv.size(); ++k) if (mv[k]) bin_buf[k >> 3] |= (unsigned char)(1u << (k & 7));
             MPI_File_write_at(fh, base_off, bin_buf.data(), (int)bin_buf.size(), MPI_BYTE, MPI_STATUS_IGNORE);
-        } else {
-            // positions: even indices digits, odd indices spaces, last char newline
-            for (size_t k = 0; k < mlen; ++k) {
-                txt_buf[2*k] = mv[k] ? '1' : '0';
-                if (k < mlen - 1) txt_buf[2*k + 1] = ' ';
-            }
+        } else if (binary_rawbytes) {
+            for (size_t k = 0; k < mv.size(); ++k) bin_buf[k] = (unsigned char)(mv[k] ? 1 : 0);
+            MPI_File_write_at(fh, base_off, bin_buf.data(), (int)mv.size(), MPI_BYTE, MPI_STATUS_IGNORE);
+        } else { // text
+            for (size_t k = 0; k < mlen; ++k) { txt_buf[2*k] = mv[k] ? '1' : '0'; if (k < mlen - 1) txt_buf[2*k+1] = ' '; }
             txt_buf[stride-1] = '\n';
             MPI_File_write_at(fh, base_off, txt_buf.data(), (int)txt_buf.size(), MPI_CHAR, MPI_STATUS_IGNORE);
         }
     };
 
-    // Write first measurement if present
-    if (local_count > 0) {
-        write_measurement(local_start, meas_first);
-        sim->reset_state();
-    }
-
-    // Remaining shots
+    if (local_count > 0) { write_measurement(local_start, meas_first); sim->reset_state(); }
     for (uint64_t j = (local_count > 0 ? 1 : 0); j < local_count; ++j) {
         uint64_t g = local_start + j;
-        sim->set_seed(g);
-        sim->sim(circuit, tmp_timer);
+        sim->set_seed(g); sim->sim(circuit, tmp_timer);
         const auto &mv = sim->get_measurement_results();
-        if (mv.size() != mlen) {
-            std::cerr << "[error] Measurement length changed (" << mv.size() << " vs " << mlen << ")" << std::endl;
-            MPI_Abort(MPI_COMM_WORLD, 3);
-        }
-        write_measurement(g, mv);
-        sim->reset_state();
+        if (mv.size() != mlen) { std::cerr << "[error] Measurement length changed." << std::endl; MPI_Abort(MPI_COMM_WORLD, 3); }
+        write_measurement(g, mv); sim->reset_state();
     }
 
     wall_timer.stop_timer();
@@ -263,15 +264,9 @@ void sim_stream_write(std::shared_ptr<NWQSim::Circuit> circuit,
     if (world_rank == 0) {
         sim_time_max = max_time_ms;
         std::cout << "Total C++ simulation time: " << (sim_time_max / 1000.0) << "s" << std::endl;
-        if (!binary) {
-            long double est_bytes = (long double)shots * (long double)stride + header_size;
-            long double gib = est_bytes / (1024.0L*1024.0L*1024.0L);
-            std::cerr << "[info] Approx output size: " << std::fixed << std::setprecision(2) << gib << " GiB (text)." << std::endl;
-        } else {
-            long double est_bytes = (long double)shots * (long double)stride + header_size;
-            long double gib = est_bytes / (1024.0L*1024.0L*1024.0L);
-            std::cerr << "[info] Approx output size: " << std::fixed << std::setprecision(2) << gib << " GiB (binary)." << std::endl;
-        }
+        long double est_bytes = (long double)shots * (long double)stride + header_size;
+        long double gib = est_bytes / (1024.0L*1024.0L*1024.0L);
+        std::cerr << "[info] Approx output size: " << std::fixed << std::setprecision(2) << gib << " GiB" << (text_legacy?" (text)":" (binary)") << std::endl;
     }
 
     MPI_File_close(&fh);
