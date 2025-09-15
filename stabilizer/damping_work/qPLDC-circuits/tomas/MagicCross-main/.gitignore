@@ -1,0 +1,25 @@
+# .gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.so
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data and results
+data/
+results/
+*.csv
+
+# Environments
+.env
+.venv/
+venv/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+external/
