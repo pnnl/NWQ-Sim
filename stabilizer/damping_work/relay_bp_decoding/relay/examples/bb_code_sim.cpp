@@ -47,20 +47,18 @@ void sim_batch(std::shared_ptr<NWQSim::Circuit> circuit,
     // Simulator
     cpu_timer sim_timer; sim_timer.start_timer();
     double tmp_timer = 0.0;
-    auto sim = BackendManager::create_state("CPU", n, "stab");
-    // Optional pre-allocation (kept as-is)
-    sim->allocate_measurement_buffers(shots * 1872); // informed guesstimate
 
     // Probe first local shot to learn measurement length
     std::vector<int32_t> first_meas;
     long long mlen_local_ll = -1LL;
     if (local_count > 0) {
+        auto sim = BackendManager::create_state("CPU", n, "stab");
         IdxType g0 = local_start;
         sim->set_seed(static_cast<IdxType>(g0));
         sim->sim(circuit, tmp_timer);
         first_meas = sim->get_measurement_results();
         mlen_local_ll = static_cast<long long>(first_meas.size());
-        sim->reset_state();
+        // sim is destroyed here, ensuring clean state
     }
 
     // Agree on measurement length across ranks
@@ -138,9 +136,10 @@ void sim_batch(std::shared_ptr<NWQSim::Circuit> circuit,
         if (v > 0) chunk_shots = static_cast<IdxType>(v);
     }
 
-    // Start with the probed first shot (if any)
+    // Main simulation loop
     IdxType j0 = 0;
     if (local_count > 0) {
+        auto sim = BackendManager::create_state("CPU", n, "stab");
         while (j0 < local_count) {
             IdxType blk = std::min(chunk_shots, local_count - j0);
             std::vector<uint8_t> buf(static_cast<size_t>(blk) * static_cast<size_t>(bytes_per_shot));
@@ -162,8 +161,7 @@ void sim_batch(std::shared_ptr<NWQSim::Circuit> circuit,
 
             MPI_Offset off = header_bytes + (static_cast<MPI_Offset>(local_start + j0)) * bytes_per_shot;
             MPI_Status st;
-            // buf.size() << INT_MAX due to chunking
-            MPI_File_write_at(fh, off, buf.data(), static_cast<int>(buf.size()), MPI_BYTE, &st);
+            MPI_File_write_at_all(fh, off, buf.data(), static_cast<int>(buf.size()), MPI_BYTE, &st);
 
             j0 += blk;
         }
