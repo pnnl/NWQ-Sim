@@ -19,9 +19,8 @@
 
 #include "../../../../include/stabsim/src/qasm_extraction.hpp"
 namespace NWQSim{
-void sim_batch(std::shared_ptr<NWQSim::Circuit> circuit, IdxType shots, std::vector<std::vector<int32_t>>& all_results, int n, double &sim_time)
+void sim_batch(std::shared_ptr<NWQSim::Circuit> circuit, IdxType shots, int n, double &sim_time, const std::string& m_filepath)
 {
-    // std::cerr << "In sim batch!" << std::endl;
     // MPI rank/size
     int world_rank = 0, world_size = 1;
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
@@ -38,6 +37,7 @@ void sim_batch(std::shared_ptr<NWQSim::Circuit> circuit, IdxType shots, std::vec
     double tmp_timer = 0.0;
     auto sim = BackendManager::create_state("CPU", n, "stab");
 
+    // Each rank simulates and stores results in memory
     std::vector<std::vector<int32_t>> local_results;
     local_results.reserve(static_cast<size_t>(local_count));
 
@@ -57,77 +57,24 @@ void sim_batch(std::shared_ptr<NWQSim::Circuit> circuit, IdxType shots, std::vec
         sim_time = max_time;
     }
 
-    // Determine measurement length; ensure consistent across ranks
-    int mlen_local = local_results.empty() ? -1 : static_cast<int>(local_results[0].size());
-    int mlen_max = 0;
-    MPI_Allreduce(&mlen_local, &mlen_max, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
-
-    int big = std::numeric_limits<int>::max();
-    int mlen_min_local = local_results.empty() ? big : mlen_local;
-    int mlen_min = 0;
-    MPI_Allreduce(&mlen_min_local, &mlen_min, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-    if (mlen_min == big) mlen_min = 0; // all empty (shouldn't happen if shots>0)
-
-    if (mlen_min != mlen_max && mlen_min != 0) {
-        if (world_rank == 0) {
-            std::cerr << "Error: measurement length mismatch across MPI ranks." << std::endl;
+    // Ranks write to a single file sequentially to avoid race conditions
+    for (int i = 0; i < world_size; ++i) {
+        if (world_rank == i) {
+            // Rank 0 opens in write mode (truncates), others append
+            std::ofstream out_file(m_filepath, (i == 0) ? std::ios::out : std::ios::app);
+            if (!out_file.is_open()) {
+                std::cerr << "Rank " << world_rank << " error opening " << m_filepath << std::endl;
+                MPI_Abort(MPI_COMM_WORLD, 1);
+            }
+            for (const auto& measurements : local_results) {
+                for (size_t k = 0; k < measurements.size(); ++k) {
+                    out_file << measurements[k] << (k == measurements.size() - 1 ? "" : " ");
+                }
+                out_file << "\n";
+            }
+            out_file.close();
         }
-        MPI_Abort(MPI_COMM_WORLD, 1);
-    }
-    int mlen = mlen_max;
-
-    // Flatten local results for gather
-    std::vector<int32_t> local_flat;
-    local_flat.resize(static_cast<size_t>(local_count) * mlen);
-    for (IdxType j = 0; j < local_count; ++j) {
-        const auto &v = local_results[static_cast<size_t>(j)];
-        for (int k = 0; k < mlen; ++k) {
-            local_flat[static_cast<size_t>(j) * mlen + k] = v[static_cast<size_t>(k)];
-        }
-    }
-
-    // Gather counts
-    int local_count_i = static_cast<int>(local_count);
-    std::vector<int> recv_counts;
-    if (world_rank == 0) recv_counts.resize(world_size, 0);
-    MPI_Gather(&local_count_i, 1, MPI_INT,
-               world_rank == 0 ? recv_counts.data() : nullptr, 1, MPI_INT,
-               0, MPI_COMM_WORLD);
-
-    // Prepare Gatherv parameters on root
-    std::vector<int> displs_elems; // element displacements (in ints)
-    std::vector<int> recv_counts_elems;
-    std::vector<int32_t> recv_flat; // flattened buffer on root
-    if (world_rank == 0) {
-        displs_elems.resize(world_size, 0);
-        recv_counts_elems.resize(world_size, 0);
-        int offset_elems = 0;
-        for (int r = 0; r < world_size; ++r) {
-            displs_elems[r] = offset_elems;
-            recv_counts_elems[r] = recv_counts[r] * mlen;
-            offset_elems += recv_counts_elems[r];
-        }
-        recv_flat.resize(static_cast<size_t>(offset_elems));
-    }
-
-    // Gather all results to root
-    int send_elems = local_count_i * mlen;
-    MPI_Gatherv(local_flat.data(), send_elems, MPI_INT,
-                world_rank == 0 ? recv_flat.data() : nullptr,
-                world_rank == 0 ? recv_counts_elems.data() : nullptr,
-                world_rank == 0 ? displs_elems.data() : nullptr,
-                MPI_INT, 0, MPI_COMM_WORLD);
-
-    if (world_rank == 0) {
-        // Reconstruct all_results in global shot order
-        all_results.clear();
-        all_results.resize(shots);
-        for (IdxType g = 0; g < shots; ++g) {
-            all_results[static_cast<size_t>(g)].assign(
-                recv_flat.begin() + static_cast<IdxType>(g) * mlen,
-                recv_flat.begin() + static_cast<IdxType>(g + 1) * mlen
-            );
-        }
+        MPI_Barrier(MPI_COMM_WORLD); // Synchronize before next rank writes
     }
 }
 }
@@ -156,33 +103,13 @@ int main(int argc, char* argv[]) {
     appendQASMToCircuit(circuit, qasmfile, n_qubits);
     std::string m_filepath = argv[4];
 
-    std::ofstream out_file;
-    if (world_rank == 0) {
-        out_file.open(m_filepath);
-        if (!out_file.is_open()) {
-            std::cerr << "Error opening measurement_results.txt" << std::endl;
-            MPI_Finalize();
-            return 1;
-        }
-    }
-
-    std::vector<std::vector<int32_t>> all_measurements; // only used on rank 0
     double total_time = 0.0;
 
     // Distribute simulation across MPI processes
-    all_measurements.resize(world_rank == 0 ? iters : 0);
-    // std::cerr << "Starting sim batch!!" << std::endl;
-    NWQSim::sim_batch(circuit, iters, all_measurements, n_qubits, total_time);
+    NWQSim::sim_batch(circuit, iters, n_qubits, total_time, m_filepath);
 
-    // Rank 0 writes results
+    // Rank 0 reports time
     if (world_rank == 0) {
-        for (const auto& measurements : all_measurements) {
-            for (size_t j = 0; j < measurements.size(); ++j) {
-                out_file << measurements[j] << (j == measurements.size() - 1 ? "" : " ");
-            }
-            out_file << "\n";
-        }
-        out_file.close();
         std::cout << "Total C++ simulation time: " << total_time / 1000 << "s" << std::endl;
     }
 

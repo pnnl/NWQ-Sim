@@ -5,8 +5,8 @@ _LOGICALS = None
 
 def worker_init(check_matrix, priors, logicals_matrix, decoder_kwargs):
     global _DECODER, _LOGICALS
-    from ldpc import bposd_decoder
-    _DECODER = bposd_decoder(
+    from ldpc import BpOsdDecoder
+    _DECODER = BpOsdDecoder(
         check_matrix,
         channel_probs=priors,
         **decoder_kwargs
