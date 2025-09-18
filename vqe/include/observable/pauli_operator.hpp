@@ -206,7 +206,8 @@ namespace NWQSim {
         }
         bool isNonTrivial() const { return non_trivial;}
         bool QWC(const PauliOperator& other) const {          
-          return ((xmask & other.zmask) | (zmask & other.xmask)) == 0;
+          // return ((xmask & other.zmask) | (zmask & other.xmask)) == 0;
+          return ((xmask & other.zmask) ^ (zmask & other.xmask)) == 0; // MZ: noticed by Sean Garner
         }
         bool GC(const PauliOperator& other) const {
           return parity(other);
