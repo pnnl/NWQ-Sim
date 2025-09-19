@@ -5,6 +5,7 @@
 
 #include "svsim/sv_cpu.hpp"
 #include "dmsim/dm_cpu.hpp"
+#include "stabsim/stab_cpu.hpp"
 
 #ifdef OMP_ENABLED
 #include "svsim/sv_omp.hpp"
@@ -70,8 +71,8 @@ public:
         std::transform(backend.begin(), backend.end(), backend.begin(),
                        [](unsigned char c)
                        { return std::toupper(c); });
-        
-         // Convert to uppercase
+
+        // Convert to uppercase
         std::transform(simulator_method.begin(), simulator_method.end(), simulator_method.begin(),
                        [](unsigned char c)
                        { return std::toupper(c); });
@@ -79,8 +80,15 @@ public:
         {
             if (simulator_method == "SV")
                 return std::make_shared<NWQSim::SV_CPU>(numQubits);
-            else
+            else if (simulator_method == "DM")
                 return std::make_shared<NWQSim::DM_CPU>(numQubits);
+            else if (simulator_method == "STAB")
+                return std::make_shared<NWQSim::STAB_CPU>(numQubits);
+            else
+            {
+                NWQSim::safe_print("Invalid simulator method name: %s. Please use one of the available methods: SV, DM, STAB. (Case insensitive)\n", simulator_method.c_str());
+                exit(1);
+            }
         }
 
 #ifdef OMP_ENABLED
@@ -102,8 +110,13 @@ public:
         {
             if (simulator_method == "SV")
                 return std::make_shared<NWQSim::SV_CUDA>(numQubits);
-            else
+            else if (simulator_method == "DM")
                 return std::make_shared<NWQSim::DM_CUDA>(numQubits);
+            else
+            {
+                NWQSim::safe_print("Invalid simulator method name: %s. Please use one of the available methods: SV, DM. (Case insensitive)\n", simulator_method.c_str());
+                exit(1);
+            }
         }
 #endif
 
