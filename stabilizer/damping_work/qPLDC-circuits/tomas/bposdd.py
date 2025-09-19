@@ -5,7 +5,7 @@ from sinter import CompiledDecoder, Decoder
 from stim import DetectorErrorModel
 
 from beliefmatching import detector_error_model_to_check_matrices
-from ldpc import bposd_decoder
+from ldpc import BpOsdDecoder
 '''This file is copied from Josh Viszlai's gbstim repo'''
 class CompiledBPOSD(CompiledDecoder):
 
@@ -34,7 +34,7 @@ class BPOSD(Decoder):
                                 dem: DetectorErrorModel
                                ) -> CompiledDecoder:
         check_matrices = detector_error_model_to_check_matrices(dem, allow_undecomposed_hyperedges=True)
-        decoder = bposd_decoder(check_matrices.check_matrix, channel_probs=check_matrices.priors, **self.decoder_kwargs)
+        decoder = BpOsdDecoder(check_matrices.check_matrix, channel_probs=check_matrices.priors, **self.decoder_kwargs)
         return CompiledBPOSD(check_matrices, decoder)
 
     def decode_via_files(self, 
