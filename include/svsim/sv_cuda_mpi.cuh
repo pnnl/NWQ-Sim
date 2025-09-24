@@ -982,8 +982,6 @@ namespace NWQSim
                 {
                     ValType el_real[4];
                     ValType el_imag[4];
-                    ValType res_real[4] = {0};
-                    ValType res_imag[4] = {0};
                     const IdxType term0 = MOD2E(i, p);
                     const IdxType term1 = MOD2E(DIV2E(i, p), q - p - 1) * EXP2E(p + 1);
                     const IdxType term2 = DIV2E(DIV2E(i, p), q - p - 1) * EXP2E(q + 1);
@@ -1808,9 +1806,7 @@ namespace NWQSim
         IdxType cur_index = 0;
         IdxType lg2_m_gpu = sv_gpu->lg2_m_gpu;
         grid_group grid = this_grid();
-        const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
         bool already_sync = false;
-        IdxType n_expect = 0;
         for (IdxType t = 0; t < n_gates; t++)
         {
             OP op_name = (sv_gpu->gates_gpu)[t].op_name;

@@ -3,6 +3,9 @@ set(SOURCE_FILE "nwq_qasm.cpp")
 add_executable(nwq_qasm nwq_qasm.cpp)
 target_compile_features(nwq_qasm PRIVATE cxx_std_17)
 
+# Add linker flag to disable executable stack (fixes CUDA linker warning)
+target_link_options(nwq_qasm PRIVATE "-Wl,-z,noexecstack")
+
 # Link against OpenMP if available
 if(OpenMP_FOUND)
     target_link_libraries(nwq_qasm PUBLIC OpenMP::OpenMP_CXX)
@@ -21,7 +24,7 @@ if(CUDAToolkit_FOUND)
     set_source_files_properties(${SOURCE_FILE} PROPERTIES LANGUAGE CUDA)
 
     target_compile_features(nwq_qasm PRIVATE cuda_std_17)
-    #target_link_libraries(nwq_qasm PUBLIC CUDA::cudart)
+    # target_link_libraries(nwq_qasm PUBLIC CUDA::cudart)
     target_compile_definitions(nwq_qasm PUBLIC CUDA_ENABLED)
 
     # If NVSHMEM is available, link against it and set the definitions

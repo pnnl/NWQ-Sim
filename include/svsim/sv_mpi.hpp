@@ -351,7 +351,6 @@ namespace NWQSim
 
             auto start = std::chrono::steady_clock::now();
             int n_gates = gates.size();
-            int n_expect = 0;
             for (int i = 0; i < n_gates; i++)
             {
 
@@ -900,9 +899,6 @@ namespace NWQSim
             const IdxType q1dim = ((IdxType)1 << std::min(qubit0, qubit1));
             // const IdxType outer_factor = ((dim) + q0dim + q0dim - 1) >> (std::max(qubit0, qubit1) + 1);
             const IdxType mider_factor = (q0dim + q1dim + q1dim - 1) >> (std::min(qubit0, qubit1) + 1);
-            const IdxType inner_factor = q1dim;
-            const IdxType qubit0_dim = ((IdxType)1 << qubit0);
-            const IdxType qubit1_dim = ((IdxType)1 << qubit1);
             const IdxType p = qubit0;
             const IdxType q = qubit1;
             ValType exp_val = 0.0;
@@ -915,10 +911,6 @@ namespace NWQSim
                 // IdxType pos1 = outer + mider + inner + qubit1_dim;
                 // IdxType pos2 = outer + mider + inner + qubit0_dim;
                 // IdxType pos3 = outer + mider + inner + q0dim + q1dim;
-                ValType el_real[4];
-                ValType el_imag[4];
-                ValType res_real[4] = {0};
-                ValType res_imag[4] = {0};
                 const IdxType term0 = MOD2E(i, p);
                 const IdxType term1 = MOD2E(DIV2E(i, p), q - p - 1) * EXP2E(p + 1);
                 const IdxType term2 = DIV2E(DIV2E(i, p), q - p - 1) * EXP2E(q + 1);
@@ -1003,17 +995,10 @@ namespace NWQSim
 
                         ValType el_real[4];
                         ValType el_imag[4];
-                        ValType res_real[4] = {0};
-                        ValType res_imag[4] = {0};
                         const IdxType term0 = MOD2E(i, p);
                         const IdxType term1 = MOD2E(DIV2E(i, p), q - p - 1) * EXP2E(p + 1);
                         const IdxType term2 = DIV2E(DIV2E(i, p), q - p - 1) * EXP2E(q + 1);
                         const IdxType term = term2 + term1 + term0;
-                        IdxType indices[4] = {
-                            term + SV4IDX(0),
-                            term + SV4IDX(1),
-                            term + SV4IDX(2),
-                            term + SV4IDX(3)};
                         el_real[0] = LOCAL_G(sv_real, term + SV4IDX(0));
                         el_imag[0] = LOCAL_G(sv_imag, term + SV4IDX(0));
                         el_real[3] = LOCAL_G(sv_real_remote, term + SV4IDX(3));

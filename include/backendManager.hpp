@@ -18,6 +18,7 @@
 #ifdef CUDA_ENABLED
 #include "svsim/sv_cuda.cuh"
 #include "dmsim/dm_cuda.cuh"
+#include "stabsim/stab_cuda.cuh"
 #endif
 
 #ifdef CUDA_MPI_ENABLED
@@ -112,6 +113,8 @@ public:
                 return std::make_shared<NWQSim::SV_CUDA>(numQubits);
             else if (simulator_method == "DM")
                 return std::make_shared<NWQSim::DM_CUDA>(numQubits);
+            else if (simulator_method == "STAB")
+                return std::make_shared<NWQSim::STAB_CUDA>(numQubits);
             else
             {
                 NWQSim::safe_print("Invalid simulator method name: %s. Please use one of the available methods: SV, DM. (Case insensitive)\n", simulator_method.c_str());

@@ -972,7 +972,6 @@ namespace NWQSim
             const IdxType tid = threadIdx.x + blockIdx.x * blockDim.x;
             grid_group grid = this_grid();
             IdxType vector_dim = (IdxType)1 << n_qubits;
-            ValType local_real = 0;
             if (tid < dim)
             {
                 m_real[tid] = 0;
@@ -987,8 +986,6 @@ namespace NWQSim
                     ValType d = dm_imag[r * vector_dim + s];
                     ValType g = sv_real[r]; // bra
                     ValType f = -sv_imag[r];
-                    ValType real_contrib = a * c * g - a * d * f - b * c * f - b * d * g;
-                    ValType imag_contrib = a * c * f + a * d * g + b * c * g - b * d * f;
                     m_real[tid] += a * c * g - a * d * f - b * c * f - b * d * g;
                     m_imag[tid] += a * c * f + a * d * g + b * c * g - b * d * f;
                 }

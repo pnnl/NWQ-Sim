@@ -133,8 +133,6 @@ namespace NWQSim
             else
             {
                 const int sp_dim = qubit_dim * qubit_dim;
-                double qubit_dim_double = (double)qubit_dim;
-                double sp_dim_double = (double)sp_dim;
                 // Read qubits properties
                 double T1_1, T1_2, T2_1, T2_2, gate_len, err_rate;
                 try
@@ -208,8 +206,6 @@ namespace NWQSim
             else
             {
                 const int sp_dim = qubit_dim * qubit_dim;
-                double qubit_dim_double = (double)qubit_dim;
-                double sp_dim_double = (double)sp_dim;
                 // Read qubits properties
                 double T1, T2;
                 try

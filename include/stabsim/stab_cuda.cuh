@@ -9,7 +9,7 @@
 #include "private/cuda_util.cuh"
 #include "private/macros.hpp"
 #include "private/sim_gate.hpp"
-#include "utils/prng.hpp"
+#include "prng.hpp"
 
 #include "circuit_pass/fusion.hpp"
 #include "private/exp_gate_declarations.cuh"
@@ -40,7 +40,7 @@ namespace NWQSim
 
     // Simulation kernel runtime
     class STAB_CUDA;
-    __global__ void simulation_kernel_cuda(STAB_CUDA *stab_gpu, Gate *gates_gpu, IdxType n_gates, int32_t seed);
+    __global__ void stabsim_kernel_cuda(STAB_CUDA *stab_gpu, Gate *gates_gpu, IdxType n_gates, int32_t seed);
     __global__ void simulation_kernel_cuda2D(STAB_CUDA *stab_gpu, Gate *gates_gpu, IdxType gate_chunk);
 
     class STAB_CUDA : public QuantumState
@@ -317,14 +317,14 @@ namespace NWQSim
             }
         }
 
-        std::vector<int32_t> get_measurement_results() override
+        std::vector<int32_t> get_measurement_results()
         {
             std::cout << "Getting measurement results: " << measurement_results.size() << " measurements" << std::endl;
             return measurement_results;
         }
 
         // Get the stabilizers in the tableau, i.e. all of the Pauli strings that stabilize a certain circuit
-        std::vector<std::string> get_stabilizers() override
+        std::vector<std::string> get_stabilizers()
         {
             int32_t x_val;
             int32_t z_val;
@@ -359,7 +359,7 @@ namespace NWQSim
         }
 
         // Simulate the gates from a circuit in the tableau
-        void sim2D(std::shared_ptr<Circuit> circuit2D, std::vector<int> gate_chunks, double &sim_time) override
+        void sim2D(std::shared_ptr<Circuit> circuit2D, std::vector<int> gate_chunks, double &sim_time)
         {
             STAB_CUDA *stab_gpu;
             SAFE_ALOC_GPU(stab_gpu, sizeof(STAB_CUDA));
@@ -446,7 +446,7 @@ namespace NWQSim
         }
 
         // Simulate the gates from a circuit in the tableau
-        void sim(std::shared_ptr<Circuit> circuit, double &sim_time) override
+        void sim(std::shared_ptr<Circuit> circuit) override
         {
             SAFE_ALOC_GPU(d_local_sums, cols * sizeof(int32_t));
             cudaMemset(d_local_sums, 0, cols * sizeof(int32_t));
@@ -480,17 +480,17 @@ namespace NWQSim
             int32_t threadsPerBlock = prop.maxThreadsPerBlock; // 1024
             int32_t maxBlocksPerSM;
             cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-                &maxBlocksPerSM,                /* out: max active blocks */
-                (void *)simulation_kernel_cuda, /* kernel */
-                threadsPerBlock,                /* threads per block */
-                0                               /* shared memory per block */
+                &maxBlocksPerSM,             /* out: max active blocks */
+                (void *)stabsim_kernel_cuda, /* kernel */
+                threadsPerBlock,             /* threads per block */
+                0                            /* shared memory per block */
             );
 
             printf("Max active blocks per SM: %d\n", maxBlocksPerSM);
             int32_t maxBlocks = prop.multiProcessorCount * maxBlocksPerSM;
             printf("Total max cooperative blocks: %d\n", maxBlocks);
             cudaFuncAttributes attr;
-            cudaFuncGetAttributes(&attr, simulation_kernel_cuda);
+            cudaFuncGetAttributes(&attr, stabsim_kernel_cuda);
             printf("Registers per thread: %d\n", attr.numRegs);
             if (attr.numRegs > 64)
             {
@@ -498,7 +498,7 @@ namespace NWQSim
             }
 
             int32_t minGridSize, blockSize;
-            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, simulation_kernel_cuda, 0, 0);
+            cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, stabsim_kernel_cuda, 0, 0);
             printf("Max block size: %d\n", blockSize);
             int32_t blocksPerGrid = maxBlocks;
 
@@ -534,7 +534,7 @@ namespace NWQSim
             sim_timer.start_timer();
 
             // Launch with cooperative kernel
-            cudaLaunchCooperativeKernel((void *)simulation_kernel_cuda, blocksPerGrid, threadsPerBlock, args, sharedMemSize);
+            cudaLaunchCooperativeKernel((void *)stabsim_kernel_cuda, blocksPerGrid, threadsPerBlock, args, sharedMemSize);
 
             sim_timer.stop_timer();
 
@@ -551,9 +551,6 @@ namespace NWQSim
                     throw std::runtime_error("CUDA kernel had an issue during execution.");
                 }
             }
-
-            /*End simulate*/
-            sim_time += sim_timer.measure();
 
             // Add to free_measurement_buffers():
 
@@ -579,8 +576,8 @@ namespace NWQSim
             {
                 printf("\n============== STAB-Sim ===============\n");
                 printf("n_qubits:%lld, n_gates:%lld, ncpus:%d, comp:%.3lf ms, comm:%.3lf ms, sim:%.3lf ms\n",
-                       n, n_gates, 1, sim_time, 0.,
-                       sim_time);
+                       n, n_gates, 1, sim_timer.measure(), 0.,
+                       sim_timer.measure());
                 printf("=====================================\n\n\n");
             }
 
@@ -672,7 +669,7 @@ namespace NWQSim
         int32_t *d_measurement_idx_counter = nullptr;
         IdxType measurement_count = 0;
 
-        void allocate_measurement_buffers(IdxType max_measurements) override
+        void allocate_measurement_buffers(IdxType max_measurements)
         {
             if (measurement_count == max_measurements && d_measurement_results != nullptr)
                 return;
@@ -682,13 +679,13 @@ namespace NWQSim
 
             if (measurement_count > 0)
             {
-                SAFE_ALOC_GPU(d_measurement_results, measurement_count * sizeof(IdxType));
-                h_measurement_results = new IdxType[measurement_count];
-                SAFE_ALOC_GPU(d_measurement_idx_counter, sizeof(IdxType));
+                SAFE_ALOC_GPU(d_measurement_results, measurement_count * sizeof(int32_t));
+                SAFE_ALOC_GPU(d_measurement_idx_counter, sizeof(int32_t));
+                h_measurement_results = new int32_t[measurement_count];
             }
         }
 
-        void free_measurement_buffers() override
+        void free_measurement_buffers()
         {
             SAFE_FREE_GPU(d_measurement_results);
             delete[] h_measurement_results;
@@ -755,7 +752,7 @@ namespace NWQSim
 
     __device__ int32_t smuggle_scratch;
     __launch_bounds__(1024, 1)
-        __global__ void simulation_kernel_cuda(STAB_CUDA *stab_gpu, Gate *gates_gpu, IdxType n_gates, int32_t seed)
+        __global__ void stabsim_kernel_cuda(STAB_CUDA *stab_gpu, Gate *gates_gpu, IdxType n_gates, int32_t seed)
     {
         cg::grid_group grid = cg::this_grid();
         IdxType i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -772,7 +769,6 @@ namespace NWQSim
         int32_t *x_arr = stab_gpu->x_bit_gpu;
         int32_t *z_arr = stab_gpu->z_bit_gpu;
         int32_t *r_arr = stab_gpu->r_bit_gpu;
-        int32_t *global_sums = stab_gpu->d_local_sums;
 
         int *d_measurement_idx_counter = stab_gpu->d_measurement_idx_counter;
         int32_t x, z, x_ctrl, z_ctrl;
