@@ -38,6 +38,20 @@
 #include <algorithm>
 #include <cctype>
 
+// TNSIM backends
+#ifdef ITENSOR_ENABLED
+#include "tnsim/tn_itensor.hpp"
+#endif
+
+// Both itensor and TAMM have Error (may be a better way to do this but this works)
+#ifdef Error
+#undef Error
+#endif
+
+#ifdef TAMM_ENABLED
+#include "tnsim/tn_tamm.hpp"
+#endif
+
 class BackendManager
 {
 public:
@@ -66,7 +80,7 @@ public:
 #endif
     }
 
-    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "SV")
+    static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "SV", int max_dim = 100, double sv_cutoff = 0.0)
     {
         // Convert to uppercase
         std::transform(backend.begin(), backend.end(), backend.begin(),
@@ -85,6 +99,10 @@ public:
                 return std::make_shared<NWQSim::DM_CPU>(numQubits);
             else if (simulator_method == "STAB")
                 return std::make_shared<NWQSim::STAB_CPU>(numQubits);
+#ifdef ITENSOR_ENABLED
+            else if (simulator_method == "TN")
+                else return std::make_shared<NWQSim::TN_ITENSOR>(numQubits, max_dim, sv_cutoff);
+#endif
             else
             {
                 NWQSim::safe_print("Invalid simulator method name: %s. Please use one of the available methods: SV, DM, STAB. (Case insensitive)\n", simulator_method.c_str());
@@ -102,6 +120,12 @@ public:
 #ifdef MPI_ENABLED
         else if (backend == "MPI")
         {
+
+#ifdef TAMM_ENABLED
+            if (backend.rfind("TN_TAMM", 0) == 0)
+                return std::make_shared<NWQSim::TN_TAMM>(numQubits, max_dim, sv_cutoff, backend);
+#endif
+
             return std::make_shared<NWQSim::SV_MPI>(numQubits);
         }
 #endif

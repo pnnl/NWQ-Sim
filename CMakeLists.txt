@@ -11,7 +11,7 @@ endif()
 
 
 # Specify the project details
-project(MyPackage
+project(NWQ-Sim
         VERSION 0.0.1
         DESCRIPTION "NWQSim Qasm"
         LANGUAGES C CXX)
@@ -77,6 +77,34 @@ else()
     set(nvshmem_found_str "N/A")
 endif()
 
+
+# Path to external ITensor installation
+set(ITENSOR_ROOT "${CMAKE_SOURCE_DIR}/../itensor"
+    CACHE PATH "Path to external iTensor installation")
+
+# Check that the directory and library actually exist
+if (IS_DIRECTORY "${ITENSOR_ROOT}" AND EXISTS "${ITENSOR_ROOT}/lib/libitensor.a")
+    set(ITENSOR_FOUND TRUE CACHE BOOL "ITensor library available")
+
+    include_directories("${ITENSOR_ROOT}")
+
+    add_library(itensor STATIC IMPORTED)
+    set_target_properties(itensor PROPERTIES
+        IMPORTED_LOCATION "${ITENSOR_ROOT}/lib/libitensor.a"
+        INTERFACE_INCLUDE_DIRECTORIES "${ITENSOR_ROOT}"
+    )
+else()
+    set(ITENSOR_FOUND FALSE CACHE BOOL "ITensor library available")
+endif()
+
+if(NOT DEFINED TAMM_DIR)
+  set(TAMM_DIR "${CMAKE_SOURCE_DIR}/../tamm_install"
+      CACHE PATH "Path to external TAMM installation")
+endif()
+
+list(APPEND CMAKE_PREFIX_PATH "${TAMM_DIR}")
+find_package(TAMM QUIET)
+
 if(HIP_FOUND)
     set(hip_found_str "TRUE")
     set(CMAKE_HIP_FLAGS_RELEASE "-O3")
@@ -126,6 +154,8 @@ message(STATUS "CUDA found: ${CUDAToolkit_FOUND}")
 message(STATUS "HIP found: ${hip_found_str}")
 message(STATUS "NVSHMEM found: ${nvshmem_found_str}")
 message(STATUS "Matrix Accelerator ENABLED: ${ma_enable}")
+message(STATUS "TAMM found: ${TAMM_FOUND}")
+message(STATUS "iTensor found: ${ITENSOR_FOUND}")
 message(STATUS "==========================================================================\n")
 
 # Include directories

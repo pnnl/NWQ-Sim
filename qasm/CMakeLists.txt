@@ -43,3 +43,30 @@ if(HIP_FOUND)
     target_compile_definitions(nwq_qasm PUBLIC HIP_ENABLED)
 
 endif()
+
+# If iTensor is found, enable itensor TN CPU simulator
+if (ITENSOR_FOUND)
+    target_link_libraries(nwq_qasm PRIVATE itensor)
+    target_compile_definitions(nwq_qasm PUBLIC ITENSOR_ENABLED)
+endif()
+
+# If TAMM is found, enable the TN TAMM backend
+if (TAMM_FOUND)
+    if(CUDAToolkit_FOUND)
+        get_target_property(_cudart CUDA::cudart IMPORTED_LOCATION)
+        get_filename_component(_cuda_libdir ${_cudart} DIRECTORY)
+        list(APPEND CMAKE_BUILD_RPATH ${_cuda_libdir})
+    endif()
+
+    if(CUDAToolkit_FOUND)
+        target_link_libraries(nwq_qasm PRIVATE
+            CUDA::cudart
+            CUDA::cublas
+            CUDA::cublasLt
+            CUDA::cusolver
+        )
+    endif()
+
+    target_link_libraries(nwq_qasm PRIVATE OpenMP::OpenMP_CXX tamm::tamm)
+    target_compile_definitions(nwq_qasm PUBLIC TAMM_ENABLED)
+endif()

@@ -19,6 +19,10 @@
 #include "src/cl_parser.hpp"
 /**************************************************************************/
 
+#ifdef TAMM_ENABLED
+#include <tamm/tamm.hpp>
+#endif
+
 using namespace NWQSim;
 ValType pass_threshold = 0.98;
 ValType run_brnchmark(std::string backend, IdxType index, IdxType total_shots, std::string simulation_method, bool is_basis);
@@ -40,9 +44,9 @@ int main(int argc, char **argv)
     IdxType total_shots = std::stoll(config_parser.get_value("shots"));
     std::string backend = config_parser.get_value("backend");
     std::transform(backend.begin(), backend.end(), backend.begin(),
-                       [](unsigned char c)
-                       { return std::toupper(c); });
-        
+                   [](unsigned char c)
+                   { return std::toupper(c); });
+
     std::string simulation_method = config_parser.get_value("sim");
     bool run_with_basis = config_parser.is_flag_set("basis");
 
@@ -69,6 +73,17 @@ int main(int argc, char **argv)
     simulation_method = Config::ENABLE_NOISE ? "DM" : simulation_method;
     Config::device_layout_file = config_parser.get_value("layout");
     Config::device_layout_str = config_parser.get_value("layout_str");
+
+    // Handle TNSim MPS parameters
+    IdxType max_dim = std::stoll(config_parser.get_value("max_dim"));
+    double sv_cutoff = std::stod(config_parser.get_value("sv_cutoff"));
+
+#ifdef TAMM_ENABLED
+    if (simulation_method == "TN")
+    {
+        tamm::initialize(argc, argv);
+    }
+#endif
 
     if (config_parser.is_flag_set("backend_list"))
     {
@@ -147,6 +162,13 @@ int main(int argc, char **argv)
                 safe_print("TESTING FAILED!\n");
         }
 
+#ifdef TAMM_ENABLED
+        if (simulation_method == "TN")
+        {
+            tamm::finalize();
+        }
+#endif
+
         return 0;
     }
 
@@ -161,7 +183,7 @@ int main(int argc, char **argv)
         if (!report_fidelity)
         {
             // Create the backend
-            std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method);
+            std::shared_ptr<NWQSim::QuantumState> state = BackendManager::create_state(backend, parser.num_qubits(), simulation_method, max_dim, sv_cutoff);
             if (!state)
             {
                 std::cerr << "Failed to create backend\n";

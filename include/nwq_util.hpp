@@ -39,7 +39,8 @@ namespace NWQSim
     {
         SV,
         DM,
-        STAB
+        STAB,
+        TN
     };
     inline std::string formatDuration(std::chrono::seconds input_seconds)
     {
