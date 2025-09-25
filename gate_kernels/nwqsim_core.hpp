@@ -12,7 +12,10 @@ namespace NWQSim
 {
     using IdxType = long long;
     using ValType = double;
-
+    namespace GateKernels
+    {
+        inline constexpr ValType MEASUREMENT_ERROR_BAR = 1e-3;
+    }
     struct ZObservableTerm
     {
         IdxType mask;
