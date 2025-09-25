@@ -8,6 +8,7 @@
 #include <cstdio>
 
 #include "nwqsim_core.hpp"
+#include "../memory/state_view.hpp"
 
 namespace NWQSim
 {
@@ -15,20 +16,6 @@ namespace NWQSim
     {
         namespace MultiGPU
         {
-
-            struct NvshmemState
-            {
-                ValType *data_real;
-                ValType *data_imag;
-                ValType *buffer_real;
-                ValType *buffer_imag;
-                IdxType dim;
-                IdxType half_dim;
-                IdxType gpu_scale;
-                IdxType lg2_m_gpu;
-                IdxType m_gpu;
-                IdxType rank;
-            };
 
             template <typename Group>
             __device__ __forceinline__ void nvshmem_grid_barrier(Group grid)
@@ -38,12 +25,12 @@ namespace NWQSim
                 grid.sync();
             }
 
-            __device__ __forceinline__ ValType symmetric_get(ValType *arr, IdxType idx, const NvshmemState &state)
+            __device__ __forceinline__ ValType symmetric_get(ValType *arr, IdxType idx, const StateView &state)
             {
                 return nvshmem_double_g(arr + ((idx) & (state.m_gpu - 1)), idx >> state.lg2_m_gpu);
             }
 
-            __device__ __forceinline__ void symmetric_put(ValType *arr, IdxType idx, const NvshmemState &state, ValType value)
+            __device__ __forceinline__ void symmetric_put(ValType *arr, IdxType idx, const StateView &state, ValType value)
             {
                 nvshmem_double_p(arr + ((idx) & (state.m_gpu - 1)), value, idx >> state.lg2_m_gpu);
             }
@@ -61,7 +48,7 @@ namespace NWQSim
             __device__ __forceinline__ void apply_c1_gate_local(const ValType *gm_real,
                                                                 const ValType *gm_imag,
                                                                 IdxType qubit,
-                                                                const NvshmemState &state)
+                                                                const StateView &state)
             {
                 namespace cg = cooperative_groups;
                 cg::grid_group grid = cg::this_grid();
@@ -98,7 +85,7 @@ namespace NWQSim
             __device__ __forceinline__ void apply_c1_gate_v1(const ValType *gm_real,
                                                              const ValType *gm_imag,
                                                              IdxType qubit,
-                                                             const NvshmemState &state)
+                                                             const StateView &state)
             {
                 namespace cg = cooperative_groups;
                 cg::grid_group grid = cg::this_grid();
@@ -183,7 +170,7 @@ namespace NWQSim
             __device__ __forceinline__ void apply_c1_gate_v2(const ValType *gm_real,
                                                              const ValType *gm_imag,
                                                              IdxType qubit,
-                                                             const NvshmemState &state)
+                                                             const StateView &state)
             {
                 namespace cg = cooperative_groups;
                 cg::grid_group grid = cg::this_grid();
@@ -238,7 +225,7 @@ namespace NWQSim
                                                                 const ValType *gm_imag,
                                                                 IdxType qubit0,
                                                                 IdxType qubit1,
-                                                                const NvshmemState &state)
+                                                                const StateView &state)
             {
                 namespace cg = cooperative_groups;
                 cg::grid_group grid = cg::this_grid();
@@ -299,7 +286,7 @@ namespace NWQSim
                                                              const ValType *gm_imag,
                                                              IdxType qubit0,
                                                              IdxType qubit1,
-                                                             const NvshmemState &state)
+                                                             const StateView &state)
             {
                 namespace cg = cooperative_groups;
                 cg::grid_group grid = cg::this_grid();
@@ -401,7 +388,7 @@ namespace NWQSim
                 }
             }
 
-            __device__ __forceinline__ void measure_qubit(const NvshmemState &state,
+            __device__ __forceinline__ void measure_qubit(const StateView &state,
                                                           IdxType n_qubits,
                                                           IdxType qubit,
                                                           ValType *probabilities,
@@ -492,7 +479,7 @@ namespace NWQSim
                 nvshmem_grid_barrier(grid);
             }
 
-            __device__ __forceinline__ void measure_all(const NvshmemState &state,
+            __device__ __forceinline__ void measure_all(const StateView &state,
                                                         IdxType n_qubits,
                                                         IdxType repetition,
                                                         ValType *probabilities,
@@ -589,7 +576,7 @@ namespace NWQSim
                 nvshmem_grid_barrier(grid);
             }
 
-            __device__ __forceinline__ void reset_qubit(const NvshmemState &state,
+            __device__ __forceinline__ void reset_qubit(const StateView &state,
                                                         IdxType n_qubits,
                                                         IdxType qubit,
                                                         ValType *probabilities)
@@ -690,7 +677,7 @@ namespace NWQSim
                 nvshmem_grid_barrier(grid);
             }
 
-            __device__ __forceinline__ void expectation_mask(const NvshmemState &state,
+            __device__ __forceinline__ void expectation_mask(const StateView &state,
                                                              IdxType n_qubits,
                                                              IdxType mask,
                                                              ValType coeff,
@@ -718,7 +705,7 @@ namespace NWQSim
                 grid.sync();
             }
 
-            __device__ __forceinline__ void expectation_observable(const NvshmemState &state,
+            __device__ __forceinline__ void expectation_observable(const StateView &state,
                                                                    IdxType n_qubits,
                                                                    const ZObservableTerm *terms,
                                                                    IdxType term_count,

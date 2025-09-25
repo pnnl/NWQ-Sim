@@ -1,26 +1,39 @@
 #pragma once
 
-#include <cstdint>
+namespace NWQSim
+{
+    using IdxType = long long;
+    using ValType = double;
+
+    /***********************************************
+     * Constant configuration:
+     ***********************************************/
+/* Constant value of PI */
+#define PI 3.14159265358979323846
+/* Constant value of sqrt(2) */
+#define S2I 0.70710678118654752440
+/* Constant value of 0.5 */
+#define HALF 0.5
+
+    enum class SimType
+    {
+        SV,
+        DM
+    };
+
+    struct ZObservableTerm
+    {
+        IdxType mask;
+        ValType coeff;
+    };
+
+    inline constexpr ValType MEASUREMENT_ERROR_BAR = 1e-3;
 
 #if defined(__CUDACC__) || defined(__HIPCC__)
 #define NWQSIM_HD __host__ __device__
 #else
 #define NWQSIM_HD
 #endif
-
-namespace NWQSim
-{
-    using IdxType = long long;
-    using ValType = double;
-    namespace GateKernels
-    {
-        inline constexpr ValType MEASUREMENT_ERROR_BAR = 1e-3;
-    }
-    struct ZObservableTerm
-    {
-        IdxType mask;
-        ValType coeff;
-    };
 
     NWQSIM_HD inline int popcount64(IdxType value)
     {
@@ -35,6 +48,6 @@ namespace NWQSim
     {
         return (popcount64(index & mask) & 1) ? ValType(-1.0) : ValType(1.0);
     }
-}
 
 #undef NWQSIM_HD
+}

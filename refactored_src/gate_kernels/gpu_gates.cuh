@@ -6,6 +6,7 @@
 #include <cstdio>
 
 #include "nwqsim_core.hpp"
+#include "../memory/state_view.hpp"
 
 namespace NWQSim
 {
@@ -41,13 +42,14 @@ namespace NWQSim
             __device__ __forceinline__ void apply_c1_gate(const ValType *gm_real,
                                                           const ValType *gm_imag,
                                                           IdxType qubit,
-                                                          ValType *state_real,
-                                                          ValType *state_imag,
-                                                          IdxType half_dim)
+                                                          const StateView &state)
             {
                 namespace cg = cooperative_groups;
                 cg::grid_group grid = cg::this_grid();
                 const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
+                ValType *state_real = state.data_real;
+                ValType *state_imag = state.data_imag;
+                const IdxType half_dim = state.half_dim ? state.half_dim : (state.dim >> 1);
                 for (IdxType i = tid; i < half_dim; i += blockDim.x * gridDim.x)
                 {
                     IdxType outer = (i >> qubit);
@@ -78,13 +80,14 @@ namespace NWQSim
                                                           const ValType *gm_imag,
                                                           IdxType qubit0,
                                                           IdxType qubit1,
-                                                          ValType *state_real,
-                                                          ValType *state_imag,
-                                                          IdxType dim)
+                                                          const StateView &state)
             {
                 namespace cg = cooperative_groups;
                 cg::grid_group grid = cg::this_grid();
                 const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
+                ValType *state_real = state.data_real;
+                ValType *state_imag = state.data_imag;
+                const IdxType dim = state.dim ? state.dim : (state.half_dim << 1);
                 const IdxType per_work = (dim >> 2);
 
                 const IdxType q0dim = pow2i(max(qubit0, qubit1));
@@ -142,9 +145,7 @@ namespace NWQSim
                                                           IdxType qubit1,
                                                           IdxType qubit2,
                                                           IdxType qubit3,
-                                                          ValType *state_real,
-                                                          ValType *state_imag,
-                                                          IdxType dim)
+                                                          const StateView &state)
             {
                 namespace cg = cooperative_groups;
                 cg::grid_group grid = cg::this_grid();
@@ -157,6 +158,9 @@ namespace NWQSim
                 assert(qubit1 != qubit3);
                 assert(qubit2 != qubit3);
 
+                ValType *state_real = state.data_real;
+                ValType *state_imag = state.data_imag;
+                const IdxType dim = state.dim ? state.dim : (state.half_dim << 1);
                 const IdxType v0 = min(qubit0, qubit1);
                 const IdxType v1 = min(qubit2, qubit3);
                 const IdxType v2 = max(qubit0, qubit1);
@@ -202,10 +206,9 @@ namespace NWQSim
                 grid.sync();
             }
 
-            __device__ __forceinline__ void measure_qubit(IdxType n_qubits,
+            __device__ __forceinline__ void measure_qubit(const StateView &state,
+                                                          IdxType n_qubits,
                                                           IdxType qubit,
-                                                          ValType *state_real,
-                                                          ValType *state_imag,
                                                           ValType *prob_buffer,
                                                           const ValType *random_values,
                                                           IdxType random_index,
@@ -215,7 +218,9 @@ namespace NWQSim
                 namespace cg = cooperative_groups;
                 cg::grid_group grid = cg::this_grid();
                 const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
-                IdxType dim = pow2i(n_qubits);
+                ValType *state_real = state.data_real;
+                ValType *state_imag = state.data_imag;
+                IdxType dim = state.dim ? state.dim : pow2i(n_qubits);
                 IdxType mask = pow2i(qubit);
                 ValType rand = random_values[random_index];
 
@@ -282,10 +287,9 @@ namespace NWQSim
                 grid.sync();
             }
 
-            __device__ __forceinline__ void measure_all(IdxType n_qubits,
+            __device__ __forceinline__ void measure_all(const StateView &state,
+                                                        IdxType n_qubits,
                                                         IdxType repetition,
-                                                        ValType *state_real,
-                                                        ValType *state_imag,
                                                         ValType *prefix_buffer,
                                                         const ValType *random_values,
                                                         IdxType random_index,
@@ -294,7 +298,9 @@ namespace NWQSim
                 namespace cg = cooperative_groups;
                 cg::grid_group grid = cg::this_grid();
                 const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
-                IdxType dim = pow2i(n_qubits);
+                ValType *state_real = state.data_real;
+                ValType *state_imag = state.data_imag;
+                IdxType dim = state.dim ? state.dim : pow2i(n_qubits);
                 IdxType n_size = dim;
 
                 for (IdxType i = tid; i < dim; i += blockDim.x * gridDim.x)
@@ -358,16 +364,17 @@ namespace NWQSim
                 grid.sync();
             }
 
-            __device__ __forceinline__ void reset_qubit(IdxType n_qubits,
+            __device__ __forceinline__ void reset_qubit(const StateView &state,
+                                                        IdxType n_qubits,
                                                         IdxType qubit,
-                                                        ValType *state_real,
-                                                        ValType *state_imag,
                                                         ValType *workspace)
             {
                 namespace cg = cooperative_groups;
                 cg::grid_group grid = cg::this_grid();
                 const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
-                IdxType dim = pow2i(n_qubits);
+                ValType *state_real = state.data_real;
+                ValType *state_imag = state.data_imag;
+                IdxType dim = state.dim ? state.dim : pow2i(n_qubits);
                 IdxType mask = pow2i(qubit);
 
                 for (IdxType i = tid; i < dim; i += blockDim.x * gridDim.x)
@@ -427,18 +434,19 @@ namespace NWQSim
                 grid.sync();
             }
 
-            __device__ __forceinline__ void expectation_mask(IdxType n_qubits,
+            __device__ __forceinline__ void expectation_mask(const StateView &state,
+                                                             IdxType n_qubits,
                                                              IdxType mask,
                                                              ValType coeff,
-                                                             const ValType *state_real,
-                                                             const ValType *state_imag,
                                                              ValType *workspace)
             {
                 namespace cg = cooperative_groups;
                 cg::grid_group grid = cg::this_grid();
                 const IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
                 const IdxType total_threads = blockDim.x * gridDim.x;
-                IdxType dim = pow2i(n_qubits);
+                const ValType *state_real = state.data_real;
+                const ValType *state_imag = state.data_imag;
+                IdxType dim = state.dim ? state.dim : pow2i(n_qubits);
 
                 ValType local = 0;
                 for (IdxType i = tid; i < dim; i += total_threads)
@@ -451,11 +459,10 @@ namespace NWQSim
                 grid.sync();
             }
 
-            __device__ __forceinline__ ValType compute_expectation_observable(IdxType n_qubits,
+            __device__ __forceinline__ ValType compute_expectation_observable(const StateView &state,
+                                                                              IdxType n_qubits,
                                                                               const ZObservableTerm *terms,
                                                                               IdxType term_count,
-                                                                              const ValType *state_real,
-                                                                              const ValType *state_imag,
                                                                               ValType *workspace)
             {
                 namespace cg = cooperative_groups;
@@ -469,8 +476,7 @@ namespace NWQSim
 
                 for (IdxType t = 0; t < term_count; t++)
                 {
-                    expectation_mask(n_qubits, terms[t].mask, terms[t].coeff,
-                                     state_real, state_imag, workspace);
+                    expectation_mask(state, n_qubits, terms[t].mask, terms[t].coeff, workspace);
                     grid.sync();
                 }
 
@@ -492,16 +498,14 @@ namespace NWQSim
                 return expectation;
             }
 
-            __device__ __forceinline__ void expectation_observable(IdxType n_qubits,
+            __device__ __forceinline__ void expectation_observable(const StateView &state,
+                                                                   IdxType n_qubits,
                                                                    const ZObservableTerm *terms,
                                                                    IdxType term_count,
-                                                                   const ValType *state_real,
-                                                                   const ValType *state_imag,
                                                                    ValType *workspace,
                                                                    ValType *result_ptr)
             {
-                ValType value = compute_expectation_observable(n_qubits, terms, term_count,
-                                                               state_real, state_imag, workspace);
+                ValType value = compute_expectation_observable(state, n_qubits, terms, term_count, workspace);
                 if (blockIdx.x == 0 && threadIdx.x == 0)
                     *result_ptr = value;
             }

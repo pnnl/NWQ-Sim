@@ -4,15 +4,16 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <omp.h>
 
 #include "nwqsim_core.hpp"
+#include "../memory/state_view.hpp"
 
 namespace NWQSim
 {
     namespace GateKernels
     {
-
-        namespace CPU
+        namespace OMP
         {
             inline IdxType pow2i(IdxType power)
             {
@@ -23,6 +24,7 @@ namespace NWQSim
             {
                 return value & (pow2i(power) - IdxType(1));
             }
+
             inline IdxType div_pow2(IdxType value, IdxType power)
             {
                 return value >> power;
@@ -39,10 +41,12 @@ namespace NWQSim
             inline void apply_c1_gate(const ValType *gm_real,
                                       const ValType *gm_imag,
                                       IdxType qubit,
-                                      ValType *state_real,
-                                      ValType *state_imag,
-                                      IdxType half_dim)
+                                      const StateView &state)
             {
+                ValType *state_real = state.data_real;
+                ValType *state_imag = state.data_imag;
+                const IdxType half_dim = state.half_dim ? state.half_dim : (state.dim >> 1);
+#pragma omp for schedule(auto)
                 for (IdxType i = 0; i < half_dim; i++)
                 {
                     IdxType outer = (i >> qubit);
@@ -72,10 +76,11 @@ namespace NWQSim
                                       const ValType *gm_imag,
                                       IdxType qubit0,
                                       IdxType qubit1,
-                                      ValType *state_real,
-                                      ValType *state_imag,
-                                      IdxType dim)
+                                      const StateView &state)
             {
+                ValType *state_real = state.data_real;
+                ValType *state_imag = state.data_imag;
+                const IdxType dim = state.dim ? state.dim : (state.half_dim << 1);
                 const IdxType per_work = (dim >> 2);
                 const IdxType q0dim = pow2i(std::max(qubit0, qubit1));
                 const IdxType q1dim = pow2i(std::min(qubit0, qubit1));
@@ -84,6 +89,7 @@ namespace NWQSim
                 const IdxType qubit0_dim = pow2i(qubit0);
                 const IdxType qubit1_dim = pow2i(qubit1);
 
+#pragma omp for schedule(auto)
                 for (IdxType i = 0; i < per_work; i++)
                 {
                     IdxType outer = ((i / inner_factor) / (mid_factor)) * (q0dim + q0dim);
@@ -131,9 +137,7 @@ namespace NWQSim
                                       IdxType qubit1,
                                       IdxType qubit2,
                                       IdxType qubit3,
-                                      ValType *state_real,
-                                      ValType *state_imag,
-                                      IdxType dim)
+                                      const StateView &state)
             {
                 assert(qubit0 != qubit1);
                 assert(qubit0 != qubit2);
@@ -142,6 +146,9 @@ namespace NWQSim
                 assert(qubit1 != qubit3);
                 assert(qubit2 != qubit3);
 
+                ValType *state_real = state.data_real;
+                ValType *state_imag = state.data_imag;
+                const IdxType dim = state.dim ? state.dim : (state.half_dim << 1);
                 const IdxType v0 = std::min(qubit0, qubit1);
                 const IdxType v1 = std::min(qubit2, qubit3);
                 const IdxType v2 = std::max(qubit0, qubit1);
@@ -151,6 +158,7 @@ namespace NWQSim
                 const IdxType r = std::max(std::min(v2, v3), std::max(v0, v1));
                 const IdxType s = std::max(v2, v3);
 
+#pragma omp for schedule(auto)
                 for (IdxType i = 0; i < (dim >> 4); i++)
                 {
                     const IdxType term0 = mod_pow2(i, p);
@@ -186,23 +194,44 @@ namespace NWQSim
                 }
             }
 
-            inline IdxType measure_qubit(IdxType n_qubits,
+            inline IdxType measure_qubit(const StateView &state,
+                                         IdxType n_qubits,
                                          IdxType qubit,
-                                         ValType *state_real,
-                                         ValType *state_imag,
+                                         ValType *scratch,
                                          ValType random_value)
             {
-                IdxType dim = pow2i(n_qubits);
+                ValType *state_real = state.data_real;
+                ValType *state_imag = state.data_imag;
+                IdxType dim = state.dim ? state.dim : pow2i(n_qubits);
+                IdxType half_dim = dim >> 1;
                 IdxType mask = pow2i(qubit);
-                ValType prob_of_one = 0;
+
+#pragma omp for schedule(auto)
                 for (IdxType i = 0; i < dim; i++)
                 {
-                    if ((i & mask) != 0)
-                        prob_of_one += state_real[i] * state_real[i] + state_imag[i] * state_imag[i];
+                    if ((i & mask) == 0)
+                        scratch[i] = 0;
+                    else
+                        scratch[i] = state_real[i] * state_real[i] + state_imag[i] * state_imag[i];
                 }
+#pragma omp barrier
+
+                for (IdxType k = half_dim; k > 0; k >>= 1)
+                {
+#pragma omp for schedule(auto)
+                    for (IdxType i = 0; i < k; i++)
+                    {
+                        scratch[i] += scratch[i + k];
+                    }
+#pragma omp barrier
+                }
+
+                ValType prob_of_one = scratch[0];
+#pragma omp barrier
                 if (random_value < prob_of_one)
                 {
                     ValType normalize_factor = std::sqrt(prob_of_one);
+#pragma omp for schedule(auto)
                     for (IdxType i = 0; i < dim; i++)
                     {
                         if ((i & mask) == 0)
@@ -219,6 +248,7 @@ namespace NWQSim
                 }
                 else
                 {
+#pragma omp for schedule(auto)
                     for (IdxType i = 0; i < dim; i++)
                     {
                         ValType normalize_factor = std::sqrt(1.0 - prob_of_one);
@@ -234,28 +264,63 @@ namespace NWQSim
                         }
                     }
                 }
+#pragma omp barrier
                 return (random_value < prob_of_one) ? 1 : 0;
             }
 
-            inline void measure_all(IdxType n_qubits,
+            inline void measure_all(const StateView &state,
+                                    IdxType n_qubits,
                                     IdxType repetition,
-                                    ValType *state_real,
-                                    ValType *state_imag,
-                                    ValType *prefix_buffer,
+                                    ValType *scratch,
                                     const ValType *random_values,
                                     IdxType *results_out)
             {
-                IdxType n_size = pow2i(n_qubits);
-                prefix_buffer[0] = 0;
-                for (IdxType i = 1; i <= n_size; i++)
-                {
-                    ValType amplitude_prob = state_real[i - 1] * state_real[i - 1] + state_imag[i - 1] * state_imag[i - 1];
-                    prefix_buffer[i] = prefix_buffer[i - 1] + amplitude_prob;
-                }
-                ValType purity = std::fabs(prefix_buffer[n_size]);
-                if (std::fabs(purity - 1.0) > MEASUREMENT_ERROR_BAR)
-                    std::printf("MA: Purity Check fails with %lf\n", purity);
+                ValType *state_real = state.data_real;
+                ValType *state_imag = state.data_imag;
+                IdxType n_size = state.dim ? state.dim : pow2i(n_qubits);
+#pragma omp for schedule(auto)
+                for (IdxType i = 0; i < n_size; i++)
+                    scratch[i] = state_real[i] * state_real[i] + state_imag[i] * state_imag[i];
+#pragma omp barrier
 
+                for (IdxType d = 0; d < n_qubits; d++)
+                {
+                    IdxType step = pow2i(d + 1);
+#pragma omp for schedule(auto)
+                    for (IdxType k = 0; k < n_size; k += step)
+                        scratch[k + step - 1] = scratch[k + pow2i(d) - 1] + scratch[k + step - 1];
+#pragma omp barrier
+                }
+
+                if (omp_get_thread_num() == 0)
+                {
+                    ValType purity = std::fabs(scratch[n_size - 1]);
+                    scratch[n_size - 1] = 0;
+                    if (std::fabs(purity - 1.0) > MEASUREMENT_ERROR_BAR)
+                        std::printf("MA: Purity Check fails with %lf\n", purity);
+                }
+#pragma omp barrier
+
+                if (n_qubits > 0)
+                {
+                    for (IdxType d = n_qubits - 1;; d--)
+                    {
+                        IdxType step = pow2i(d + 1);
+#pragma omp for schedule(auto)
+                        for (IdxType k = 0; k < n_size - 1; k += step)
+                        {
+                            ValType tmp = scratch[k + pow2i(d) - 1];
+                            ValType tmp2 = scratch[k + step - 1];
+                            scratch[k + pow2i(d) - 1] = tmp2;
+                            scratch[k + step - 1] = tmp + tmp2;
+                        }
+#pragma omp barrier
+                        if (d == 0)
+                            break;
+                    }
+                }
+
+#pragma omp for schedule(auto)
                 for (IdxType shot = 0; shot < repetition; shot++)
                 {
                     IdxType lo = 0;
@@ -264,31 +329,51 @@ namespace NWQSim
                     while (hi - lo > 1)
                     {
                         IdxType mid = lo + (hi - lo) / 2;
-                        if (r >= prefix_buffer[mid])
+                        if (r >= scratch[mid])
                             lo = mid;
                         else
                             hi = mid;
                     }
                     results_out[shot] = lo;
                 }
+#pragma omp barrier
             }
 
-            inline void reset_qubit(IdxType n_qubits,
+            inline void reset_qubit(const StateView &state,
+                                    IdxType n_qubits,
                                     IdxType qubit,
-                                    ValType *state_real,
-                                    ValType *state_imag)
+                                    ValType *scratch)
             {
-                IdxType dim = pow2i(n_qubits);
+                ValType *state_real = state.data_real;
+                ValType *state_imag = state.data_imag;
+                IdxType dim = state.dim ? state.dim : pow2i(n_qubits);
+                IdxType half_dim = dim >> 1;
                 IdxType mask = pow2i(qubit);
-                ValType prob_of_one = 0;
+
+#pragma omp for schedule(auto)
                 for (IdxType i = 0; i < dim; i++)
                 {
-                    if ((i & mask) != 0)
-                        prob_of_one += state_real[i] * state_real[i] + state_imag[i] * state_imag[i];
+                    if ((i & mask) == 0)
+                        scratch[i] = 0;
+                    else
+                        scratch[i] = state_real[i] * state_real[i] + state_imag[i] * state_imag[i];
                 }
+#pragma omp barrier
+
+                for (IdxType k = half_dim; k > 0; k >>= 1)
+                {
+#pragma omp for schedule(auto)
+                    for (IdxType i = 0; i < k; i++)
+                        scratch[i] += scratch[i + k];
+#pragma omp barrier
+                }
+
+                ValType prob_of_one = scratch[0];
+#pragma omp barrier
                 if (prob_of_one < 1.0)
                 {
                     ValType factor = 1.0 / std::sqrt(1.0 - prob_of_one);
+#pragma omp for schedule(auto)
                     for (IdxType i = 0; i < dim; i++)
                     {
                         if ((i & mask) == 0)
@@ -305,6 +390,7 @@ namespace NWQSim
                 }
                 else
                 {
+#pragma omp for schedule(auto)
                     for (IdxType i = 0; i < dim; i++)
                     {
                         if ((i & mask) == 0)
@@ -317,37 +403,40 @@ namespace NWQSim
                         }
                     }
                 }
+#pragma omp barrier
             }
-            inline ValType expectation_mask(IdxType n_qubits,
-                                            IdxType mask,
-                                            const ValType *state_real,
-                                            const ValType *state_imag)
+
+            inline ValType expectation_mask(const StateView &state,
+                                            IdxType n_qubits,
+                                            IdxType mask)
             {
-                IdxType dim = pow2i(n_qubits);
+                const ValType *state_real = state.data_real;
+                const ValType *state_imag = state.data_imag;
+                IdxType dim = state.dim ? state.dim : pow2i(n_qubits);
                 ValType total = 0;
+#pragma omp for reduction(+ : total) schedule(auto)
                 for (IdxType i = 0; i < dim; i++)
                 {
                     ValType prob = state_real[i] * state_real[i] + state_imag[i] * state_imag[i];
                     total += z_mask_sign(i, mask) * prob;
                 }
+#pragma omp barrier
                 return total;
             }
 
-            inline ValType expectation_observable(IdxType n_qubits,
+            inline ValType expectation_observable(const StateView &state,
+                                                  IdxType n_qubits,
                                                   const ZObservableTerm *terms,
-                                                  IdxType term_count,
-                                                  const ValType *state_real,
-                                                  const ValType *state_imag)
+                                                  IdxType term_count)
             {
                 ValType result = 0;
                 for (IdxType t = 0; t < term_count; t++)
                 {
-                    result += terms[t].coeff * expectation_mask(n_qubits, terms[t].mask, state_real, state_imag);
+                    result += terms[t].coeff * expectation_mask(state, n_qubits, terms[t].mask);
                 }
                 return result;
             }
 
-        } // namespace CPU
-
+        } // namespace OMP
     } // namespace GateKernels
 } // namespace NWQSim
