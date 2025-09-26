@@ -79,7 +79,7 @@ int main(int argc, char **argv)
     double sv_cutoff = std::stod(config_parser.get_value("sv_cutoff"));
 
 #ifdef TAMM_ENABLED
-    if (simulation_method == "TN")
+    if (backend == "TN_TAMM_CPU" || backend == "TN_TAMM_GPU")
     {
         tamm::initialize(argc, argv);
     }
@@ -163,7 +163,7 @@ int main(int argc, char **argv)
         }
 
 #ifdef TAMM_ENABLED
-        if (simulation_method == "TN")
+        if (backend == "TN_TAMM_CPU" || backend == "TN_TAMM_GPU")
         {
             tamm::finalize();
         }
