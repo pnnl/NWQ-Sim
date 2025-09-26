@@ -39,7 +39,7 @@ namespace NWQSim::Config
             std::cout << std::left << std::setw(40) << "\033[1;33mTensor Core:\033[0m"
                       << "\033[1;32m" << (ENABLE_TENSOR_CORE ? "Enabled" : "Disabled") << "\033[0m" << std::endl;
             std::cout << std::left << std::setw(40) << "\033[1;33mSimulation Backend:\033[0m"
-                      << "\033[1;32m" << (sim_backend == "sv" ? "SVSim" : "DMSim") << "\033[0m" << std::endl;
+                      << "\033[1;32m" << (sim_backend == "sv" ? "SVSim" : (sim_backend == "dm" ? "DMSim" : "TNSim")) << "\033[0m" << std::endl;
             if (Config::PRINT_SIM_TRACE)
             {
                 std::cout << std::endl;

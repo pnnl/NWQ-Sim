@@ -5,7 +5,7 @@
 #pragma push_macro("DELAY")
 #undef DELAY
 
-#include "<itensor/all.h>"
+#include "itensor/all.h"
 
 #pragma pop_macro("GET")
 #pragma pop_macro("DELAY")
