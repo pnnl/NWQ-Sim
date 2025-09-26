@@ -4,7 +4,9 @@ add_executable(nwq_qasm nwq_qasm.cpp)
 target_compile_features(nwq_qasm PRIVATE cxx_std_17)
 
 # Add linker flag to disable executable stack (fixes CUDA linker warning)
-target_link_options(nwq_qasm PRIVATE "-Wl,-z,noexecstack")
+if (NOT APPLE)
+    target_link_options(nwq_qasm PRIVATE "-Wl,-z,noexecstack")
+endif()
 
 # Link against OpenMP if available
 if(OpenMP_FOUND)
