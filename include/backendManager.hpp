@@ -78,6 +78,11 @@ public:
 #ifdef HIP_ENABLED
         NWQSim::safe_print("- AMDGPU\n");
 #endif
+
+#ifdef TAMM_ENABLED
+        NWQSim::safe_print("- TN_TAMM_CPU");
+        NWQSim::safe_print("- TN_TAMM_GPU");
+#endif
     }
 
     static std::shared_ptr<NWQSim::QuantumState> create_state(std::string backend, NWQSim::IdxType numQubits, std::string simulator_method = "SV", int max_dim = 100, double sv_cutoff = 0.0)
@@ -101,7 +106,7 @@ public:
                 return std::make_shared<NWQSim::STAB_CPU>(numQubits);
 #ifdef ITENSOR_ENABLED
             else if (simulator_method == "TN")
-                else return std::make_shared<NWQSim::TN_ITENSOR>(numQubits, max_dim, sv_cutoff);
+                return std::make_shared<NWQSim::TN_ITENSOR>(numQubits, max_dim, sv_cutoff);
 #endif
             else
             {
@@ -109,6 +114,13 @@ public:
                 exit(1);
             }
         }
+
+#ifdef TAMM_ENABLED
+        else if (backend.rfind("TN_TAMM", 0) == 0)
+        {
+            return std::make_shared<NWQSim::TN_TAMM>(numQubits, max_dim, sv_cutoff, backend);
+        }
+#endif
 
 #ifdef OMP_ENABLED
         else if (backend == "OPENMP")
@@ -120,12 +132,6 @@ public:
 #ifdef MPI_ENABLED
         else if (backend == "MPI")
         {
-
-#ifdef TAMM_ENABLED
-            if (backend.rfind("TN_TAMM", 0) == 0)
-                return std::make_shared<NWQSim::TN_TAMM>(numQubits, max_dim, sv_cutoff, backend);
-#endif
-
             return std::make_shared<NWQSim::SV_MPI>(numQubits);
         }
 #endif

@@ -31,6 +31,10 @@ find_package(MPI)
 find_package(OpenMP)
 find_package(HIP QUIET)
 
+get_target_property(_mpi_includes MPI::MPI_CXX INTERFACE_INCLUDE_DIRECTORIES)
+message(STATUS "MPI::MPI_CXX include dirs: ${_mpi_includes}")
+
+
 set(ma_enable "N/A") 
 if(CUDAToolkit_FOUND)
 
@@ -82,7 +86,6 @@ endif()
 set(ITENSOR_ROOT "${CMAKE_SOURCE_DIR}/../itensor"
     CACHE PATH "Path to external iTensor installation")
 
-# Check that the directory and library actually exist
 if (IS_DIRECTORY "${ITENSOR_ROOT}" AND EXISTS "${ITENSOR_ROOT}/lib/libitensor.a")
     set(ITENSOR_FOUND TRUE CACHE BOOL "ITensor library available")
 
