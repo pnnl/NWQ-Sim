@@ -1,5 +1,11 @@
 #pragma once
 
+#if defined(__CUDACC__) || defined(__HIPCC__)
+#define NWQSIM_HD __host__ __device__
+#else
+#define NWQSIM_HD
+#endif
+
 namespace NWQSim
 {
     using IdxType = long long;
@@ -29,11 +35,25 @@ namespace NWQSim
 
     inline constexpr ValType MEASUREMENT_ERROR_BAR = 1e-3;
 
-#if defined(__CUDACC__) || defined(__HIPCC__)
-#define NWQSIM_HD __host__ __device__
-#else
-#define NWQSIM_HD
-#endif
+    struct StateSpan
+    {
+        ValType *real = nullptr;
+        ValType *imag = nullptr;
+        ValType *work_real = nullptr;
+        ValType *work_imag = nullptr;
+        IdxType size = 0;
+        IdxType half_size = 0;
+
+        NWQSIM_HD IdxType full_extent() const
+        {
+            return size ? size : (half_size << 1);
+        }
+
+        NWQSIM_HD IdxType half_extent() const
+        {
+            return half_size ? half_size : (size >> 1);
+        }
+    };
 
     NWQSIM_HD inline int popcount64(IdxType value)
     {
@@ -48,6 +68,6 @@ namespace NWQSim
     {
         return (popcount64(index & mask) & 1) ? ValType(-1.0) : ValType(1.0);
     }
+}
 
 #undef NWQSIM_HD
-}

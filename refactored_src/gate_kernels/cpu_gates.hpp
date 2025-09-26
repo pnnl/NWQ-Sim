@@ -6,7 +6,6 @@
 #include <cstdio>
 
 #include "nwqsim_core.hpp"
-#include "../memory/state_view.hpp"
 
 namespace NWQSim
 {
@@ -40,11 +39,11 @@ namespace NWQSim
             inline void apply_c1_gate(const ValType *gm_real,
                                       const ValType *gm_imag,
                                       IdxType qubit,
-                                      const StateView &state)
+                                      const StateSpan &state)
             {
-                ValType *state_real = state.data_real;
-                ValType *state_imag = state.data_imag;
-                const IdxType half_dim = state.half_dim ? state.half_dim : (state.dim >> 1);
+                ValType *state_real = state.real;
+                ValType *state_imag = state.imag;
+                const IdxType half_dim = state.half_extent();
                 for (IdxType i = 0; i < half_dim; i++)
                 {
                     IdxType outer = (i >> qubit);
@@ -74,11 +73,11 @@ namespace NWQSim
                                       const ValType *gm_imag,
                                       IdxType qubit0,
                                       IdxType qubit1,
-                                      const StateView &state)
+                                      const StateSpan &state)
             {
-                ValType *state_real = state.data_real;
-                ValType *state_imag = state.data_imag;
-                const IdxType dim = state.dim ? state.dim : (state.half_dim << 1);
+                ValType *state_real = state.real;
+                ValType *state_imag = state.imag;
+                const IdxType dim = state.full_extent();
                 const IdxType per_work = (dim >> 2);
                 const IdxType q0dim = pow2i(std::max(qubit0, qubit1));
                 const IdxType q1dim = pow2i(std::min(qubit0, qubit1));
@@ -134,7 +133,7 @@ namespace NWQSim
                                       IdxType qubit1,
                                       IdxType qubit2,
                                       IdxType qubit3,
-                                      const StateView &state)
+                                      const StateSpan &state)
             {
                 assert(qubit0 != qubit1);
                 assert(qubit0 != qubit2);
@@ -143,9 +142,9 @@ namespace NWQSim
                 assert(qubit1 != qubit3);
                 assert(qubit2 != qubit3);
 
-                ValType *state_real = state.data_real;
-                ValType *state_imag = state.data_imag;
-                const IdxType dim = state.dim ? state.dim : (state.half_dim << 1);
+                ValType *state_real = state.real;
+                ValType *state_imag = state.imag;
+                const IdxType dim = state.full_extent();
                 const IdxType v0 = std::min(qubit0, qubit1);
                 const IdxType v1 = std::min(qubit2, qubit3);
                 const IdxType v2 = std::max(qubit0, qubit1);
@@ -190,14 +189,14 @@ namespace NWQSim
                 }
             }
 
-            inline IdxType measure_qubit(const StateView &state,
+            inline IdxType measure_qubit(const StateSpan &state,
                                          IdxType n_qubits,
                                          IdxType qubit,
                                          ValType random_value)
             {
-                ValType *state_real = state.data_real;
-                ValType *state_imag = state.data_imag;
-                IdxType dim = state.dim ? state.dim : pow2i(n_qubits);
+                ValType *state_real = state.real;
+                ValType *state_imag = state.imag;
+                IdxType dim = state.size ? state.size : pow2i(n_qubits);
                 IdxType mask = pow2i(qubit);
                 ValType prob_of_one = 0;
                 for (IdxType i = 0; i < dim; i++)
@@ -242,16 +241,16 @@ namespace NWQSim
                 return (random_value < prob_of_one) ? 1 : 0;
             }
 
-            inline void measure_all(const StateView &state,
+            inline void measure_all(const StateSpan &state,
                                     IdxType n_qubits,
                                     IdxType repetition,
                                     ValType *prefix_buffer,
                                     const ValType *random_values,
                                     IdxType *results_out)
             {
-                ValType *state_real = state.data_real;
-                ValType *state_imag = state.data_imag;
-                IdxType n_size = state.dim ? state.dim : pow2i(n_qubits);
+                ValType *state_real = state.real;
+                ValType *state_imag = state.imag;
+                IdxType n_size = state.size ? state.size : pow2i(n_qubits);
                 prefix_buffer[0] = 0;
                 for (IdxType i = 1; i <= n_size; i++)
                 {
@@ -279,13 +278,13 @@ namespace NWQSim
                 }
             }
 
-            inline void reset_qubit(const StateView &state,
+            inline void reset_qubit(const StateSpan &state,
                                     IdxType n_qubits,
                                     IdxType qubit)
             {
-                ValType *state_real = state.data_real;
-                ValType *state_imag = state.data_imag;
-                IdxType dim = state.dim ? state.dim : pow2i(n_qubits);
+                ValType *state_real = state.real;
+                ValType *state_imag = state.imag;
+                IdxType dim = state.size ? state.size : pow2i(n_qubits);
                 IdxType mask = pow2i(qubit);
                 ValType prob_of_one = 0;
                 for (IdxType i = 0; i < dim; i++)
@@ -325,13 +324,13 @@ namespace NWQSim
                     }
                 }
             }
-            inline ValType expectation_mask(const StateView &state,
+            inline ValType expectation_mask(const StateSpan &state,
                                             IdxType n_qubits,
                                             IdxType mask)
             {
-                const ValType *state_real = state.data_real;
-                const ValType *state_imag = state.data_imag;
-                IdxType dim = state.dim ? state.dim : pow2i(n_qubits);
+                const ValType *state_real = state.real;
+                const ValType *state_imag = state.imag;
+                IdxType dim = state.size ? state.size : pow2i(n_qubits);
                 ValType total = 0;
                 for (IdxType i = 0; i < dim; i++)
                 {
@@ -341,7 +340,7 @@ namespace NWQSim
                 return total;
             }
 
-            inline ValType expectation_observable(const StateView &state,
+            inline ValType expectation_observable(const StateSpan &state,
                                                   IdxType n_qubits,
                                                   const ZObservableTerm *terms,
                                                   IdxType term_count)
