@@ -438,6 +438,15 @@ class ErrorModel:
             # ────────────────────────────────────────────────────────────────
             # 3) 测量类 (M, MX, …) ── 在测量 **前** 插入 Measurement 噪声
             # ────────────────────────────────────────────────────────────────
+            if name.startswith("MR") and self._error_config["Measurement"]:
+                err_stmt = self._error_settings["Measurement"]
+                if err_stmt and (not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP")):
+                    circ_lines.append(f"{err_stmt} {target_str}")
+                circ_lines.append(f"{name} {target_str}")
+                # if err_stmt and (not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP")): #for long reset
+                #     circ_lines.append(f"{err_stmt} {target_str}")
+                continue
+
             if name.startswith("M") and self._error_config["Measurement"]:
                 err_stmt = self._error_settings["Measurement"]
                 if err_stmt and (not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP")):
@@ -1035,7 +1044,7 @@ def inject_amplitude_damp(qasm_text: str, error_model: "ErrorModel") -> str:
                 qtok = m.group(1)
                 # Any non-reset breaks the initial reset block if it was in progress
                 if in_first_reset_block and not first_reset_block_done:
-                    in_first_reset_block = False
+                    in_first_reset_block = False #flip to make all resets have error after
                     first_reset_block_done = True
                 # Inject PRE-MEAS damp (for all subsequent rounds)
                 p = _pick_pre_meas_params()
