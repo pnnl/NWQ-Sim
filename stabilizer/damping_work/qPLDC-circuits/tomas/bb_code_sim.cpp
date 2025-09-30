@@ -49,6 +49,7 @@ void sim_batch(std::shared_ptr<NWQSim::Circuit> circuit, IdxType shots, int n, d
         sim->reset_state();
     }
 
+// ...existing code...
     sim_timer.stop_timer();
     double local_time = sim_timer.measure();
     double max_time = 0.0;
@@ -57,25 +58,34 @@ void sim_batch(std::shared_ptr<NWQSim::Circuit> circuit, IdxType shots, int n, d
         sim_time = max_time;
     }
 
-    // Ranks write to a single file sequentially to avoid race conditions
-    for (int i = 0; i < world_size; ++i) {
-        if (world_rank == i) {
-            // Rank 0 opens in write mode (truncates), others append
-            std::ofstream out_file(m_filepath, (i == 0) ? std::ios::out : std::ios::app);
-            if (!out_file.is_open()) {
-                std::cerr << "Rank " << world_rank << " error opening " << m_filepath << std::endl;
-                MPI_Abort(MPI_COMM_WORLD, 1);
-            }
-            for (const auto& measurements : local_results) {
-                for (size_t k = 0; k < measurements.size(); ++k) {
-                    out_file << measurements[k] << (k == measurements.size() - 1 ? "" : " ");
-                }
-                out_file << "\n";
-            }
-            out_file.close();
+    // --- Parallel I/O Strategy using MPI-IO ---
+
+    // 1. Convert local results (vector of vectors) to a single string buffer for writing.
+    std::stringstream ss;
+    for (const auto& measurements : local_results) {
+        for (size_t k = 0; k < measurements.size(); ++k) {
+            ss << measurements[k] << (k == measurements.size() - 1 ? "" : " ");
         }
-        MPI_Barrier(MPI_COMM_WORLD); // Synchronize before next rank writes
+        ss << "\n";
     }
+    std::string local_data_str = ss.str();
+    long long local_size = local_data_str.length();
+
+    // 2. Use MPI_Exscan to calculate the file offset for each rank.
+    // Each rank's offset is the sum of the data sizes of all preceding ranks.
+    long long offset = 0;
+    MPI_Exscan(&local_size, &offset, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+
+    // 3. Open the file in parallel.
+    MPI_File fh;
+    MPI_File_open(MPI_COMM_WORLD, m_filepath.c_str(), MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
+
+    // 4. Each rank writes its data block to its calculated offset in the file.
+    // This is a collective operation; all ranks participate.
+    MPI_File_write_at_all(fh, offset, local_data_str.c_str(), static_cast<int>(local_size), MPI_CHAR, MPI_STATUS_IGNORE);
+
+    // 5. Close the file.
+    MPI_File_close(&fh);
 }
 }
 

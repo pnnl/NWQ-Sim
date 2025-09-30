@@ -55,7 +55,7 @@ namespace NWQSim
             dist = std::uniform_int_distribution<int>(0,1);
             random_float = std::uniform_real_distribution<double>(0.0, 1.0);
             measurement_count = 0;  // initialize
-            seed = 0;
+            seed = 42;
 
 
             has_destabilizers = true;
