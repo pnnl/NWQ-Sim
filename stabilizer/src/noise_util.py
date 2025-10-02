@@ -443,6 +443,8 @@ class ErrorModel:
                 if err_stmt and (not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP")):
                     circ_lines.append(f"{err_stmt} {target_str}")
                 circ_lines.append(f"{name} {target_str}")
+                if err_stmt and (not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP")):
+                    circ_lines.append(f"{err_stmt} {target_str}")
                 # if err_stmt and (not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP")): #for long reset
                 #     circ_lines.append(f"{err_stmt} {target_str}")
                 continue
@@ -981,11 +983,11 @@ def inject_amplitude_damp(qasm_text: str, error_model: "ErrorModel") -> str:
 
     def _pick_post_reset_params():
         # Prefer Reset args for post-reset injection; fallback to Measurement
-        return p_reset or p_meas
+        return p_reset
 
     def _pick_pre_meas_params():
         # Prefer Measurement args for pre-measure injection; fallback to Reset
-        return p_meas or p_reset
+        return p_meas
 
     meas_stmt_re = _re.compile(r"^(?:m|measure)\s+(q\[\d+\])(?:\s*->\s*rec\[\d+\])?$", _re.IGNORECASE)
     reset_stmt_re = _re.compile(r"^reset\s+(q\[\d+\])$", _re.IGNORECASE)
@@ -1044,8 +1046,8 @@ def inject_amplitude_damp(qasm_text: str, error_model: "ErrorModel") -> str:
                 qtok = m.group(1)
                 # Any non-reset breaks the initial reset block if it was in progress
                 if in_first_reset_block and not first_reset_block_done:
-                    in_first_reset_block = False #flip to make all resets have error after
-                    first_reset_block_done = True
+                    in_first_reset_block = True #flip to make all resets have error after
+                    first_reset_block_done = False
                 # Inject PRE-MEAS damp (for all subsequent rounds)
                 p = _pick_pre_meas_params()
                 if p:
@@ -1054,10 +1056,9 @@ def inject_amplitude_damp(qasm_text: str, error_model: "ErrorModel") -> str:
                 out_lines.append(f"{indent}{stmt};")
                 continue
 
-            # Any other statement: end the first reset block if we were in it
             if in_first_reset_block and not first_reset_block_done:
-                in_first_reset_block = False
-                first_reset_block_done = True
+                in_first_reset_block = True #flip to make all resets have error after
+                first_reset_block_done = False
 
             out_lines.append(f"{indent}{stmt};")
 
