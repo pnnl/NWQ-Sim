@@ -133,6 +133,7 @@ namespace
               << "  -ag, --adapt-gradtol  Gradient norm tolerance (default 1e-3).\n"
               << "  -af, --adapt-fvaltol  Energy change tolerance (default disabled).\n"
               << "  -am, --adapt-maxeval  Maximum ADAPT iterations (default 20).\n"
+              << "  -as, --adapt-saveinterval  Save parameters every N iterations (default 0 = no saving).\n"
               << "SIMULATOR OPTIONS\n"
               << "  --num_threads         Specify number of threads (ignored in current backend).\n"
               << "  --disable_fusion      Disable gate fusion (ignored in current backend).\n";
@@ -513,6 +514,16 @@ namespace
           return false;
         }
         config.options.adapt_max_iterations = static_cast<std::size_t>(std::stoull(argv[++i]));
+        continue;
+      }
+      if (arg == "-as" || arg == "--adapt-saveinterval")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --adapt-saveinterval";
+          return false;
+        }
+        config.options.adapt_save_interval = static_cast<std::size_t>(std::stoull(argv[++i]));
         continue;
       }
       error = "Unrecognized option: " + arg;

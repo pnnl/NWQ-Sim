@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -196,6 +197,32 @@ namespace vqe
       return bytes / (1024.0 * 1024.0);
     }
 
+    void save_adapt_parameters(std::ofstream &out,
+                               std::size_t iteration,
+                               const std::vector<double> &parameters,
+                               const std::vector<std::string> &selected_labels,
+                               double energy)
+    {
+      if (!out.is_open())
+      {
+        return;
+      }
+      out << std::setprecision(16);
+      out << "# Iteration " << iteration << std::endl;
+      out << "# Energy: " << energy << std::endl;
+      out << "# Number of parameters: " << parameters.size() << std::endl;
+      for (std::size_t i = 0; i < parameters.size(); ++i)
+      {
+        if (i < selected_labels.size())
+        {
+          out << "# " << selected_labels[i] << std::endl;
+        }
+        out << parameters[i] << std::endl;
+      }
+      out << std::endl;
+      out.flush();
+    }
+
     template <typename Backend>
     struct objective_context
     {
@@ -271,7 +298,8 @@ namespace vqe
   template <typename Backend>
   adapt_result run_adapt_impl(const std::vector<pauli_term> &pauli_terms,
                               adapt_ansatz &ansatz,
-                              const vqe_options &options)
+                              const vqe_options &options,
+                              const std::string &hamiltonian_path)
   {
     Backend backend(ansatz.get_circuit().num_qubits());
 
@@ -281,6 +309,19 @@ namespace vqe
     const double reference_energy = compute_energy(backend, pauli_terms);
     result.initial_energy = reference_energy;
     result.energy = reference_energy;
+
+    std::ofstream param_file;
+    if (options.adapt_save_interval > 0)
+    {
+      std::string output_filename = hamiltonian_path + ".adapt_params.txt";
+      param_file.open(output_filename);
+      if (param_file.is_open())
+      {
+        param_file << "# ADAPT-VQE Parameters for " << hamiltonian_path << std::endl;
+        param_file << "# Save interval: every " << options.adapt_save_interval << " iterations" << std::endl;
+        param_file << std::endl;
+      }
+    }
 
     if (options.verbose)
     {
@@ -468,6 +509,19 @@ namespace vqe
         std::cout << row.str() << std::endl;
       }
 
+      if (options.adapt_save_interval > 0 && (iter + 1) % options.adapt_save_interval == 0)
+      {
+        std::vector<std::string> current_labels;
+        for (auto idx : ansatz.selected_indices())
+        {
+          if (idx < pool_excitations.size())
+          {
+            current_labels.push_back(pool_excitations[idx].label);
+          }
+        }
+        save_adapt_parameters(param_file, iter + 1, current_params, current_labels, optimized_energy);
+      }
+
       if (options.adapt_energy_tolerance > 0.0 &&
           std::abs(previous_energy - optimized_energy) < options.adapt_energy_tolerance)
       {
@@ -549,7 +603,7 @@ namespace vqe
 #ifdef VQE_ENABLE_CUDA
     if (options.use_gpu)
     {
-  return run_adapt_impl<backend::statevector_gpu>(pauli_terms, ansatz, options);
+  return run_adapt_impl<backend::statevector_gpu>(pauli_terms, ansatz, options, hamiltonian_path);
     }
 #else
     if (options.use_gpu)
@@ -558,7 +612,7 @@ namespace vqe
     }
 #endif
 
-  return run_adapt_impl<backend::statevector_cpu>(pauli_terms, ansatz, options);
+  return run_adapt_impl<backend::statevector_cpu>(pauli_terms, ansatz, options, hamiltonian_path);
   }
 
 } // namespace vqe
