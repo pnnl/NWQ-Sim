@@ -1,197 +1,247 @@
-#include "include/nwqsim_qflow.hpp"
-#include "include/utils.hpp"
-#include "vqeBackendManager.hpp"
-#include "utils.hpp"
-#include "vqe_state.hpp"
+#include "nwqsim_qflow.hpp"
 
-#include "src/uccsdmin.cpp"
-#include "src/singletgsd.cpp"
-
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <limits>
+#include <optional>
 #include <sstream>
-#include <chrono>
-#include <unordered_map>
-#include <iostream>
-#include <fstream>
-#include <vector>
+#include <stdexcept>
 #include <string>
-#include <complex>
-#include <regex>
-#include <map>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
-// Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
-void silent_callback_function(const std::vector<NWQSim::ValType> &x, NWQSim::ValType fval, NWQSim::IdxType iteration) {}
+#include <nlopt.hpp>
 
-std::string get_termination_reason_local(int result)
+#include "ansatz/ansatz.hpp"
+#include "execution/vqe_runner.hpp"
+#include "fermion_term.hpp"
+#include "hamiltonian_parser.hpp"
+#include "jw_transform.hpp"
+
+namespace
 {
-    static const std::map<int, std::string> reason_map_adapt = {
-        {0, "Local gradient minimum is reached"},
-        {9, "Local Gradient Follower is not run"}};
-    auto it = reason_map_adapt.find(result);
-    if (it != reason_map_adapt.end())
+  constexpr double kPi = 3.14159265358979323846;
+
+  vqe::hamiltonian_data build_data_from_ops(const std::vector<std::pair<std::string, std::complex<double>>> &ops)
+  {
+    vqe::hamiltonian_data data;
+    for (const auto &entry : ops)
     {
-        return it->second;
+      const std::string &config = entry.first;
+      const auto &coeff = entry.second;
+      if (config.empty())
+      {
+        data.constant += coeff;
+        continue;
+      }
+
+      std::istringstream stream(config);
+      std::string token;
+      vqe::fermion_term term;
+      term.coefficient = coeff;
+      while (stream >> token)
+      {
+        if (token == "+")
+        {
+          continue;
+        }
+        bool creation = false;
+        if (!token.empty() && token.back() == '^')
+        {
+          creation = true;
+          token.pop_back();
+        }
+        if (token.empty())
+        {
+          continue;
+        }
+        const std::size_t index = static_cast<std::size_t>(std::stoull(token));
+        data.max_index = std::max(data.max_index, index);
+        term.operators.push_back({index, creation ? vqe::fermion_op_kind::creation : vqe::fermion_op_kind::annihilation});
+      }
+      if (term.operators.empty())
+      {
+        data.constant += coeff;
+      }
+      else
+      {
+        data.terms.push_back(std::move(term));
+      }
     }
-    else
+    return data;
+  }
+
+  bool is_gpu_backend(const std::string &backend)
+  {
+    std::string value = backend;
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c)
+                   { return static_cast<char>(std::toupper(c)); });
+    return value == "GPU" || value == "NVGPU" || value == "NVGPU_MPI";
+  }
+
+  std::vector<std::string> collect_parameter_labels(const vqe::uccsd_ansatz &ansatz)
+  {
+    std::vector<std::string> labels;
+    const auto &map = ansatz.excitation_parameter_map();
+    labels.reserve(map.size());
+    for (const auto &excitation : ansatz.excitations())
     {
-        return "Unknown reason, code: " + std::to_string(result);
+      if (map.find(excitation.label) != map.end() &&
+          std::find(labels.begin(), labels.end(), excitation.label) == labels.end())
+      {
+        labels.push_back(excitation.label);
+      }
     }
-}
+    return labels;
+  }
 
-double optimize_ansatz(const VQEBackendManager &manager,
-                       const std::string &backend,
-                       std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil,
-                       std::shared_ptr<NWQSim::VQE::Ansatz> ansatz,
-                       NWQSim::VQE::OptimizerSettings &settings,
-                       nlopt::algorithm &algo,
-                       unsigned &seed,
-                       int num_trials,
-                       bool verbose,
-                       double delta,
-                       double eta)
-{
-    std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(backend, ansatz, hamil, algo, silent_callback_function, seed, settings);
+  std::vector<int> parse_parameter_label(const std::string &label)
+  {
+    std::vector<int> indices;
+    std::istringstream stream(label);
+    std::string token;
+    while (stream >> token)
+    {
+      if (token == "+")
+      {
+        continue;
+      }
+      if (!token.empty() && token.back() == '^')
+      {
+        token.pop_back();
+      }
+      if (token.empty())
+      {
+        continue;
+      }
+      indices.push_back(static_cast<int>(std::stoi(token)));
+    }
+    std::reverse(indices.begin(), indices.end());
+    return indices;
+  }
 
-    std::vector<double> params;
-    params.resize(ansatz->numParams());
-    std::fill(params.begin(), params.end(), 0);
-
-    double initial_ene, final_ene;
-    long long num_iterations = 0;
-    state->initialize();
-
-    // Use custom true gradient descent instead of SPSA gradient
-    state->follow_true_gradient(params,
-                                initial_ene,
-                                final_ene,
-                                num_iterations,
-                                delta,
-                                eta,
-                                num_trials,
-                                verbose);
-
-    return final_ene;
-}
+} // namespace
 
 std::vector<std::pair<std::string, std::complex<double>>> parseHamiltonianFile(const std::string &filename)
 {
-    std::vector<std::pair<std::string, std::complex<double>>> result;
-    std::ifstream file(filename);
-
-    if (!file.is_open())
+  const auto data = vqe::read_hamiltonian_file(filename);
+  std::vector<std::pair<std::string, std::complex<double>>> result;
+  if (std::abs(data.constant.real()) > 0.0 || std::abs(data.constant.imag()) > 0.0)
+  {
+    result.emplace_back("", data.constant);
+  }
+  for (const auto &term : data.terms)
+  {
+    std::ostringstream config;
+    bool first = true;
+    for (const auto &op : term.operators)
     {
-        throw std::runtime_error("Could not open file: " + filename);
+      if (!first)
+      {
+        config << ' ';
+      }
+      first = false;
+      config << op.index;
+      if (op.kind == vqe::fermion_op_kind::creation)
+      {
+        config << '^';
+      }
     }
-
-    std::string line;
-    // Regex pattern to match (real, imag) followed by optional config string
-    std::regex pattern(R"(\(\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)\s*,\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)\s*\)(.*)?)");
-
-    while (std::getline(file, line))
-    {
-        // Skip empty lines and comment lines
-        if (line.empty() || line[0] == 'c')
-        {
-            continue;
-        }
-
-        std::smatch match;
-        if (std::regex_search(line, match, pattern))
-        {
-            if (match.size() >= 3)
-            {
-                // Parse the complex number
-                double real_part = std::stod(match.str(1));
-                double imag_part = std::stod(match.str(2));
-                std::complex<double> coeff(real_part, imag_part);
-
-                // Get the config string (everything after the closing parenthesis)
-                std::string config = match.str(3);
-
-                // Trim leading/trailing whitespace from config
-                config.erase(0, config.find_first_not_of(" \t"));
-                config.erase(config.find_last_not_of(" \t") + 1);
-
-                result.emplace_back(config, coeff);
-            }
-        }
-    }
-
-    file.close();
-    return result;
+    result.emplace_back(config.str(), term.coefficient);
+  }
+  return result;
 }
 
-std::vector<int> parseParameterString(const std::string &param_str)
+std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim(
+    const std::vector<std::pair<std::string, std::complex<double>>> &hamiltonian_ops,
+    int n_part,
+    std::string backend,
+    std::optional<vqe::vqe_options> options_override)
 {
-    std::vector<int> result;
-    std::istringstream iss(param_str);
-    std::string token;
+  if (n_part < 0)
+  {
+    throw std::invalid_argument("Number of particles must be non-negative");
+  }
 
-    while (iss >> token)
+  const auto data = build_data_from_ops(hamiltonian_ops);
+  if (data.num_qubits() % 2 != 0)
+  {
+    throw std::runtime_error("Hamiltonian maps to an odd number of qubits; expected even for spin orbitals");
+  }
+
+  const auto pauli_terms = vqe::jordan_wigner_transform(data);
+
+  vqe::molecular_environment env;
+  env.n_spatial = data.num_qubits() / 2;
+  env.n_electrons = static_cast<std::size_t>(n_part);
+  env.constant_energy = data.constant.real();
+
+  vqe::vqe_options options;
+  if (options_override.has_value())
+  {
+    options = *options_override;
+  }
+  else
+  {
+    options = vqe::vqe_options{};
+    options.trotter_steps = 1;
+    options.symmetry_level = 0;
+    options.lower_bound = -kPi;
+    options.upper_bound = kPi;
+    options.max_evaluations = 100;
+    options.relative_tolerance = -1.0;
+    options.absolute_tolerance = -1.0;
+    options.stop_value = -std::numeric_limits<double>::infinity();
+    options.max_time = -1.0;
+    options.optimizer = nlopt::LN_COBYLA;
+  }
+
+  options.mode = vqe::run_mode::standard;
+  options.use_gpu = is_gpu_backend(backend);
+  env.xacc_indexing = options.use_xacc_indexing;
+
+  if (options.trotter_steps == 0)
+  {
+    throw std::invalid_argument("trotter_steps must be positive for qflow_nwqsim");
+  }
+
+  vqe::uccsd_ansatz ansatz(env, options.trotter_steps, options.symmetry_level);
+  ansatz.build();
+
+  auto result = vqe::run_default_vqe_with_ansatz(ansatz, pauli_terms, options);
+
+  std::vector<std::pair<std::vector<int>, double>> parameter_output;
+  const auto labels = collect_parameter_labels(ansatz);
+  const auto &map = ansatz.excitation_parameter_map();
+  for (const auto &label : labels)
+  {
+    const auto it = map.find(label);
+    if (it == map.end())
     {
-        // Remove ^ if it exists at the end
-        if (!token.empty() && token.back() == '^')
-        {
-            token.pop_back();
-        }
-
-        // Convert to integer and add to result
-        try
-        {
-            int num = std::stoi(token);
-            result.push_back(num);
-        }
-        catch (const std::exception &e)
-        {
-            // Skip invalid tokens
-            continue;
-        }
+      continue;
     }
-    std::reverse(result.begin(), result.end());
+    const std::size_t index = it->second;
+    if (index >= result.parameters.size())
+    {
+      continue;
+    }
+    parameter_output.emplace_back(parse_parameter_label(label), result.parameters[index]);
+  }
 
-
-    return result;
+  return {result.energy, parameter_output};
 }
 
-std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim(const std::vector<std::pair<std::string, std::complex<double>>> &hamiltonian_ops, int n_part, std::string backend)
+std::string get_termination_reason_local(int result)
 {
-    VQEBackendManager manager;
-
-    NWQSim::VQE::OptimizerSettings settings;
-    settings.max_evals = 100;
-    settings.lbound = -PI;
-    settings.ubound = PI;
-
-    nlopt::algorithm algo = (nlopt::algorithm)nlopt_algorithm_from_string("LN_COBYLA");
-    double delta = 1e-2;
-    double eta = 1;
-    unsigned seed = time(0);
-    bool use_xacc = true;
-    bool verbose = false;
-
-    int n_trials = 1;
-
-    std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(hamiltonian_ops, n_part, use_xacc, NWQSim::VQE::getJordanWignerTransform);
-
-    std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
-
-    ansatz = std::make_shared<NWQSim::VQE::UCCSDmin>(
-        hamil->getEnv(),
-        NWQSim::VQE::getJordanWignerTransform,
-        1,
-        0);
-
-    ansatz->buildAnsatz();
-
-    double final_energy = optimize_ansatz(manager, backend, hamil, ansatz, settings, algo, seed, n_trials, verbose, delta, eta);
-
-    std::vector<std::pair<std::string, double>> param_map = ansatz->getFermionicOperatorParameters();
-
-    std::vector<std::pair<std::vector<int>, double>> param_vector;
-
-    for (const auto &param : param_map)
-    {
-        param_vector.emplace_back(parseParameterString(param.first), param.second);
-    }
-
-    return std::make_pair(final_energy, param_vector);
+  static const std::unordered_map<int, std::string> kReasons = {
+      {0, "Local gradient minimum is reached"},
+      {9, "Local Gradient Follower is not run"}};
+  const auto it = kReasons.find(result);
+  if (it != kReasons.end())
+  {
+    return it->second;
+  }
+  return "Unknown reason, code: " + std::to_string(result);
 }

@@ -1,0 +1,564 @@
+#include "execution/adapt_runner.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <numeric>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+#include <nlopt.hpp>
+
+#include "ansatz/ansatz.hpp"
+#include "backend/statevector_cpu.hpp"
+#ifdef VQE_ENABLE_CUDA
+#include "backend/statevector_gpu.hpp"
+#endif
+#include "hamiltonian_parser.hpp"
+#include "jw_transform.hpp"
+#include <sys/resource.h>
+
+namespace vqe
+{
+  namespace
+  {
+
+    constexpr double kCoeffCutoff = 1e-10;
+
+    struct parameter_summary
+    {
+      std::size_t count = 0;
+      double max_abs = 0.0;
+      double l2_norm = 0.0;
+    };
+
+    struct gate_tally
+    {
+      int single_qubit = 0;
+      int two_qubit = 0;
+    };
+
+    std::string trim_copy(const std::string &value)
+    {
+      auto begin = value.begin();
+      auto end = value.end();
+      while (begin != end && std::isspace(static_cast<unsigned char>(*begin)))
+      {
+        ++begin;
+      }
+      while (end != begin && std::isspace(static_cast<unsigned char>(*(end - 1))) )
+      {
+        --end;
+      }
+      return std::string(begin, end);
+    }
+
+    std::string format_operator_label(const std::string &label)
+    {
+      std::vector<std::string> pieces;
+      std::stringstream ss(label);
+      std::string token;
+      while (std::getline(ss, token, ','))
+      {
+        const auto trimmed = trim_copy(token);
+        if (!trimmed.empty())
+        {
+          pieces.emplace_back("(" + trimmed + ")");
+        }
+      }
+      if (pieces.empty())
+      {
+        if (label.empty())
+        {
+          return "<none>";
+        }
+        return "(" + label + ")";
+      }
+      std::ostringstream out;
+      for (std::size_t idx = 0; idx < pieces.size(); ++idx)
+      {
+        if (idx > 0)
+        {
+          out << ", ";
+        }
+        out << pieces[idx];
+      }
+      return out.str();
+    }
+
+    int pauli_basis_single_qubit_cost(bool has_x, bool has_z)
+    {
+      if (has_x && has_z)
+      {
+        return 4;
+      }
+      if (has_x)
+      {
+        return 2;
+      }
+      if (has_z)
+      {
+        return 0;
+      }
+      return 0;
+    }
+
+    gate_tally pauli_rotation_tally(const gate &g)
+    {
+      gate_tally tally;
+      for (std::size_t idx = 0; idx < g.qubits.size(); ++idx)
+      {
+        const std::size_t qubit = g.qubits[idx];
+        const bool has_x = (g.pauli.x_mask >> qubit) & 1ULL;
+        const bool has_z = (g.pauli.z_mask >> qubit) & 1ULL;
+        tally.single_qubit += pauli_basis_single_qubit_cost(has_x, has_z);
+      }
+      if (!g.qubits.empty())
+      {
+        tally.single_qubit += 1;
+      }
+      if (g.qubits.size() > 1)
+      {
+        tally.two_qubit += static_cast<int>(2 * (g.qubits.size() - 1));
+      }
+      return tally;
+    }
+
+    gate_tally accumulate_gate_tally(const circuit &circ)
+    {
+      gate_tally tally;
+      for (const auto &g : circ.gates())
+      {
+        switch (g.kind)
+        {
+        case gate_kind::x:
+        case gate_kind::h:
+        case gate_kind::rz:
+          ++tally.single_qubit;
+          break;
+        case gate_kind::cnot:
+          ++tally.two_qubit;
+          break;
+        case gate_kind::pauli_rotation:
+        {
+          const auto contrib = pauli_rotation_tally(g);
+          tally.single_qubit += contrib.single_qubit;
+          tally.two_qubit += contrib.two_qubit;
+          break;
+        }
+        }
+      }
+      return tally;
+    }
+
+    parameter_summary summarize_parameters(const std::vector<double> &params)
+    {
+      parameter_summary summary;
+      summary.count = params.size();
+      double sum_sq = 0.0;
+      for (double value : params)
+      {
+        const double abs_value = std::abs(value);
+        if (abs_value > summary.max_abs)
+        {
+          summary.max_abs = abs_value;
+        }
+        sum_sq += value * value;
+      }
+      summary.l2_norm = std::sqrt(sum_sq);
+      return summary;
+    }
+
+    std::string format_double(double value, int precision = 12)
+    {
+      std::ostringstream oss;
+      oss << std::setprecision(precision) << value;
+      return oss.str();
+    }
+
+    double current_rss_mebibytes()
+    {
+      struct rusage usage{};
+      if (getrusage(RUSAGE_SELF, &usage) != 0)
+      {
+        return 0.0;
+      }
+#ifdef __APPLE__
+      const double bytes = static_cast<double>(usage.ru_maxrss);
+#else
+      const double bytes = static_cast<double>(usage.ru_maxrss) * 1024.0;
+#endif
+      return bytes / (1024.0 * 1024.0);
+    }
+
+    template <typename Backend>
+    struct objective_context
+    {
+      circuit *circ = nullptr;
+      Backend *backend = nullptr;
+      const std::vector<pauli_term> *terms = nullptr;
+      std::size_t *eval_count = nullptr;
+    };
+
+    template <typename Backend>
+    double objective_function_impl(const std::vector<double> &x,
+                                   std::vector<double> &grad,
+                                   void *data)
+    {
+      auto *ctx = static_cast<objective_context<Backend> *>(data);
+      if (ctx == nullptr || ctx->circ == nullptr || ctx->backend == nullptr || ctx->terms == nullptr || ctx->eval_count == nullptr)
+      {
+        throw std::runtime_error("objective context not initialized");
+      }
+
+      auto &circuit_ref = *ctx->circ;
+      for (std::size_t i = 0; i < x.size(); ++i)
+      {
+        circuit_ref.set_parameter(i, x[i]);
+      }
+
+      ctx->backend->reset();
+      ctx->backend->apply(circuit_ref);
+
+      ++(*ctx->eval_count);
+      grad.assign(x.size(), 0.0);
+      return ctx->backend->expectation(*ctx->terms).real();
+    }
+
+    template <typename Backend>
+    double compute_energy(Backend &backend,
+                          const std::vector<pauli_term> &terms)
+    {
+      return backend.expectation(terms).real();
+    }
+
+    template <typename Backend>
+    void apply_pool_operator(Backend &backend,
+                             std::size_t num_qubits,
+                             const std::vector<pauli_term> &pauli_terms,
+                             double parameter)
+    {
+      if (std::abs(parameter) < 1e-12)
+      {
+        return;
+      }
+      circuit incremental(num_qubits);
+      const std::size_t param_index = incremental.add_parameter(parameter);
+      parameter_expression expr;
+      expr.terms.push_back(parameter_term{param_index, 1.0});
+      for (const auto &term : pauli_terms)
+      {
+        const double coeff = term.coefficient.real();
+        if (std::abs(coeff) < kCoeffCutoff)
+        {
+          continue;
+        }
+        incremental.add_pauli_rotation(term, expr, 2.0 * coeff);
+      }
+      if (!incremental.gates().empty())
+      {
+        backend.apply(incremental);
+      }
+    }
+
+  } // namespace
+
+  template <typename Backend>
+  adapt_result run_adapt_impl(const std::vector<pauli_term> &pauli_terms,
+                              adapt_ansatz &ansatz,
+                              const vqe_options &options)
+  {
+    Backend backend(ansatz.get_circuit().num_qubits());
+
+    adapt_result result;
+    backend.reset();
+    backend.apply(ansatz.mutable_circuit());
+    const double reference_energy = compute_energy(backend, pauli_terms);
+    result.initial_energy = reference_energy;
+    result.energy = reference_energy;
+
+    if (options.verbose)
+    {
+      const auto stats = summarize_parameters(ansatz.mutable_circuit().parameters());
+      std::cout << "[adapt] Initialization: pool_size=" << ansatz.pool_operator_components().size()
+                << " gradient_step=" << format_double(options.adapt_gradient_step, 6)
+                << " gradient_tol=" << format_double(options.adapt_gradient_tolerance, 6) << std::endl;
+      std::cout << "[adapt] Reference energy: " << format_double(reference_energy, 12)
+                << " parameters=" << stats.count
+                << " max|θ|=" << format_double(stats.max_abs, 6)
+                << " ||θ||₂=" << format_double(stats.l2_norm, 6) << std::endl;
+      std::cout << "Running ADAPT-VQE..." << std::endl;
+      std::cout << " Iter   Objective Value     # Evals  Grad Norm  |  #1q Gates  #2q Gates  |  Selected Operator" << std::endl;
+      std::cout << "--------------------------------------------------------------------------------------------------------------" << std::endl;
+    }
+
+    const auto &pool_components = ansatz.pool_operator_components();
+    const auto pool_size = pool_components.size();
+    const auto &pool_excitations = ansatz.pool_excitations();
+    std::vector<bool> selected(pool_size, false);
+
+    std::size_t total_energy_evals = 0;
+    bool converged = false;
+    double previous_energy = reference_energy;
+
+    for (std::size_t iter = 0; iter < options.adapt_max_iterations; ++iter)
+    {
+      backend.reset();
+      backend.apply(ansatz.mutable_circuit());
+      double base_energy = compute_energy(backend, pauli_terms);
+      ++total_energy_evals;
+
+      if (options.adapt_log_memory)
+      {
+        std::cout << "[adapt] iteration " << iter << " RSS: " << current_rss_mebibytes() << " MiB" << std::endl;
+      }
+
+      double max_gradient = 0.0;
+      std::size_t max_index = pool_size;
+      Backend scratch(backend.num_qubits());
+
+      for (std::size_t idx = 0; idx < pool_size; ++idx)
+      {
+        if (selected[idx])
+        {
+          continue;
+        }
+        scratch.copy_state_from(backend);
+        for (const auto &component : pool_components[idx])
+        {
+          apply_pool_operator(scratch, backend.num_qubits(), component.terms,
+                              options.adapt_gradient_step * component.parameter_scale);
+        }
+        const double energy_plus = compute_energy(scratch, pauli_terms);
+        ++total_energy_evals;
+
+        for (const auto &component : pool_components[idx])
+        {
+          apply_pool_operator(scratch, backend.num_qubits(), component.terms,
+                              -2.0 * options.adapt_gradient_step * component.parameter_scale);
+        }
+        const double energy_minus = compute_energy(scratch, pauli_terms);
+        ++total_energy_evals;
+
+        const double gradient = (energy_plus - energy_minus) / (2.0 * options.adapt_gradient_step);
+        const double magnitude = std::abs(gradient);
+        if (magnitude > max_gradient)
+        {
+          max_gradient = magnitude;
+          max_index = idx;
+        }
+      }
+
+      std::string selected_label = "<none>";
+      if (max_index < pool_size && max_index < pool_excitations.size())
+      {
+        selected_label = pool_excitations[max_index].label;
+      }
+
+      if (max_index == pool_size || max_gradient < options.adapt_gradient_tolerance)
+      {
+        converged = true;
+        result.energy = base_energy;
+        result.iterations = iter;
+        if (options.verbose)
+        {
+          std::cout << "[adapt][iter " << (iter + 1)
+                    << "] convergence: max|grad|=" << format_double(max_gradient, 6)
+                    << " energy=" << format_double(base_energy, 12)
+                    << " evaluations=" << total_energy_evals << std::endl;
+        }
+        break;
+      }
+
+      ansatz.add_operator(max_index, 0.0);
+      selected[max_index] = true;
+
+      auto &circ = ansatz.mutable_circuit();
+      auto current_params = circ.parameters();
+
+      nlopt::opt opt(options.adapt_optimizer, current_params.size());
+      const double lower = std::min(options.adapt_lower_bound, options.adapt_upper_bound);
+      const double upper = std::max(options.adapt_lower_bound, options.adapt_upper_bound);
+      opt.set_lower_bounds(std::vector<double>(current_params.size(), lower));
+      opt.set_upper_bounds(std::vector<double>(current_params.size(), upper));
+      if (options.adapt_max_evaluations > 0)
+      {
+        opt.set_maxeval(static_cast<int>(options.adapt_max_evaluations));
+      }
+      if (options.adapt_max_time > 0)
+      {
+        opt.set_maxtime(options.adapt_max_time);
+      }
+      if (options.adapt_relative_tolerance >= 0)
+      {
+        opt.set_ftol_rel(options.adapt_relative_tolerance);
+      }
+      if (options.adapt_absolute_tolerance >= 0)
+      {
+        opt.set_ftol_abs(options.adapt_absolute_tolerance);
+      }
+      if (std::isfinite(options.adapt_stop_value))
+      {
+        opt.set_stopval(options.adapt_stop_value);
+      }
+
+      for (const auto &param : options.adapt_algorithm_parameters)
+      {
+        opt.set_param(param.first.c_str(), param.second);
+      }
+
+      objective_context<Backend> ctx{&circ, &backend, &pauli_terms, &total_energy_evals};
+      opt.set_min_objective(objective_function_impl<Backend>, &ctx);
+
+      current_params = circ.parameters();
+      if (options.adapt_initial_parameters.size() == current_params.size())
+      {
+        current_params = options.adapt_initial_parameters;
+        for (std::size_t i = 0; i < current_params.size(); ++i)
+        {
+          circ.set_parameter(i, current_params[i]);
+        }
+      }
+      double min_value = 0.0;
+      nlopt::result status;
+      try
+      {
+        status = opt.optimize(current_params, min_value);
+      }
+      catch (const std::exception &ex)
+      {
+        throw std::runtime_error(std::string("NLopt optimization failed: ") + ex.what());
+      }
+
+      for (std::size_t i = 0; i < current_params.size(); ++i)
+      {
+        circ.set_parameter(i, current_params[i]);
+      }
+
+      backend.reset();
+      backend.apply(circ);
+      const double expectation = backend.expectation(pauli_terms).real();
+      const double optimized_energy = expectation;
+      ++total_energy_evals;
+
+      result.energy = optimized_energy;
+      if (status > 0)
+      {
+        result.converged = true;
+      }
+
+      if (options.verbose)
+      {
+        const auto counts = accumulate_gate_tally(circ);
+        const auto formatted_label = format_operator_label(selected_label);
+        std::ostringstream row;
+        row << std::setw(4) << iter << "  ";
+        row << std::fixed << std::setprecision(12) << std::setw(20) << optimized_energy << "  ";
+        row << std::setw(7) << total_energy_evals << "  ";
+        row << std::scientific << std::setprecision(3) << std::setw(8) << max_gradient << "  |  ";
+        row << std::defaultfloat;
+        row << std::setw(9) << counts.single_qubit << "  "
+            << std::setw(9) << counts.two_qubit << "  |  "
+            << formatted_label;
+        std::cout << row.str() << std::endl;
+      }
+
+      if (options.adapt_energy_tolerance > 0.0 &&
+          std::abs(previous_energy - optimized_energy) < options.adapt_energy_tolerance)
+      {
+        if (options.verbose)
+        {
+          std::cout << "[adapt][iter " << (iter + 1)
+                    << "] energy change " << format_double(std::abs(previous_energy - optimized_energy), 6)
+                    << " < tol=" << format_double(options.adapt_energy_tolerance, 6) << std::endl;
+        }
+        result.iterations = iter + 1;
+        converged = true;
+        break;
+      }
+      previous_energy = optimized_energy;
+
+      if (iter + 1 == options.adapt_max_iterations)
+      {
+        result.iterations = iter + 1;
+      }
+    }
+
+    if (!converged)
+    {
+      backend.reset();
+      backend.apply(ansatz.mutable_circuit());
+      result.energy = compute_energy(backend, pauli_terms);
+      ++total_energy_evals;
+    }
+
+    result.parameters = ansatz.mutable_circuit().parameters();
+    result.selected_indices = ansatz.selected_indices();
+    result.selected_labels.reserve(result.selected_indices.size());
+    for (auto idx : result.selected_indices)
+    {
+      if (idx >= pool_excitations.size())
+      {
+        throw std::out_of_range("selected operator index exceeds pool size");
+      }
+      result.selected_labels.push_back(pool_excitations[idx].label);
+    }
+    if (options.verbose && !result.selected_labels.empty())
+    {
+      std::cout << "Final parameters:" << std::endl;
+      for (std::size_t i = 0; i < result.selected_labels.size() && i < result.parameters.size(); ++i)
+      {
+        const auto formatted_label = format_operator_label(result.selected_labels[i]);
+        std::ostringstream line;
+        line << "  " << formatted_label << " :: "
+             << std::fixed << std::setprecision(16) << result.parameters[i];
+        std::cout << line.str() << std::endl;
+      }
+    }
+    result.energy_evaluations = total_energy_evals;
+    return result;
+  }
+
+  adapt_result run_adapt_vqe(const std::string &hamiltonian_path,
+                             std::size_t n_particles,
+                             const vqe_options &options)
+  {
+    const auto data = read_hamiltonian_file(hamiltonian_path);
+    if (data.num_qubits() % 2 != 0)
+    {
+      throw std::runtime_error("Hamiltonian maps to an odd number of qubits; expected even for spin orbitals");
+    }
+
+    const auto pauli_terms = jordan_wigner_transform(data);
+    const double constant_energy = data.constant.real();
+
+    molecular_environment env;
+    env.n_spatial = data.num_qubits() / 2;
+    env.n_electrons = n_particles;
+  env.xacc_indexing = options.use_xacc_indexing;
+    env.constant_energy = constant_energy;
+
+  adapt_ansatz ansatz(env, options.symmetry_level);
+    ansatz.build_pool();
+
+#ifdef VQE_ENABLE_CUDA
+    if (options.use_gpu)
+    {
+  return run_adapt_impl<backend::statevector_gpu>(pauli_terms, ansatz, options);
+    }
+#else
+    if (options.use_gpu)
+    {
+      throw std::runtime_error("vqe built without CUDA support; GPU backend unavailable");
+    }
+#endif
+
+  return run_adapt_impl<backend::statevector_cpu>(pauli_terms, ansatz, options);
+  }
+
+} // namespace vqe

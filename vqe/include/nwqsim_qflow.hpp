@@ -1,33 +1,20 @@
-#ifndef NWQSIM_QFLOW_HPP
-#define NWQSIM_QFLOW_HPP
+#pragma once
 
-#include <vector>
-#include <string>
 #include <complex>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
-/**
- * @brief Parse a Hamiltonian file and extract operator-coefficient pairs
- *
- * @param filename Path to the Hamiltonian file
- * @return Vector of pairs containing operator strings and their complex coefficients
- */
+#include "execution/vqe_runner.hpp"
+
 std::vector<std::pair<std::string, std::complex<double>>> parseHamiltonianFile(const std::string &filename);
 
-/**
- * @brief Run VQE optimization using NWQSim backend
- *
- * @param hamiltonian_ops Vector of Hamiltonian operators and coefficients
- * @param backend Backend type (default: "CPU")
- * @return Optimized ground state energy
- */
-std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim(const std::vector<std::pair<std::string, std::complex<double>>> &hamiltonian_ops, int n_part, std::string backend = "CPU");
+std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim(
+    const std::vector<std::pair<std::string, std::complex<double>>> &hamiltonian_ops,
+    int n_part,
+    std::string backend = "CPU",
+    std::optional<vqe::vqe_options> options = std::nullopt);
 
-/**
- * @brief Get termination reason for optimization result
- *
- * @param result Optimization result code
- * @return Human-readable termination reason
- */
 std::string get_termination_reason_local(int result);
 
-#endif // EXACHEM_QFLOW_HPP

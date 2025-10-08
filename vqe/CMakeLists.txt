@@ -1,107 +1,134 @@
 # ===============================================================================
-# VQE Module CMakeLists.txt
+# VQE Module CMakeLists.txt (new implementation)
 # ===============================================================================
 
 # Collect source files
-set(VQE_SRCS 
-    src/jw.cpp              
-    src/uccsd.cpp     
-    src/utils.cpp
-    src/uccsdmin.cpp
-    src/singletgsd.cpp  
-    src/ansatz_pool.cpp  
-    src/hamiltonian.cpp  
+set(VQE_SRCS
+    src/hamiltonian_parser.cpp
+    src/jw_transform.cpp
+    src/pauli_term.cpp
+    src/environment.cpp
+    src/circuit.cpp
+    src/ansatz/uccsd.cpp
+    src/ansatz/adapt.cpp
+    src/backend/gate_builder.cpp
+    src/backend/gate_fusion.cpp
+    src/backend/statevector_cpu.cpp
+    src/execution/adapt_runner.cpp
+    src/execution/vqe_runner.cpp
 )
 
+set(VQE_GPU_SOURCE src/backend/statevector_gpu.cu)
+set(VQE_GPU_STUB   src/backend/statevector_gpu_stub.cpp)
+
+if(CUDAToolkit_FOUND)
+    enable_language(CUDA)
+    list(APPEND VQE_SRCS ${VQE_GPU_SOURCE})
+    set_source_files_properties(${VQE_GPU_SOURCE} PROPERTIES LANGUAGE CUDA)
+else()
+    list(APPEND VQE_SRCS ${VQE_GPU_STUB})
+endif()
+
 # Add nlopt subdirectory first (dependency)
-add_subdirectory(nlopt)
+set(_VQE_NLOPT_SOURCE "")
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlopt/CMakeLists.txt")
+    set(_VQE_NLOPT_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlopt")
+elseif (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/nlopt/CMakeLists.txt")
+    set(_VQE_NLOPT_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/nlopt")
+endif()
+
+if (_VQE_NLOPT_SOURCE)
+    if (IS_ABSOLUTE "${_VQE_NLOPT_SOURCE}")
+        add_subdirectory(${_VQE_NLOPT_SOURCE} ${CMAKE_CURRENT_BINARY_DIR}/nlopt)
+    else()
+        add_subdirectory(${_VQE_NLOPT_SOURCE} nlopt)
+    endif()
+    if (EXISTS "${_VQE_NLOPT_SOURCE}/src/api")
+        set(VQE_NLOPT_INCLUDE "${_VQE_NLOPT_SOURCE}/src/api")
+    endif()
+else()
+    message(FATAL_ERROR "NLopt source directory not found. Expected third_party/nlopt or nlopt.")
+endif()
+
+if (NOT VQE_NLOPT_INCLUDE)
+    set(VQE_NLOPT_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/nlopt/src/api")
+endif()
 
 # ===============================================================================
 # Define targets
 # ===============================================================================
 
-# VQE base library (internal use)
 add_library(vqe SHARED ${VQE_SRCS})
-
-# NWQSim QFlow library object
 add_library(nwqsim "nwqsim_qflow_lib.cpp")
-
-# Main VQE executable
 add_executable(nwq_vqe "main.cpp")
-
-# QFlow executable 
-add_executable(nwq_qflow "qflow.cpp")
-
 
 # ===============================================================================
 # Configure target properties
 # ===============================================================================
 
-# Set C++ standard for all targets
-set(ALL_TARGETS nwqsim vqe nwq_vqe nwq_qflow)
+set(ALL_TARGETS nwqsim vqe nwq_vqe)
 foreach(target ${ALL_TARGETS})
     target_compile_features(${target} PRIVATE cxx_std_17)
 endforeach()
+
+if(CUDAToolkit_FOUND)
+    foreach(target ${ALL_TARGETS})
+        target_compile_features(${target} PRIVATE cuda_std_17)
+        target_compile_definitions(${target} PUBLIC VQE_ENABLE_CUDA)
+    endforeach()
+    target_compile_options(vqe PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
+endif()
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(vqe PUBLIC OpenMP::OpenMP_CXX)
+    target_compile_definitions(vqe PUBLIC NWQSIM_USE_OPENMP)
+endif()
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(vqe PRIVATE
+        $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>>:-O3>
+        $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>>:-ffast-math>
+        $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>>:-fno-trapping-math>
+        $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>>:-fno-math-errno>
+    )
+endif()
 
 # ===============================================================================
 # Include directories and link directories
 # ===============================================================================
 
-# Set target-specific include directories
-target_include_directories(vqe 
-    PUBLIC 
+target_include_directories(vqe
+    PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
     PRIVATE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/nlopt/src/api>
+        $<BUILD_INTERFACE:${VQE_NLOPT_INCLUDE}>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/nlopt>
 )
 
 target_include_directories(nwqsim
-    PUBLIC 
+    PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/nwqsim/vqe>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/nwqsim>
     PRIVATE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/nlopt/src/api>
+        $<BUILD_INTERFACE:${VQE_NLOPT_INCLUDE}>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/nlopt>
 )
 
-target_include_directories(nwq_vqe PRIVATE 
+target_include_directories(nwq_vqe PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/nlopt/src/api>
+    $<BUILD_INTERFACE:${VQE_NLOPT_INCLUDE}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
 )
-
-target_include_directories(nwq_qflow PRIVATE 
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/nlopt/src/api>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-)
-
-# Link directories for internal builds only
-target_link_directories(vqe BEFORE PRIVATE "nlopt/build")
-target_link_directories(nwqsim BEFORE PRIVATE "nlopt/build")
-target_link_directories(nwq_vqe BEFORE PRIVATE "nlopt/build")
-target_link_directories(nwq_qflow BEFORE PRIVATE "nlopt/build")
 
 # ===============================================================================
 # Basic linking
 # ===============================================================================
 
-# Link base VQE library dependencies
 target_link_libraries(vqe PRIVATE nlopt m)
-
-# Link NWQSim QFlow library dependencies
 target_link_libraries(nwqsim PRIVATE vqe nlopt m)
-
-# Link main VQE executable dependencies
 target_link_libraries(nwq_vqe PRIVATE vqe nlopt m)
-
-# Link QFlow executable dependencies
-target_link_libraries(nwq_qflow PRIVATE vqe nlopt m)
 
 # ===============================================================================
 # Build type specific configurations
@@ -114,29 +141,68 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 
 # ===============================================================================
-# CUDA support
+# CUDA support registration (propagate CUDA language to relevant sources)
 # ===============================================================================
 
 if(CUDAToolkit_FOUND)
-    enable_language(CUDA)
-    
-    # Set CUDA source file properties
-    set(CUDA_SOURCE_FILES 
-        "main.cpp" 
-        "qflow.cpp" 
-        "qflow_py.cpp"
-        "nwqsim_qflow_lib.cpp"
+    set(CUDA_SOURCE_FILES
+        "src/backend/statevector_gpu.cu"
     )
-    
     foreach(file ${CUDA_SOURCE_FILES})
         if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${file}")
             set_source_files_properties("${file}" PROPERTIES LANGUAGE CUDA)
         endif()
     endforeach()
-    
-    # Apply CUDA features and definitions to all targets
-    foreach(target ${ALL_TARGETS})
-        target_compile_features(${target} PRIVATE cuda_std_17)
-        target_compile_definitions(${target} PUBLIC CUDA_ENABLED)
-    endforeach()
+endif()
+
+# ===============================================================================
+# Python bindings (optional)
+# ===============================================================================
+
+option(VQE_BUILD_PYTHON "Build Python bindings for the VQE module" ON)
+
+if(VQE_BUILD_PYTHON)
+    find_package(pybind11 CONFIG QUIET)
+    if(pybind11_FOUND)
+        pybind11_add_module(nwqsim_vqe_core MODULE python/module.cpp)
+        target_link_libraries(nwqsim_vqe_core PRIVATE vqe)
+        target_include_directories(nwqsim_vqe_core PRIVATE ${VQE_NLOPT_INCLUDE} ${CMAKE_CURRENT_BINARY_DIR}/nlopt)
+        set_target_properties(nwqsim_vqe_core PROPERTIES OUTPUT_NAME "_core" PREFIX "")
+
+        # Set proper rpath for the Python module to find libvqe.dylib in the same directory
+        if(APPLE)
+            set_target_properties(nwqsim_vqe_core PROPERTIES
+                INSTALL_RPATH "@loader_path"
+                BUILD_WITH_INSTALL_RPATH TRUE)
+        else()
+            set_target_properties(nwqsim_vqe_core PROPERTIES
+                INSTALL_RPATH "$ORIGIN"
+                BUILD_WITH_INSTALL_RPATH TRUE)
+        endif()
+
+        # Determine installation directory for the Python package
+        set(_python_package_subdir "nwqsim_vqe")
+        if(DEFINED SKBUILD AND DEFINED SKBUILD_PLATLIB_DIR)
+            set(_python_install_dir "${SKBUILD_PLATLIB_DIR}/${_python_package_subdir}")
+        else()
+            find_package(Python3 COMPONENTS Interpreter REQUIRED)
+            execute_process(
+                COMMAND "${Python3_EXECUTABLE}" "-c" "import sysconfig;print(sysconfig.get_path('platlib'))"
+                OUTPUT_VARIABLE _python_site_package
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+            if(NOT _python_site_package)
+                message(FATAL_ERROR "Failed to determine Python site-packages directory")
+            endif()
+            set(_python_install_dir "${_python_site_package}/${_python_package_subdir}")
+        endif()
+
+        # Install the Python module and required libraries alongside it
+        install(TARGETS nwqsim_vqe_core DESTINATION ${_python_install_dir})
+        install(TARGETS vqe DESTINATION ${_python_install_dir})
+        install(TARGETS nlopt DESTINATION ${_python_install_dir})
+        
+        install(DIRECTORY python/nwqsim_vqe/ DESTINATION ${_python_install_dir} FILES_MATCHING PATTERN "*.py")
+    else()
+        message(WARNING "pybind11 not found; skipping VQE Python bindings")
+    endif()
 endif()
