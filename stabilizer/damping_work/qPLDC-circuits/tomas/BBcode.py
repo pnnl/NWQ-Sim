@@ -295,7 +295,7 @@ class BBcode:
 
         return circuit
     
-    def build_full_BBcode_circuit(self, rounds: int, noise_profile: list, observable_type: str, code_capacity = False) -> stim.Circuit:
+    def build_full_BBcode_circuit(self, rounds: int, noise_profile: list, observable_type: str, code_capacity = False, prepare_logical_ones=True) -> stim.Circuit:
     
         p1, p2, p_M, p_R = noise_profile
 
@@ -325,6 +325,16 @@ class BBcode:
                 # X_ERROR -> PAULI_CHANNEL_1(p, 0, 0)
                 full_circuit.append_operation("PAULI_CHANNEL_1", data_indices, [p_R, 0.0, 0.0])
         full_circuit.append("TICK")
+
+        # --- Insert logical-X physical X gates here if requested ---
+        if prepare_logical_ones:
+            # print(self.logical_X)
+            # print(self.coord_to_index)
+            for set in self.logical_X:
+                for coord in set:
+                    full_circuit.append_operation("X", self.coord_to_index[coord])
+                    print("X at ", self.coord_to_index[coord])
+
 
         # First round
         full_circuit += self.build_standard_sm_round(noise_profile)
