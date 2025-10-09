@@ -50,7 +50,7 @@ namespace vqe
     double adapt_gradient_step = 1e-2;
     double adapt_gradient_tolerance = 1e-3;
     double adapt_energy_tolerance = -1.0;
-    bool adapt_log_memory = false;
+    bool adapt_log_memory = true;
     std::size_t adapt_save_interval = 0; // Save parameters every N iterations (0 = no saving)
 
     // Optimizer configuration for ADAPT inner VQE solves

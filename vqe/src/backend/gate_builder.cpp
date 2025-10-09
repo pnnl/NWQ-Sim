@@ -125,6 +125,14 @@ void build_simulation_gates(const circuit& circ, std::vector<sim_gate>& out) {
           gate.op = sim_gate::kind::pauli;
           gate.pauli = g.pauli;
           gate.angle = evaluate_expression(circ, g.expression);
+
+          // Validate qubit count doesn't exceed array capacity
+          if (g.qubits.size() > gate.pauli_qubits.size()) {
+            throw std::runtime_error(
+              "Pauli rotation gate has " + std::to_string(g.qubits.size()) +
+              " qubits, exceeding maximum capacity of " + std::to_string(gate.pauli_qubits.size()));
+          }
+
           gate.pauli_qubit_count = static_cast<std::uint32_t>(g.qubits.size());
           for (std::size_t i = 0; i < g.qubits.size() && i < gate.pauli_qubits.size(); ++i) {
             const std::size_t qubit = g.qubits[i];

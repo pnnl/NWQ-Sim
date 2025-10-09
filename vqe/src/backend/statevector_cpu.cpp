@@ -347,6 +347,13 @@ void statevector_cpu::apply_pauli(const sim_gate& gate) {
     return;
   }
 
+  // Validate array bounds
+  if (count > gate.pauli_qubits.size()) {
+    throw std::runtime_error(
+      "Pauli gate qubit count " + std::to_string(count) +
+      " exceeds array capacity " + std::to_string(gate.pauli_qubits.size()));
+  }
+
   for (std::uint32_t idx = 0; idx < count; ++idx) {
     const auto basis = gate.pauli_basis[idx];
     const auto qubit = static_cast<std::size_t>(gate.pauli_qubits[idx]);

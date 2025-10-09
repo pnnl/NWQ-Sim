@@ -393,6 +393,10 @@ namespace vqe
           max_gradient = magnitude;
           max_index = idx;
         }
+
+        if (options.adapt_log_memory) {
+          std::cout << "[DEBUG] iteration " << iter << " idx:" << idx << "/" << pool_size << ", RSS: " << current_rss_mebibytes() << " MiB" << std::endl;
+        }
       }
 
       std::string selected_label = "<none>";
