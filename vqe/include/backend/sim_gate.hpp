@@ -20,8 +20,8 @@ struct sim_gate {
   std::array<double, 16> imag{};
   pauli_term pauli{};
   double angle = 0.0;
-  std::array<std::uint32_t, 16> pauli_qubits{};
-  std::array<std::uint8_t, 16> pauli_basis{};
+  std::array<std::uint32_t, 32> pauli_qubits{};
+  std::array<std::uint8_t, 32> pauli_basis{};
   std::uint32_t pauli_qubit_count = 0;
 
   [[nodiscard]] bool is_single() const { return op == kind::single; }
