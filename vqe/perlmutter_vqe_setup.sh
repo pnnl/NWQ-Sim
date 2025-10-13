@@ -1,11 +1,8 @@
 #!/bin/bash
 
-FOLDER_NAME=${1:-"NWQ-Sim"}
-echo "Install in folder: $FOLDER_NAME"
-
 # git clone --recursive -b vqe_memory https://github.com/pnnl/NWQ-Sim.git $FOLDER_NAME
 
-source ~/"$FOLDER_NAME"/environment/setup_perlmutter.sh
+source ./environment/setup_perlmutter.sh
 module load python
 
 cd ~/"$FOLDER_NAME"
