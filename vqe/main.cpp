@@ -19,6 +19,10 @@
 #include <nlopt.h>
 #include <nlopt.hpp>
 
+#ifdef VQE_ENABLE_MPI
+#include <mpi.h>
+#endif
+
 #include "ansatz/ansatz.hpp"
 #include "execution/adapt_runner.hpp"
 #include "execution/vqe_runner.hpp"
@@ -844,6 +848,22 @@ namespace
 
 int main(int argc, char **argv)
 {
+#ifdef VQE_ENABLE_MPI
+  MPI_Init(&argc, &argv);
+  //Disable printing for processes other than node-0:
+  int rank = 0;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  if (rank != 0) 
+  {
+      // Redirect C stdio
+      freopen("/dev/null", "w", stdout);
+      freopen("/dev/null", "w", stderr);
+      // Optional: also silence C++ streams
+      std::cout.setstate(std::ios::failbit);
+      std::cerr.setstate(std::ios::failbit);
+  }
+#endif
+
   cli_config config;
   std::string error;
   if (!parse_args(argc, argv, config, error))
@@ -894,4 +914,8 @@ int main(int argc, char **argv)
     std::cerr << "error: " << ex.what() << std::endl;
     return EXIT_FAILURE;
   }
+#ifdef VQE_ENABLE_MPI
+  MPI_Finalize();
+#endif
+
 }

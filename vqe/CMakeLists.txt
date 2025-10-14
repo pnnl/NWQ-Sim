@@ -2,6 +2,10 @@
 # VQE Module CMakeLists.txt (new implementation)
 # ===============================================================================
 
+# To control if ADAPT VQE use MPI for parallel execution, by default off for daily usage
+# should be enabled for HPC.
+option(VQE_ENABLE_MPI "Enable MPI for ADAPT_VQE parallelization" OFF)
+
 # Collect source files
 set(VQE_SRCS
     src/hamiltonian_parser.cpp
@@ -82,6 +86,16 @@ endif()
 if(OpenMP_CXX_FOUND)
     target_link_libraries(vqe PUBLIC OpenMP::OpenMP_CXX)
     target_compile_definitions(vqe PUBLIC NWQSIM_USE_OPENMP)
+endif()
+
+if(VQE_ENABLE_MPI)
+    find_package(MPI REQUIRED)
+    target_link_libraries(vqe PRIVATE MPI::MPI_CXX)
+    target_compile_definitions(vqe PRIVATE VQE_ENABLE_MPI)
+    target_link_libraries(nwq_vqe PRIVATE MPI::MPI_CXX)
+    target_compile_definitions(nwq_vqe PRIVATE VQE_ENABLE_MPI)
+else()
+    message(STATUS "MPI is OFF for ADAPT_VQE (serial ADAPT loop)")
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

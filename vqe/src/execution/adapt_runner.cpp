@@ -12,8 +12,10 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-
 #include <nlopt.hpp>
+#ifdef VQE_ENABLE_MPI
+#include <mpi.h>
+#endif
 
 #include "ansatz/ansatz.hpp"
 #include "backend/statevector_cpu.hpp"
@@ -26,6 +28,24 @@
 
 namespace vqe
 {
+#ifdef VQE_ENABLE_MPI
+// Safe if MPI is already initialized elsewhere
+struct MpiGuard 
+{
+    bool owner = false;
+    MpiGuard()
+	{
+        int init = 0; MPI_Initialized(&init);
+        if (!init) { MPI_Init(nullptr, nullptr); owner = true; }
+    }
+    ~MpiGuard() 
+	{
+        int finalized = 0; MPI_Finalized(&finalized);
+        if (owner && !finalized) MPI_Finalize();
+    }
+};
+#endif
+
   namespace
   {
 
@@ -301,8 +321,14 @@ namespace vqe
                               const vqe_options &options,
                               const std::string &hamiltonian_path)
   {
-    Backend backend(ansatz.get_circuit().num_qubits());
+#ifdef VQE_ENABLE_MPI
+	MpiGuard guard;
+	int world_rank = 0, world_size = 1;
+	MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+#endif
 
+    Backend backend(ansatz.get_circuit().num_qubits());
     adapt_result result;
     backend.reset();
     backend.apply(ansatz.mutable_circuit());
@@ -363,8 +389,15 @@ namespace vqe
       std::size_t max_index = pool_size;
       Backend scratch(backend.num_qubits());
 
+	  //=========================== MPI Parallelization =======================
+	#ifdef VQE_ENABLE_MPI
+      MPI_Barrier(MPI_COMM_WORLD);
+	  for (std::size_t idx = world_rank; idx < pool_size; idx += world_size) 
+	  {
+	#else
       for (std::size_t idx = 0; idx < pool_size; ++idx)
       {
+	#endif
         if (selected[idx])
         {
           continue;
@@ -388,12 +421,35 @@ namespace vqe
 
         const double gradient = (energy_plus - energy_minus) / (2.0 * options.adapt_gradient_step);
         const double magnitude = std::abs(gradient);
+
         if (magnitude > max_gradient)
         {
           max_gradient = magnitude;
           max_index = idx;
         }
       }
+
+	#ifdef VQE_ENABLE_MPI
+	  // MPI_MAXLOC works with (double,int), so we map size_t to int temporarily
+	  // If N might exceed INT_MAX, we need to use a custom reduction instead.
+	  struct { double val; int idx; } in_pair, out_pair;
+	  in_pair.val = max_gradient;
+	  in_pair.idx = static_cast<int>(max_index);
+
+	  MPI_Datatype pair_type;
+	  MPI_Type_create_struct( 2, (int[]){1, 1},
+			  (MPI_Aint[]){offsetof(decltype(in_pair), val), offsetof(decltype(in_pair), idx)},
+			  (MPI_Datatype[]){MPI_DOUBLE, MPI_INT}, &pair_type);
+	  MPI_Type_commit(&pair_type);
+
+	  MPI_Allreduce(&in_pair, &out_pair, 1, MPI_DOUBLE_INT, MPI_MAXLOC, MPI_COMM_WORLD);
+	  MPI_Type_free(&pair_type);
+	  
+	  max_gradient = out_pair.val;
+	  max_index = static_cast<std::size_t>(out_pair.idx);
+	#endif
+
+	  //=========================================================================
 
       std::string selected_label = "<none>";
       if (max_index < pool_size && max_index < pool_excitations.size())
