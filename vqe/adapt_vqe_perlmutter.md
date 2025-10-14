@@ -1,6 +1,6 @@
-# NWQ-VQE
+# NWQ-VQE (NERSC Perlmutter)
 
-To test ADAPT-VQE on NERSC Perlmutter
+To test ADAPT-VQE on NERSC [Perlmutter](https://docs.nersc.gov/systems/perlmutter/architecture/). Will have a similar one for OLCF Frontier.
 
 ## Features
 
