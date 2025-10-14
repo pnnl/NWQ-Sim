@@ -46,3 +46,78 @@ Case-3 (assuming in build dir and using 4 nodes, 16 MPI tasks, with 1 GPU per ta
 time srun -N 4 --ntasks-per-node=4 -c 32 -C gpu --gpus-per-task=1 --cpu_bind=cores vqe/nwq_vqe -b NVGPU -f ../H20-11Orbitals/H2O_1.75_Eq_11-Orbitals_DUCC3_H2O-1.75_Eq_DUCC3_10-electrons_11-Orbitals.out-xacc -p 6 -v --abstol 1e-6 --maxeval 5000 -o LN_BOBYQA --adapt -ag 1e-3 -am 120
 ```
 
+## Examplar job script for Perlmutter
+```bash
+#SBATCH -N 16
+#SBATCH -G 64
+#SBATCH --ntasks-per-node=4
+#SBATCH -c 32
+#SBATCH -C gpu
+#SBATCH --cpu_bind=cores
+#SBATCH -q regular
+#SBATCH -J h20_11a
+#SBATCH --mail-user=ang.li@pnnl.gov
+#SBATCH -o printouts/out_%x_%j.txt
+#SBATCH -e printouts/err_%x_%j.txt
+#SBATCH --mail-type=ALL
+#SBATCH --time-min=32:00:00
+#SBATCH -t 10:00:00
+#SBATCH -A m4243
+
+
+export OMP_NUM_THREADS=1
+export OMP_PLACES=cores
+export OMP_PROC_BIND=close
+
+# VQE parameters
+NWQSIM_FOLDER="NWQ-Sim"
+BACKEND="NVGPU"
+
+HAMILTONIAN_PATH=H2O_1.75_Eq_11-Orbitals_DUCC3_H2O-1.75_Eq_DUCC3_10-electrons_11-Orbitals.out-xacc
+NUM_PARTICLES=10
+
+OPTIMIZER="LN_BOBYQA" 
+MAX_ITERATIONS=30000
+MAX_ADAITERS=100 
+TOLERANCE=1e-6
+UB=0.9
+LB=-0.9
+ADAPT_GRADIENT_THRESHOLD=1e-3
+MAX_SECS=3600
+
+echo "Starting ADAPT-VQE simulation on Perlmutter GPU node (GPU backend)"
+echo "Job ID: ${SLURM_JOBID}"
+echo "Node: ${SLURM_NODELIST}"
+echo "GPUs: ${SLURM_GPUS}"
+echo "Tasks: ${SLURM_NTASKS}"
+echo "CPUs per task: ${SLURM_CPUS_PER_TASK}"
+echo "OMP_NUM_THREADS: ${OMP_NUM_THREADS}"
+echo "Backend: ${BACKEND}"
+echo "Timestamp: $(date)"
+echo "================================================"
+
+source ~/${NWQSIM_FOLDER}/environment/setup_perlmutter.sh
+module load python
+
+time srun -n 64 -c 32 --cpu_bind=cores -G 64 --gpus-per-task=1 --cpu_bind=cores ${NWQSIM_FOLDER}/build/vqe/nwq_vqe \
+    -b ${BACKEND} \
+    -f ${HAMILTONIAN_PATH} \
+    -p ${NUM_PARTICLES} \
+    -v \
+    --abstol ${TOLERANCE} \
+    -ub ${UB} \
+    -lb ${LB} \
+    --maxeval ${MAX_ITERATIONS} \
+    -o ${OPTIMIZER} \
+    --adapt \
+    -ag ${ADAPT_GRADIENT_THRESHOLD} \
+    -am ${MAX_ADAITERS} \
+    --sym 3
+
+
+
+echo "================================================"
+echo "VQE simulation completed"
+echo "End timestamp: $(date)"
+```
+
