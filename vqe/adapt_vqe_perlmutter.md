@@ -9,7 +9,7 @@ To test ADAPT-VQE on NERSC Perlmutter
 
 ## Building
 
-This module builds together with NWQ-Sim. You need to enable the option of MPI: -DVQE\_ENABLE\_MPI  
+This module builds together with NWQ-Sim. You need to enable the option of MPI: -DVQE\_ENABLE\_MPI by using the following cmake command or adjust the option of option(VQE_ENABLE_MPI "Enable MPI for ADAPT_VQE parallelization" OFF) from OFF to ON in the cmake file "NWQ-Sim/vqe/CMakeLists.txt". 
 
 ```bash
 git clone https://github.com/pnnl/NWQ-Sim.git
