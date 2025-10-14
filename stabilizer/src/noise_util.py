@@ -39,31 +39,31 @@ PAULI_DOUBLE = [
 # ...existing code...
 def stim_to_qasm_with_depolarize_noise(circuit: stim.Circuit) -> str:
     """
-    Converts a stim circuit with DEPOLARIZE1/DEPOLARIZE2/AMPLITUDE_DAMP instructions 
+    Converts a stim circuit with DEPOLARIZE1/DEPOLARIZE2/AMPLITUDE_DAMP instructions
     to a QASM 2.0 string, defining custom gates for these noise channels.
 
     Note: REPEAT blocks are unsupported in QASM; we unroll them by using
     circuit.flattened() so all operations are emitted explicitly.
     """
     qasm_body = ""
-    has_depolarize1 = False
-    has_depolarize2 = False
-    has_damp = False
-
     # Unroll REPEAT blocks by flattening the circuit
     for instruction in circuit.flattened():
         name = instruction.name
         targets = instruction.targets_copy()
         args = instruction.gate_args_copy()
 
-        if name == "DEPOLARIZE1":
-            has_depolarize1 = True
+        qasm_inst = ""
+        if name in ["X_ERROR", "Y_ERROR", "Z_ERROR"]:
+            gate_name = name.lower()
+            params = f"({args[0]})" if args else ""
+            for target in targets:
+                qasm_body += f"{gate_name}{params} q[{target.value}];\n"
+        elif name == "DEPOLARIZE1":
             gate_name = "dep1"
             params = f"({args[0]})"
             for target in targets:
                 qasm_body += f"{gate_name}{params} q[{target.value}];\n"
         elif name == "DEPOLARIZE2":
-            has_depolarize2 = True
             gate_name = "dep2"
             params = f"({args[0]})"
             # DEPOLARIZE2 targets pairs of qubits
@@ -72,7 +72,6 @@ def stim_to_qasm_with_depolarize_noise(circuit: stim.Circuit) -> str:
                 q2 = targets[i+1].value
                 qasm_body += f"{gate_name}{params} q[{q1}],q[{q2}];\n"
         elif name == "AMPLITUDE_DAMP":  # map Stim op (if present) to QASM damp
-            has_damp = True
             gate_name = "damp"
             a = list(args)
             while len(a) < 2:
@@ -116,7 +115,8 @@ def stim_to_qasm_with_depolarize_noise(circuit: stim.Circuit) -> str:
     qasm_header = "OPENQASM 2.0;\n"
     qasm_header += 'include "qelib1.inc";\n'
     qasm_header += f"qreg q[{num_qubits}];\n"
-    qasm_header += f"creg c[{num_qubits}];\n"
+    # creg is not always needed and can be large.
+    # qasm_header += f"creg c[{num_qubits}];\n"
 
     return qasm_header + qasm_body
 
@@ -387,6 +387,9 @@ class ErrorModel:
         返回 Stim 电路文本行列表。
         """
         circ_lines: list[str] = []
+        qubits = [str(t) for t in range(self.noiseless_circ.num_qubits)] 
+        qubit_str = " ".join(qubits)
+        # print(qubits)
 
         for inst in self.noiseless_circ:
             name = inst.name.upper()
@@ -441,20 +444,20 @@ class ErrorModel:
             if name.startswith("MR") and self._error_config["Measurement"]:
                 err_stmt = self._error_settings["Measurement"]
                 if err_stmt and (not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP")):
-                    circ_lines.append(f"{err_stmt} {target_str}")
+                    circ_lines.append(f"{err_stmt} {qubit_str}")
                 circ_lines.append(f"{name} {target_str}")
-                if err_stmt and (not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP")):
-                    circ_lines.append(f"{err_stmt} {target_str}")
+                # if err_stmt and (not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP")):
+                #     circ_lines.append(f"{err_stmt} {target_str}")
                 # if err_stmt and (not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP")): #for long reset
                 #     circ_lines.append(f"{err_stmt} {target_str}")
                 continue
 
-            if name.startswith("M") and self._error_config["Measurement"]:
-                err_stmt = self._error_settings["Measurement"]
-                if err_stmt and (not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP")):
-                    circ_lines.append(f"{err_stmt} {target_str}")
-                circ_lines.append(f"{name} {target_str}")
-                continue
+            # if name.startswith("M") and self._error_config["Measurement"]:
+            #     err_stmt = self._error_settings["Measurement"]
+            #     if err_stmt and (not err_stmt.strip().upper().startswith("AMPLITUDE_DAMP")):
+            #         circ_lines.append(f"{err_stmt} {target_str}")
+            #     circ_lines.append(f"{name} {target_str}")
+            #     continue
 
             # ────────────────────────────────────────────────────────────────
             # 4) 复位类 (R, RX, …) ── 在复位 **后** 插入 Reset 噪声
@@ -967,33 +970,63 @@ def _parse_amp_damp_args(stmt: Optional[str]) -> Optional[tuple[float, float]]:
         return None
 
 def inject_amplitude_damp(qasm_text: str, error_model: "ErrorModel") -> str:
-    """Insert damp(p1,p2) to mimic Stim ordering for amplitude damping.
-    Policy requested:
-    - After the FIRST contiguous round of RESET statements, inject damp AFTER each of those resets.
-    - Thereafter, inject damp BEFORE every measurement (M/measure) – including lines that have M; RESET pairs.
-    Other noise channels are unaffected. Trailing // comments preserved.
     """
-    import re as _re
+    Insert damp(p1,p2) into a QASM string based on the noise model settings.
+    This function iterates through the QASM file and injects `damp` noise
+    instructions according to the policies defined in the `ErrorModel`.
 
-    p_meas = _parse_amp_damp_args(error_model._error_settings.get("Measurement"))
-    p_reset = _parse_amp_damp_args(error_model._error_settings.get("Reset"))
-    # If neither configured, nothing to do
-    if not p_meas and not p_reset:
+    - For 'Reset' noise: `damp` is inserted *after* each `reset` operation.
+    - For 'Measurement' noise: `damp` is inserted *before* each block of
+      `measure` operations, once per qubit in the circuit.
+    """
+    p_meas_args = _parse_amp_damp_args(error_model._error_settings.get("Measurement"))
+    p_reset_args = _parse_amp_damp_args(error_model._error_settings.get("Reset"))
+
+    if not p_meas_args and not p_reset_args:
         return qasm_text
 
-    def _pick_post_reset_params():
-        # Prefer Reset args for post-reset injection; fallback to Measurement
-        return p_reset
+    lines = qasm_text.splitlines()
+    new_lines = []
+    
+    # Regex to find qubit targets like q[0], q[12], etc.
+    qubit_target_re = re.compile(r"q\[(\d+)\]")
 
-    def _pick_pre_meas_params():
-        # Prefer Measurement args for pre-measure injection; fallback to Reset
-        return p_meas
+    in_measurement_block = False
+    for line in lines:
+        stripped_line = line.strip()
+        is_measurement = stripped_line.startswith("measure") or stripped_line.startswith("m ")
 
-    meas_stmt_re = _re.compile(r"^(?:m|measure)\s+(q\[\d+\])(?:\s*->\s*rec\[\d+\])?$", _re.IGNORECASE)
-    reset_stmt_re = _re.compile(r"^reset\s+(q\[\d+\])$", _re.IGNORECASE)
-    indent_re = _re.compile(r"^(\s*)")
-
-    out_lines: list[str] = []
+        # --- Handle Measurement ---
+        if p_meas_args and is_measurement:
+            if not in_measurement_block:
+                # This is the start of a new measurement block.
+                # Inject damp for all qubits.
+                in_measurement_block = True
+                indent = line[:line.find(stripped_line[0])] if stripped_line else ""
+                
+                num_qubits = error_model.noiseless_circ.num_qubits
+                for i in range(num_qubits):
+                    damp_inst = f"damp({p_meas_args[0]},{p_meas_args[1]}) q[{i}];"
+                    new_lines.append(indent + damp_inst)
+            
+            new_lines.append(line)
+        
+        # --- Handle Reset ---
+        elif p_reset_args and stripped_line.startswith("reset"):
+            in_measurement_block = False # Reset ends a measurement block
+            targets = qubit_target_re.findall(line)
+            new_lines.append(line) # Add reset instruction first
+            indent = line[:line.find(stripped_line[0])] if stripped_line else ""
+            for target in targets:
+                damp_inst = f"damp({p_reset_args[0]},{p_reset_args[1]}) q[{target}];"
+                new_lines.append(indent + damp_inst)
+        
+        else:
+            # Any other instruction also ends a measurement block
+            in_measurement_block = False
+            new_lines.append(line)
+            
+    return "\n".join(new_lines)
 
     # Track the first contiguous block of RESET statements
     in_first_reset_block = False

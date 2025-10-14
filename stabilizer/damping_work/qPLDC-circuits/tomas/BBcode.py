@@ -295,7 +295,7 @@ class BBcode:
 
         return circuit
     
-    def build_full_BBcode_circuit(self, rounds: int, noise_profile: list, observable_type: str, code_capacity = False, prepare_logical_ones=True) -> stim.Circuit:
+    def build_full_BBcode_circuit(self, rounds: int, noise_profile: list, observable_type: str, code_capacity = False, prepare_logical_ones=False) -> stim.Circuit:
     
         p1, p2, p_M, p_R = noise_profile
 
