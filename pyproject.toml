@@ -1,0 +1,32 @@
+[build-system]
+requires = [
+  "scikit-build-core>=0.7",
+  "pybind11>=2.11",
+  "cmake>=3.20",
+  "ninja"
+]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "nwqsim-vqe"
+version = "1.0.0"
+description = "NWQ-Sim VQE bindings"
+readme = "vqe/README.md"
+license = {text = "BSD-3-Clause"}
+authors = [
+  {name = "NWQ-Sim Developers"}
+]
+requires-python = ">=3.9"
+classifiers = [
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: C++",
+  "License :: OSI Approved :: BSD License"
+]
+
+[project.optional-dependencies]
+scipy = ["scipy>=1.10", "numpy>=1.21"]
+
+[tool.scikit-build]
+wheel.packages = ["vqe/python/nwqsim_vqe"]
+cmake.build-type = "Release"

@@ -63,7 +63,7 @@ class BinaryDistribution(Distribution):
 setup(
     name="qiskit-nwqsim-provider",
     python_requires='>3.8.0',
-    version=0.1,
+    version="1.0.0",
     author="Ang Li",
     author_email="ang.li@pnnl.gov",
     description="Qiskit simulator whose backend is based on the NWQSim simulator",

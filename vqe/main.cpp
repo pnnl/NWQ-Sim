@@ -1,526 +1,922 @@
-#include "vqeBackendManager.hpp"
-#include "utils.hpp"
-#include <cmath>
-#include <string>
-#include "circuit/dynamic_ansatz.hpp"
-#include "vqe_adapt.hpp"
-#include "src/uccsdmin.cpp"
-#include "src/singletgsd.cpp"
-#include "src/ansatz_pool.cpp" // MZ: move the ansatz pool generation out of the src/utils.cpp
-#include "nwq_util.hpp"
+#include <algorithm>
 #include <chrono>
+#include <cctype>
+#include <exception>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <map>
+#include <optional>
+#include <random>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
-#define UNDERLINE "\033[4m"
+#include <nlopt.h>
+#include <nlopt.hpp>
 
-#define CLOSEUNDERLINE "\033[0m"
-using IdxType = NWQSim::IdxType;
-using ValType = NWQSim::ValType;
+#ifdef VQE_ENABLE_MPI
+#include <mpi.h>
+#endif
 
-struct VQEParams {
-  /**
-   * @brief  Structure to hold command line arguments for NWQ-VQE
-   */
-  // Problem Info
-  std::string hamiltonian_path = "";
-  IdxType nparticles = -1;
-  bool xacc = true;
+#include "ansatz/ansatz.hpp"
+#include "execution/adapt_runner.hpp"
+#include "execution/vqe_runner.hpp"
+#include "hamiltonian_parser.hpp"
+#include "jw_transform.hpp"
 
-  // Simulator options
-  std::string backend = "CPU";
-  uint32_t seed;
-  // Optimizer settings
-  NWQSim::VQE::OptimizerSettings optimizer_settings;
-  nlopt::algorithm algo;
-  IdxType symm_level = 0;
+#include <private/nlohmann/json.hpp>
 
-  bool verbose = false; // MZ: if show optimization results in each iteration
+namespace
+{
+  using json = nlohmann::json;
 
-  // ADAPT-VQE options
-  bool adapt = false;
-  bool qubit = false;
-  IdxType adapt_maxeval = 100;
-  ValType adapt_fvaltol = -1; // MZ: original ADAPT-VQE paper only used the gradient norm as the convergence criteria, 
-                              // which is more reasonable as since fvaltol may give false convergence when the same operator is picked consecutively
-  ValType adapt_gradtol = 1e-3;
-  IdxType adapt_pool_size = -1;
+  constexpr double kPi = 3.14159265358979323846;
 
-  // Ansatz options
-  NWQSim::VQE::PoolType pool = NWQSim::VQE::PoolType::Fermionic;
-};
-int show_help() {
-  std::cout << "NWQ-VQE Options" << std::endl;
-  std::cout << UNDERLINE << "INFORMATIONAL" << CLOSEUNDERLINE << std::endl;
-  std::cout << "-h, --help            Show help menu." << std::endl;
-  std::cout << "-l, --list-backends   List available backends and exit." << std::endl;
-  std::cout << UNDERLINE << "REQUIRED" << CLOSEUNDERLINE << std::endl;
-  std::cout << "-f, --hamiltonian     Path to the input Hamiltonian file (formatted as a sum of Fermionic operators, see examples)" << std::endl;
-  std::cout << "-p, --nparticles      Number of electrons in molecule" << std::endl;
-  std::cout << UNDERLINE << "OPTIONAL (Hamiltonian, Ansatz and Backend)" << CLOSEUNDERLINE << std::endl;
-  std::cout << "--ducc                Use DUCC indexing scheme. Defaults to false (defaults to use XACC/Qiskit scheme)." << std::endl;
-  // std::cout << "--symm                Symmetry level (0->none, 1->single, 2->double non-mixed+single, 3->all). Defaults to 0." << std::endl;
-  std::cout << "--sym, --symm         UCCSD Symmetry level (0->none, 1->spin symmetry, 2->also orbital symmetry). Defaults to 0." << std::endl; // MZ: is this call orbital symmetry?
-  std::cout << "--gsd                 Use singlet GSD ansatz for ADAPT-VQE. Default to false." << std::endl;
-  std::cout << "-b, --backend         Simulation backend. Defaults to CPU" << std::endl;
-  std::cout << "--seed                Random seed for initial point and empirical gradient estimation. Defaults to time(NULL)" << std::endl;
-  // std::cout << "--config              Path to NWQ-Sim config file. Defaults to \"../default_config.json\"" << std::endl;
-  std::cout << UNDERLINE << "OPTIONAL (Global Minimizer)" << CLOSEUNDERLINE << std::endl;
-  std::cout << "-v, --verbose         Print optimization callback on each VQE iteration. Defaults to false" << std::endl;
-  std::cout << "-o, --optimizer       NLOpt optimizer name. Defaults to LN_COBYLA. Some common optimizers are LN_BOBYQA, LN_NEWUOA, and LD_LBFGS." << std::endl;
-  std::cout << "--opt-config          Path to config file for NLOpt optimizer parameters" << std::endl;
-  std::cout << "-lb, --lbound         Optimizer lower bound. Defaults to -Pi" << std::endl;
-  std::cout << "-ub, --ubound         Optimizer upper bound. Defaults to Pi" << std::endl;  std::cout << "--reltol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
-  std::cout << "--abstol              Relative tolerance termination criterion. Defaults to -1 (off)" << std::endl;
-  std::cout << "--maxeval             Maximum number of function evaluations for optimizer (only for VQE). Defaults to 100" << std::endl;
-  std::cout << "--maxtime             Maximum optimizer time (seconds). Defaults to -1.0 (off)" << std::endl;
-  std::cout << "--stopval             Cutoff function value for optimizer. Defaults to -MAXFLOAT (off)" << std::endl;
-  std::cout << UNDERLINE << "ADAPT-VQE OPTIONS" << CLOSEUNDERLINE << std::endl;
-  std::cout << "--adapt               Use ADAPT-VQE for dynamic ansatz construction. Defaults to false" << std::endl;
-  std::cout << "-ag, --adapt-gradtol  Cutoff absolute tolerance for operator gradient norm. Defaults to 1e-3" << std::endl;
-  std::cout << "-af, --adapt-fvaltol  Cutoff absolute tolerance for function value. Defaults to -1 (off)" << std::endl;
-  std::cout << "-am, --adapt-maxeval  Set a maximum iteration count for ADAPT-VQE. Defaults to 100" << std::endl;
-  std::cout << "--qubit               Uses Qubit instead of Fermionic operators for ADAPT-VQE. Defaults to false" << std::endl;
-  std::cout << "--adapt-pool          Sets the pool size for Qubit operators. Defaults to -1" << std::endl;
-  std::cout << UNDERLINE << "LEGACY" << CLOSEUNDERLINE << std::endl;
-  std::cout << "--xacc                Use XACC indexing scheme, otherwise uses DUCC scheme. (Deprecated, true by default)" << std::endl;
-  std::cout << "--origin              Use old implementatin of UCCSD for VQE or ADAPT-VQE. Have duplicated operators and potential symmetry problem. Default to false." << std::endl;
-  std::cout << "-n                    (Same as -p or --nparticules) Number of electrons in molecule" << std::endl; // MZ: this could be confusing as people usually use n for number of qubits (2*number of spartial orbitals)
-  std::cout << UNDERLINE << "SIMULATOR OPTIONS" << CLOSEUNDERLINE << std::endl;
-  std::cout << "--num_threads         Specify the number of OMP threads. Defaults to use all hardware threads" << std::endl;
-  std::cout << "--disable_fusion      Disable gate fusion. Defaults to enabled" << std::endl;
-  return 1;
-}
-
-using json = nlohmann::json;
-
-/**
- * @brief  Parse command line arguments
- * @note   
- * @param  argc: Number of command line arguments passed
- * @param  argv: Pointer to command line arg C strings
- * @param  manager: Backend manager object
- * @param  params: Data structure to store command line arguments
- * @retval 
- */
-int parse_args(int argc, char** argv,
-               VQEBackendManager& manager,
-               VQEParams& params) {
-  std::string opt_config_file = "";
-  std::string algorithm_name = "LN_COBYLA";
-  NWQSim::VQE::OptimizerSettings& settings = params.optimizer_settings;
-  params.seed = time(NULL);
-  settings.lbound = -2*PI; //
-  settings.ubound = 2*PI; //
-  for (size_t i = 1; i < argc; i++) {
-    std::string argname = argv[i];
-    if (argname == "-h" || argname == "--help") {
-      return show_help();
-    } if (argname == "-l" || argname == "--list-backends") {
-      manager.print_available_backends();
-      return 1;
-    } else
-    if (argname == "-b" || argname == "--backend") {
-      params.backend = argv[++i];//-2.034241 -1.978760  -1.825736
-      continue;
-    } else
-    if (argname == "-f" || argname == "--hamiltonian") {
-      params.hamiltonian_path = argv[++i];
-      continue;
-    } else 
-    if (argname == "-p" || argname == "-n" || argname == "--nparticles") {
-      params.nparticles = std::atoll(argv[++i]);
-    } else 
-    if (argname == "-v" || argname == "--verbose") {
-      params.verbose = true;
-    } else
-    if (argname == "--seed") {
-      params.seed = (unsigned)std::atoi(argv[++i]);
-    }  else 
-    if (argname == "--adapt-pool") {
-      params.adapt_pool_size = (long long)std::atoi(argv[++i]);
-    } else if (argname == "--xacc") {
-      params.xacc = true;
-    } else if (argname == "--ducc") {
-      params.xacc = false;
-    } else 
-    if (argname == "--opt-config") {
-      opt_config_file = argv[++i];
-    } else  
-    if (argname == "-o" || argname == "--optimizer") {
-      algorithm_name = argv[++i];
-    } else 
-    if (argname == "--reltol") {
-      params.optimizer_settings.rel_tol = std::atof(argv[++i]);
-    } else 
-    if (argname == "--abstol") {
-      settings.abs_tol = std::atof(argv[++i]);
-    }  else 
-    if (argname == "--sym" || argname == "--symm") {
-      params.symm_level = (unsigned)std::atoi(argv[++i]);;
-    } else
-    if (argname == "-ub" || argname == "--ubound") {
-      settings.ubound = std::atof(argv[++i]);
-    }  else 
-    if (argname == "-lb" || argname == "--lbound") {
-      settings.lbound = std::atof(argv[++i]);
-    } else 
-    if (argname == "-af" || argname == "--adapt-fvaltol") {
-      params.adapt_fvaltol = std::atof(argv[++i]);
-    } else 
-    if (argname == "-ag" || argname == "--adapt-gradtol") {
-      params.adapt_gradtol = std::atof(argv[++i]);
-    }  else 
-    if (argname == "-am" || argname == "--adapt-maxeval") {
-      params.adapt_maxeval = std::atoll(argv[++i]);
-    } else 
-    if (argname == "--adapt") {
-      params.adapt = true;
-    }  else 
-    if (argname == "--qubit") {
-      // params.qubit = true;
-      params.pool = NWQSim::VQE::PoolType::Pauli;
-    } else 
-    if (argname == "--maxeval") {
-      settings.max_evals = std::atoll(argv[++i]);
-    } else if (argname == "--stopval") {
-      settings.stop_val = std::atof(argv[++i]);
-    } else if (argname == "--maxtime") {
-      settings.max_time = std::atof(argv[++i]);
-    } else if (argname == "--gsd") {
-      params.pool = NWQSim::VQE::PoolType::Singlet_GSD;
-    } else if (argname == "--origin") {
-      params.pool = NWQSim::VQE::PoolType::Fermionic_Origin;
-    } else if (argname == "--num_threads") {
-      NWQSim::Config::OMP_NUM_THREADS = std::atoi(argv[++i]);
-    } else if (argname == "--disable_fusion") {
-      NWQSim::Config::ENABLE_FUSION = false;
-    } else {
-      fprintf(stderr, "\033[91mERROR:\033[0m Unrecognized option %s, type -h or --help for a list of configurable parameters\n", argv[i]);
-      return show_help();
-    }
-  }
-  if (params.hamiltonian_path == "") {
-      fprintf(stderr, "\033[91mERROR:\033[0m Must pass a Hamiltonian file (--hamiltonian, -f)\n");
-
-      return show_help();
-  }
-  if (params.nparticles == -1) {
-      fprintf(stderr, "\033[91mERROR:\033[0m Must pass a particle count (--nparticles, -n)\n");
-      return show_help();
-  }
-  params.algo = (nlopt::algorithm)nlopt_algorithm_from_string(algorithm_name.c_str());
-  if (opt_config_file != "") {
-    std::ifstream f(opt_config_file);
-    json data = json::parse(f); 
-    for (json::iterator it = data.begin(); it != data.end(); ++it) {
-      settings.parameter_map[it.key()] = it.value().get<NWQSim::ValType>();
-    }
-  }
-  return 0;
-}
-
-
-// Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
-void carriage_return_callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fval, NWQSim::IdxType iteration) {
-  printf("\33[2K\rEvaluation %lld, fval = %f", iteration, fval);fflush(stdout);
-}
-
-// Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
-void callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fval, NWQSim::IdxType iteration) {
-  std::string paramstr = "[";
-  for (auto i: x) {
-    paramstr += std::to_string(i) + ", ";
-  }
-  printf("\33[2KEvaluation %lld, fval = %f, x=%s\n", iteration, fval, paramstr.c_str());fflush(stdout);
-}
-// Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
-void silent_callback_function(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fval, NWQSim::IdxType iteration) {
-  
-}
-
-//-------------------------------------------------------------------------------------------------
-// MZ: sorry, original callback function is too much
-void print_header() {
-    std::cout << "\n----- Iteration Summary -----\n" << std::left
-              << std::setw(8) << " Iter"
-              << std::setw(29) << "Objective Value"
-              << std::setw(55) << "Parameters (first 5)"
-              << std::endl;
-    std::cout << std::string(90, '-') << std::endl;
-}
-
-// Callback function, requires signature (void*) (const std::vector<NWQSim::ValType>&, NWQSim::ValType, NWQSim::IdxType)
-void callback_function_simple(const std::vector<NWQSim::ValType>& x, NWQSim::ValType fval, NWQSim::IdxType iteration) {
-  if (iteration == 0) {
-    print_header();
-  }
-  std::cout << std::left << " "
-            << std::setw(7) << iteration
-            << std::setw(29) << std::fixed << std::setprecision(14) << fval;
-  
-  std::cout << std::fixed << std::setprecision(6);
-  for (size_t i = 0; i < std::min(x.size(), size_t(5)); ++i) {
-      std::cout  << std::setw(11) << x[i];
-  }
-  std::cout << std::endl;
-}
-
-std::string get_termination_reason(nlopt::result result) {
-    static const std::map<nlopt::result, std::string> reason_map = {
-        {nlopt::SUCCESS, "Optimization converged successfully"},
-        {nlopt::STOPVAL_REACHED, "Objective function value reached the specified stop value"},
-        {nlopt::FTOL_REACHED, "Function tolerance reached"},
-        {nlopt::XTOL_REACHED, "Variable tolerance reached"},
-        {nlopt::MAXEVAL_REACHED, "Maximum number of evaluations reached"},
-        {nlopt::MAXTIME_REACHED, "Maximum allowed time reached"},
-        {nlopt::FAILURE, "Optimization failed"},
-        {nlopt::INVALID_ARGS, "Invalid arguments"},
-        {nlopt::OUT_OF_MEMORY, "Out of memory"},
-        {nlopt::ROUNDOFF_LIMITED, "Roundoff limited"},
-        {nlopt::FORCED_STOP, "Optimization was forcibly stopped by a callback function"}
-    };
-    auto it = reason_map.find(result);
-    if (it != reason_map.end()) {
-        return it->second;
-    } else {
-        return "Unknown reason, code: " + std::to_string(result);
-    }
-}
-
-std::string get_termination_reason_adapt(int result) {
-    static const std::map<int, std::string> reason_map_adapt = {
-        {0, "Abs. tol. for operator gradient norm is reached"},
-        {1, "Abs. tol. for function value change is reached"},
-        {2, "Max. number of iterations for ADAPT-VQE is reached"},
-        {9, "ADAPT iteration is not run"}
-    };
-    auto it = reason_map_adapt.find(result);
-    if (it != reason_map_adapt.end()) {
-        return it->second;
-    } else {
-        return "Unknown reason, code: " + std::to_string(result);
-    }
-}
-//-------------------------------------------------------------------------------------------------
-
-
-/**
- * @brief  Optimized the UCCSD (or ADAPT-VQE) Ansatz and Report the Fermionic Excitations
- * @note   
- * @param  manager: API to handle calls to different backends
- * @param  params: Data structure with runtime-configurable options
- * @param  ansatz: Shared pointer to a parameterized quantum circuit
- * @param  hamil: Share pointer to a Hamiltonian observable
- * @param  x: Parameter vector (reference, output)
- * @param  fval: Energy value (reference, output)
- * @retval None
- */
-std::shared_ptr<NWQSim::VQE::VQEState> optimize_ansatz(const VQEBackendManager& manager,
-                     VQEParams params,
-                     std::shared_ptr<NWQSim::VQE::Ansatz> ansatz,
-                     std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil,
-                     std::vector<double>& x,
-                     double& fval) {
-  // Set the callback function (silent is default)
-  // NWQSim::VQE::Callback callback = (params.adapt ? silent_callback_function : callback_function); // MZ: sorry, original callback function is too much
-  // NWQSim::VQE::Callback callback = (params.adapt ? silent_callback_function : callback_function_simple); 
-  NWQSim::VQE::Callback callback;
-  if ( (params.adapt) || (!params.verbose) ) {
-    callback = silent_callback_function;
-  } else {
-    callback = callback_function_simple;
-  }
-  
-  std::shared_ptr<NWQSim::VQE::VQEState> state = manager.create_vqe_solver(params.backend,
-                                                                           ansatz, 
-                                                                           hamil, 
-                                                                           params.algo, 
-                                                                           callback, 
-                                                                           params.seed, 
-                                                                           params.optimizer_settings);  
-  x.resize(ansatz->numParams());
-  std::fill(x.begin(), x.end(), 0);
-
-  
-  if (params.adapt) {
-    /***** ADAPT-VQE ******/
-    // recast the ansatz pointer
-    std::shared_ptr<NWQSim::VQE::DynamicAnsatz> dyn_ansatz = std::reinterpret_pointer_cast<NWQSim::VQE::DynamicAnsatz>(ansatz);
-    // make the operator pool (either Fermionic or ADAPT)
-    dyn_ansatz->make_op_pool(hamil->getTransformer(), params.seed, params.adapt_pool_size);
-    // construct the AdaptVQE controller
-    NWQSim::VQE::AdaptVQE adapt_instance(dyn_ansatz, state, hamil);
-    // timing utilities
-    auto start_time = std::chrono::high_resolution_clock::now();
-    adapt_instance.make_commutators(); // Start making the commutators
-    auto end_commutators = std::chrono::high_resolution_clock::now();
-    // double commutator_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_commutators - start_time).count() / 1e9; // MZ: why nanoseconds?
-    double commutator_time = std::chrono::duration<double>(end_commutators - start_time).count();
-    // NWQSim::safe_print("Constructed ADAPT-VQE Commutators in %.2e seconds\n", commutator_time); // Report the commutator overhead
-    state -> set_comm_duration(commutator_time); // MZ: time the commutator construction
-
-    adapt_instance.optimize(x, fval, params.adapt_maxeval, params.adapt_gradtol, params.adapt_fvaltol); // MAIN OPTIMIZATION LOOP
-    auto end_optimization = std::chrono::high_resolution_clock::now();
-    // double optimization_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_optimization - end_commutators ).count() / 1e9; // MZ: why nanoseconds?
-    double optimization_time = std::chrono::duration<double>(end_optimization - end_commutators ).count();
-    // NWQSim::safe_print("Completed ADAPT-VQE Optimization in %.2e seconds\n", optimization_time); // Report the total time
-    state -> set_duration(optimization_time); // MZ: time the optimization
-    state -> set_numpauli(adapt_instance.get_numpauli()); // MZ: get the number of Pauli terms
-    state -> set_numcomm(adapt_instance.get_numcomm()); // MZ: get the number of commuting cliques
-//     double commutator_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_commutators - start_time).count() / 1e9;
-//     NWQSim::safe_print("Constructed ADAPT-VQE Commutators in %.2e seconds\n", commutator_time); // Report the commutator overhead
-//     adapt_instance.optimize(x, fval, params.adapt_maxeval, params.adapt_gradtol, params.adapt_fvaltol); // MAIN OPTIMIZATION LOOP
-//     auto end_optimization = std::chrono::high_resolution_clock::now();
-//     double optimization_time = std::chrono::duration_cast<std::chrono::nanoseconds>(end_optimization - end_commutators ).count() / 1e9;
-//     NWQSim::safe_print("Completed ADAPT-VQE Optimization in %.2e seconds\n", optimization_time); // Report the total time
-  } else {
-    state->initialize(); // Initialize the state (AKA allocating measurement data structures and building the measurement circuit)
-
-    auto start_time = std::chrono::high_resolution_clock::now(); // MZ: time the optimization
-    state->optimize(x, fval); // MAIN OPTIMIZATION LOOP
-    auto end_time = std::chrono::high_resolution_clock::now(); // MZ: time the optimization
-    double opt_duration = std::chrono::duration<double>(end_time - start_time).count(); // MZ: time the optimization
-    state -> set_duration(opt_duration); // MZ: time the optimization
-  }
-  return state; // MZ: I need information
-}
-
-
-int main(int argc, char** argv) {
-  VQEBackendManager manager;
-  VQEParams params;
-
-  if (parse_args(argc, argv, manager, params)) {
-    return 1;
-  }
-  #ifdef MPI_ENABLED
-    int i_proc;
-    if (params.backend == "MPI" || params.backend == "NVGPU_MPI")
+  std::string nlopt_status_to_string(nlopt::result status)
+  {
+    switch (status)
     {
-      MPI_Init(&argc, &argv);
-      MPI_Comm_rank(MPI_COMM_WORLD, &i_proc);
+    case nlopt::FAILURE:
+      return "FAILURE";
+    case nlopt::INVALID_ARGS:
+      return "INVALID_ARGS";
+    case nlopt::OUT_OF_MEMORY:
+      return "OUT_OF_MEMORY";
+    case nlopt::ROUNDOFF_LIMITED:
+      return "ROUNDOFF_LIMITED";
+    case nlopt::FORCED_STOP:
+      return "FORCED_STOP";
+    case nlopt::SUCCESS:
+      return "SUCCESS";
+    case nlopt::STOPVAL_REACHED:
+      return "STOPVAL_REACHED";
+    case nlopt::FTOL_REACHED:
+      return "FTOL_REACHED";
+    case nlopt::XTOL_REACHED:
+      return "XTOL_REACHED";
+    case nlopt::MAXEVAL_REACHED:
+      return "MAXEVAL_REACHED";
+    case nlopt::MAXTIME_REACHED:
+      return "MAXTIME_REACHED";
+    default:
+      return "UNKNOWN";
+    }
   }
-  #endif
 
-  // Get the Hamiltonian from the external file
-  NWQSim::safe_print("Reading Hamiltonian...\n");
-  std::shared_ptr<NWQSim::VQE::Hamiltonian> hamil = std::make_shared<NWQSim::VQE::Hamiltonian>(params.hamiltonian_path, 
-                                                                                               params.nparticles,
-                                                                                               params.xacc);
-  NWQSim::safe_print("Constructed %lld Pauli observables\n", hamil->num_ops());
-  NWQSim::safe_print("Constructing the ansatz...\n");
-  
-  // Build the parameterized ansatz
-  std::shared_ptr<NWQSim::VQE::Ansatz> ansatz;
-  if (params.adapt)
+  std::string nlopt_algorithm_to_string(nlopt::algorithm algo)
   {
-    ansatz = std::make_shared<NWQSim::VQE::DynamicAnsatz>(hamil->getEnv(), params.pool);
-  } else {
-    // Static ansatz
-    if (params.pool == NWQSim::VQE::PoolType::Fermionic_Origin) {
-        ansatz  = std::make_shared<NWQSim::VQE::UCCSD>(
-        hamil->getEnv(),
-        NWQSim::VQE::getJordanWignerTransform,
-        1,
-        params.symm_level
-      );
-    } else if (params.pool == NWQSim::VQE::PoolType::Singlet_GSD) {
-        ansatz  = std::make_shared<NWQSim::VQE::Singlet_GSD>(
-        hamil->getEnv(),
-        NWQSim::VQE::getJordanWignerTransform,
-        1
-      );
-    } else {
-      ansatz  = std::make_shared<NWQSim::VQE::UCCSDmin>(
-        hamil->getEnv(),
-        NWQSim::VQE::getJordanWignerTransform,
-        1,
-        params.symm_level
-      );
+    try
+    {
+      nlopt::opt opt(algo, 1);
+      return opt.get_algorithm_name();
+    }
+    catch (const std::exception &)
+    {
+      return "unknown";
     }
   }
-  ansatz->buildAnsatz();
 
-  NWQSim::safe_print("Starting with %lld Gates and %lld parameters\n" ,ansatz->num_gates(), ansatz->numParams());
-  std::vector<double> x;
-  double fval;
-  if (params.adapt) {
-    NWQSim::safe_print("Beginning ADAPT-VQE loop...\n");
-  } else {
-    NWQSim::safe_print("Beginning VQE loop...\n");
-  }
-
-//   // Print out the Fermionic operators with their excitations
-//   std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters();
-//   NWQSim::safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters:\n", fval);
-//   for (auto& pair: param_map) {
-//     NWQSim::safe_print("%s :: %e\n", pair.first.c_str(), pair.second);
-
-  // Print out the Fermionic operators with their excitations                                        
-  // std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters();  // MZ: comment out for better printing
-  // NWQSim::safe_print("\nFinished VQE loop.\n\tFinal value: %e\n\tFinal parameters:\n", fval);         // MZ: comment out for better printing
-  // for (auto& pair: param_map) {                                                                       // MZ: comment out for better printing
-  //   NWQSim::safe_print("%s :: %e\n", pair.first.c_str(), pair.second);                                // MZ: comment out for better printing
-  // }                                                                                                   // MZ: comment out for better printing
-
-
-  std::shared_ptr<NWQSim::VQE::VQEState> opt_info = optimize_ansatz(manager, params, ansatz,  hamil, x, fval); // MZ: add opt_result
-
-  double total_seconds = opt_info -> get_duration();
-  int hours = static_cast<int>(total_seconds) / 3600;
-  int minutes = (static_cast<int>(total_seconds) % 3600) / 60;
-  double seconds = total_seconds - (hours * 3600 + minutes * 60);
-
-  // Print out the Fermionic operators with their excitations                                        
-  std::vector<std::pair<std::string, double> > param_map = ansatz->getFermionicOperatorParameters(); 
-  // MZ: A better summary at the end so I don't scroll all the way up, especially with gradient-free optimizater    
-  NWQSim::safe_print("\n--------- Result Summary ---------\n");
-  if (params.adapt) {
-    NWQSim::safe_print("Method                 : ADAPT-VQE\n");
-  } else {
-    NWQSim::safe_print("Method                 : VQE, Symmetry Level = %d\n", params.symm_level);
-  }
-  NWQSim::safe_print("Ansatz                 : %s\n", ansatz->getAnsatzName().c_str());  // MZ: don't want to scroll all the way up to see this
-  NWQSim::safe_print("# Ham. Pauli Strings   : %lld \n", hamil->num_ops()); // MZ: don't want to scroll all the way up to see this
-  if (params.adapt) {
-    // MZ: time
-    double comm_total_secs = opt_info -> get_comm_duration();
-    int comm_hours = static_cast<int>(comm_total_secs) / 3600;
-    int comm_minutes = (static_cast<int>(comm_total_secs) % 3600) / 60;
-    double comm_seconds = comm_total_secs - (comm_hours * 3600 + comm_minutes * 60);
-    NWQSim::safe_print("# commutators   (ADAPT): %d\n", opt_info->get_numcomm());
-    NWQSim::safe_print("# Pauli Strings (ADAPT): %d\n", opt_info->get_numpauli());
-    NWQSim::safe_print("Commutator Time (ADAPT): %d hrs %d mins %.4f secs\n", comm_hours, comm_minutes, comm_seconds);
-  }
-    NWQSim::safe_print("Operator Stats         : %lld operators, %lld parameters, and %lld Gates\n" , ansatz->numOps(), ansatz->numParams(), ansatz->num_gates()); // MZ: don't want to scroll all the way up to see this
-    NWQSim::CircuitMetrics final_metrics = ansatz -> circuit_metrics();
-    NWQSim::safe_print("Circuit Stats          : %lld depth, %lld 1q gates, %lld 2q gates, %.3f gate density\n", final_metrics.depth, final_metrics.one_q_gates, final_metrics.two_q_gates, final_metrics.gate_density);
-    std::string ter_rea;
-    if (params.adapt) {
-      ter_rea = "Optimization terminated: "+get_termination_reason_adapt(opt_info->get_adaptresult())+"\n";
-    } else {
-      ter_rea = "Optimization terminated: "+get_termination_reason(opt_info->get_optresult())+"\n";
-    }
-    NWQSim::safe_print(ter_rea.c_str());
-    if (params.adapt) {
-      NWQSim::safe_print("# ADAPT rounds         : %d\n", opt_info->get_adaptrounds()); //MZ: ADAPT round
-    } else {
-      NWQSim::safe_print("# function eval.       : %d\n", opt_info->get_numevals());
-    }
-    NWQSim::safe_print("Evaluation Time        : %d hrs %d mins %.4f secs\n", hours, minutes, seconds);
-    NWQSim::safe_print("Final objective value  : %.16f\nFinal parameters:\n", fval); 
-    for (auto& pair: param_map) {                                                                       
-      NWQSim::safe_print("  %s :: %.16f\n", pair.first.c_str(), pair.second);  
-    }
-    // // MZ: print the QASM3 circuit
-    // if (params.adapt) {
-    //   NWQSim::safe_print( (ansatz->toQASM3()).c_str() );
-    // }
-
-#ifdef MPI_ENABLED
-  if (params.backend == "MPI" || params.backend == "NVGPU_MPI")
+  struct cli_config
   {
-    MPI_Finalize();
+    bool show_help = false;
+    bool list_backends = false;
+    bool disable_fusion = false;
+    std::optional<int> requested_threads;
+
+    std::string hamiltonian_path;
+    std::size_t n_particles = 0;
+    bool have_particles = false;
+
+    std::string backend = "CPU";
+    std::string optimizer_config_path;
+
+    vqe::vqe_options options;
+    std::unordered_map<std::string, double> optimizer_params;
+  };
+
+  std::string to_upper(std::string value)
+  {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c)
+                   { return static_cast<char>(std::toupper(c)); });
+    return value;
+  }
+
+  void print_help()
+  {
+    std::cout << "NWQ-VQE Options\n"
+              << "INFORMATIONAL\n"
+              << "  -h, --help            Show help menu.\n"
+              << "  -l, --list-backends   List available backends and exit.\n"
+              << "REQUIRED\n"
+              << "  -f, --hamiltonian     Path to the input Hamiltonian file (sum of Fermionic operators).\n"
+              << "  -p, -n, --nparticles  Number of electrons in molecule.\n"
+              << "OPTIONAL (Hamiltonian, Ansatz and Backend)\n"
+              << "  --ducc                Use DUCC indexing scheme (default).\n"
+              << "  --xacc                Use XACC/Qiskit indexing scheme.\n"
+              << "  --sym, --symm         UCCSD symmetry level (0->none, 1->spin, 2->orbital, 3->full).\n"
+              << "  -b, --backend         Simulation backend (CPU|GPU). Defaults to CPU.\n"
+              << "  --seed                Random seed for reproducibility.\n"
+              << "OPTIONAL (Global Minimizer)\n"
+              << "  -v, --verbose         Print additional progress information.\n"
+              << "  -o, --optimizer       NLopt optimizer name (e.g. LN_COBYLA, LN_BOBYQA).\n"
+              << "  --opt-config          Path to JSON file with optimizer parameter overrides.\n"
+              << "  -lb, --lbound         Optimizer lower bound (default -2π).\n"
+              << "  -ub, --ubound         Optimizer upper bound (default 2π).\n"
+              << "  --reltol              Relative tolerance termination criterion.\n"
+              << "  --abstol              Absolute tolerance termination criterion.\n"
+              << "  --stopval             Objective stop value.\n"
+              << "  --maxeval             Maximum number of function evaluations (default 100).\n"
+              << "  --maxtime             Maximum optimizer time (seconds).\n"
+              << "OPTIONAL (ADAPT-VQE)\n"
+              << "  --adapt               Run ADAPT-VQE instead of standard VQE.\n"
+              << "  -ag, --adapt-gradtol  Gradient norm tolerance (default 1e-3).\n"
+              << "  -af, --adapt-fvaltol  Energy change tolerance (default disabled).\n"
+              << "  -am, --adapt-maxeval  Maximum ADAPT iterations (default 20).\n"
+              << "  -as, --adapt-saveinterval  Save parameters every N iterations (default 0 = no saving).\n"
+              << "SIMULATOR OPTIONS\n"
+              << "  --num_threads         Specify number of threads (ignored in current backend).\n"
+              << "  --disable_fusion      Disable gate fusion (ignored in current backend).\n";
+  }
+
+  void list_backends()
+  {
+    std::cout << "Available backends:\n  CPU";
+#ifdef VQE_ENABLE_CUDA
+    std::cout << "\n  GPU";
+#endif
+    std::cout << "\n";
+  }
+
+  void apply_optimizer_parameters(vqe::vqe_options &opts,
+                                  const std::unordered_map<std::string, double> &params)
+  {
+    for (const auto &entry : params)
+    {
+      opts.algorithm_parameters[entry.first] = entry.second;
+      opts.adapt_algorithm_parameters[entry.first] = entry.second;
+    }
+  }
+
+  bool parse_opt_config(const std::string &path,
+                        std::unordered_map<std::string, double> &out_map,
+                        std::string &error)
+  {
+    std::ifstream in(path);
+    if (!in.is_open())
+    {
+      error = "Failed to open optimizer config file: " + path;
+      return false;
+    }
+    json doc;
+    try
+    {
+      in >> doc;
+    }
+    catch (const std::exception &ex)
+    {
+      error = std::string("Failed to parse optimizer config: ") + ex.what();
+      return false;
+    }
+    if (!doc.is_object())
+    {
+      error = "Optimizer config must be a JSON object mapping parameter names to numeric values";
+      return false;
+    }
+    for (auto it = doc.begin(); it != doc.end(); ++it)
+    {
+      if (!it.value().is_number())
+      {
+        error = "Optimizer config entry '" + it.key() + "' is not numeric";
+        return false;
+      }
+      out_map[it.key()] = it.value().get<double>();
+    }
+    return true;
+  }
+
+  bool parse_backend(const std::string &value, cli_config &config, std::string &error)
+  {
+    const std::string upper = to_upper(value);
+    config.backend = upper;
+    if (upper == "CPU")
+    {
+      config.options.use_gpu = false;
+      return true;
+    }
+    if (upper == "GPU" || upper == "NVGPU" || upper == "NVGPU_MPI")
+    {
+      config.options.use_gpu = true;
+      return true;
+    }
+    if (upper == "MPI")
+    {
+      error = "MPI backend is not supported in the new implementation";
+      return false;
+    }
+    error = "Unknown backend: " + value;
+    return false;
+  }
+
+  bool parse_optimizer_name(const std::string &name, vqe::vqe_options &opts, std::string &error)
+  {
+    const std::string upper = to_upper(name);
+    nlopt_algorithm algo = nlopt_algorithm_from_string(upper.c_str());
+    if (algo < 0 || algo >= NLOPT_NUM_ALGORITHMS)
+    {
+      error = "Unknown NLopt optimizer: " + name;
+      return false;
+    }
+    opts.optimizer = static_cast<nlopt::algorithm>(algo);
+    opts.adapt_optimizer = opts.optimizer;
+    return true;
+  }
+
+  void set_bounds(vqe::vqe_options &opts, double lower, double upper)
+  {
+    opts.lower_bound = lower;
+    opts.upper_bound = upper;
+    opts.adapt_lower_bound = lower;
+    opts.adapt_upper_bound = upper;
+  }
+
+  void set_max_evaluations(vqe::vqe_options &opts, std::size_t value)
+  {
+    opts.max_evaluations = value;
+    opts.adapt_max_evaluations = value;
+  }
+
+  void set_max_time(vqe::vqe_options &opts, double seconds)
+  {
+    opts.max_time = seconds;
+    opts.adapt_max_time = seconds;
+  }
+
+  void set_relative_tolerance(vqe::vqe_options &opts, double tol)
+  {
+    opts.relative_tolerance = tol;
+    opts.adapt_relative_tolerance = tol;
+  }
+
+  void set_absolute_tolerance(vqe::vqe_options &opts, double tol)
+  {
+    opts.absolute_tolerance = tol;
+    opts.adapt_absolute_tolerance = tol;
+  }
+
+  void set_stop_value(vqe::vqe_options &opts, double value)
+  {
+    opts.stop_value = value;
+    opts.adapt_stop_value = value;
+  }
+
+  bool parse_args(int argc, char **argv, cli_config &config, std::string &error)
+  {
+    config.options = vqe::vqe_options{};
+    config.options.symmetry_level = 0;
+    config.options.trotter_steps = 1;
+    config.options.use_xacc_indexing = true;
+    set_bounds(config.options, -2.0 * kPi, 2.0 * kPi);
+    set_relative_tolerance(config.options, -1.0);
+    set_absolute_tolerance(config.options, -1.0);
+    set_stop_value(config.options, -std::numeric_limits<double>::infinity());
+    set_max_evaluations(config.options, 100);
+    set_max_time(config.options, -1.0);
+    config.options.optimizer = nlopt::LN_COBYLA;
+    config.options.adapt_optimizer = nlopt::LN_COBYLA;
+    config.options.adapt_gradient_tolerance = 1e-3;
+    config.options.adapt_energy_tolerance = -1.0;
+    config.options.adapt_max_iterations = 20;
+
+    for (int i = 1; i < argc; ++i)
+    {
+      std::string arg = argv[i];
+      if (arg == "-h" || arg == "--help")
+      {
+        config.show_help = true;
+        return true;
+      }
+      if (arg == "-l" || arg == "--list-backends")
+      {
+        config.list_backends = true;
+        continue;
+      }
+      if (arg == "-f" || arg == "--hamiltonian")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --hamiltonian";
+          return false;
+        }
+        config.hamiltonian_path = argv[++i];
+        continue;
+      }
+      if (arg == "-p" || arg == "-n" || arg == "--nparticles")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --nparticles";
+          return false;
+        }
+        config.n_particles = static_cast<std::size_t>(std::stoull(argv[++i]));
+        config.have_particles = true;
+        continue;
+      }
+      if (arg == "--ducc")
+      {
+        config.options.use_xacc_indexing = false;
+        continue;
+      }
+      if (arg == "--xacc")
+      {
+        config.options.use_xacc_indexing = true;
+        continue;
+      }
+      if (arg == "--sym" || arg == "--symm")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --sym";
+          return false;
+        }
+        std::size_t level = static_cast<std::size_t>(std::stoull(argv[++i]));
+        config.options.symmetry_level = level;
+        continue;
+      }
+      if (arg == "-b" || arg == "--backend")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --backend";
+          return false;
+        }
+        if (!parse_backend(argv[++i], config, error))
+        {
+          return false;
+        }
+        continue;
+      }
+      if (arg == "--seed")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --seed";
+          return false;
+        }
+        config.options.random_seed = static_cast<unsigned>(std::stoul(argv[++i]));
+        continue;
+      }
+      if (arg == "-v" || arg == "--verbose")
+      {
+        config.options.verbose = true;
+        continue;
+      }
+      if (arg == "--opt-config")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --opt-config";
+          return false;
+        }
+        config.optimizer_config_path = argv[++i];
+        continue;
+      }
+      if (arg == "-o" || arg == "--optimizer")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --optimizer";
+          return false;
+        }
+        if (!parse_optimizer_name(argv[++i], config.options, error))
+        {
+          return false;
+        }
+        continue;
+      }
+      if (arg == "-lb" || arg == "--lbound")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --lbound";
+          return false;
+        }
+        const double lower = std::stod(argv[++i]);
+        set_bounds(config.options, lower, config.options.upper_bound);
+        continue;
+      }
+      if (arg == "-ub" || arg == "--ubound")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --ubound";
+          return false;
+        }
+        const double upper = std::stod(argv[++i]);
+        set_bounds(config.options, config.options.lower_bound, upper);
+        continue;
+      }
+      if (arg == "--reltol")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --reltol";
+          return false;
+        }
+        set_relative_tolerance(config.options, std::stod(argv[++i]));
+        continue;
+      }
+      if (arg == "--abstol")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --abstol";
+          return false;
+        }
+        set_absolute_tolerance(config.options, std::stod(argv[++i]));
+        continue;
+      }
+      if (arg == "--maxeval")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --maxeval";
+          return false;
+        }
+        set_max_evaluations(config.options, static_cast<std::size_t>(std::stoull(argv[++i])));
+        continue;
+      }
+      if (arg == "--maxtime")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --maxtime";
+          return false;
+        }
+        set_max_time(config.options, std::stod(argv[++i]));
+        continue;
+      }
+      if (arg == "--stopval")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --stopval";
+          return false;
+        }
+        set_stop_value(config.options, std::stod(argv[++i]));
+        continue;
+      }
+      if (arg == "--num_threads")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --num_threads";
+          return false;
+        }
+        config.requested_threads = static_cast<int>(std::stoi(argv[++i]));
+        continue;
+      }
+      if (arg == "--disable_fusion")
+      {
+        config.disable_fusion = true;
+        continue;
+      }
+      if (arg == "--adapt")
+      {
+        config.options.mode = vqe::run_mode::adapt;
+        continue;
+      }
+      if (arg == "-ag" || arg == "--adapt-gradtol")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --adapt-gradtol";
+          return false;
+        }
+        config.options.adapt_gradient_tolerance = std::stod(argv[++i]);
+        continue;
+      }
+      if (arg == "-af" || arg == "--adapt-fvaltol")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --adapt-fvaltol";
+          return false;
+        }
+        config.options.adapt_energy_tolerance = std::stod(argv[++i]);
+        continue;
+      }
+      if (arg == "-am" || arg == "--adapt-maxeval")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --adapt-maxeval";
+          return false;
+        }
+        config.options.adapt_max_iterations = static_cast<std::size_t>(std::stoull(argv[++i]));
+        continue;
+      }
+      if (arg == "-as" || arg == "--adapt-saveinterval")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --adapt-saveinterval";
+          return false;
+        }
+        config.options.adapt_save_interval = static_cast<std::size_t>(std::stoull(argv[++i]));
+        continue;
+      }
+      error = "Unrecognized option: " + arg;
+      return false;
+    }
+
+    if (!config.optimizer_config_path.empty())
+    {
+      if (!parse_opt_config(config.optimizer_config_path, config.optimizer_params, error))
+      {
+        return false;
+      }
+    }
+
+    apply_optimizer_parameters(config.options, config.optimizer_params);
+    return true;
+  }
+
+  struct gate_stats
+  {
+    std::size_t total = 0;
+    std::size_t single_qubit = 0;
+    std::size_t two_qubit = 0;
+    std::size_t pauli_rotations = 0;
+    std::size_t x_gates = 0;
+  };
+
+  gate_stats analyze_gates(const vqe::circuit &circ)
+  {
+    gate_stats stats;
+    stats.total = circ.gates().size();
+    for (const auto &gate : circ.gates())
+    {
+      switch (gate.kind)
+      {
+      case vqe::gate_kind::x:
+        ++stats.single_qubit;
+        ++stats.x_gates;
+        break;
+      case vqe::gate_kind::h:
+      case vqe::gate_kind::rz:
+        ++stats.single_qubit;
+        break;
+      case vqe::gate_kind::cnot:
+        ++stats.two_qubit;
+        break;
+      case vqe::gate_kind::pauli_rotation:
+        ++stats.pauli_rotations;
+        break;
+      }
+    }
+    return stats;
+  }
+
+  std::vector<std::string> ordered_parameter_labels(const vqe::uccsd_ansatz &ansatz)
+  {
+    std::vector<std::string> labels;
+    const auto &map = ansatz.excitation_parameter_map();
+    for (const auto &excitation : ansatz.excitations())
+    {
+      if (map.find(excitation.label) != map.end() &&
+          std::find(labels.begin(), labels.end(), excitation.label) == labels.end())
+      {
+        labels.push_back(excitation.label);
+      }
+    }
+    return labels;
+  }
+
+  void print_parameter_summary(const vqe::uccsd_ansatz &ansatz,
+                               const vqe::vqe_result &result,
+                               std::size_t trotter_steps)
+  {
+    const auto &map = ansatz.excitation_parameter_map();
+    auto labels = ordered_parameter_labels(ansatz);
+    const std::size_t unique_params = ansatz.unique_parameter_count();
+    const std::size_t per_step = unique_params == 0 ? result.parameters.size() : unique_params;
+    if (labels.empty() && per_step == result.parameters.size())
+    {
+      labels.resize(per_step);
+      for (std::size_t i = 0; i < per_step; ++i)
+      {
+        labels[i] = "param_" + std::to_string(i);
+      }
+    }
+    std::cout << "Final parameters:" << std::endl;
+    std::cout << std::setprecision(16);
+    for (std::size_t step = 0; step < std::max<std::size_t>(trotter_steps, 1); ++step)
+    {
+      if (trotter_steps > 1)
+      {
+        std::cout << "  [Trotter step " << (step + 1) << "]" << std::endl;
+      }
+      for (const auto &label : labels)
+      {
+        const auto it = map.find(label);
+        if (it == map.end())
+        {
+          continue;
+        }
+        const std::size_t base_index = it->second;
+        const std::size_t parameter_index = base_index + step * per_step;
+        if (parameter_index >= result.parameters.size())
+        {
+          continue;
+        }
+        std::cout << "    " << label << " :: " << result.parameters[parameter_index] << std::endl;
+      }
+    }
+    std::cout << std::setprecision(6);
+  }
+
+  std::string format_duration(double seconds)
+  {
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(4) << seconds << " seconds";
+    return oss.str();
+  }
+
+  void emit_warnings(const cli_config &config)
+  {
+    if (config.disable_fusion)
+    {
+      std::cerr << "[warning] Gate fusion cannot be disabled in the new backend." << std::endl;
+    }
+    if (config.requested_threads.has_value())
+    {
+      std::cerr << "[warning] CPU backend does not currently support explicit thread configuration." << std::endl;
+    }
+  }
+
+  int run_vqe_mode(const cli_config &config)
+  {
+    const auto &opts = config.options;
+
+    if (opts.verbose)
+    {
+      std::cout << "[vqe] Configuration summary:" << std::endl;
+      std::cout << "  Hamiltonian path      : " << config.hamiltonian_path << std::endl;
+      std::cout << "  Particles (electrons) : " << config.n_particles << std::endl;
+      std::cout << "  Backend               : " << config.backend << std::endl;
+      std::cout << "  Trotter steps         : " << opts.trotter_steps << std::endl;
+      std::cout << "  Symmetry level        : " << opts.symmetry_level << std::endl;
+      std::cout << "  Optimizer             : " << nlopt_algorithm_to_string(opts.optimizer) << std::endl;
+      std::cout << "  Parameter bounds      : [" << opts.lower_bound << ", " << opts.upper_bound << "]" << std::endl;
+      if (opts.max_evaluations > 0)
+      {
+        std::cout << "  Max evaluations       : " << opts.max_evaluations << std::endl;
+      }
+      if (opts.max_time > 0)
+      {
+        std::cout << "  Max time (s)          : " << opts.max_time << std::endl;
+      }
+      if (opts.random_seed.has_value())
+      {
+        std::cout << "  Random seed           : " << *opts.random_seed << std::endl;
+      }
+    }
+
+    std::cout << "Reading Hamiltonian..." << std::endl;
+    const auto data = vqe::read_hamiltonian_file(config.hamiltonian_path);
+    const auto pauli_terms = vqe::jordan_wigner_transform(data);
+    if (opts.verbose)
+    {
+      std::cout << "Hamiltonian has " << pauli_terms.size() << " Pauli terms." << std::endl;
+    }
+
+    vqe::molecular_environment env;
+    env.n_spatial = data.num_qubits() / 2;
+    env.n_electrons = config.n_particles;
+    env.xacc_indexing = opts.use_xacc_indexing;
+    env.constant_energy = data.constant.real();
+
+    if (env.n_spatial == 0)
+    {
+      throw std::runtime_error("Hamiltonian does not define any spatial orbitals");
+    }
+
+    vqe::uccsd_ansatz ansatz(env, opts.trotter_steps, opts.symmetry_level);
+    ansatz.build();
+
+    if (opts.verbose)
+    {
+      std::cout << "Constructed ansatz with " << ansatz.excitations().size() << " generators and "
+                << ansatz.get_circuit().parameters().size() << " parameters." << std::endl;
+    }
+
+    auto start = std::chrono::steady_clock::now();
+    auto result = vqe::run_default_vqe_with_ansatz(ansatz, pauli_terms, opts);
+    auto stop = std::chrono::steady_clock::now();
+
+    const double elapsed = std::chrono::duration<double>(stop - start).count();
+
+    std::cout << "\n--------- Result Summary ---------" << std::endl;
+    std::cout << "Method                 : VQE" << std::endl;
+    std::cout << "Symmetry level         : " << opts.symmetry_level << std::endl;
+    std::cout << "# Hamiltonian terms    : " << pauli_terms.size() << std::endl;
+    std::cout << "# Evaluations          : " << result.evaluations << std::endl;
+    std::cout << "Converged              : " << (result.converged ? "yes" : "no") << std::endl;
+    std::cout << std::setprecision(16);
+    std::cout << "Final objective value  : " << result.energy << std::endl;
+    if (opts.verbose)
+    {
+      std::cout << "Initial objective value: " << result.initial_energy << std::endl;
+      std::cout << "Objective delta        : " << result.energy_delta << std::endl;
+    }
+    std::cout << std::setprecision(6);
+    std::cout << "Evaluation time        : " << format_duration(elapsed) << std::endl;
+
+    const auto stats = analyze_gates(ansatz.get_circuit());
+    std::cout << "Operator stats         : " << ansatz.excitations().size() << " operators, "
+              << ansatz.unique_parameter_count() << " unique parameters, "
+              << ansatz.get_circuit().parameters().size() << " total parameters" << std::endl;
+    std::cout << "Circuit stats          : " << stats.total << " gates (" << stats.single_qubit << " 1q, "
+              << stats.two_qubit << " 2q, " << stats.pauli_rotations << " Pauli rotations)" << std::endl;
+
+    print_parameter_summary(ansatz, result, opts.trotter_steps);
+
+    if (opts.verbose)
+    {
+      std::cout << "\n[vqe] Optimization details:" << std::endl;
+      std::cout << "  NLopt status          : " << nlopt_status_to_string(result.status) << std::endl;
+      std::cout << "  Iterations recorded   : " << result.iterations << std::endl;
+      std::cout << "  Evaluations           : " << result.evaluations << std::endl;
+      if (result.evaluations > 0)
+      {
+        const double avg_apply = result.apply_time / static_cast<double>(result.evaluations);
+        const double avg_expect = result.expectation_time / static_cast<double>(result.evaluations);
+        std::cout << "  Total apply time (s)  : " << result.apply_time << " (avg " << avg_apply << ")" << std::endl;
+        std::cout << "  Total expect time (s) : " << result.expectation_time << " (avg " << avg_expect << ")" << std::endl;
+      }
+      else
+      {
+        std::cout << "  Total apply time (s)  : " << result.apply_time << std::endl;
+        std::cout << "  Total expect time (s) : " << result.expectation_time << std::endl;
+      }
+    }
+    return result.converged ? EXIT_SUCCESS : EXIT_FAILURE;
+  }
+
+  int run_adapt_mode(const cli_config &config)
+  {
+    const auto &opts = config.options;
+
+    if (opts.verbose)
+    {
+      std::cout << "[adapt] Configuration summary:" << std::endl;
+      std::cout << "  Hamiltonian path      : " << config.hamiltonian_path << std::endl;
+      std::cout << "  Particles (electrons) : " << config.n_particles << std::endl;
+      std::cout << "  Backend               : " << config.backend << std::endl;
+      std::cout << "  Symmetry level        : " << opts.symmetry_level << std::endl;
+      std::cout << "  Max iterations        : " << opts.adapt_max_iterations << std::endl;
+      std::cout << "  Gradient step         : " << opts.adapt_gradient_step << std::endl;
+      std::cout << "  Gradient tolerance    : " << opts.adapt_gradient_tolerance << std::endl;
+      if (opts.adapt_energy_tolerance > 0.0)
+      {
+        std::cout << "  Energy tolerance      : " << opts.adapt_energy_tolerance << std::endl;
+      }
+      std::cout << "  Optimizer             : " << nlopt_algorithm_to_string(opts.adapt_optimizer) << std::endl;
+      std::cout << "  Parameter bounds      : [" << opts.adapt_lower_bound << ", "
+                << opts.adapt_upper_bound << "]" << std::endl;
+      if (opts.adapt_max_evaluations > 0)
+      {
+        std::cout << "  Max evaluations       : " << opts.adapt_max_evaluations << std::endl;
+      }
+      if (opts.adapt_max_time > 0)
+      {
+        std::cout << "  Max time (s)          : " << opts.adapt_max_time << std::endl;
+      }
+      if (opts.random_seed.has_value())
+      {
+        std::cout << "  Random seed           : " << *opts.random_seed << std::endl;
+      }
+      std::cout << "Running ADAPT-VQE..." << std::endl;
+    }
+
+    auto start = std::chrono::steady_clock::now();
+    auto result = vqe::run_adapt_vqe(config.hamiltonian_path,
+                                     config.n_particles,
+                                     opts);
+    auto stop = std::chrono::steady_clock::now();
+    const double elapsed = std::chrono::duration<double>(stop - start).count();
+
+    std::cout << "\n--------- Result Summary ---------" << std::endl;
+    std::cout << "Method                 : ADAPT-VQE" << std::endl;
+    std::cout << "Symmetry level         : " << opts.symmetry_level << std::endl;
+    std::cout << "# Hamiltonian terms    : " << result.hamiltonian_terms << std::endl;
+    std::cout << "# ADAPT iterations     : " << result.iterations << std::endl;
+    std::cout << "Energy evaluations     : " << result.energy_evaluations << std::endl;
+    std::cout << std::setprecision(16);
+    std::cout << "Final objective value  : " << result.energy << std::endl;
+    if (opts.verbose)
+    {
+      std::cout << "Initial objective value: " << result.initial_energy << std::endl;
+      std::cout << "Objective delta        : " << (result.energy - result.initial_energy) << std::endl;
+    }
+    std::cout << std::setprecision(6);
+    std::cout << "Evaluation time        : " << format_duration(elapsed) << std::endl;
+    std::cout << "Converged              : " << (result.converged ? "yes" : "no") << std::endl;
+
+    if (opts.verbose)
+    {
+      std::cout << "\n[adapt] Optimization details:" << std::endl;
+      std::cout << "  Iterations executed   : " << result.iterations << std::endl;
+      std::cout << "  Energy evaluations    : " << result.energy_evaluations << std::endl;
+      std::cout << std::setprecision(16);
+      std::cout << "  Initial energy        : " << result.initial_energy << std::endl;
+      std::cout << "  Final energy          : " << result.energy << std::endl;
+      std::cout << "  ΔEnergy               : " << (result.energy - result.initial_energy) << std::endl;
+      std::cout << std::setprecision(6);
+      std::cout << "  Selected operator cnt : " << result.selected_indices.size() << std::endl;
+      std::cout << "  Parameter count       : " << result.parameters.size() << std::endl;
+    }
+
+    return result.converged ? EXIT_SUCCESS : EXIT_FAILURE;
+  }
+
+} // namespace
+
+int main(int argc, char **argv)
+{
+#ifdef VQE_ENABLE_MPI
+  MPI_Init(&argc, &argv);
+  //Disable printing for processes other than node-0:
+  int rank = 0;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  if (rank != 0) 
+  {
+      // Redirect C stdio
+      freopen("/dev/null", "w", stdout);
+      freopen("/dev/null", "w", stderr);
+      // Optional: also silence C++ streams
+      std::cout.setstate(std::ios::failbit);
+      std::cerr.setstate(std::ios::failbit);
   }
 #endif
-  return 0;
+
+  cli_config config;
+  std::string error;
+  if (!parse_args(argc, argv, config, error))
+  {
+    std::cerr << "Error: " << error << "\n";
+    print_help();
+    return EXIT_FAILURE;
+  }
+
+  if (config.show_help)
+  {
+    print_help();
+    return EXIT_SUCCESS;
+  }
+
+  if (config.list_backends)
+  {
+    list_backends();
+    return EXIT_SUCCESS;
+  }
+
+  if (config.hamiltonian_path.empty())
+  {
+    std::cerr << "Error: Hamiltonian file not specified (--hamiltonian)." << std::endl;
+    print_help();
+    return EXIT_FAILURE;
+  }
+
+  if (!config.have_particles)
+  {
+    std::cerr << "Error: Number of particles not specified (--nparticles)." << std::endl;
+    print_help();
+    return EXIT_FAILURE;
+  }
+
+  emit_warnings(config);
+
+  try
+  {
+    if (config.options.mode == vqe::run_mode::adapt)
+    {
+      return run_adapt_mode(config);
+    }
+    return run_vqe_mode(config);
+  }
+  catch (const std::exception &ex)
+  {
+    std::cerr << "error: " << ex.what() << std::endl;
+    return EXIT_FAILURE;
+  }
+#ifdef VQE_ENABLE_MPI
+  MPI_Finalize();
+#endif
+
 }

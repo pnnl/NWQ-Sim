@@ -11,10 +11,10 @@ endif()
 
 
 # Specify the project details
-project(MyPackage
-        VERSION 0.0.1
-        DESCRIPTION "NWQSim Qasm"
-        LANGUAGES C CXX)
+project(NWQ-Sim
+    VERSION 1.0.0
+    DESCRIPTION "NWQ-Sim Quantum Simulation Toolkit"
+    LANGUAGES C CXX)
 
 list(INSERT CMAKE_MODULE_PATH 0 "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(nwqsim-utils)
@@ -135,7 +135,7 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 add_subdirectory(qasm)
 
 # Only add VQE subdirectory if nlopt exists - this creates the NWQSimQFlow library
-if (EXISTS "${PROJECT_SOURCE_DIR}/vqe/nlopt/CMakeLists.txt")
+if (EXISTS "${PROJECT_SOURCE_DIR}/vqe/CMakeLists.txt")
     add_subdirectory(vqe)
 endif()
 
@@ -148,7 +148,10 @@ if (TARGET nwqsim)
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/nwqsim/vqe>
     )
     list(APPEND NWQSIM_INSTALL_TARGETS vqe nlopt)
-    install(FILES "vqe/include/nwqsim_qflow.hpp" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim/vqe)    
+    install(FILES
+        "vqe/include/nwqsim_qflow.hpp"
+        "vqe/include/vqe_options.hpp"
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim/vqe)
 else()
     add_library(nwqsim INTERFACE)
     target_include_directories(nwqsim INTERFACE
