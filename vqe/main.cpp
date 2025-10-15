@@ -731,8 +731,8 @@ namespace
     std::cout << "Final objective value  : " << result.energy << std::endl;
     if (opts.verbose)
     {
-      std::cout << "Initial objective value: " << result.initial_energy << std::endl;
-      std::cout << "Objective delta        : " << result.energy_delta << std::endl;
+      std::cout << "Initial objective value : " << result.initial_energy << std::endl;
+      std::cout << "Objective delta         : " << result.energy_delta << std::endl;
     }
     std::cout << std::setprecision(6);
     std::cout << "Evaluation time        : " << format_duration(elapsed) << std::endl;
@@ -814,15 +814,14 @@ namespace
     std::cout << "\n--------- Result Summary ---------" << std::endl;
     std::cout << "Method                 : ADAPT-VQE" << std::endl;
     std::cout << "Symmetry level         : " << opts.symmetry_level << std::endl;
-    std::cout << "# Hamiltonian terms    : " << result.hamiltonian_terms << std::endl;
     std::cout << "# ADAPT iterations     : " << result.iterations << std::endl;
     std::cout << "Energy evaluations     : " << result.energy_evaluations << std::endl;
     std::cout << std::setprecision(16);
     std::cout << "Final objective value  : " << result.energy << std::endl;
     if (opts.verbose)
     {
-      std::cout << "Initial objective value: " << result.initial_energy << std::endl;
-      std::cout << "Objective delta        : " << (result.energy - result.initial_energy) << std::endl;
+      std::cout << "Initial objective value : " << result.initial_energy << std::endl;
+      std::cout << "Objective delta         : " << (result.energy - result.initial_energy) << std::endl;
     }
     std::cout << std::setprecision(6);
     std::cout << "Evaluation time        : " << format_duration(elapsed) << std::endl;
