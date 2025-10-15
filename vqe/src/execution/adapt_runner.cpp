@@ -223,9 +223,9 @@ struct MpiGuard
     {
       if (seconds < 60.0)
       {
-        // Less than 1 minute: show as seconds with 1 decimal place
+        // Less than 1 minute: show as seconds with 2 decimal places
         char buffer[16];
-        std::snprintf(buffer, sizeof(buffer), "%.1fs", seconds);
+        std::snprintf(buffer, sizeof(buffer), "%.2fs", seconds);
         return std::string(buffer);
       }
       else
