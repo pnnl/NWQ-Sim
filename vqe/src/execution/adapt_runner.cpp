@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -24,6 +25,7 @@
 #endif
 #include "hamiltonian_parser.hpp"
 #include "jw_transform.hpp"
+#include "nwq_util.hpp"
 #include <sys/resource.h>
 
 namespace vqe
@@ -217,6 +219,26 @@ struct MpiGuard
       return bytes / (1024.0 * 1024.0);
     }
 
+    std::string format_duration(double seconds)
+    {
+      if (seconds < 60.0)
+      {
+        // Less than 1 minute: show as seconds with 1 decimal place
+        char buffer[16];
+        std::snprintf(buffer, sizeof(buffer), "%.1fs", seconds);
+        return std::string(buffer);
+      }
+      else
+      {
+        // 1 minute or more: show as "XXXm YYs"
+        int minutes = static_cast<int>(seconds / 60.0);
+        int secs = static_cast<int>(seconds) % 60;
+        char buffer[16];
+        std::snprintf(buffer, sizeof(buffer), "%dm %02ds", minutes, secs);
+        return std::string(buffer);
+      }
+    }
+
     void save_adapt_parameters(std::ofstream &out,
                                std::size_t iteration,
                                const std::vector<double> &parameters,
@@ -235,9 +257,9 @@ struct MpiGuard
       {
         if (i < selected_labels.size())
         {
-          out << "# " << selected_labels[i] << std::endl;
+          out << "# " << selected_labels[i]
         }
-        out << parameters[i] << std::endl;
+        out << "::" << parameters[i] << std::endl;
       }
       out << std::endl;
       out.flush();
@@ -339,7 +361,7 @@ struct MpiGuard
     std::ofstream param_file;
     if (options.adapt_save_interval > 0)
     {
-      std::string output_filename = hamiltonian_path + ".adapt_params.txt";
+      std::string output_filename = hamiltonian_path + "-adapt_params.txt";
       param_file.open(output_filename);
       if (param_file.is_open())
       {
@@ -352,16 +374,18 @@ struct MpiGuard
     if (options.verbose)
     {
       const auto stats = summarize_parameters(ansatz.mutable_circuit().parameters());
-      std::cout << "[adapt] Initialization: pool_size=" << ansatz.pool_operator_components().size()
-                << " gradient_step=" << format_double(options.adapt_gradient_step, 6)
-                << " gradient_tol=" << format_double(options.adapt_gradient_tolerance, 6) << std::endl;
-      std::cout << "[adapt] Reference energy: " << format_double(reference_energy, 12)
-                << " parameters=" << stats.count
-                << " max|θ|=" << format_double(stats.max_abs, 6)
-                << " ||θ||₂=" << format_double(stats.l2_norm, 6) << std::endl;
-      std::cout << "Running ADAPT-VQE..." << std::endl;
-      std::cout << " Iter   Objective Value     # Evals  Grad Norm  |  #1q Gates  #2q Gates  |  Selected Operator" << std::endl;
-      std::cout << "--------------------------------------------------------------------------------------------------------------" << std::endl;
+      NWQSim::safe_print("[adapt] Initialization: pool_size=%zu gradient_step=%s gradient_tol=%s\n",
+                         ansatz.pool_operator_components().size(),
+                         format_double(options.adapt_gradient_step, 6).c_str(),
+                         format_double(options.adapt_gradient_tolerance, 6).c_str());
+      NWQSim::safe_print("[adapt] Reference energy: %s parameters=%zu max|θ|=%s ||θ||₂=%s\n",
+                         format_double(reference_energy, 12).c_str(),
+                         stats.count,
+                         format_double(stats.max_abs, 6).c_str(),
+                         format_double(stats.l2_norm, 6).c_str());
+      NWQSim::safe_print("Running ADAPT-VQE...\n");
+      NWQSim::safe_print(" Iter   Objective Value     # Evals  Grad Norm    Time     |  #1q Gates  #2q Gates  |  Selected Operator\n");
+      NWQSim::safe_print("-----------------------------------------------------------------------------------------------------------------------\n");
     }
 
     const auto &pool_components = ansatz.pool_operator_components();
@@ -375,6 +399,8 @@ struct MpiGuard
 
     for (std::size_t iter = 0; iter < options.adapt_max_iterations; ++iter)
     {
+      auto iteration_start = std::chrono::steady_clock::now();
+
       backend.reset();
       backend.apply(ansatz.mutable_circuit());
       double base_energy = compute_energy(backend, pauli_terms);
@@ -382,7 +408,7 @@ struct MpiGuard
 
       if (options.adapt_log_memory)
       {
-        std::cout << "[adapt] iteration " << iter << " RSS: " << current_rss_mebibytes() << " MiB" << std::endl;
+        NWQSim::safe_print("[adapt] iteration %zu RSS: %.2f MiB\n", iter, current_rss_mebibytes());
       }
 
       double max_gradient = 0.0;
@@ -464,10 +490,11 @@ struct MpiGuard
         result.iterations = iter;
         if (options.verbose)
         {
-          std::cout << "[adapt][iter " << (iter + 1)
-                    << "] convergence: max|grad|=" << format_double(max_gradient, 6)
-                    << " energy=" << format_double(base_energy, 12)
-                    << " evaluations=" << total_energy_evals << std::endl;
+          NWQSim::safe_print("[adapt][iter %zu] convergence: max|grad|=%s energy=%s evaluations=%zu\n",
+                             (iter + 1),
+                             format_double(max_gradient, 6).c_str(),
+                             format_double(base_energy, 12).c_str(),
+                             total_energy_evals);
         }
         break;
       }
@@ -551,18 +578,22 @@ struct MpiGuard
 
       if (options.verbose)
       {
+        auto iteration_end = std::chrono::steady_clock::now();
+        std::chrono::duration<double> iteration_duration = iteration_end - iteration_start;
+        double elapsed_seconds = iteration_duration.count();
+        std::string time_str = format_duration(elapsed_seconds);
+
         const auto counts = accumulate_gate_tally(circ);
         const auto formatted_label = format_operator_label(selected_label);
-        std::ostringstream row;
-        row << std::setw(4) << iter << "  ";
-        row << std::fixed << std::setprecision(12) << std::setw(20) << optimized_energy << "  ";
-        row << std::setw(7) << total_energy_evals << "  ";
-        row << std::scientific << std::setprecision(3) << std::setw(8) << max_gradient << "  |  ";
-        row << std::defaultfloat;
-        row << std::setw(9) << counts.single_qubit << "  "
-            << std::setw(9) << counts.two_qubit << "  |  "
-            << formatted_label;
-        std::cout << row.str() << std::endl;
+        NWQSim::safe_print("%4zu  %20.12f  %7zu  %.3e  %9s  |  %9d  %9d  |  %s\n",
+                           iter,
+                           optimized_energy,
+                           total_energy_evals,
+                           max_gradient,
+                           time_str.c_str(),
+                           counts.single_qubit,
+                           counts.two_qubit,
+                           formatted_label.c_str());
       }
 
       if (options.adapt_save_interval > 0 && (iter + 1) % options.adapt_save_interval == 0)
@@ -583,9 +614,10 @@ struct MpiGuard
       {
         if (options.verbose)
         {
-          std::cout << "[adapt][iter " << (iter + 1)
-                    << "] energy change " << format_double(std::abs(previous_energy - optimized_energy), 6)
-                    << " < tol=" << format_double(options.adapt_energy_tolerance, 6) << std::endl;
+          NWQSim::safe_print("[adapt][iter %zu] energy change %s < tol=%s\n",
+                             (iter + 1),
+                             format_double(std::abs(previous_energy - optimized_energy), 6).c_str(),
+                             format_double(options.adapt_energy_tolerance, 6).c_str());
         }
         result.iterations = iter + 1;
         converged = true;
@@ -620,14 +652,11 @@ struct MpiGuard
     }
     if (options.verbose && !result.selected_labels.empty())
     {
-      std::cout << "Final parameters:" << std::endl;
+      NWQSim::safe_print("Final parameters:\n");
       for (std::size_t i = 0; i < result.selected_labels.size() && i < result.parameters.size(); ++i)
       {
         const auto formatted_label = format_operator_label(result.selected_labels[i]);
-        std::ostringstream line;
-        line << "  " << formatted_label << " :: "
-             << std::fixed << std::setprecision(16) << result.parameters[i];
-        std::cout << line.str() << std::endl;
+        NWQSim::safe_print("  %s :: %.16f\n", formatted_label.c_str(), result.parameters[i]);
       }
     }
     result.energy_evaluations = total_energy_evals;

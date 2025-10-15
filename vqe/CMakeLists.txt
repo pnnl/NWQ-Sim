@@ -117,6 +117,7 @@ target_include_directories(vqe
     PRIVATE
         $<BUILD_INTERFACE:${VQE_NLOPT_INCLUDE}>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/nlopt>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
 )
 
 target_include_directories(nwqsim
