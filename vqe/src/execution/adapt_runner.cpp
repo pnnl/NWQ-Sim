@@ -462,16 +462,7 @@ struct MpiGuard
 	  struct { double val; int idx; } in_pair, out_pair;
 	  in_pair.val = max_gradient;
 	  in_pair.idx = static_cast<int>(max_index);
-
-	  MPI_Datatype pair_type;
-	  MPI_Type_create_struct( 2, (int[]){1, 1},
-			  (MPI_Aint[]){offsetof(decltype(in_pair), val), offsetof(decltype(in_pair), idx)},
-			  (MPI_Datatype[]){MPI_DOUBLE, MPI_INT}, &pair_type);
-	  MPI_Type_commit(&pair_type);
-
 	  MPI_Allreduce(&in_pair, &out_pair, 1, MPI_DOUBLE_INT, MPI_MAXLOC, MPI_COMM_WORLD);
-	  MPI_Type_free(&pair_type);
-	  
 	  max_gradient = out_pair.val;
 	  max_index = static_cast<std::size_t>(out_pair.idx);
 	#endif
