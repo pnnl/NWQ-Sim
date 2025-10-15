@@ -257,7 +257,7 @@ struct MpiGuard
       {
         if (i < selected_labels.size())
         {
-          out << "# " << selected_labels[i]
+          out << "# " << selected_labels[i];
         }
         out << "::" << parameters[i] << std::endl;
       }
