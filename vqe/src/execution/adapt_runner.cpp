@@ -374,6 +374,7 @@ struct MpiGuard
     if (options.verbose)
     {
       const auto stats = summarize_parameters(ansatz.mutable_circuit().parameters());
+      NWQSim::safe_print("[adapt] Hamiltonian has %zu Pauli terms\n", pauli_terms.size());
       NWQSim::safe_print("[adapt] Initialization: pool_size=%zu gradient_step=%s gradient_tol=%s\n",
                          ansatz.pool_operator_components().size(),
                          format_double(options.adapt_gradient_step, 6).c_str(),
@@ -485,16 +486,22 @@ struct MpiGuard
 
       if (max_index == pool_size || max_gradient < options.adapt_gradient_tolerance)
       {
+        auto iteration_end = std::chrono::steady_clock::now();
+        std::chrono::duration<double> iteration_duration = iteration_end - iteration_start;
+        double elapsed_seconds = iteration_duration.count();
+        std::string time_str = format_duration(elapsed_seconds);
+
         converged = true;
         result.energy = base_energy;
         result.iterations = iter;
         if (options.verbose)
         {
-          NWQSim::safe_print("[adapt][iter %zu] convergence: max|grad|=%s energy=%s evaluations=%zu\n",
-                             (iter + 1),
-                             format_double(max_gradient, 6).c_str(),
-                             format_double(base_energy, 12).c_str(),
-                             total_energy_evals);
+          NWQSim::safe_print("%4zu  %20.12f  %7zu  %.3e  %9s  |  converged\n",
+                             iter,
+                             base_energy,
+                             total_energy_evals,
+                             max_gradient,
+                             time_str.c_str());
         }
         break;
       }
@@ -586,7 +593,7 @@ struct MpiGuard
         const auto counts = accumulate_gate_tally(circ);
         const auto formatted_label = format_operator_label(selected_label);
         NWQSim::safe_print("%4zu  %20.12f  %7zu  %.3e  %9s  |  %9d  %9d  |  %s\n",
-                           iter,
+                           iter+1,
                            optimized_energy,
                            total_energy_evals,
                            max_gradient,
@@ -660,6 +667,7 @@ struct MpiGuard
       }
     }
     result.energy_evaluations = total_energy_evals;
+    result.hamiltonian_terms = pauli_terms.size();
     return result;
   }
 

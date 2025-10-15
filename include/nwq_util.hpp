@@ -195,7 +195,7 @@ namespace NWQSim
         va_list args;
         va_start(args, format);
 
-#ifdef MPI_ENABLED
+#if defined(MPI_ENABLED) || defined(VQE_ENABLE_MPI)
         int flag;
         MPI_Initialized(&flag);
         if (flag)
