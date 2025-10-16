@@ -218,7 +218,7 @@ struct MpiGuard
       return bytes / (1024.0 * 1024.0);
     }
 
-
+    // MZ: formatting time string for each ADAPT iteration
     std::string format_duration(double seconds)
     {
       if (seconds < 60.0)
@@ -265,6 +265,15 @@ struct MpiGuard
       out.flush();
     }
 
+    // Helper function to check if optimizer needs gradients based on algorithm name
+    inline bool optimizer_needs_gradient(nlopt::algorithm algo)
+    {
+      const std::string name = nlopt_algorithm_name(static_cast<nlopt_algorithm>(algo));
+      // Check if algorithm name contains "derivative" (not "no-derivative")
+      // Naming: NLOPT_{G/L}{D/N}_* where D=derivative-based, N=no-derivative
+      return (name.find("derivative-based") != std::string::npos);
+    }
+
     template <typename Backend>
     struct objective_context
     {
@@ -272,6 +281,7 @@ struct MpiGuard
       Backend *backend = nullptr;
       const std::vector<pauli_term> *terms = nullptr;
       std::size_t *eval_count = nullptr;
+      bool compute_gradient = false;
     };
 
     template <typename Backend>
@@ -293,13 +303,48 @@ struct MpiGuard
 
       ctx->backend->reset();
       ctx->backend->apply(circuit_ref);
-
+      const double energy = ctx->backend->expectation(*ctx->terms).real();
       ++(*ctx->eval_count);
-      grad.assign(x.size(), 0.0);
-      return ctx->backend->expectation(*ctx->terms).real();
+
+      if (!std::isfinite(energy))
+      {
+        throw std::runtime_error("Non-finite energy value: " + std::to_string(energy));
+      }
+
+      // Compute gradients if needed (for derivative-based optimizers like LD_LBFGS)
+      if (ctx->compute_gradient && !grad.empty())
+      {
+        const double epsilon = 1e-5;  // finite difference step size
+
+        for (std::size_t i = 0; i < x.size(); ++i)
+        {
+          const double x_original = x[i];
+
+          // Forward difference: grad[i] = [E(x + ε) - E(x)] / ε
+          circuit_ref.set_parameter(i, x_original + epsilon);
+          ctx->backend->reset();
+          ctx->backend->apply(circuit_ref);
+          const double energy_plus = ctx->backend->expectation(*ctx->terms).real();
+          ++(*ctx->eval_count);
+
+          if (!std::isfinite(energy_plus))
+          {
+            throw std::runtime_error("Non-finite energy_plus at param " + std::to_string(i));
+          }
+
+          grad[i] = (energy_plus - energy) / epsilon;
+          circuit_ref.set_parameter(i, x_original);
+        }
+      }
+      else
+      {
+        grad.assign(x.size(), 0.0);
+      }
+
+      return energy;
     } // objective_function_impl() ends
 
-    
+
 
     template <typename Backend>
     double compute_energy(Backend &backend,
@@ -535,7 +580,14 @@ struct MpiGuard
         opt.set_param(param.first.c_str(), param.second);
       }
 
-      objective_context<Backend> ctx{&circ, &backend, &pauli_terms, &total_energy_evals};
+      const bool needs_grad = optimizer_needs_gradient(options.adapt_optimizer);
+      // if (options.verbose && iter == 0)
+      // {
+      //   std::cout << "[adapt] Optimizer: " << nlopt_algorithm_name(static_cast<nlopt_algorithm>(options.adapt_optimizer))
+      //             << " (gradient computation: " << (needs_grad ? "enabled" : "disabled") << ")" << std::endl;
+      // }
+
+      objective_context<Backend> ctx{&circ, &backend, &pauli_terms, &total_energy_evals, needs_grad};
       opt.set_min_objective(objective_function_impl<Backend>, &ctx);
 
       current_params = circ.parameters();
@@ -555,9 +607,25 @@ struct MpiGuard
         status = opt.optimize(current_params, min_value);
         num_evals = opt.get_numevals(); //MZ: number of optimization iterations is the actual useful info need to return
       }
+      catch (const nlopt::roundoff_limited &ex)
+      {
+        // Roundoff errors - optimization may have converged as much as possible
+        if (options.verbose)
+        {
+          std::cout << "[adapt][warning] NLopt roundoff limited: " << ex.what() << std::endl;
+        }
+        num_evals = opt.get_numevals();
+        status = nlopt::ROUNDOFF_LIMITED;
+      }
+      catch (const nlopt::forced_stop &ex)
+      {
+        throw std::runtime_error(std::string("NLopt forced stop: ") + ex.what());
+      }
       catch (const std::exception &ex)
       {
-        throw std::runtime_error(std::string("NLopt optimization failed: ") + ex.what());
+        throw std::runtime_error(std::string("NLopt optimization failed (iter=") + std::to_string(iter) +
+                                 ", params=" + std::to_string(current_params.size()) +
+                                 ", needs_grad=" + std::to_string(needs_grad) + "): " + ex.what());
       }
 
       for (std::size_t i = 0; i < current_params.size(); ++i)

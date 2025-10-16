@@ -729,11 +729,8 @@ namespace
     std::cout << "Converged              : " << (result.converged ? "yes" : "no") << std::endl;
     std::cout << std::setprecision(16);
     std::cout << "Final objective value  : " << result.energy << std::endl;
-    if (opts.verbose)
-    {
-      std::cout << "Initial objective value: " << result.initial_energy << std::endl;
-      std::cout << "Objective delta        : " << result.energy_delta << std::endl;
-    }
+    std::cout << "Initial objective value: " << result.initial_energy << std::endl;
+    std::cout << "Objective delta        : " << result.energy_delta << std::endl;
     std::cout << std::setprecision(6);
     std::cout << "Evaluation time        : " << format_duration(elapsed) << std::endl;
 
@@ -818,28 +815,23 @@ namespace
     std::cout << "Energy evaluations     : " << result.energy_evaluations << std::endl;
     std::cout << std::setprecision(16);
     std::cout << "Final objective value  : " << result.energy << std::endl;
-    if (opts.verbose)
-    {
-      std::cout << "Initial objective value: " << result.initial_energy << std::endl;
-      std::cout << "Objective delta        : " << (result.energy - result.initial_energy) << std::endl;
-    }
+    std::cout << "Initial objective value: " << result.initial_energy << std::endl;
+    std::cout << "Objective delta        : " << (result.energy - result.initial_energy) << std::endl;
     std::cout << std::setprecision(6);
     std::cout << "Evaluation time        : " << format_duration(elapsed) << std::endl;
     std::cout << "Converged              : " << (result.converged ? "yes" : "no") << std::endl;
 
-    if (opts.verbose)
-    {
-      std::cout << "\n[adapt] Optimization details:" << std::endl;
-      std::cout << "  Iterations executed   : " << result.iterations << std::endl;
-      std::cout << "  Energy evaluations    : " << result.energy_evaluations << std::endl;
-      std::cout << std::setprecision(16);
-      std::cout << "  Initial energy        : " << result.initial_energy << std::endl;
-      std::cout << "  Final energy          : " << result.energy << std::endl;
-      std::cout << "  ΔEnergy               : " << (result.energy - result.initial_energy) << std::endl;
-      std::cout << std::setprecision(6);
-      std::cout << "  Selected operator cnt : " << result.selected_indices.size() << std::endl;
-      std::cout << "  Parameter count       : " << result.parameters.size() << std::endl;
-    }
+    std::cout << "\n[adapt] Optimization details:" << std::endl;
+    std::cout << "  Iterations executed   : " << result.iterations << std::endl;
+    std::cout << "  Energy evaluations    : " << result.energy_evaluations << std::endl;
+    // std::cout << std::setprecision(16);
+    // std::cout << "  Initial energy        : " << result.initial_energy << std::endl;
+    // std::cout << "  Final energy          : " << result.energy << std::endl;
+    // std::cout << "  ΔEnergy               : " << (result.energy - result.initial_energy) << std::endl;
+    // std::cout << std::setprecision(6);
+    std::cout << "  Selected operator cnt : " << result.selected_indices.size() << std::endl;
+    std::cout << "  Parameter count       : " << result.parameters.size() << std::endl;
+
 
     return result.converged ? EXIT_SUCCESS : EXIT_FAILURE;
   }

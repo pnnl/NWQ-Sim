@@ -154,6 +154,15 @@ namespace vqe
       std::size_t last_print_eval = 0;
     };
 
+    // Helper function to check if optimizer needs gradients based on algorithm name
+    inline bool optimizer_needs_gradient(nlopt::algorithm algo)
+    {
+      const std::string name = nlopt_algorithm_name(static_cast<nlopt_algorithm>(algo));
+      // Check if algorithm name contains "derivative" (not "no-derivative")
+      // Naming: NLOPT_{G/L}{D/N}_* where D=derivative-based, N=no-derivative
+      return (name.find("derivative-based") != std::string::npos);
+    }
+
     template <typename Backend>
     struct objective_context
     {
@@ -164,6 +173,7 @@ namespace vqe
       double *apply_time = nullptr;
       double *expectation_time = nullptr;
       iteration_logger *logger = nullptr;
+      bool compute_gradient = false;
     };
 
     template <typename Backend>
@@ -188,12 +198,35 @@ namespace vqe
       ctx->backend->apply(ctx->ansatz->get_circuit());
       const auto apply_stop = std::chrono::steady_clock::now();
 
-      ++(*ctx->eval_count);
-      grad.assign(x.size(), 0.0);
-
       const auto expect_start = std::chrono::steady_clock::now();
       const double expectation = ctx->backend->expectation(*ctx->terms).real();
       const auto expect_stop = std::chrono::steady_clock::now();
+      ++(*ctx->eval_count);
+
+      // Compute gradients if needed (for derivative-based optimizers like LD_LBFGS)
+      if (ctx->compute_gradient && !grad.empty())
+      {
+        const double epsilon = 1e-5;  // finite difference step size
+
+        for (std::size_t i = 0; i < x.size(); ++i)
+        {
+          const double x_original = x[i];
+
+          // Forward difference: grad[i] = [E(x + ε) - E(x)] / ε
+          circuit.set_parameter(i, x_original + epsilon);
+          ctx->backend->reset();
+          ctx->backend->apply(ctx->ansatz->get_circuit());
+          const double energy_plus = ctx->backend->expectation(*ctx->terms).real();
+          ++(*ctx->eval_count);
+
+          grad[i] = (energy_plus - expectation) / epsilon;
+          circuit.set_parameter(i, x_original);
+        }
+      }
+      else
+      {
+        grad.assign(x.size(), 0.0);
+      }
 
       if (ctx->apply_time != nullptr)
       {
@@ -282,7 +315,8 @@ namespace vqe
       double apply_time = 0.0;
       double expectation_time = 0.0;
 
-      objective_context<Backend> context{&ansatz, &backend, &pauli_terms, &eval_count, &apply_time, &expectation_time, &logger};
+      objective_context<Backend> context{&ansatz, &backend, &pauli_terms, &eval_count, &apply_time, &expectation_time, &logger,
+                                          optimizer_needs_gradient(options.optimizer)};
       opt.set_min_objective(objective_function_impl<Backend>, &context);
 
       double min_value = 0.0;
