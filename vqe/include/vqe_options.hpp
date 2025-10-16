@@ -66,6 +66,7 @@ namespace vqe
     std::size_t adapt_status_interval = 25;
     std::unordered_map<std::string, double> adapt_algorithm_parameters;
     std::vector<double> adapt_initial_parameters;
+    bool use_spsa_gradient = false;  // Use SPSA-style gradient estimation (2 evals instead of N+1)
   };
 
 } // namespace vqe

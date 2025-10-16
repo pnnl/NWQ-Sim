@@ -8,6 +8,7 @@
 #include <iostream>
 #include <limits>
 #include <numeric>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -282,6 +283,8 @@ struct MpiGuard
       const std::vector<pauli_term> *terms = nullptr;
       std::size_t *eval_count = nullptr;
       bool compute_gradient = false;
+      bool use_spsa_gradient = false;  // Use SPSA-style gradient estimation
+      std::mt19937 *rng = nullptr;     // Random number generator for SPSA
     };
 
     template <typename Backend>
@@ -314,26 +317,75 @@ struct MpiGuard
       // Compute gradients if needed (for derivative-based optimizers like LD_LBFGS)
       if (ctx->compute_gradient && !grad.empty())
       {
-        const double epsilon = 1e-5;  // finite difference step size
-
-        for (std::size_t i = 0; i < x.size(); ++i)
+        if (ctx->use_spsa_gradient && ctx->rng != nullptr)
         {
-          const double x_original = x[i];
+          // SPSA gradient estimation: only 2 function evaluations regardless of dimensionality
+          const double epsilon = 1e-4;  // SPSA perturbation size
+          std::uniform_int_distribution<int> dist(0, 1);
+          std::vector<double> delta(x.size());
 
-          // Forward difference: grad[i] = [E(x + ε) - E(x)] / ε
-          circuit_ref.set_parameter(i, x_original + epsilon);
+          // Generate random perturbation direction (±1 for each parameter)
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            delta[i] = (dist(*ctx->rng) == 0) ? -1.0 : 1.0;
+          }
+
+          // Evaluate at x + ε*delta
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            circuit_ref.set_parameter(i, x[i] + epsilon * delta[i]);
+          }
           ctx->backend->reset();
           ctx->backend->apply(circuit_ref);
           const double energy_plus = ctx->backend->expectation(*ctx->terms).real();
           ++(*ctx->eval_count);
 
-          if (!std::isfinite(energy_plus))
+          // Evaluate at x - ε*delta
+          for (std::size_t i = 0; i < x.size(); ++i)
           {
-            throw std::runtime_error("Non-finite energy_plus at param " + std::to_string(i));
+            circuit_ref.set_parameter(i, x[i] - epsilon * delta[i]);
+          }
+          ctx->backend->reset();
+          ctx->backend->apply(circuit_ref);
+          const double energy_minus = ctx->backend->expectation(*ctx->terms).real();
+          ++(*ctx->eval_count);
+
+          // Compute gradient approximation: grad[i] ≈ (E+ - E-) / (2ε * delta[i])
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            grad[i] = (energy_plus - energy_minus) / (2.0 * epsilon * delta[i]);
           }
 
-          grad[i] = (energy_plus - energy) / epsilon;
-          circuit_ref.set_parameter(i, x_original);
+          // Restore parameters
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            circuit_ref.set_parameter(i, x[i]);
+          }
+        }
+        else
+        {
+          // Standard finite difference gradient
+          const double epsilon = 1e-5;  // finite difference step size
+
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            const double x_original = x[i];
+
+            // Forward difference: grad[i] = [E(x + ε) - E(x)] / ε
+            circuit_ref.set_parameter(i, x_original + epsilon);
+            ctx->backend->reset();
+            ctx->backend->apply(circuit_ref);
+            const double energy_plus = ctx->backend->expectation(*ctx->terms).real();
+            ++(*ctx->eval_count);
+
+            if (!std::isfinite(energy_plus))
+            {
+              throw std::runtime_error("Non-finite energy_plus at param " + std::to_string(i));
+            }
+
+            grad[i] = (energy_plus - energy) / epsilon;
+            circuit_ref.set_parameter(i, x_original);
+          }
         }
       }
       else
@@ -404,6 +456,7 @@ struct MpiGuard
     const double reference_energy = compute_energy(backend, pauli_terms);
     result.initial_energy = reference_energy;
     result.energy = reference_energy;
+    const bool needs_grad = optimizer_needs_gradient(options.adapt_optimizer);
 
     std::ofstream param_file;
     if (options.adapt_save_interval > 0)
@@ -580,14 +633,11 @@ struct MpiGuard
         opt.set_param(param.first.c_str(), param.second);
       }
 
-      const bool needs_grad = optimizer_needs_gradient(options.adapt_optimizer);
-      // if (options.verbose && iter == 0)
-      // {
-      //   std::cout << "[adapt] Optimizer: " << nlopt_algorithm_name(static_cast<nlopt_algorithm>(options.adapt_optimizer))
-      //             << " (gradient computation: " << (needs_grad ? "enabled" : "disabled") << ")" << std::endl;
-      // }
+      // Random number generator for SPSA (if enabled)
+      static std::mt19937 rng(std::random_device{}());
 
-      objective_context<Backend> ctx{&circ, &backend, &pauli_terms, &total_energy_evals, needs_grad};
+      objective_context<Backend> ctx{&circ, &backend, &pauli_terms, &total_energy_evals,
+                                      needs_grad, options.use_spsa_gradient, &rng};
       opt.set_min_objective(objective_function_impl<Backend>, &ctx);
 
       current_params = circ.parameters();

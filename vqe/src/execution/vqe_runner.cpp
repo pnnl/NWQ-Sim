@@ -10,6 +10,7 @@
 #include <iostream>
 #include <limits>
 #include <numeric>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -174,6 +175,8 @@ namespace vqe
       double *expectation_time = nullptr;
       iteration_logger *logger = nullptr;
       bool compute_gradient = false;
+      bool use_spsa_gradient = false;  // Use SPSA-style gradient estimation
+      std::mt19937 *rng = nullptr;     // Random number generator for SPSA
     };
 
     template <typename Backend>
@@ -206,21 +209,70 @@ namespace vqe
       // Compute gradients if needed (for derivative-based optimizers like LD_LBFGS)
       if (ctx->compute_gradient && !grad.empty())
       {
-        const double epsilon = 1e-5;  // finite difference step size
-
-        for (std::size_t i = 0; i < x.size(); ++i)
+        if (ctx->use_spsa_gradient && ctx->rng != nullptr)
         {
-          const double x_original = x[i];
+          // SPSA gradient estimation: only 2 function evaluations regardless of dimensionality
+          const double epsilon = 1e-4;  // SPSA perturbation size
+          std::uniform_int_distribution<int> dist(0, 1);
+          std::vector<double> delta(x.size());
 
-          // Forward difference: grad[i] = [E(x + ε) - E(x)] / ε
-          circuit.set_parameter(i, x_original + epsilon);
+          // Generate random perturbation direction (±1 for each parameter)
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            delta[i] = (dist(*ctx->rng) == 0) ? -1.0 : 1.0;
+          }
+
+          // Evaluate at x + ε*delta
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            circuit.set_parameter(i, x[i] + epsilon * delta[i]);
+          }
           ctx->backend->reset();
           ctx->backend->apply(ctx->ansatz->get_circuit());
           const double energy_plus = ctx->backend->expectation(*ctx->terms).real();
           ++(*ctx->eval_count);
 
-          grad[i] = (energy_plus - expectation) / epsilon;
-          circuit.set_parameter(i, x_original);
+          // Evaluate at x - ε*delta
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            circuit.set_parameter(i, x[i] - epsilon * delta[i]);
+          }
+          ctx->backend->reset();
+          ctx->backend->apply(ctx->ansatz->get_circuit());
+          const double energy_minus = ctx->backend->expectation(*ctx->terms).real();
+          ++(*ctx->eval_count);
+
+          // Compute gradient approximation: grad[i] ≈ (E+ - E-) / (2ε * delta[i])
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            grad[i] = (energy_plus - energy_minus) / (2.0 * epsilon * delta[i]);
+          }
+
+          // Restore parameters
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            circuit.set_parameter(i, x[i]);
+          }
+        }
+        else
+        {
+          // Standard finite difference gradient
+          const double epsilon = 1e-5;  // finite difference step size
+
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            const double x_original = x[i];
+
+            // Forward difference: grad[i] = [E(x + ε) - E(x)] / ε
+            circuit.set_parameter(i, x_original + epsilon);
+            ctx->backend->reset();
+            ctx->backend->apply(ctx->ansatz->get_circuit());
+            const double energy_plus = ctx->backend->expectation(*ctx->terms).real();
+            ++(*ctx->eval_count);
+
+            grad[i] = (energy_plus - expectation) / epsilon;
+            circuit.set_parameter(i, x_original);
+          }
         }
       }
       else
@@ -314,9 +366,12 @@ namespace vqe
       std::size_t eval_count = 0;
       double apply_time = 0.0;
       double expectation_time = 0.0;
+      const bool needs_grad = optimizer_needs_gradient(options.optimizer);
 
+      // Random number generator for SPSA (if enabled)
+      static std::mt19937 rng(std::random_device{}());
       objective_context<Backend> context{&ansatz, &backend, &pauli_terms, &eval_count, &apply_time, &expectation_time, &logger,
-                                          optimizer_needs_gradient(options.optimizer)};
+                                          needs_grad, options.use_spsa_gradient, &rng};
       opt.set_min_objective(objective_function_impl<Backend>, &context);
 
       double min_value = 0.0;

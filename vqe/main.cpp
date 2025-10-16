@@ -132,6 +132,7 @@ namespace
               << "  --stopval             Objective stop value.\n"
               << "  --maxeval             Maximum number of function evaluations (default 100).\n"
               << "  --maxtime             Maximum optimizer time (seconds).\n"
+              << "  --spsa                Use SPSA gradient estimation (2 evals) instead of finite-diff (N+1 evals).\n"
               << "OPTIONAL (ADAPT-VQE)\n"
               << "  --adapt               Run ADAPT-VQE instead of standard VQE.\n"
               << "  -ag, --adapt-gradtol  Gradient norm tolerance (default 1e-3).\n"
@@ -485,6 +486,11 @@ namespace
         config.disable_fusion = true;
         continue;
       }
+      if (arg == "--spsa")
+      {
+        config.options.use_spsa_gradient = true;
+        continue;
+      }
       if (arg == "--adapt")
       {
         config.options.mode = vqe::run_mode::adapt;
@@ -671,7 +677,12 @@ namespace
       std::cout << "  Backend               : " << config.backend << std::endl;
       std::cout << "  Trotter steps         : " << opts.trotter_steps << std::endl;
       std::cout << "  Symmetry level        : " << opts.symmetry_level << std::endl;
-      std::cout << "  Optimizer             : " << nlopt_algorithm_to_string(opts.optimizer) << std::endl;
+      std::cout << "  Optimizer             : " << nlopt_algorithm_to_string(opts.optimizer);
+      if (opts.use_spsa_gradient)
+      {
+        std::cout << " (SPSA gradient)";
+      }
+      std::cout << std::endl;
       std::cout << "  Parameter bounds      : [" << opts.lower_bound << ", " << opts.upper_bound << "]" << std::endl;
       if (opts.max_evaluations > 0)
       {
@@ -783,7 +794,12 @@ namespace
       {
         std::cout << "  Energy tolerance      : " << opts.adapt_energy_tolerance << std::endl;
       }
-      std::cout << "  Optimizer             : " << nlopt_algorithm_to_string(opts.adapt_optimizer) << std::endl;
+      std::cout << "  Optimizer             : " << nlopt_algorithm_to_string(opts.adapt_optimizer);
+      if (opts.use_spsa_gradient)
+      {
+        std::cout << " (SPSA gradient)";
+      }
+      std::cout << std::endl;
       std::cout << "  Parameter bounds      : [" << opts.adapt_lower_bound << ", "
                 << opts.adapt_upper_bound << "]" << std::endl;
       if (opts.adapt_max_evaluations > 0)
