@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 #include <nlopt.hpp>
+#include <chrono>
 #ifdef VQE_ENABLE_MPI
 #include <mpi.h>
 #endif
@@ -217,6 +218,27 @@ struct MpiGuard
       return bytes / (1024.0 * 1024.0);
     }
 
+
+    std::string format_duration(double seconds)
+    {
+      if (seconds < 60.0)
+      {
+        // Less than 1 minute: show as seconds with 2 decimal places
+        char buffer[16];
+        std::snprintf(buffer, sizeof(buffer), "%.2fs", seconds);
+        return std::string(buffer);
+      }
+      else
+      {
+        // 1 minute or more: show as "XXXm YYs"
+        int minutes = static_cast<int>(seconds / 60.0);
+        int secs = static_cast<int>(seconds) % 60;
+        char buffer[16];
+        std::snprintf(buffer, sizeof(buffer), "%dm %02ds", minutes, secs);
+        return std::string(buffer);
+      }
+    }
+
     void save_adapt_parameters(std::ofstream &out,
                                std::size_t iteration,
                                const std::vector<double> &parameters,
@@ -235,9 +257,9 @@ struct MpiGuard
       {
         if (i < selected_labels.size())
         {
-          out << "# " << selected_labels[i] << std::endl;
+          out << "# " << selected_labels[i];
         }
-        out << parameters[i] << std::endl;
+        out << "::" << parameters[i] << std::endl;
       }
       out << std::endl;
       out.flush();
@@ -275,7 +297,9 @@ struct MpiGuard
       ++(*ctx->eval_count);
       grad.assign(x.size(), 0.0);
       return ctx->backend->expectation(*ctx->terms).real();
-    }
+    } // objective_function_impl() ends
+
+    
 
     template <typename Backend>
     double compute_energy(Backend &backend,
@@ -360,8 +384,8 @@ struct MpiGuard
                 << " max|θ|=" << format_double(stats.max_abs, 6)
                 << " ||θ||₂=" << format_double(stats.l2_norm, 6) << std::endl;
       std::cout << "Running ADAPT-VQE..." << std::endl;
-      std::cout << " Iter   Objective Value     # Evals  Grad Norm  |  #1q Gates  #2q Gates  |  Selected Operator" << std::endl;
-      std::cout << "--------------------------------------------------------------------------------------------------------------" << std::endl;
+      std::cout << " Iter   Objective Value     # Evals  Grad Norm    Time   |  #1q Gates  #2q Gates  |  Selected Operator\n" << std::endl;
+      std::cout << "-----------------------------------------------------------------------------------------------------------------------\n" << std::endl;
     }
 
     const auto &pool_components = ansatz.pool_operator_components();
@@ -369,12 +393,15 @@ struct MpiGuard
     const auto &pool_excitations = ansatz.pool_excitations();
     std::vector<bool> selected(pool_size, false);
 
-    std::size_t total_energy_evals = 0;
+    std::size_t total_energy_evals = 0; // MZ: I think what supposed to be printed is mistaken during the code re-organization
+                                           // It was the number of optimizaton in each ADAPT round, not how many circuit evaluations
     bool converged = false;
     double previous_energy = reference_energy;
 
     for (std::size_t iter = 0; iter < options.adapt_max_iterations; ++iter)
     {
+      auto iteration_start = std::chrono::steady_clock::now(); // MZ: timer start
+
       backend.reset();
       backend.apply(ansatz.mutable_circuit());
       double base_energy = compute_energy(backend, pauli_terms);
@@ -450,15 +477,23 @@ struct MpiGuard
 
       if (max_index == pool_size || max_gradient < options.adapt_gradient_tolerance)
       {
+        auto iteration_end = std::chrono::steady_clock::now();  // MZ: timer end
+        std::chrono::duration<double> iteration_duration = iteration_end - iteration_start;
+        double elapsed_seconds = iteration_duration.count();
+        std::string time_str = format_duration(elapsed_seconds);
+
         converged = true;
         result.energy = base_energy;
         result.iterations = iter;
         if (options.verbose)
         {
-          std::cout << "[adapt][iter " << (iter + 1)
-                    << "] convergence: max|grad|=" << format_double(max_gradient, 6)
-                    << " energy=" << format_double(base_energy, 12)
-                    << " evaluations=" << total_energy_evals << std::endl;
+          std::ostringstream oss;
+          oss << std::setw(4) << iter+1 << "  "
+              << std::setw(20) << std::fixed << std::setprecision(12) << base_energy << "  "
+              << std::setw(7) << 0 << "  "
+              << std::scientific << std::setprecision(3) << max_gradient
+              << std::setw(9) << time_str << "  |  converged\n";
+          std::cout << oss.str();
         }
         break;
       }
@@ -513,10 +548,12 @@ struct MpiGuard
         }
       }
       double min_value = 0.0;
+      int num_evals = 0;
       nlopt::result status;
       try
       {
         status = opt.optimize(current_params, min_value);
+        num_evals = opt.get_numevals(); //MZ: number of optimization iterations is the actual useful info need to return
       }
       catch (const std::exception &ex)
       {
@@ -540,15 +577,20 @@ struct MpiGuard
         result.converged = true;
       }
 
+      auto iteration_end = std::chrono::steady_clock::now();  // MZ: timer end
+      std::chrono::duration<double> iteration_duration = iteration_end - iteration_start;
+      double elapsed_seconds = iteration_duration.count();
+      std::string time_str = format_duration(elapsed_seconds);
+
       if (options.verbose)
       {
         const auto counts = accumulate_gate_tally(circ);
         const auto formatted_label = format_operator_label(selected_label);
         std::ostringstream row;
-        row << std::setw(4) << iter << "  ";
+        row << std::setw(4) << iter+1 << "  ";
         row << std::fixed << std::setprecision(12) << std::setw(20) << optimized_energy << "  ";
-        row << std::setw(7) << total_energy_evals << "  ";
-        row << std::scientific << std::setprecision(3) << std::setw(8) << max_gradient << "  |  ";
+        row << std::setw(7) << num_evals << "  ";
+        row << std::scientific << std::setprecision(3) << std::setw(8) << max_gradient << std::setw(9) << time_str << "  |  ";
         row << std::defaultfloat;
         row << std::setw(9) << counts.single_qubit << "  "
             << std::setw(9) << counts.two_qubit << "  |  "
@@ -577,6 +619,7 @@ struct MpiGuard
           std::cout << "[adapt][iter " << (iter + 1)
                     << "] energy change " << format_double(std::abs(previous_energy - optimized_energy), 6)
                     << " < tol=" << format_double(options.adapt_energy_tolerance, 6) << std::endl;
+
         }
         result.iterations = iter + 1;
         converged = true;

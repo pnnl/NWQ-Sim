@@ -731,8 +731,8 @@ namespace
     std::cout << "Final objective value  : " << result.energy << std::endl;
     if (opts.verbose)
     {
-      std::cout << "Initial objective value : " << result.initial_energy << std::endl;
-      std::cout << "Objective delta         : " << result.energy_delta << std::endl;
+      std::cout << "Initial objective value: " << result.initial_energy << std::endl;
+      std::cout << "Objective delta        : " << result.energy_delta << std::endl;
     }
     std::cout << std::setprecision(6);
     std::cout << "Evaluation time        : " << format_duration(elapsed) << std::endl;
@@ -820,8 +820,8 @@ namespace
     std::cout << "Final objective value  : " << result.energy << std::endl;
     if (opts.verbose)
     {
-      std::cout << "Initial objective value : " << result.initial_energy << std::endl;
-      std::cout << "Objective delta         : " << (result.energy - result.initial_energy) << std::endl;
+      std::cout << "Initial objective value: " << result.initial_energy << std::endl;
+      std::cout << "Objective delta        : " << (result.energy - result.initial_energy) << std::endl;
     }
     std::cout << std::setprecision(6);
     std::cout << "Evaluation time        : " << format_duration(elapsed) << std::endl;
