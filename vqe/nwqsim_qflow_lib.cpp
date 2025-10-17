@@ -233,15 +233,16 @@ std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim
   return {result.energy, parameter_output};
 }
 
-std::string get_termination_reason_local(int result)
-{
-  static const std::unordered_map<int, std::string> kReasons = {
-      {0, "Local gradient minimum is reached"},
-      {9, "Local Gradient Follower is not run"}};
-  const auto it = kReasons.find(result);
-  if (it != kReasons.end())
-  {
-    return it->second;
-  }
-  return "Unknown reason, code: " + std::to_string(result);
-}
+// MZ: "local gradient" (SPSA gradient) is not implemnted after re-organized anyway
+// std::string get_termination_reason_local(int result)
+// {
+//   static const std::unordered_map<int, std::string> kReasons = {
+//       {0, "Local gradient minimum is reached"},
+//       {9, "Local Gradient Follower is not run"}};
+//   const auto it = kReasons.find(result);
+//   if (it != kReasons.end())
+//   {
+//     return it->second;
+//   }
+//   return "Unknown reason, code: " + std::to_string(result);
+// }

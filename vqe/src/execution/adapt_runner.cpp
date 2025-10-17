@@ -673,7 +673,6 @@ struct MpiGuard
       }
 
       start_iteration = loaded_state.iteration;
-      result.initial_energy = loaded_state.energy;
       result.energy = loaded_state.energy;
 
       if (options.verbose)
@@ -714,9 +713,10 @@ struct MpiGuard
       }
     }
 
-    if (options.verbose && start_iteration == 0)
+    if (options.verbose)
     {
       const auto stats = summarize_parameters(ansatz.mutable_circuit().parameters());
+      std::cout << std::endl;
       std::cout << "[adapt] Initialization: pool_size=" << ansatz.pool_operator_components().size()
                 << " # paulis=" << pauli_terms.size()
                 << " gradient_step=" << format_double(options.adapt_gradient_step, 6)
@@ -752,7 +752,7 @@ struct MpiGuard
     bool converged = false;
     double previous_energy = (start_iteration > 0) ? result.energy : reference_energy;
 
-    for (std::size_t iter = start_iteration; iter < options.adapt_max_iterations; ++iter)
+    for (std::size_t iter = start_iteration; iter < start_iteration+options.adapt_max_iterations; ++iter)
     {
       auto iteration_start = std::chrono::steady_clock::now(); // MZ: timer start
 

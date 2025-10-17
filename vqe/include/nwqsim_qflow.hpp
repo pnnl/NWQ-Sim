@@ -16,5 +16,5 @@ std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim
     std::string backend = "CPU",
     std::optional<vqe::vqe_options> options = std::nullopt);
 
-std::string get_termination_reason_local(int result);
+// std::string get_termination_reason_local(int result); // MZ: "local gradient" (SPSA gradient) is not implemnted after re-organized anyway
 

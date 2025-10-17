@@ -311,7 +311,6 @@ The shared library `libnwqsim` exports the QFlow ABI defined in `include/nwqsim_
 
 - `parseHamiltonianFile` – load a Fermionic Hamiltonian into the coefficient/operator form.
 - `qflow_nwqsim` – run a UCCSD-min VQE and obtain the ground-state energy plus the parameter list. Pass an optional `vqe::vqe_options` instance (from `vqe_options.hpp`) to override defaults such as optimizer, bounds, or GPU usage.
-- `get_termination_reason_local` – translate ADAPT termination codes to human-readable descriptions.
 
 Link against `libvqe` for native access to the solver primitives (environment, ansatz builders, state-vector backends, and the `execution` runners).
 
