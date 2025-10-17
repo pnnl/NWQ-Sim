@@ -461,7 +461,7 @@ struct MpiGuard
     std::ofstream param_file;
     if (options.adapt_save_interval > 0)
     {
-      std::string output_filename = hamiltonian_path + ".adapt_params.txt";
+      std::string output_filename = hamiltonian_path + "-adapt_params.txt";
       param_file.open(output_filename);
       if (param_file.is_open())
       {
@@ -475,6 +475,7 @@ struct MpiGuard
     {
       const auto stats = summarize_parameters(ansatz.mutable_circuit().parameters());
       std::cout << "[adapt] Initialization: pool_size=" << ansatz.pool_operator_components().size()
+                << " # paulis=" << pauli_terms.size()
                 << " gradient_step=" << format_double(options.adapt_gradient_step, 6)
                 << " gradient_tol=" << format_double(options.adapt_gradient_tolerance, 6) << std::endl;
       std::cout << "[adapt] Reference energy: " << format_double(reference_energy, 12)
@@ -573,7 +574,7 @@ struct MpiGuard
         selected_label = pool_excitations[max_index].label;
       }
 
-      if (max_index == pool_size || max_gradient < options.adapt_gradient_tolerance)
+      if (max_index == pool_size || max_gradient < options.adapt_gradient_tolerance) // MZ: not sure when max_index == pool_size will happen
       {
         auto iteration_end = std::chrono::steady_clock::now();  // MZ: timer end
         std::chrono::duration<double> iteration_duration = iteration_end - iteration_start;
@@ -655,7 +656,7 @@ struct MpiGuard
       try
       {
         status = opt.optimize(current_params, min_value);
-        num_evals = opt.get_numevals(); //MZ: number of optimization iterations is the actual useful info need to return
+        num_evals = opt.get_numevals(); //MZ: number of optimization iterations is the iterative info to return
       }
       catch (const nlopt::roundoff_limited &ex)
       {
@@ -770,18 +771,6 @@ struct MpiGuard
       }
       result.selected_labels.push_back(pool_excitations[idx].label);
     }
-    if (options.verbose && !result.selected_labels.empty())
-    {
-      std::cout << "Final parameters:" << std::endl;
-      for (std::size_t i = 0; i < result.selected_labels.size() && i < result.parameters.size(); ++i)
-      {
-        const auto formatted_label = format_operator_label(result.selected_labels[i]);
-        std::ostringstream line;
-        line << "  " << formatted_label << " :: "
-             << std::fixed << std::setprecision(16) << result.parameters[i];
-        std::cout << line.str() << std::endl;
-      }
-    }
     result.energy_evaluations = total_energy_evals;
     return result;
   }
@@ -802,7 +791,7 @@ struct MpiGuard
     molecular_environment env;
     env.n_spatial = data.num_qubits() / 2;
     env.n_electrons = n_particles;
-  env.xacc_indexing = options.use_xacc_indexing;
+    env.xacc_indexing = options.use_xacc_indexing;
     env.constant_energy = constant_energy;
 
   adapt_ansatz ansatz(env, options.symmetry_level);

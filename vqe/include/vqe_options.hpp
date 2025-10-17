@@ -33,8 +33,8 @@ namespace vqe
 
     // Optimizer configuration for standard VQE
     nlopt::algorithm optimizer = nlopt::LN_COBYLA;
-    double lower_bound = -2.0 * 3.14159265358979323846;
-    double upper_bound = 2.0 * 3.14159265358979323846;
+    double lower_bound = -1.0 * 3.14159265358979323846;
+    double upper_bound = 1.0 * 3.14159265358979323846;
     std::size_t max_evaluations = 100;
     double relative_tolerance = -1.0;
     double absolute_tolerance = -1.0;
@@ -47,7 +47,7 @@ namespace vqe
 
     // ADAPT-VQE specific controls
     std::size_t adapt_max_iterations = 20;
-    double adapt_gradient_step = 1e-2;
+    double adapt_gradient_step = 1e-4; // Note: this is for central difference in operator gradient comoutation
     double adapt_gradient_tolerance = 1e-3;
     double adapt_energy_tolerance = -1.0;
     bool adapt_log_memory = false;
@@ -55,8 +55,8 @@ namespace vqe
 
     // Optimizer configuration for ADAPT inner VQE solves
     nlopt::algorithm adapt_optimizer = nlopt::LN_COBYLA;
-    double adapt_lower_bound = -2.0 * 3.14159265358979323846;
-    double adapt_upper_bound = 2.0 * 3.14159265358979323846;
+    double adapt_lower_bound = 1.0 * 3.14159265358979323846;
+    double adapt_upper_bound = 1.0 * 3.14159265358979323846;
     std::size_t adapt_max_evaluations = 100;
     double adapt_relative_tolerance = -1.0;
     double adapt_absolute_tolerance = -1.0;

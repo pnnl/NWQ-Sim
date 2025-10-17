@@ -314,6 +314,35 @@ namespace vqe
       if (options.initial_parameters.size() == param_count)
       {
         parameters = options.initial_parameters;
+        if (options.verbose)
+        {
+          std::cout << "[vqe] Using custom initial parameters (" << param_count << " values)" << std::endl;
+        }
+      }
+      else if (options.verbose && !options.initial_parameters.empty())
+      {
+        std::cout << "[vqe] Warning: Initial parameters size mismatch (got "
+                  << options.initial_parameters.size() << ", need " << param_count
+                  << "). Using zeros." << std::endl;
+      }
+
+      if (options.verbose)
+      {
+        std::size_t display_count = std::min(param_count, std::size_t(10));
+        std::cout << "[vqe] Initial parameters: [";
+        for (std::size_t i = 0; i < display_count; ++i)
+        {
+          if (i > 0) std::cout << ", ";
+          std::cout << parameters[i];
+        }
+        if (param_count > 10)
+        {
+          std::cout << ", ...]" << std::endl;
+        }
+        else
+        {
+          std::cout << "]" << std::endl;
+        }
       }
 
       auto &mutable_circuit = ansatz.mutable_circuit();
