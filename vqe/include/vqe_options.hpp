@@ -51,7 +51,7 @@ namespace vqe
     double adapt_gradient_tolerance = 1e-3;
     double adapt_energy_tolerance = -1.0;
     bool adapt_log_memory = false;
-    std::size_t adapt_save_interval = 0; // Save parameters every N iterations (0 = no saving)
+    bool adapt_save_params = false; // Save parameters every iteration
 
     // Optimizer configuration for ADAPT inner VQE solves
     nlopt::algorithm adapt_optimizer = nlopt::LN_COBYLA;
@@ -67,6 +67,7 @@ namespace vqe
     std::unordered_map<std::string, double> adapt_algorithm_parameters;
     std::vector<double> adapt_initial_parameters;
     bool use_spsa_gradient = false;  // Use SPSA-style gradient estimation (2 evals instead of N+1)
+    std::string adapt_load_state_file;  // Load ADAPT-VQE state from file to resume optimization
   };
 
 } // namespace vqe

@@ -59,6 +59,7 @@ namespace vqe
     {
       return excitation_to_parameter_label_;
     }
+    [[nodiscard]] const char* pool_name() const { return "UCCSD"; }
 
   private:
     void generate_single_excitations();
@@ -107,6 +108,8 @@ namespace vqe
     const std::vector<excitation_info> &pool_excitations() const { return pool_excitations_; }
     const std::vector<std::vector<pool_operator_component>> &pool_operator_components() const { return pool_components_; }
     const std::vector<std::size_t> &selected_indices() const { return selected_indices_; }
+    const std::string& pool_name() const { return pool_name_; }
+    std::size_t symmetry_level() const { return symmetry_level_; }
 
     std::size_t add_operator(std::size_t pool_index, double initial_parameter = 0.0);
     void reset_circuit();
@@ -116,6 +119,7 @@ namespace vqe
 
     molecular_environment env_;
     std::size_t symmetry_level_ = 0;
+    std::string pool_name_;  // Pool name from generator ansatz
     std::vector<excitation_info> pool_excitations_;
     std::vector<std::vector<pool_operator_component>> pool_components_;
     std::vector<std::size_t> selected_indices_;

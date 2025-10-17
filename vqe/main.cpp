@@ -142,7 +142,8 @@ namespace
               << "  -ag, --adapt-gradtol  Gradient norm tolerance (default 1e-3).\n"
               << "  -af, --adapt-fvaltol  Energy change tolerance (default disabled).\n"
               << "  -am, --adapt-maxeval  Maximum ADAPT iterations (default 50).\n"
-              << "  -as, --adapt-saveint  Save parameters every N iterations (default 0 = no saving) to the same path as the Hamiltonian file.\n"
+              << "  -as, --adapt-save     Save parameters every iteration to {hamiltonian_path}-adapt_params.txt.\n"
+              << "  -al, --adapt-load     Load ADAPT-VQE state from file to resume optimization.\n"
               << "SIMULATOR OPTIONS\n"
               << "  --num_threads         Specify number of threads (ignored in current backend).\n"
               << "  --disable_fusion      Disable gate fusion (ignored in current backend).\n";
@@ -628,14 +629,19 @@ namespace
         config.options.adapt_max_iterations = static_cast<std::size_t>(std::stoull(argv[++i]));
         continue;
       }
-      if (arg == "-as" || arg == "--adapt-saveint")
+      if (arg == "-as" || arg == "--adapt-save")
+      {
+        config.options.adapt_save_params = true;
+        continue;
+      }
+      if (arg == "-al" || arg == "--adapt-load")
       {
         if (i + 1 >= argc)
         {
-          error = "Missing value for --adapt-saveint";
+          error = "Missing value for --adapt-load";
           return false;
         }
-        config.options.adapt_save_interval = static_cast<std::size_t>(std::stoull(argv[++i]));
+        config.options.adapt_load_state_file = argv[++i];
         continue;
       }
       error = "Unrecognized option: " + arg;
