@@ -17,7 +17,6 @@ namespace vqe
     std::vector<std::string> selected_labels;
     std::size_t iterations = 0;
     std::size_t energy_evaluations = 0;
-    std::size_t hamiltonian_terms = 0;
     bool converged = false;
     double initial_energy = 0.0;
   };

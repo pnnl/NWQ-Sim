@@ -187,7 +187,7 @@ std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim
   {
     options = vqe::vqe_options{};
     options.trotter_steps = 1;
-    options.symmetry_level = 0;
+    options.symmetry_level = 3;
     options.lower_bound = -kPi;
     options.upper_bound = kPi;
     options.max_evaluations = 100;
@@ -195,7 +195,7 @@ std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim
     options.absolute_tolerance = -1.0;
     options.stop_value = -std::numeric_limits<double>::infinity();
     options.max_time = -1.0;
-    options.optimizer = nlopt::LN_COBYLA;
+    options.optimizer = nlopt::LD_LBFGS; // MZ: to use a derivative-based optimizer to enable gradient computation
   }
 
   options.mode = vqe::run_mode::standard;
@@ -233,15 +233,16 @@ std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim
   return {result.energy, parameter_output};
 }
 
-std::string get_termination_reason_local(int result)
-{
-  static const std::unordered_map<int, std::string> kReasons = {
-      {0, "Local gradient minimum is reached"},
-      {9, "Local Gradient Follower is not run"}};
-  const auto it = kReasons.find(result);
-  if (it != kReasons.end())
-  {
-    return it->second;
-  }
-  return "Unknown reason, code: " + std::to_string(result);
-}
+// MZ: "local gradient" (SPSA gradient) is not implemnted after re-organized anyway
+// std::string get_termination_reason_local(int result)
+// {
+//   static const std::unordered_map<int, std::string> kReasons = {
+//       {0, "Local gradient minimum is reached"},
+//       {9, "Local Gradient Follower is not run"}};
+//   const auto it = kReasons.find(result);
+//   if (it != kReasons.end())
+//   {
+//     return it->second;
+//   }
+//   return "Unknown reason, code: " + std::to_string(result);
+// }

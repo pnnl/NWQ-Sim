@@ -34,6 +34,9 @@ namespace vqe
     const auto &excitations = generator.excitations();
     const auto &pauli_generators = generator.pauli_generators();
 
+    // Get pool name from the generator
+    pool_name_ = generator.pool_name();
+
     pool_excitations_.clear();
     pool_components_.clear();
 

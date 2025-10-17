@@ -93,6 +93,7 @@ if(VQE_ENABLE_MPI)
     target_link_libraries(vqe PRIVATE MPI::MPI_CXX)
     target_compile_definitions(vqe PRIVATE VQE_ENABLE_MPI)
     target_link_libraries(nwq_vqe PRIVATE MPI::MPI_CXX)
+    target_compile_definitions(nwq_vqe PRIVATE VQE_ENABLE_MPI)
 else()
     message(STATUS "MPI is OFF for ADAPT_VQE (serial ADAPT loop)")
 endif()
@@ -116,7 +117,6 @@ target_include_directories(vqe
     PRIVATE
         $<BUILD_INTERFACE:${VQE_NLOPT_INCLUDE}>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/nlopt>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
 )
 
 target_include_directories(nwqsim
