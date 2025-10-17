@@ -187,7 +187,7 @@ std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim
   {
     options = vqe::vqe_options{};
     options.trotter_steps = 1;
-    options.symmetry_level = 0;
+    options.symmetry_level = 3;
     options.lower_bound = -kPi;
     options.upper_bound = kPi;
     options.max_evaluations = 100;
@@ -195,7 +195,7 @@ std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim
     options.absolute_tolerance = -1.0;
     options.stop_value = -std::numeric_limits<double>::infinity();
     options.max_time = -1.0;
-    options.optimizer = nlopt::LN_COBYLA;
+    options.optimizer = nlopt::LD_LBFGS; // MZ: to use a derivative-based optimizer to enable gradient computation
   }
 
   options.mode = vqe::run_mode::standard;

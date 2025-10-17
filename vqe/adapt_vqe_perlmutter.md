@@ -54,15 +54,16 @@ time srun -N 4 --ntasks-per-node=4 -c 32 -C gpu --gpus-per-task=1 --cpu_bind=cor
 
 ## Examplar job script for Perlmutter
 ```bash
+#!/bin/bash
+
 #SBATCH -N 16
 #SBATCH -G 64
 #SBATCH --ntasks-per-node=4
 #SBATCH -c 32
 #SBATCH -C gpu
-#SBATCH --cpu_bind=cores
 #SBATCH -q regular
 #SBATCH -J h20_11a
-#SBATCH --mail-user=ang.li@pnnl.gov
+#SBATCH --mail-user=xxx.xx@pnnl.gov
 #SBATCH -o printouts/out_%x_%j.txt
 #SBATCH -e printouts/err_%x_%j.txt
 #SBATCH --mail-type=ALL
@@ -115,10 +116,11 @@ time srun -n 64 -c 32 --cpu_bind=cores -G 64 --gpus-per-task=1 --cpu_bind=cores 
     -lb ${LB} \
     --maxeval ${MAX_ITERATIONS} \
     -o ${OPTIMIZER} \
+    --sym 3 \
     --adapt \
     -ag ${ADAPT_GRADIENT_THRESHOLD} \
     -am ${MAX_ADAITERS} \
-    --sym 3
+    --as
 
 
 

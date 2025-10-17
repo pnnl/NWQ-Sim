@@ -972,7 +972,7 @@ namespace
                 << opts.adapt_upper_bound << "]" << std::endl;
       if (opts.adapt_max_evaluations > 0)
       {
-        std::cout << "  Max evaluations       : " << opts.adapt_max_evaluations << std::endl;
+        std::cout << "  Max VQE evaluations   : " << opts.adapt_max_evaluations << std::endl;
       }
       if (opts.adapt_max_time > 0)
       {
