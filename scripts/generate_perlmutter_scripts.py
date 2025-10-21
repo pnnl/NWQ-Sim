@@ -72,9 +72,9 @@ script_template = """#!/bin/bash
 #SBATCH -q regular
 #SBATCH -J nwq_vqe_{name}
 #SBATCH -t {time}
-#SBATCH --mail-user=matthew.burns@pnnl.gov
+#SBATCH --mail-user=xxxx.xxxx@pnnl.gov
 #SBATCH --mail-type=ALL
-#SBATCH -A m4243
+#SBATCH -A mxxxx
 #SBATCH -o {outpath}
 #SBATCH -e {errpath}
 
