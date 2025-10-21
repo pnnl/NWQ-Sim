@@ -14,7 +14,6 @@ This module builds together with NWQ-Sim. You need to enable the option of MPI: 
 ```bash
 git clone https://github.com/pnnl/NWQ-Sim.git
 cd NWQ-Sim
-git checkout vqe_memory
 git submodule update --init --recursive vqe/nlopt
 mkdir build
 cd build
