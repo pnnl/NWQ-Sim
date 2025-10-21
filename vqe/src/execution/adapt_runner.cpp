@@ -673,6 +673,7 @@ struct MpiGuard
       }
 
       start_iteration = loaded_state.iteration;
+      result.initial_energy = loaded_state.energy;
       result.energy = loaded_state.energy;
 
       if (options.verbose)

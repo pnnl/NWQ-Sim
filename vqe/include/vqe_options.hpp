@@ -55,7 +55,7 @@ namespace vqe
 
     // Optimizer configuration for ADAPT inner VQE solves
     nlopt::algorithm adapt_optimizer = nlopt::LN_COBYLA;
-    double adapt_lower_bound = 1.0 * 3.14159265358979323846;
+    double adapt_lower_bound = -1.0 * 3.14159265358979323846;
     double adapt_upper_bound = 1.0 * 3.14159265358979323846;
     std::size_t adapt_max_evaluations = 100;
     double adapt_relative_tolerance = -1.0;

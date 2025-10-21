@@ -41,7 +41,7 @@ time srun -n 2 -c 128 --cpu_bind=cores -G 2 --gpu-bind=none vqe/nwq_vqe -b NVGPU
 salloc --nodes 4 --qos interactive -t 120 --constraint gpu --account=m4243
 source ../environment/setup_perlmutter.sh
 module load python
-time srun -n 4 -c 128 --cpu_bind=cores -G 4 --gpu-bind=none vqe/nwq_vqe -b NVGPU -f ../BZDZ-9Orbitals/ducc3_benzene-FrozenCoreCCSD_8Elec_9Orbs.out-xacc -p 6 -v --abstol 1e-6 --maxeval 5000 -o LN_BOBYQA --adapt -ag 1e-3 -am 120
+time srun -n 4 -c 128 --cpu_bind=cores -G 4 --gpu-bind=none vqe/nwq_vqe -b NVGPU -f ../BZDZ-9Orbitals/ducc3_benzene-FrozenCoreCCSD_8Elec_9Orbs.out-xacc -p 8 -v --abstol 1e-6 --maxeval 5000 -o LN_BOBYQA --adapt -ag 1e-3 -am 120
 ```
 
 ### Case-3 (assuming in build dir and using 4 nodes, 16 MPI tasks, with 1 GPU per task and 32 CPUs per task (suggested for large case, as GPU parts more dominate, try me!):
@@ -49,7 +49,7 @@ time srun -n 4 -c 128 --cpu_bind=cores -G 4 --gpu-bind=none vqe/nwq_vqe -b NVGPU
 salloc --nodes 4 --qos interactive -t 120 --constraint gpu --account=m4243
 source ../environment/setup_perlmutter.sh
 module load python
-time srun -N 4 --ntasks-per-node=4 -c 32 -C gpu --gpus-per-task=1 --cpu_bind=cores vqe/nwq_vqe -b NVGPU -f ../H20-11Orbitals/H2O_1.75_Eq_11-Orbitals_DUCC3_H2O-1.75_Eq_DUCC3_10-electrons_11-Orbitals.out-xacc -p 6 -v --abstol 1e-6 --maxeval 5000 -o LN_BOBYQA --adapt -ag 1e-3 -am 120
+time srun -N 4 --ntasks-per-node=4 -c 32 -C gpu --gpus-per-task=1 --cpu_bind=cores vqe/nwq_vqe -b NVGPU -f ../H20-11Orbitals/H2O_1.75_Eq_11-Orbitals_DUCC3_H2O-1.75_Eq_DUCC3_10-electrons_11-Orbitals.out-xacc -p 10 -v --abstol 1e-6 --maxeval 5000 -o LN_BOBYQA --adapt -ag 1e-3 -am 120
 ```
 
 ## Examplar job script for Perlmutter
@@ -68,7 +68,7 @@ time srun -N 4 --ntasks-per-node=4 -c 32 -C gpu --gpus-per-task=1 --cpu_bind=cor
 #SBATCH -e printouts/err_%x_%j.txt
 #SBATCH --mail-type=ALL
 #SBATCH --time-min=32:00:00
-#SBATCH -t 10:00:00
+#SBATCH -t 48:00:00
 #SBATCH -A m4243
 
 

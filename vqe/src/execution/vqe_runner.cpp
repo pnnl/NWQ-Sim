@@ -456,7 +456,7 @@ namespace vqe
     molecular_environment env;
     env.n_spatial = data.num_qubits() / 2;
     env.n_electrons = n_particles;
-  env.xacc_indexing = options.use_xacc_indexing;
+    env.xacc_indexing = options.use_xacc_indexing;
     env.constant_energy = data.constant.real();
 
     uccsd_ansatz ansatz(env, options.trotter_steps, options.symmetry_level);
