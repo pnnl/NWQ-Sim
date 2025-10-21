@@ -94,6 +94,8 @@ namespace
 
     std::string backend = "CPU";
     std::string optimizer_config_path;
+    std::string init_params_input;  // Initial parameters input (single value or file)
+    bool save_params = false;  // Save optimized parameters to file
 
     vqe::vqe_options options;
     std::unordered_map<std::string, double> optimizer_params;
@@ -116,28 +118,32 @@ namespace
               << "  -f, --hamiltonian     Path to the input Hamiltonian file (sum of Fermionic operators).\n"
               << "  -p, -n, --nparticles  Number of electrons in molecule.\n"
               << "OPTIONAL (Hamiltonian, Ansatz and Backend)\n"
-              << "  --ducc                Use DUCC indexing scheme (default).\n"
-              << "  --xacc                Use XACC/Qiskit indexing scheme.\n"
-              << "  --sym, --symm         UCCSD symmetry level (0->none, 1->spin, 2->orbital, 3->full).\n"
-              << "  -b, --backend         Simulation backend (CPU|GPU). Defaults to CPU.\n"
+              << "  --xacc                Enable XACC/Qiskit indexing scheme (default).\n"
+              << "  --ducc                Enable DUCC indexing scheme.\n"
+              << "  --sym, --symm         UCCSD symmetry level (0->none, 1->spin, 2->orbital, 3->full). Default to 3.\n"
+              << "  -b, --backend         Simulation backend (CPU, MPI, NVGPU|GPU|NVGPU_MPI). Defaults to CPU.\n"
               << "  --seed                Random seed for reproducibility.\n"
               << "OPTIONAL (Global Minimizer)\n"
               << "  -v, --verbose         Print additional progress information.\n"
-              << "  -o, --optimizer       NLopt optimizer name (e.g. LN_COBYLA, LN_BOBYQA).\n"
+              << "  -o, --optimizer       NLopt optimizer (e.g. LN_COBYLA, LN_BOBYQA, LN_NEWUOA, LD_LBFGS).\n"
               << "  --opt-config          Path to JSON file with optimizer parameter overrides.\n"
-              << "  -lb, --lbound         Optimizer lower bound (default -2π).\n"
-              << "  -ub, --ubound         Optimizer upper bound (default 2π).\n"
+              << "  -lb, --lbound         Optimizer lower bound (default -π).\n"
+              << "  -ub, --ubound         Optimizer upper bound (default π).\n"
               << "  --reltol              Relative tolerance termination criterion.\n"
               << "  --abstol              Absolute tolerance termination criterion.\n"
               << "  --stopval             Objective stop value.\n"
-              << "  --maxeval             Maximum number of function evaluations (default 100).\n"
-              << "  --maxtime             Maximum optimizer time (seconds).\n"
+              << "  --maxeval             Maximum number of function evaluations in VQE optimization (default 100).\n"
+              << "  --maxtime             Maximum VQE optimizer time (seconds).\n"
+              << "  --spsa                Enable SPSA gradient estimation (2 evals) instead of forward difference (N+1 evals).\n"
+              << "  --init-params         [For VQE only] Initial parameters: single value (repeat for all) or file with comma-separated values.\n"
+              << "  --save-params         [For VQE only] Save optimized parameters to {hamiltonian_path}-vqe_params.txt.\n"
               << "OPTIONAL (ADAPT-VQE)\n"
-              << "  --adapt               Run ADAPT-VQE instead of standard VQE.\n"
-              << "  -ag, --adapt-gradtol  Gradient norm tolerance (default 1e-3).\n"
+              << "  --adapt               Enable ADAPT-VQE instead of standard VQE.\n"
+              << "  -ag, --adapt-gradtol  Operator Gradient norm tolerance (default 1e-3).\n"
               << "  -af, --adapt-fvaltol  Energy change tolerance (default disabled).\n"
-              << "  -am, --adapt-maxeval  Maximum ADAPT iterations (default 20).\n"
-              << "  -as, --adapt-saveinterval  Save parameters every N iterations (default 0 = no saving).\n"
+              << "  -am, --adapt-maxeval  Maximum ADAPT iterations (default 50).\n"
+              << "  -as, --adapt-save     Save parameters every iteration to {hamiltonian_path}-adapt_params.txt.\n"
+              << "  -al, --adapt-load     Load ADAPT-VQE state from file to resume optimization.\n"
               << "SIMULATOR OPTIONS\n"
               << "  --num_threads         Specify number of threads (ignored in current backend).\n"
               << "  --disable_fusion      Disable gate fusion (ignored in current backend).\n";
@@ -236,6 +242,89 @@ namespace
     return true;
   }
 
+  // Parse initial parameters: either a single value or a file with comma-separated values
+  bool parse_initial_parameters(const std::string &input, std::size_t expected_size,
+                                std::vector<double> &params, std::string &error)
+  {
+    params.clear();
+
+    // Try to parse as a single double value
+    try
+    {
+      double value = std::stod(input);
+      // It's a single value - repeat for all parameters
+      if (expected_size > 0)
+      {
+        params.assign(expected_size, value);
+      }
+      else
+      {
+        params.push_back(value);  // Will be repeated later when size is known
+      }
+      return true;
+    }
+    catch (...)
+    {
+      // Not a single value, try to read as a file
+    }
+
+    // Try to read from file
+    std::ifstream file(input);
+    if (!file.is_open())
+    {
+      error = "Cannot parse as number or open file: " + input;
+      return false;
+    }
+
+    std::string line;
+    while (std::getline(file, line))
+    {
+      // Split by comma
+      std::stringstream ss(line);
+      std::string token;
+      while (std::getline(ss, token, ','))
+      {
+        // Trim whitespace
+        token.erase(0, token.find_first_not_of(" \t\r\n"));
+        token.erase(token.find_last_not_of(" \t\r\n") + 1);
+
+        if (token.empty()) continue;
+
+        try
+        {
+          params.push_back(std::stod(token));
+        }
+        catch (...)
+        {
+          error = "Invalid number in file: " + token;
+          return false;
+        }
+      }
+    }
+
+    if (params.empty())
+    {
+      error = "No parameters found in file: " + input;
+      return false;
+    }
+
+    // If file has fewer parameters than expected, fill with zeros
+    if (expected_size > 0 && params.size() < expected_size)
+    {
+      std::cerr << "[warning] Parameter file has " << params.size() << " values, expected "
+                << expected_size << ". Filling remaining with zeros." << std::endl;
+      params.resize(expected_size, 0.0);
+    }
+    else if (expected_size > 0 && params.size() > expected_size)
+    {
+      std::cerr << "[warning] Parameter file has " << params.size() << " values, expected "
+                << expected_size << ". Using first " << expected_size << " values." << std::endl;
+      params.resize(expected_size);
+    }
+
+    return true;
+  }
+
   void set_bounds(vqe::vqe_options &opts, double lower, double upper)
   {
     opts.lower_bound = lower;
@@ -277,10 +366,10 @@ namespace
   bool parse_args(int argc, char **argv, cli_config &config, std::string &error)
   {
     config.options = vqe::vqe_options{};
-    config.options.symmetry_level = 0;
+    config.options.symmetry_level = 3; // MZ: changed to 3
     config.options.trotter_steps = 1;
     config.options.use_xacc_indexing = true;
-    set_bounds(config.options, -2.0 * kPi, 2.0 * kPi);
+    set_bounds(config.options, -1.0 * kPi, 1.0 * kPi);  // MZ: changed to [-pi, pi]
     set_relative_tolerance(config.options, -1.0);
     set_absolute_tolerance(config.options, -1.0);
     set_stop_value(config.options, -std::numeric_limits<double>::infinity());
@@ -290,7 +379,7 @@ namespace
     config.options.adapt_optimizer = nlopt::LN_COBYLA;
     config.options.adapt_gradient_tolerance = 1e-3;
     config.options.adapt_energy_tolerance = -1.0;
-    config.options.adapt_max_iterations = 20;
+    config.options.adapt_max_iterations = 50;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -485,6 +574,26 @@ namespace
         config.disable_fusion = true;
         continue;
       }
+      if (arg == "--spsa")
+      {
+        config.options.use_spsa_gradient = true;
+        continue;
+      }
+      if (arg == "--init-params")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --init-params";
+          return false;
+        }
+        config.init_params_input = argv[++i];
+        continue;
+      }
+      if (arg == "--save-params")
+      {
+        config.save_params = true;
+        continue;
+      }
       if (arg == "--adapt")
       {
         config.options.mode = vqe::run_mode::adapt;
@@ -520,14 +629,19 @@ namespace
         config.options.adapt_max_iterations = static_cast<std::size_t>(std::stoull(argv[++i]));
         continue;
       }
-      if (arg == "-as" || arg == "--adapt-saveinterval")
+      if (arg == "-as" || arg == "--adapt-save")
+      {
+        config.options.adapt_save_params = true;
+        continue;
+      }
+      if (arg == "-al" || arg == "--adapt-load")
       {
         if (i + 1 >= argc)
         {
-          error = "Missing value for --adapt-saveinterval";
+          error = "Missing value for --adapt-load";
           return false;
         }
-        config.options.adapt_save_interval = static_cast<std::size_t>(std::stoull(argv[++i]));
+        config.options.adapt_load_state_file = argv[++i];
         continue;
       }
       error = "Unrecognized option: " + arg;
@@ -659,6 +773,15 @@ namespace
     }
   }
 
+
+
+
+
+
+
+
+//-------------------------------------------------------------- run_vqe_mode() --------------------------------------------------------------//
+
   int run_vqe_mode(const cli_config &config)
   {
     const auto &opts = config.options;
@@ -671,7 +794,12 @@ namespace
       std::cout << "  Backend               : " << config.backend << std::endl;
       std::cout << "  Trotter steps         : " << opts.trotter_steps << std::endl;
       std::cout << "  Symmetry level        : " << opts.symmetry_level << std::endl;
-      std::cout << "  Optimizer             : " << nlopt_algorithm_to_string(opts.optimizer) << std::endl;
+      std::cout << "  Optimizer             : " << nlopt_algorithm_to_string(opts.optimizer);
+      if (opts.use_spsa_gradient)
+      {
+        std::cout << " (SPSA gradient)";
+      }
+      std::cout << std::endl;
       std::cout << "  Parameter bounds      : [" << opts.lower_bound << ", " << opts.upper_bound << "]" << std::endl;
       if (opts.max_evaluations > 0)
       {
@@ -709,14 +837,36 @@ namespace
     vqe::uccsd_ansatz ansatz(env, opts.trotter_steps, opts.symmetry_level);
     ansatz.build();
 
+    const std::size_t param_count = ansatz.get_circuit().parameters().size();
+
     if (opts.verbose)
     {
       std::cout << "Constructed ansatz with " << ansatz.excitations().size() << " generators and "
-                << ansatz.get_circuit().parameters().size() << " parameters." << std::endl;
+                << param_count << " parameters." << std::endl;
+    }
+
+    // Process initial parameters if specified
+    vqe::vqe_options opts_with_params = opts;
+    if (!config.init_params_input.empty())
+    {
+      std::string error;
+      std::vector<double> init_params;
+
+      if (!parse_initial_parameters(config.init_params_input, param_count, init_params, error))
+      {
+        std::cerr << "Error parsing initial parameters: " << error << std::endl;
+        return EXIT_FAILURE;
+      }
+
+      opts_with_params.initial_parameters = init_params;
+      if (opts.verbose)
+      {
+        std::cout << "Using custom initial parameters: " << init_params.size() << " values" << std::endl;
+      }
     }
 
     auto start = std::chrono::steady_clock::now();
-    auto result = vqe::run_default_vqe_with_ansatz(ansatz, pauli_terms, opts);
+    auto result = vqe::run_default_vqe_with_ansatz(ansatz, pauli_terms, opts_with_params);
     auto stop = std::chrono::steady_clock::now();
 
     const double elapsed = std::chrono::duration<double>(stop - start).count();
@@ -729,11 +879,8 @@ namespace
     std::cout << "Converged              : " << (result.converged ? "yes" : "no") << std::endl;
     std::cout << std::setprecision(16);
     std::cout << "Final objective value  : " << result.energy << std::endl;
-    if (opts.verbose)
-    {
-      std::cout << "Initial objective value: " << result.initial_energy << std::endl;
-      std::cout << "Objective delta        : " << result.energy_delta << std::endl;
-    }
+    std::cout << "Initial objective value: " << result.initial_energy << std::endl;
+    std::cout << "Objective delta        : " << result.energy_delta << std::endl;
     std::cout << std::setprecision(6);
     std::cout << "Evaluation time        : " << format_duration(elapsed) << std::endl;
 
@@ -765,8 +912,37 @@ namespace
         std::cout << "  Total expect time (s) : " << result.expectation_time << std::endl;
       }
     }
+
+    // Save optimized parameters to file if requested
+    if (config.save_params)
+    {
+      std::string param_file_path = config.hamiltonian_path + "-vqe_params.txt";
+      std::ofstream param_file(param_file_path);
+      if (param_file.is_open())
+      {
+        for (std::size_t i = 0; i < result.parameters.size(); ++i)
+        {
+          if (i > 0) param_file << ", ";
+          param_file << std::setprecision(16) << result.parameters[i];
+        }
+        param_file << std::endl;
+        param_file.close();
+        std::cout << "[vqe] Saved " << result.parameters.size()
+                  << " optimized parameters to: " << param_file_path << std::endl;
+      }
+      else
+      {
+        std::cerr << "[vqe] Warning: Could not save parameters to: " << param_file_path << std::endl;
+      }
+    }
+
     return result.converged ? EXIT_SUCCESS : EXIT_FAILURE;
   }
+
+
+
+
+//-------------------------------------------------------------- run_adapt_mode() --------------------------------------------------------------//
 
   int run_adapt_mode(const cli_config &config)
   {
@@ -786,12 +962,17 @@ namespace
       {
         std::cout << "  Energy tolerance      : " << opts.adapt_energy_tolerance << std::endl;
       }
-      std::cout << "  Optimizer             : " << nlopt_algorithm_to_string(opts.adapt_optimizer) << std::endl;
+      std::cout << "  Optimizer             : " << nlopt_algorithm_to_string(opts.adapt_optimizer);
+      if (opts.use_spsa_gradient)
+      {
+        std::cout << " (SPSA gradient)";
+      }
+      std::cout << std::endl;
       std::cout << "  Parameter bounds      : [" << opts.adapt_lower_bound << ", "
                 << opts.adapt_upper_bound << "]" << std::endl;
       if (opts.adapt_max_evaluations > 0)
       {
-        std::cout << "  Max evaluations       : " << opts.adapt_max_evaluations << std::endl;
+        std::cout << "  Max VQE evaluations   : " << opts.adapt_max_evaluations << std::endl;
       }
       if (opts.adapt_max_time > 0)
       {
@@ -814,38 +995,36 @@ namespace
     std::cout << "\n--------- Result Summary ---------" << std::endl;
     std::cout << "Method                 : ADAPT-VQE" << std::endl;
     std::cout << "Symmetry level         : " << opts.symmetry_level << std::endl;
-    std::cout << "# Hamiltonian terms    : " << result.hamiltonian_terms << std::endl;
     std::cout << "# ADAPT iterations     : " << result.iterations << std::endl;
     std::cout << "Energy evaluations     : " << result.energy_evaluations << std::endl;
     std::cout << std::setprecision(16);
     std::cout << "Final objective value  : " << result.energy << std::endl;
-    if (opts.verbose)
-    {
-      std::cout << "Initial objective value: " << result.initial_energy << std::endl;
-      std::cout << "Objective delta        : " << (result.energy - result.initial_energy) << std::endl;
-    }
+    std::cout << "Initial objective value: " << result.initial_energy << std::endl;
+    std::cout << "Objective delta        : " << (result.energy - result.initial_energy) << std::endl;
     std::cout << std::setprecision(6);
     std::cout << "Evaluation time        : " << format_duration(elapsed) << std::endl;
     std::cout << "Converged              : " << (result.converged ? "yes" : "no") << std::endl;
 
-    if (opts.verbose)
-    {
-      std::cout << "\n[adapt] Optimization details:" << std::endl;
-      std::cout << "  Iterations executed   : " << result.iterations << std::endl;
-      std::cout << "  Energy evaluations    : " << result.energy_evaluations << std::endl;
-      std::cout << std::setprecision(16);
-      std::cout << "  Initial energy        : " << result.initial_energy << std::endl;
-      std::cout << "  Final energy          : " << result.energy << std::endl;
-      std::cout << "  ΔEnergy               : " << (result.energy - result.initial_energy) << std::endl;
-      std::cout << std::setprecision(6);
-      std::cout << "  Selected operator cnt : " << result.selected_indices.size() << std::endl;
-      std::cout << "  Parameter count       : " << result.parameters.size() << std::endl;
-    }
+    std::cout << "\n[adapt] Optimization details:" << std::endl;
+    std::cout << "  Iterations executed   : " << result.iterations << std::endl;
+    std::cout << "  Energy evaluations    : " << result.energy_evaluations << std::endl;
+    // std::cout << std::setprecision(16);
+    // std::cout << "  Initial energy        : " << result.initial_energy << std::endl;
+    // std::cout << "  Final energy          : " << result.energy << std::endl;
+    // std::cout << "  ΔEnergy               : " << (result.energy - result.initial_energy) << std::endl;
+    // std::cout << std::setprecision(6);
+    std::cout << "  Selected operator cnt : " << result.selected_indices.size() << std::endl;
+    std::cout << "  Parameter count       : " << result.parameters.size() << std::endl;
+
 
     return result.converged ? EXIT_SUCCESS : EXIT_FAILURE;
   }
 
 } // namespace
+
+
+
+//-------------------------------------------------------------- main() --------------------------------------------------------------//
 
 int main(int argc, char **argv)
 {

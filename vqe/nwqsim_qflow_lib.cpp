@@ -159,6 +159,17 @@ std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim
     int n_part,
     std::string backend,
     std::optional<vqe::vqe_options> options_override)
+  // To use custom initial parameters, pass a vqe::vqe_options with initial_parameters set.
+  // Use trial and error with verbose=true to find the correct parameter count:
+  // Step 1: Run with verbose to see expected parameter count
+  // vqe::vqe_options test_opts;
+  // test_opts.verbose = true;
+  // qflow_nwqsim(hamiltonian_ops, n_part, backend, test_opts);  // Check output for parameter count
+  // Step 2: Create your initial parameters with the correct size
+  // vqe::vqe_options custom_opts;
+  // custom_opts.initial_parameters = {0.1, 0.2, 0.3, ...};  // Must match parameter count from step 1
+  // custom_opts.verbose = true;
+  // return qflow_nwqsim(hamiltonian_ops, n_part, backend, custom_opts);
 {
   if (n_part < 0)
   {
@@ -186,16 +197,17 @@ std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim
   else
   {
     options = vqe::vqe_options{};
+    options.verbose = false; // Set to true for more information
     options.trotter_steps = 1;
-    options.symmetry_level = 0;
-    options.lower_bound = -kPi;
-    options.upper_bound = kPi;
-    options.max_evaluations = 100;
-    options.relative_tolerance = -1.0;
-    options.absolute_tolerance = -1.0;
+    options.symmetry_level = 3;
+    options.lower_bound = -kPi; // -pi
+    options.upper_bound = kPi; // pi
+    options.max_evaluations = 100; // Max number of optimization iterations
+    options.relative_tolerance = -1.0; // -1 for no relative tolerance
+    options.absolute_tolerance = 1e-8; // -1 for no absolute tolerance
     options.stop_value = -std::numeric_limits<double>::infinity();
-    options.max_time = -1.0;
-    options.optimizer = nlopt::LN_COBYLA;
+    options.max_time = -1.0; // -1 for no max time
+    options.optimizer = nlopt::LD_LBFGS; // Use a derivative-based optimizer to enable gradient computation
   }
 
   options.mode = vqe::run_mode::standard;
@@ -233,15 +245,16 @@ std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim
   return {result.energy, parameter_output};
 }
 
-std::string get_termination_reason_local(int result)
-{
-  static const std::unordered_map<int, std::string> kReasons = {
-      {0, "Local gradient minimum is reached"},
-      {9, "Local Gradient Follower is not run"}};
-  const auto it = kReasons.find(result);
-  if (it != kReasons.end())
-  {
-    return it->second;
-  }
-  return "Unknown reason, code: " + std::to_string(result);
-}
+// MZ: "local gradient" (SPSA gradient) is not implemnted after re-organized anyway
+// std::string get_termination_reason_local(int result)
+// {
+//   static const std::unordered_map<int, std::string> kReasons = {
+//       {0, "Local gradient minimum is reached"},
+//       {9, "Local Gradient Follower is not run"}};
+//   const auto it = kReasons.find(result);
+//   if (it != kReasons.end())
+//   {
+//     return it->second;
+//   }
+//   return "Unknown reason, code: " + std::to_string(result);
+// }

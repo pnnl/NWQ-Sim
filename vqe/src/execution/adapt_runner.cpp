@@ -2,18 +2,19 @@
 
 #include <algorithm>
 #include <cctype>
-#include <chrono>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
 #include <numeric>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 #include <nlopt.hpp>
+#include <chrono>
 #ifdef VQE_ENABLE_MPI
 #include <mpi.h>
 #endif
@@ -25,7 +26,6 @@
 #endif
 #include "hamiltonian_parser.hpp"
 #include "jw_transform.hpp"
-#include "nwq_util.hpp"
 #include <sys/resource.h>
 
 namespace vqe
@@ -219,6 +219,7 @@ struct MpiGuard
       return bytes / (1024.0 * 1024.0);
     }
 
+    // MZ: formatting time string for each ADAPT iteration
     std::string format_duration(double seconds)
     {
       if (seconds < 60.0)
@@ -243,6 +244,7 @@ struct MpiGuard
                                std::size_t iteration,
                                const std::vector<double> &parameters,
                                const std::vector<std::string> &selected_labels,
+                               const std::vector<std::size_t> &selected_indices,
                                double energy)
     {
       if (!out.is_open())
@@ -250,9 +252,17 @@ struct MpiGuard
         return;
       }
       out << std::setprecision(16);
+      out << std::endl;
       out << "# Iteration " << iteration << std::endl;
       out << "# Energy: " << energy << std::endl;
       out << "# Number of parameters: " << parameters.size() << std::endl;
+      out << "# Operator indices: ";
+      for (std::size_t i = 0; i < selected_indices.size(); ++i)
+      {
+        if (i > 0) out << ", ";
+        out << selected_indices[i];
+      }
+      out << std::endl;
       for (std::size_t i = 0; i < parameters.size(); ++i)
       {
         if (i < selected_labels.size())
@@ -265,6 +275,176 @@ struct MpiGuard
       out.flush();
     }
 
+    struct adapt_state
+    {
+      std::string pool_name;
+      std::size_t symmetry_level = 0;
+      std::size_t iteration = 0;
+      double energy = 0.0;
+      std::vector<std::size_t> operator_indices;
+      std::vector<double> parameters;
+      std::vector<std::string> operator_labels;
+    };
+
+    bool load_adapt_state(const std::string &filename, adapt_state &state, std::string &error)
+    {
+      std::ifstream file(filename);
+      if (!file.is_open())
+      {
+        error = "Could not open file: " + filename;
+        return false;
+      }
+
+      std::string line;
+      adapt_state latest_state;
+      bool found_pool = false;
+      bool found_symmetry = false;
+      bool in_iteration = false;
+
+      while (std::getline(file, line))
+      {
+        // Skip empty lines
+        if (line.empty()) {
+          if (in_iteration) {
+            // End of iteration block, save this as latest state
+            state = latest_state;
+            in_iteration = false;
+          }
+          continue;
+        }
+
+        // Parse header info
+        if (line.find("# Pool: ") == 0)
+        {
+          latest_state.pool_name = line.substr(8);
+          found_pool = true;
+          continue;
+        }
+
+        if (line.find("# Symmetry level: ") == 0)
+        {
+          try {
+            latest_state.symmetry_level = std::stoull(line.substr(18));
+            found_symmetry = true;
+          } catch (...) {
+            error = "Invalid symmetry level in file";
+            return false;
+          }
+          continue;
+        }
+
+        // Parse iteration block
+        if (line.find("# Iteration ") == 0)
+        {
+          in_iteration = true;
+          latest_state.operator_indices.clear();
+          latest_state.parameters.clear();
+          latest_state.operator_labels.clear();
+          try {
+            latest_state.iteration = std::stoull(line.substr(12));
+          } catch (...) {
+            error = "Invalid iteration number in file";
+            return false;
+          }
+          continue;
+        }
+
+        if (line.find("# Energy: ") == 0)
+        {
+          try {
+            latest_state.energy = std::stod(line.substr(10));
+          } catch (...) {
+            error = "Invalid energy value in file";
+            return false;
+          }
+          continue;
+        }
+
+        if (line.find("# Operator indices: ") == 0)
+        {
+          std::string indices_str = line.substr(20);
+          std::istringstream iss(indices_str);
+          std::string token;
+          while (std::getline(iss, token, ','))
+          {
+            // Trim whitespace
+            token.erase(0, token.find_first_not_of(" \t"));
+            token.erase(token.find_last_not_of(" \t") + 1);
+            try {
+              latest_state.operator_indices.push_back(std::stoull(token));
+            } catch (...) {
+              error = "Invalid operator index in file";
+              return false;
+            }
+          }
+          continue;
+        }
+
+        // Parse parameter lines (format: "# label::value")
+        if (line.find("::") != std::string::npos)
+        {
+          std::size_t pos = line.find("::");
+          std::string label_part = line.substr(0, pos);
+          std::string value_part = line.substr(pos + 2);
+
+          // Extract label (remove "# " prefix if present)
+          std::string label;
+          if (label_part.size() > 2 && label_part[0] == '#' && label_part[1] == ' ')
+          {
+            label = label_part.substr(2);
+          }
+
+          try {
+            double value = std::stod(value_part);
+            latest_state.parameters.push_back(value);
+            if (!label.empty())
+            {
+              latest_state.operator_labels.push_back(label);
+            }
+          } catch (...) {
+            error = "Invalid parameter value in file";
+            return false;
+          }
+          continue;
+        }
+      }
+
+      // Save final iteration if we were in one
+      if (in_iteration)
+      {
+        state = latest_state;
+      }
+
+      if (!found_pool)
+      {
+        error = "File does not contain pool name";
+        return false;
+      }
+
+      if (!found_symmetry)
+      {
+        error = "File does not contain symmetry level";
+        return false;
+      }
+
+      if (state.iteration == 0)
+      {
+        error = "No valid iteration found in file";
+        return false;
+      }
+
+      return true;
+    }
+
+    // Helper function to check if optimizer needs gradients based on algorithm name
+    inline bool optimizer_needs_gradient(nlopt::algorithm algo)
+    {
+      const std::string name = nlopt_algorithm_name(static_cast<nlopt_algorithm>(algo));
+      // Check if algorithm name contains "derivative" (not "no-derivative")
+      // Naming: NLOPT_{G/L}{D/N}_* where D=derivative-based, N=no-derivative
+      return (name.find("derivative-based") != std::string::npos);
+    }
+
     template <typename Backend>
     struct objective_context
     {
@@ -272,6 +452,9 @@ struct MpiGuard
       Backend *backend = nullptr;
       const std::vector<pauli_term> *terms = nullptr;
       std::size_t *eval_count = nullptr;
+      bool compute_gradient = false;
+      bool use_spsa_gradient = false;  // Use SPSA-style gradient estimation
+      std::mt19937 *rng = nullptr;     // Random number generator for SPSA
     };
 
     template <typename Backend>
@@ -293,11 +476,97 @@ struct MpiGuard
 
       ctx->backend->reset();
       ctx->backend->apply(circuit_ref);
-
+      const double energy = ctx->backend->expectation(*ctx->terms).real();
       ++(*ctx->eval_count);
-      grad.assign(x.size(), 0.0);
-      return ctx->backend->expectation(*ctx->terms).real();
-    }
+
+      if (!std::isfinite(energy))
+      {
+        throw std::runtime_error("Non-finite energy value: " + std::to_string(energy));
+      }
+
+      // Compute gradients if needed (for derivative-based optimizers like LD_LBFGS)
+      if (ctx->compute_gradient && !grad.empty())
+      {
+        if (ctx->use_spsa_gradient && ctx->rng != nullptr)
+        {
+          // SPSA gradient estimation: only 2 function evaluations regardless of dimensionality
+          const double epsilon = 1e-4;  // SPSA perturbation size
+          std::uniform_int_distribution<int> dist(0, 1);
+          std::vector<double> delta(x.size());
+
+          // Generate random perturbation direction (±1 for each parameter)
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            delta[i] = (dist(*ctx->rng) == 0) ? -1.0 : 1.0;
+          }
+
+          // Evaluate at x + ε*delta
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            circuit_ref.set_parameter(i, x[i] + epsilon * delta[i]);
+          }
+          ctx->backend->reset();
+          ctx->backend->apply(circuit_ref);
+          const double energy_plus = ctx->backend->expectation(*ctx->terms).real();
+          ++(*ctx->eval_count);
+
+          // Evaluate at x - ε*delta
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            circuit_ref.set_parameter(i, x[i] - epsilon * delta[i]);
+          }
+          ctx->backend->reset();
+          ctx->backend->apply(circuit_ref);
+          const double energy_minus = ctx->backend->expectation(*ctx->terms).real();
+          ++(*ctx->eval_count);
+
+          // Compute gradient approximation: grad[i] ≈ (E+ - E-) / (2ε * delta[i])
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            grad[i] = (energy_plus - energy_minus) / (2.0 * epsilon * delta[i]);
+          }
+
+          // Restore parameters
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            circuit_ref.set_parameter(i, x[i]);
+          }
+        }
+        else
+        {
+          // Standard finite difference gradient
+          const double epsilon = 1e-5;  // finite difference step size
+
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            const double x_original = x[i];
+
+            // Forward difference: grad[i] = [E(x + ε) - E(x)] / ε
+            circuit_ref.set_parameter(i, x_original + epsilon);
+            ctx->backend->reset();
+            ctx->backend->apply(circuit_ref);
+            const double energy_plus = ctx->backend->expectation(*ctx->terms).real();
+            ++(*ctx->eval_count);
+
+            if (!std::isfinite(energy_plus))
+            {
+              throw std::runtime_error("Non-finite energy_plus at param " + std::to_string(i));
+            }
+
+            grad[i] = (energy_plus - energy) / epsilon;
+            circuit_ref.set_parameter(i, x_original);
+          }
+        }
+      }
+      else
+      {
+        grad.assign(x.size(), 0.0);
+      }
+
+      return energy;
+    } // objective_function_impl() ends
+
+
 
     template <typename Backend>
     double compute_energy(Backend &backend,
@@ -357,36 +626,109 @@ struct MpiGuard
     const double reference_energy = compute_energy(backend, pauli_terms);
     result.initial_energy = reference_energy;
     result.energy = reference_energy;
+    const bool needs_grad = optimizer_needs_gradient(options.adapt_optimizer);
+
+    // Load state from file if requested
+    std::size_t start_iteration = 0;
+    if (!options.adapt_load_state_file.empty())
+    {
+      adapt_state loaded_state;
+      std::string load_error;
+      if (!load_adapt_state(options.adapt_load_state_file, loaded_state, load_error))
+      {
+        throw std::runtime_error("Failed to load ADAPT state: " + load_error);
+      }
+
+      // Validate loaded state matches current configuration
+      if (loaded_state.symmetry_level != ansatz.symmetry_level())
+      {
+        throw std::runtime_error("Symmetry level mismatch: file has " +
+                                std::to_string(loaded_state.symmetry_level) +
+                                ", current is " + std::to_string(ansatz.symmetry_level()));
+      }
+
+      // Rebuild circuit with loaded operators
+      ansatz.reset_circuit();
+      for (std::size_t idx : loaded_state.operator_indices)
+      {
+        if (idx >= ansatz.pool_size())
+        {
+          throw std::runtime_error("Invalid operator index " + std::to_string(idx) +
+                                  " in state file (pool size is " + std::to_string(ansatz.pool_size()) + ")");
+        }
+        ansatz.add_operator(idx, 0.0);  // Add with zero initial parameter
+      }
+
+      // Set loaded parameters
+      auto &circ = ansatz.mutable_circuit();
+      if (loaded_state.parameters.size() != circ.parameters().size())
+      {
+        throw std::runtime_error("Parameter count mismatch: file has " +
+                                std::to_string(loaded_state.parameters.size()) +
+                                ", circuit has " + std::to_string(circ.parameters().size()));
+      }
+      for (std::size_t i = 0; i < loaded_state.parameters.size(); ++i)
+      {
+        circ.set_parameter(i, loaded_state.parameters[i]);
+      }
+
+      start_iteration = loaded_state.iteration;
+      result.initial_energy = loaded_state.energy;
+      result.energy = loaded_state.energy;
+
+      if (options.verbose)
+      {
+        std::cout << "[adapt] Loaded state from: " << options.adapt_load_state_file << std::endl;
+        std::cout << "[adapt] Resuming from iteration " << start_iteration
+                  << " with energy " << format_double(loaded_state.energy, 12) << std::endl;
+        std::cout << "[adapt] Loaded " << loaded_state.operator_indices.size()
+                  << " operators and " << loaded_state.parameters.size() << " parameters" << std::endl;
+      }
+    }
 
     std::ofstream param_file;
-    if (options.adapt_save_interval > 0)
+    if (options.adapt_save_params)
     {
-      std::string output_filename = hamiltonian_path + "-adapt_params.txt";
-      param_file.open(output_filename);
-      if (param_file.is_open())
+#ifdef VQE_ENABLE_MPI
+      // Only rank 0 should write to file in MPI mode
+      if (world_rank == 0)
+#endif
       {
-        param_file << "# ADAPT-VQE Parameters for " << hamiltonian_path << std::endl;
-        param_file << "# Save interval: every " << options.adapt_save_interval << " iterations" << std::endl;
-        param_file << std::endl;
+        std::string output_filename = hamiltonian_path + "-adapt_params.txt";
+        // If resuming, append to existing file
+        if (start_iteration > 0)
+        {
+          param_file.open(output_filename, std::ios::app);
+        }
+        else
+        {
+          param_file.open(output_filename);
+          if (param_file.is_open())
+          {
+            param_file << "# ADAPT-VQE Parameters for " << hamiltonian_path << std::endl;
+            param_file << "# Pool: " << ansatz.pool_name() << std::endl;
+            param_file << "# Symmetry level: " << ansatz.symmetry_level() << std::endl;
+            param_file << std::endl;
+          }
+        }
       }
     }
 
     if (options.verbose)
     {
       const auto stats = summarize_parameters(ansatz.mutable_circuit().parameters());
-      NWQSim::safe_print("[adapt] Hamiltonian has %zu Pauli terms\n", pauli_terms.size());
-      NWQSim::safe_print("[adapt] Initialization: pool_size=%zu gradient_step=%s gradient_tol=%s\n",
-                         ansatz.pool_operator_components().size(),
-                         format_double(options.adapt_gradient_step, 6).c_str(),
-                         format_double(options.adapt_gradient_tolerance, 6).c_str());
-      NWQSim::safe_print("[adapt] Reference energy: %s parameters=%zu max|θ|=%s ||θ||₂=%s\n",
-                         format_double(reference_energy, 12).c_str(),
-                         stats.count,
-                         format_double(stats.max_abs, 6).c_str(),
-                         format_double(stats.l2_norm, 6).c_str());
-      NWQSim::safe_print("Running ADAPT-VQE...\n");
-      NWQSim::safe_print(" Iter   Objective Value     # Evals  Grad Norm    Time     |  #1q Gates  #2q Gates  |  Selected Operator\n");
-      NWQSim::safe_print("-----------------------------------------------------------------------------------------------------------------------\n");
+      std::cout << std::endl;
+      std::cout << "[adapt] Initialization: pool_size=" << ansatz.pool_operator_components().size()
+                << " # paulis=" << pauli_terms.size()
+                << " gradient_step=" << format_double(options.adapt_gradient_step, 6)
+                << " gradient_tol=" << format_double(options.adapt_gradient_tolerance, 6) << std::endl;
+      std::cout << "[adapt] Reference energy: " << format_double(reference_energy, 12)
+                << " parameters=" << stats.count
+                << " max|θ|=" << format_double(stats.max_abs, 6)
+                << " ||θ||₂=" << format_double(stats.l2_norm, 6) << std::endl;
+      std::cout << "Running ADAPT-VQE..." << std::endl;
+      std::cout << " Iter   Objective Value     # Evals  Grad Norm    Time   |  #1q Gates  #2q Gates  |  Selected Operator\n" << std::endl;
+      std::cout << "-----------------------------------------------------------------------------------------------------------------------\n" << std::endl;
     }
 
     const auto &pool_components = ansatz.pool_operator_components();
@@ -394,13 +736,26 @@ struct MpiGuard
     const auto &pool_excitations = ansatz.pool_excitations();
     std::vector<bool> selected(pool_size, false);
 
-    std::size_t total_energy_evals = 0;
-    bool converged = false;
-    double previous_energy = reference_energy;
-
-    for (std::size_t iter = 0; iter < options.adapt_max_iterations; ++iter)
+    // Mark already selected operators if resuming
+    if (start_iteration > 0)
     {
-      auto iteration_start = std::chrono::steady_clock::now();
+      for (std::size_t idx : ansatz.selected_indices())
+      {
+        if (idx < pool_size)
+        {
+          selected[idx] = true;
+        }
+      }
+    }
+
+    std::size_t total_energy_evals = 0; // MZ: I think what supposed to be printed is mistaken during the code re-organization
+                                           // It was the number of optimizaton in each ADAPT round, not how many circuit evaluations
+    bool converged = false;
+    double previous_energy = (start_iteration > 0) ? result.energy : reference_energy;
+
+    for (std::size_t iter = start_iteration; iter < start_iteration+options.adapt_max_iterations; ++iter)
+    {
+      auto iteration_start = std::chrono::steady_clock::now(); // MZ: timer start
 
       backend.reset();
       backend.apply(ansatz.mutable_circuit());
@@ -409,7 +764,7 @@ struct MpiGuard
 
       if (options.adapt_log_memory)
       {
-        NWQSim::safe_print("[adapt] iteration %zu RSS: %.2f MiB\n", iter, current_rss_mebibytes());
+        std::cout << "[adapt] iteration " << iter << " RSS: " << current_rss_mebibytes() << " MiB" << std::endl;
       }
 
       double max_gradient = 0.0;
@@ -462,16 +817,7 @@ struct MpiGuard
 	  struct { double val; int idx; } in_pair, out_pair;
 	  in_pair.val = max_gradient;
 	  in_pair.idx = static_cast<int>(max_index);
-
-	  MPI_Datatype pair_type;
-	  MPI_Type_create_struct( 2, (int[]){1, 1},
-			  (MPI_Aint[]){offsetof(decltype(in_pair), val), offsetof(decltype(in_pair), idx)},
-			  (MPI_Datatype[]){MPI_DOUBLE, MPI_INT}, &pair_type);
-	  MPI_Type_commit(&pair_type);
-
 	  MPI_Allreduce(&in_pair, &out_pair, 1, MPI_DOUBLE_INT, MPI_MAXLOC, MPI_COMM_WORLD);
-	  MPI_Type_free(&pair_type);
-	  
 	  max_gradient = out_pair.val;
 	  max_index = static_cast<std::size_t>(out_pair.idx);
 	#endif
@@ -484,9 +830,9 @@ struct MpiGuard
         selected_label = pool_excitations[max_index].label;
       }
 
-      if (max_index == pool_size || max_gradient < options.adapt_gradient_tolerance)
+      if (max_index == pool_size || max_gradient < options.adapt_gradient_tolerance) // MZ: not sure when max_index == pool_size will happen
       {
-        auto iteration_end = std::chrono::steady_clock::now();
+        auto iteration_end = std::chrono::steady_clock::now();  // MZ: timer end
         std::chrono::duration<double> iteration_duration = iteration_end - iteration_start;
         double elapsed_seconds = iteration_duration.count();
         std::string time_str = format_duration(elapsed_seconds);
@@ -496,12 +842,13 @@ struct MpiGuard
         result.iterations = iter;
         if (options.verbose)
         {
-          NWQSim::safe_print("%4zu  %20.12f  %7zu  %.3e  %9s  |  converged\n",
-                             iter,
-                             base_energy,
-                             total_energy_evals,
-                             max_gradient,
-                             time_str.c_str());
+          std::ostringstream oss;
+          oss << std::setw(4) << iter+1 << "  "
+              << std::setw(20) << std::fixed << std::setprecision(12) << base_energy << "  "
+              << std::setw(7) << 0 << "  "
+              << std::scientific << std::setprecision(3) << max_gradient
+              << std::setw(9) << time_str << "  |  converged\n";
+          std::cout << oss.str();
         }
         break;
       }
@@ -543,7 +890,11 @@ struct MpiGuard
         opt.set_param(param.first.c_str(), param.second);
       }
 
-      objective_context<Backend> ctx{&circ, &backend, &pauli_terms, &total_energy_evals};
+      // Random number generator for SPSA (if enabled)
+      static std::mt19937 rng(std::random_device{}());
+
+      objective_context<Backend> ctx{&circ, &backend, &pauli_terms, &total_energy_evals,
+                                      needs_grad, options.use_spsa_gradient, &rng};
       opt.set_min_objective(objective_function_impl<Backend>, &ctx);
 
       current_params = circ.parameters();
@@ -556,14 +907,32 @@ struct MpiGuard
         }
       }
       double min_value = 0.0;
+      int num_evals = 0;
       nlopt::result status;
       try
       {
         status = opt.optimize(current_params, min_value);
+        num_evals = opt.get_numevals(); //MZ: number of optimization iterations is the iterative info to return
+      }
+      catch (const nlopt::roundoff_limited &ex)
+      {
+        // Roundoff errors - optimization may have converged as much as possible
+        if (options.verbose)
+        {
+          std::cout << "[adapt][warning] NLopt roundoff limited: " << ex.what() << std::endl;
+        }
+        num_evals = opt.get_numevals();
+        status = nlopt::ROUNDOFF_LIMITED;
+      }
+      catch (const nlopt::forced_stop &ex)
+      {
+        throw std::runtime_error(std::string("NLopt forced stop: ") + ex.what());
       }
       catch (const std::exception &ex)
       {
-        throw std::runtime_error(std::string("NLopt optimization failed: ") + ex.what());
+        throw std::runtime_error(std::string("NLopt optimization failed (iter=") + std::to_string(iter) +
+                                 ", params=" + std::to_string(current_params.size()) +
+                                 ", needs_grad=" + std::to_string(needs_grad) + "): " + ex.what());
       }
 
       for (std::size_t i = 0; i < current_params.size(); ++i)
@@ -583,37 +952,45 @@ struct MpiGuard
         result.converged = true;
       }
 
+      auto iteration_end = std::chrono::steady_clock::now();  // MZ: timer end
+      std::chrono::duration<double> iteration_duration = iteration_end - iteration_start;
+      double elapsed_seconds = iteration_duration.count();
+      std::string time_str = format_duration(elapsed_seconds);
+
       if (options.verbose)
       {
-        auto iteration_end = std::chrono::steady_clock::now();
-        std::chrono::duration<double> iteration_duration = iteration_end - iteration_start;
-        double elapsed_seconds = iteration_duration.count();
-        std::string time_str = format_duration(elapsed_seconds);
-
         const auto counts = accumulate_gate_tally(circ);
         const auto formatted_label = format_operator_label(selected_label);
-        NWQSim::safe_print("%4zu  %20.12f  %7zu  %.3e  %9s  |  %9d  %9d  |  %s\n",
-                           iter+1,
-                           optimized_energy,
-                           total_energy_evals,
-                           max_gradient,
-                           time_str.c_str(),
-                           counts.single_qubit,
-                           counts.two_qubit,
-                           formatted_label.c_str());
+        std::ostringstream row;
+        row << std::setw(4) << iter+1 << "  ";
+        row << std::fixed << std::setprecision(12) << std::setw(20) << optimized_energy << "  ";
+        row << std::setw(7) << num_evals << "  ";
+        row << std::scientific << std::setprecision(3) << std::setw(8) << max_gradient << std::setw(9) << time_str << "  |  ";
+        row << std::defaultfloat;
+        row << std::setw(9) << counts.single_qubit << "  "
+            << std::setw(9) << counts.two_qubit << "  |  "
+            << formatted_label;
+        std::cout << row.str() << std::endl;
       }
 
-      if (options.adapt_save_interval > 0 && (iter + 1) % options.adapt_save_interval == 0)
+      if (options.adapt_save_params)
       {
-        std::vector<std::string> current_labels;
-        for (auto idx : ansatz.selected_indices())
+#ifdef VQE_ENABLE_MPI
+        // Only rank 0 should write to file in MPI mode
+        if (world_rank == 0)
+#endif
         {
-          if (idx < pool_excitations.size())
+          std::vector<std::string> current_labels;
+          for (auto idx : ansatz.selected_indices())
           {
-            current_labels.push_back(pool_excitations[idx].label);
+            if (idx < pool_excitations.size())
+            {
+              current_labels.push_back(pool_excitations[idx].label);
+            }
           }
+          save_adapt_parameters(param_file, iter + 1, current_params, current_labels,
+                              ansatz.selected_indices(), optimized_energy);
         }
-        save_adapt_parameters(param_file, iter + 1, current_params, current_labels, optimized_energy);
       }
 
       if (options.adapt_energy_tolerance > 0.0 &&
@@ -621,10 +998,10 @@ struct MpiGuard
       {
         if (options.verbose)
         {
-          NWQSim::safe_print("[adapt][iter %zu] energy change %s < tol=%s\n",
-                             (iter + 1),
-                             format_double(std::abs(previous_energy - optimized_energy), 6).c_str(),
-                             format_double(options.adapt_energy_tolerance, 6).c_str());
+          std::cout << "[adapt][iter " << (iter + 1)
+                    << "] energy change " << format_double(std::abs(previous_energy - optimized_energy), 6)
+                    << " < tol=" << format_double(options.adapt_energy_tolerance, 6) << std::endl;
+
         }
         result.iterations = iter + 1;
         converged = true;
@@ -657,17 +1034,7 @@ struct MpiGuard
       }
       result.selected_labels.push_back(pool_excitations[idx].label);
     }
-    if (options.verbose && !result.selected_labels.empty())
-    {
-      NWQSim::safe_print("Final parameters:\n");
-      for (std::size_t i = 0; i < result.selected_labels.size() && i < result.parameters.size(); ++i)
-      {
-        const auto formatted_label = format_operator_label(result.selected_labels[i]);
-        NWQSim::safe_print("  %s :: %.16f\n", formatted_label.c_str(), result.parameters[i]);
-      }
-    }
     result.energy_evaluations = total_energy_evals;
-    result.hamiltonian_terms = pauli_terms.size();
     return result;
   }
 
@@ -687,7 +1054,7 @@ struct MpiGuard
     molecular_environment env;
     env.n_spatial = data.num_qubits() / 2;
     env.n_electrons = n_particles;
-  env.xacc_indexing = options.use_xacc_indexing;
+    env.xacc_indexing = options.use_xacc_indexing;
     env.constant_energy = constant_energy;
 
   adapt_ansatz ansatz(env, options.symmetry_level);

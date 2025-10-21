@@ -4,11 +4,13 @@ Production-ready Variational Quantum Eigensolver (VQE) module built on the NWQ-S
 
 ## Features
 
-- **High Performance**: GPU-accelerated quantum circuit simulation
-- **Multiple Algorithms**: UCCSD and ADAPT-VQE implementations  
-- **Python API**: Interface with error handling
-- **Flexible Optimization**: Integration with NLopt and SciPy optimizers
-
+- **High Performance**: GPU-accelerated quantum circuit simulation with MPI parallelization for ADAPT-VQE
+- **Multiple Algorithms**: UCCSD and ADAPT-VQE implementations with adaptive operator selection
+- **Checkpoint and Resumption**: Save and restore VQE/ADAPT-VQE state for long-running optimizations
+- **Flexible Optimization**: Integration with NLopt optimizers including SPSA gradient estimation and numerical gradients
+- **Parameter Management**: Custom initial parameters from files or values, parameter saving to disk
+- **Python API**: Interface with error handling and convenience functions
+- **Advanced Logging**: Iteration details, memory tracking, convergence monitoring, and performance profiling
 - **Documentation**: API documentation with examples
 
 ## Building
@@ -66,17 +68,20 @@ HAMILTONIAN / ANSATZ / BACKEND OPTIONS
   -b, --backend         Simulation backend (CPU | GPU). Defaults to CPU.
   --seed                Seed for initial parameters and stochastic gradients.
 
-OPTIMISER OPTIONS
-  -v, --verbose         Print additional optimisation progress.
+OPTIMIZER OPTIONS
+  -v, --verbose         Print additional optimization progress.
   -o, --optimizer       NLopt algorithm name (default LN_COBYLA).
   --opt-config          JSON file with NLopt parameter overrides.
-  -lb, --lbound         Lower bound for all parameters (default -2π).
-  -ub, --ubound         Upper bound for all parameters (default  2π).
+  -lb, --lbound         Lower bound for all parameters (default -π).
+  -ub, --ubound         Upper bound for all parameters (default π).
   --reltol              Relative objective tolerance (default disabled).
   --abstol              Absolute objective tolerance (default disabled).
   --maxeval             Maximum objective evaluations (default 100).
-  --maxtime             Wall-clock limit for the optimiser (seconds).
+  --maxtime             Wall-clock limit for the optimizer (seconds).
   --stopval             Objective value threshold for early exit.
+  --spsa                Use SPSA gradient estimation (2 evals) instead of forward difference (N+1 evals).
+  --init-params         [For VQE only] Initial parameters: single value (repeat for all) or file with comma-separated values.
+  --save-params         [For VQE only] Save optimized parameters to {hamiltonian_path}-vqe_params.txt.
 
 SIMULATION OPTIONS
   --num_threads         Requested CPU thread count (advisory).
@@ -86,7 +91,10 @@ ADAPT-VQE OPTIONS
   --adapt               Enable ADAPT-VQE loop.
   -ag, --adapt-gradtol  Gradient-norm termination threshold (default 1e-3).
   -af, --adapt-fvaltol  Energy-change termination threshold (default disabled).
-  -am, --adapt-maxeval  Maximum ADAPT iterations (default 20).
+  -am, --adapt-maxeval  Maximum ADAPT iterations (default 50).
+  -as, --adapt-save     Save ADAPT parameters every iteration to {hamiltonian_path}-adapt_params.txt.
+  -al, --adapt-load     Load ADAPT state from file to resume optimization from checkpoint.
+  --adapt-log-memory    Log RSS memory usage per ADAPT iteration.
 ```
 
 Example – plain VQE run on the supplied `H4_4_0.9_xacc.hamil` benchmark:
@@ -95,10 +103,30 @@ Example – plain VQE run on the supplied `H4_4_0.9_xacc.hamil` benchmark:
 ./build/vqe/nwq_vqe -f vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -p 4 --maxeval 1000
 ```
 
+Example – VQE with custom initial parameters and parameter saving:
+
+```bash
+./build/vqe/nwq_vqe -f vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -p 4 --init-params init_params.txt --maxeval 1000 --save-params
+```
+
 Example – Fermionic ADAPT-VQE with the same problem:
 
 ```bash
 ./build/vqe/nwq_vqe -f vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -p 4 --adapt --adapt-maxeval 50
+```
+
+Example – ADAPT-VQE with checkpointing (the parameter values are saved under the same parent folder as the Hamiltonian file):
+
+```bash
+./build/vqe/nwq_vqe -f vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -p 4 --adapt --adapt-save --adapt-log-memory
+# To resume from checkpoint:
+./build/vqe/nwq_vqe -f vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -p 4 --adapt --adapt-load qe/example_hamiltonians/H4_4_0.9_xacc.hamil-adapt_params.txt
+```
+
+Example – ADAPT-VQE with SPSA gradient and GPU acceleration:
+
+```bash
+./build/vqe/nwq_vqe -f vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -p 4 --adapt -b NVGPU --spsa --adapt-maxeval 50
 ```
 
 ## Python API
@@ -126,17 +154,19 @@ pauli_terms = vqe.transform(hamiltonian)
 ansatz = vqe.UCCSD(system, trotter_steps=1, symmetry_level=3)
 ansatz.build()
 
-# 4) Configure optimization
+# 4) Configure optimization with custom initial parameters
 options = vqe.Options()
 options.optimizer = "L-BFGS-B"
 options.max_evaluations = 1000
 options.use_gpu = True
 options.relative_tolerance = 1e-8
+options.initial_parameters = [0.1, -0.2, 0.05]  # Custom starting parameters (must match ansatz.parameter_count)
 
 # 5) Run VQE
 result = vqe.run(ansatz, pauli_terms, options)
 print(f"Ground state energy: {result.energy:.8f}")
 print(f"Converged: {result.success} ({result.evaluations} evaluations)")
+print(f"Final parameters: {result.parameters}")
 ```
 
 ### SciPy Integration
@@ -220,13 +250,14 @@ hamiltonian = vqe.load_hamiltonian("h4_square.txt")
 adapt_options = vqe.Options()
 adapt_options.mode = "adapt"
 adapt_options.use_xacc_indexing = True
-adapt_options.adapt_max_iterations = 20
+adapt_options.adapt_max_iterations = 50
 adapt_options.adapt_gradient_tolerance = 1e-4
 adapt_options.adapt_energy_tolerance = 1e-8
 
 # Configure inner VQE optimization for each ADAPT step
 adapt_options.adapt_optimizer = "L-BFGS-B"
 adapt_options.adapt_max_evaluations = 500
+adapt_options.adapt_max_time = 600.0    # Time limit per ADAPT iteration in seconds
 adapt_options.use_gpu = True
 
 # Run ADAPT-VQE
@@ -239,11 +270,11 @@ result = vqe.adapt(
 # Result analysis
 print(f"Final energy: {result.energy:.8f}")
 print(f"ADAPT iterations: {result.iterations}")
-print(f"Circuit depth: {result.circuit_depth}")
 print(f"Total evaluations: {result.energy_evaluations}")
 print(f"Selected operators: {result.selected_labels}")
 print(f"Converged: {result.success}")
 ```
+
 
 ### Error Handling
 
@@ -294,14 +325,14 @@ except ValueError as e:
 - **`OperatorKind.CREATION`** / **`OperatorKind.ANNIHILATION`**: Fermion operators
 
 ### Key Features
-- ✅ **Error handling**
-- ✅ **Input validation** for all configuration parameters  
-- ✅ **String representations** (`__repr__`, `__str__`) for all classes
-- ✅ **Property-based access** with getters/setters instead of raw attributes
-- ✅ **Parallel computation support**
-- ✅ **Clean external optimizer interface** via `EnergyEvaluator`
-- ✅ **GPU auto-fallback** with warnings instead of crashes
-- ✅ **Type hints and documentation** throughout the API
+- **Error handling**
+- **Input validation** for all configuration parameters  
+- **String representations** (`__repr__`, `__str__`) for all classes
+- **Property-based access** with getters/setters instead of raw attributes
+- **Parallel computation support**
+- **Clean external optimizer interface** via `EnergyEvaluator`
+- **GPU auto-fallback** with warnings instead of crashes
+- **Type hints and documentation** throughout the API
 
 
 
@@ -310,10 +341,10 @@ except ValueError as e:
 The shared library `libnwqsim` exports the QFlow ABI defined in `include/nwqsim_qflow.hpp`. It provides:
 
 - `parseHamiltonianFile` – load a Fermionic Hamiltonian into the coefficient/operator form.
-- `qflow_nwqsim` – run a UCCSD-min VQE and obtain the ground-state energy plus the parameter list. Pass an optional `vqe::vqe_options` instance (from `vqe_options.hpp`) to override defaults such as optimizer, bounds, or GPU usage.
-- `get_termination_reason_local` – translate ADAPT termination codes to human-readable descriptions.
+- `qflow_nwqsim` – run a UCCSD VQE and obtain the ground-state energy plus the parameter list. Pass an optional `vqe::vqe_options` instance (from `vqe_options.hpp`) to override defaults such as optimizer, bounds, GPU usage, or initial parameters.
 
 Link against `libvqe` for native access to the solver primitives (environment, ansatz builders, state-vector backends, and the `execution` runners).
+
 
 Example with custom options:
 
@@ -322,8 +353,153 @@ Example with custom options:
 #include "vqe_options.hpp"
 
 vqe::vqe_options opts;
-opts.max_evaluations = 500;
-opts.optimizer = nlopt::LN_BOBYQA;
+opts.verbose = false; // Set to true for more information
+opts.trotter_steps = 1;
+opts.symmetry_level = 3;
+opts.lower_bound = -kPi; // -pi
+opts.upper_bound = kPi; // pi
+opts.max_evaluations = 100; // Max number of optimization iterations
+opts.relative_tolerance = -1.0; // -1 for no relative tolerance
+opts.absolute_tolerance = 1e-8; // -1 for no absolute tolerance
+opts.max_time = -1.0; // -1 for no max time
+opts.optimizer = nlopt::LD_LBFGS; // Use a derivative-based optimizer to enable gradient computation
+opts.initial_parameters = {0.1, 0.2, 0.3, ...};  // Must match parameter count for the used ansatz (UCCSD)
 
-auto [energy, parameters] = qflow_nwqsim(ham_ops, n_electrons, "GPU", opts);
+auto [energy, parameters] = qflow_nwqsim(ham_ops, n_electrons, "NVGPU", opts);
 ```
+
+
+
+
+## Advanced CLI Features
+
+### Parameter Management
+
+Initial parameters can be provided as a starting point for VQE optimization. This is useful when you have a good initial guess from prior optimization or another method.
+
+**From file (CLI):**
+```bash
+./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --init-params params.txt
+```
+
+The file should contain comma-separated values, one per parameter. If the file has fewer parameters than required, missing values are filled with zeros. If it has more, only the first N values are used.
+
+**From single value (CLI):**
+```bash
+./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --init-params 0.5
+```
+
+This repeats the value for all parameters in the ansatz.
+
+**Saving optimized parameters (CLI):**
+```bash
+./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --maxeval 1000 --save-params
+```
+
+Creates `hamiltonian.txt-vqe_params.txt` with the final optimized parameters.
+
+### Gradient Methods
+
+The module supports multiple gradient estimation methods for optimization:
+
+**Numerical gradients (default for derivative-based optimizers):**
+- Uses forward finite difference with step size 1e-5
+- Requires N+1 function evaluations per gradient
+- More accurate for smooth functions
+
+**SPSA gradient (Simultaneous Perturbation Stochastic Approximation):**
+```bash
+./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --spsa
+```
+
+- Only 2 function evaluations per gradient regardless of dimension
+- Beneficial for large parameter spaces
+- Useful when evaluation cost is very high
+
+### ADAPT-VQE Checkpointing
+
+Long-running ADAPT-VQE optimizations can be saved and resumed:
+
+**Saving parameters every iteration:**
+```bash
+./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --adapt --adapt-save
+```
+
+Creates `hamiltonian.txt-adapt_params.txt` with full ADAPT state including:
+- Selected operators and their indices
+- Optimized parameters at each iteration
+- Energy values
+- Metadata (pool type, symmetry level, iteration number)
+
+**Resuming from checkpoint:**
+```bash
+./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --adapt --adapt-load hamiltonian.txt-adapt_params.txt
+```
+
+The optimizer validates that symmetry settings match and resumes from the saved iteration.
+
+### Memory and Performance Monitoring
+
+**Memory tracking:**
+```bash
+./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --adapt --adapt-log-memory
+```
+
+Logs RSS memory usage per ADAPT iteration to track memory growth.
+
+**Verbose output:**
+```bash
+./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --verbose
+```
+
+Provides detailed iteration information including:
+- Parameter statistics (max absolute value, L2 norm)
+- Energy changes between iterations
+- Selected operators (for ADAPT)
+- Gate count statistics
+- Timing information
+
+### Parallel ADAPT-VQE
+
+Operator gradient computation in ADAPT-VQE can be parallelized using MPI:
+
+```bash
+mpirun -np 8 ./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --adapt --adapt-maxeval 50
+```
+
+Each MPI rank evaluates a subset of operators, reducing wall-clock time for large operator pools.
+
+## Configuration Reference
+
+### CLI Defaults and Behavior
+
+**Symmetry Level:** Default is now 3 (full symmetry), forcing equivalentance of parameters corresponding to symmetric excitation operators. Values range from 0 (no symmetry) to 3 (full).
+
+**Parameter Bounds:** Default bounds are -π to π. Through the range [-0.9, 0.9] is suitable for most UCCSD ansatze.
+
+**ADAPT-VQE Iterations:** Default maximum is 50 iterations.
+
+**Tolerances:**
+- Gradient tolerance (ADAPT): 1e-3 (convergence when gradient norm is below this)
+- Energy tolerance (ADAPT): Disabled by default. When enabled, ADAPT stops when energy change between iterations drops below this threshold.
+
+**Time Limits:** Specified in seconds for VQE optimizations in full UCCSD VQE function and ADAPT-VQE function. A value less than or equal to 0 means unlimited. Useful for resource-constrained environments.
+
+### VQE-specific vqe_options
+
+- `initial_parameters`: Custom starting parameters for optimization
+- `max_evaluations`: Function evaluation limit
+- `max_time`: Wall-clock time limit
+- `optimizer`: NLopt algorithm (LD_LBFGS, LN_COBYLA, etc.)
+- `relative_tolerance` / `absolute_tolerance`: Convergence criteria
+
+### ADAPT-specific vqe_options
+
+- `adapt_initial_parameters`: Starting parameters for inner VQE in first ADAPT iteration
+- `adapt_max_evaluations`: Function evaluations per inner VQE solve
+- `adapt_max_time`: Time limit per inner VQE solve
+- `adapt_gradient_step`: Step size for central difference gradient (default 1e-4)
+- `adapt_log_memory`: Enable memory tracking
+- `adapt_save_params`: Auto-save state every iteration
+- `adapt_load_state_file`: Resume from checkpoint
+- `use_spsa_gradient`: Enable SPSA gradient method

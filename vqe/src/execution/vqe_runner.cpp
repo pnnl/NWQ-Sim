@@ -10,6 +10,7 @@
 #include <iostream>
 #include <limits>
 #include <numeric>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -154,6 +155,15 @@ namespace vqe
       std::size_t last_print_eval = 0;
     };
 
+    // Helper function to check if optimizer needs gradients based on algorithm name
+    inline bool optimizer_needs_gradient(nlopt::algorithm algo)
+    {
+      const std::string name = nlopt_algorithm_name(static_cast<nlopt_algorithm>(algo));
+      // Check if algorithm name contains "derivative" (not "no-derivative")
+      // Naming: NLOPT_{G/L}{D/N}_* where D=derivative-based, N=no-derivative
+      return (name.find("derivative-based") != std::string::npos);
+    }
+
     template <typename Backend>
     struct objective_context
     {
@@ -164,6 +174,9 @@ namespace vqe
       double *apply_time = nullptr;
       double *expectation_time = nullptr;
       iteration_logger *logger = nullptr;
+      bool compute_gradient = false;
+      bool use_spsa_gradient = false;  // Use SPSA-style gradient estimation
+      std::mt19937 *rng = nullptr;     // Random number generator for SPSA
     };
 
     template <typename Backend>
@@ -188,12 +201,84 @@ namespace vqe
       ctx->backend->apply(ctx->ansatz->get_circuit());
       const auto apply_stop = std::chrono::steady_clock::now();
 
-      ++(*ctx->eval_count);
-      grad.assign(x.size(), 0.0);
-
       const auto expect_start = std::chrono::steady_clock::now();
       const double expectation = ctx->backend->expectation(*ctx->terms).real();
       const auto expect_stop = std::chrono::steady_clock::now();
+      ++(*ctx->eval_count);
+
+      // Compute gradients if needed (for derivative-based optimizers like LD_LBFGS)
+      if (ctx->compute_gradient && !grad.empty())
+      {
+        if (ctx->use_spsa_gradient && ctx->rng != nullptr)
+        {
+          // SPSA gradient estimation: only 2 function evaluations regardless of dimensionality
+          const double epsilon = 1e-4;  // SPSA perturbation size
+          std::uniform_int_distribution<int> dist(0, 1);
+          std::vector<double> delta(x.size());
+
+          // Generate random perturbation direction (±1 for each parameter)
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            delta[i] = (dist(*ctx->rng) == 0) ? -1.0 : 1.0;
+          }
+
+          // Evaluate at x + ε*delta
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            circuit.set_parameter(i, x[i] + epsilon * delta[i]);
+          }
+          ctx->backend->reset();
+          ctx->backend->apply(ctx->ansatz->get_circuit());
+          const double energy_plus = ctx->backend->expectation(*ctx->terms).real();
+          ++(*ctx->eval_count);
+
+          // Evaluate at x - ε*delta
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            circuit.set_parameter(i, x[i] - epsilon * delta[i]);
+          }
+          ctx->backend->reset();
+          ctx->backend->apply(ctx->ansatz->get_circuit());
+          const double energy_minus = ctx->backend->expectation(*ctx->terms).real();
+          ++(*ctx->eval_count);
+
+          // Compute gradient approximation: grad[i] ≈ (E+ - E-) / (2ε * delta[i])
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            grad[i] = (energy_plus - energy_minus) / (2.0 * epsilon * delta[i]);
+          }
+
+          // Restore parameters
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            circuit.set_parameter(i, x[i]);
+          }
+        }
+        else
+        {
+          // Standard finite difference gradient
+          const double epsilon = 1e-5;  // finite difference step size
+
+          for (std::size_t i = 0; i < x.size(); ++i)
+          {
+            const double x_original = x[i];
+
+            // Forward difference: grad[i] = [E(x + ε) - E(x)] / ε
+            circuit.set_parameter(i, x_original + epsilon);
+            ctx->backend->reset();
+            ctx->backend->apply(ctx->ansatz->get_circuit());
+            const double energy_plus = ctx->backend->expectation(*ctx->terms).real();
+            ++(*ctx->eval_count);
+
+            grad[i] = (energy_plus - expectation) / epsilon;
+            circuit.set_parameter(i, x_original);
+          }
+        }
+      }
+      else
+      {
+        grad.assign(x.size(), 0.0);
+      }
 
       if (ctx->apply_time != nullptr)
       {
@@ -229,6 +314,35 @@ namespace vqe
       if (options.initial_parameters.size() == param_count)
       {
         parameters = options.initial_parameters;
+        if (options.verbose)
+        {
+          std::cout << "[vqe] Using custom initial parameters (" << param_count << " values)" << std::endl;
+        }
+      }
+      else if (options.verbose && !options.initial_parameters.empty())
+      {
+        std::cout << "[vqe] Warning: Initial parameters size mismatch (got "
+                  << options.initial_parameters.size() << ", need " << param_count
+                  << "). Using zeros." << std::endl;
+      }
+
+      if (options.verbose)
+      {
+        std::size_t display_count = std::min(param_count, std::size_t(10));
+        std::cout << "[vqe] Initial parameters: [";
+        for (std::size_t i = 0; i < display_count; ++i)
+        {
+          if (i > 0) std::cout << ", ";
+          std::cout << parameters[i];
+        }
+        if (param_count > 10)
+        {
+          std::cout << ", ...]" << std::endl;
+        }
+        else
+        {
+          std::cout << "]" << std::endl;
+        }
       }
 
       auto &mutable_circuit = ansatz.mutable_circuit();
@@ -281,8 +395,12 @@ namespace vqe
       std::size_t eval_count = 0;
       double apply_time = 0.0;
       double expectation_time = 0.0;
+      const bool needs_grad = optimizer_needs_gradient(options.optimizer);
 
-      objective_context<Backend> context{&ansatz, &backend, &pauli_terms, &eval_count, &apply_time, &expectation_time, &logger};
+      // Random number generator for SPSA (if enabled)
+      static std::mt19937 rng(std::random_device{}());
+      objective_context<Backend> context{&ansatz, &backend, &pauli_terms, &eval_count, &apply_time, &expectation_time, &logger,
+                                          needs_grad, options.use_spsa_gradient, &rng};
       opt.set_min_objective(objective_function_impl<Backend>, &context);
 
       double min_value = 0.0;
@@ -338,7 +456,7 @@ namespace vqe
     molecular_environment env;
     env.n_spatial = data.num_qubits() / 2;
     env.n_electrons = n_particles;
-  env.xacc_indexing = options.use_xacc_indexing;
+    env.xacc_indexing = options.use_xacc_indexing;
     env.constant_energy = data.constant.real();
 
     uccsd_ansatz ansatz(env, options.trotter_steps, options.symmetry_level);
