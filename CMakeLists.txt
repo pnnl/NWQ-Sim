@@ -152,6 +152,10 @@ if (TARGET nwqsim)
         "vqe/include/nwqsim_qflow.hpp"
         "vqe/include/vqe_options.hpp"
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim/vqe)
+    install(FILES
+        "vqe/include/execution/adapt_runner.hpp"
+        "vqe/include/execution/vqe_runner.hpp"
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim/vqe/execution)
 else()
     add_library(nwqsim INTERFACE)
     target_include_directories(nwqsim INTERFACE
