@@ -44,6 +44,11 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j4
 ```
 
+4. If you enable VQE module by setting NWQSIM\_ENABLE\_VQE in main CMakeLists.txt to 'ON' (default is 'OFF'), you will first need to configure nlopt submodule by
+```bash
+git submodule update --init --recursive vqe/nlopt
+```
+before cmake.
 
 ## Build on HPC Systems
 

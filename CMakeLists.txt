@@ -9,6 +9,8 @@ else()
     message("Environment variables cc and/or CC are not set, using default settings")
 endif()
 
+option(NWQSIM_ENABLE_VQE "Build VQE components (requires NLopt)" ON)
+
 
 # Specify the project details
 project(NWQ-Sim
@@ -126,7 +128,9 @@ message(STATUS "CUDA found: ${CUDAToolkit_FOUND}")
 message(STATUS "HIP found: ${hip_found_str}")
 message(STATUS "NVSHMEM found: ${nvshmem_found_str}")
 message(STATUS "Matrix Accelerator ENABLED: ${ma_enable}")
+message(STATUS "Build VQE component: ${NWQSIM_ENABLE_VQE}")
 message(STATUS "==========================================================================\n")
+
 
 # Include directories
 include_directories(${PROJECT_SOURCE_DIR}/include)
@@ -134,8 +138,9 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 # Subdirectories
 add_subdirectory(qasm)
 
-# Only add VQE subdirectory if nlopt exists - this creates the NWQSimQFlow library
-if (EXISTS "${PROJECT_SOURCE_DIR}/vqe/CMakeLists.txt")
+if(NWQSIM_ENABLE_VQE)
+    message(STATUS "NWQSIM_ENABLE_VQE=ON (will look for NLopt)")
+    message(STATUS "If NLopt is not found, use 'git submodule update --init --recursive vqe/nlopt'")
     add_subdirectory(vqe)
 endif()
 
