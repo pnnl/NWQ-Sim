@@ -9,7 +9,7 @@ else()
     message("Environment variables cc and/or CC are not set, using default settings")
 endif()
 
-option(NWQSIM_ENABLE_VQE "Build VQE components (requires NLopt)" ON)
+option(NWQSIM_ENABLE_VQE "Build VQE components (requires NLopt)" OFF)
 
 
 # Specify the project details
