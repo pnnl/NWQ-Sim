@@ -139,8 +139,8 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 add_subdirectory(qasm)
 
 if(NWQSIM_ENABLE_VQE)
-    message(STATUS "NWQSIM_ENABLE_VQE=ON (will look for NLopt)")
-    message(STATUS "If NLopt is not found, use 'git submodule update --init --recursive vqe/nlopt'")
+    message(STATUS "NWQSIM_ENABLE_VQE=ON (will look for NLopt and pybind11)")
+    message(STATUS "If NLopt or pybind11 is not found, use 'git submodule update --init --recursive'")
     add_subdirectory(vqe)
 endif()
 

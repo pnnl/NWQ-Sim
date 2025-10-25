@@ -15,10 +15,20 @@ Production-ready Variational Quantum Eigensolver (VQE) module built on the NWQ-S
 
 ## Building
 
-This module builds together with NWQ-Sim. Follow the project-wide instructions in `doc/user_manual.md` to configure and compile the tree. If you cloned without `--recursive`, fetch the bundled NLopt source before running CMake:
+This module will not automatically build together with NWQ-Sim. Follow the project-wide instructions in `doc/user_manual.md` to configure and compile the tree. If you cloned without `--recursive`, fetch the bundled NLopt and pybind11 sources before running CMake:
 
 ```bash
-git submodule update --init --recursive vqe/nlopt
+git submodule update --init --recursive
+```
+
+Importantly, `-DNWQSIM_ENABLE_VQE=ON` should be added in the `make` command to enable VQE function. For example,
+
+```bash
+cmake .. -DCMAKE_C_COMPILER=cc -DCMAKE_CXX_COMPILER=CC \
+ -DNWQSIM_ENABLE_VQE=ON \        # enable VQE
+ -DVQE_ENABLE_MPI=ON \           # enable MPI
+ -DCMAKE_CUDA_HOST_COMPILER=CC \ # enable NVDIA GPU backend
+ -DCMAKE_BUILD_TYPE=Release
 ```
 
 The build system will take care of compiling NLopt during the normal configure/build step.
