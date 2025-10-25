@@ -203,6 +203,13 @@ if(VQE_BUILD_PYTHON)
         target_include_directories(nwqsim_vqe_core PRIVATE ${VQE_NLOPT_INCLUDE} ${CMAKE_CURRENT_BINARY_DIR}/nlopt)
         set_target_properties(nwqsim_vqe_core PROPERTIES OUTPUT_NAME "_core" PREFIX "")
 
+        # Disable LTO for pybind11 module to work around GCC zstd decompression bug
+        # This only affects the Python binding performance, not the core VQE library
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+            target_compile_options(nwqsim_vqe_core PRIVATE -fno-lto)
+            target_link_options(nwqsim_vqe_core PRIVATE -fno-lto)
+        endif()
+
         # Set proper rpath for the Python module to find libvqe.dylib in the same directory
         if(APPLE)
             set_target_properties(nwqsim_vqe_core PROPERTIES
