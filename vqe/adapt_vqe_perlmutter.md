@@ -20,7 +20,8 @@ mkdir build
 cd build
 source ../environment/setup_perlmutter.sh
 module load python
-cmake .. -DCMAKE_C_COMPILER=cc -DCMAKE_CXX_COMPILER=CC -DVQE_ENABLE_MPI=ON -DCMAKE_CUDA_HOST_COMPILER=CC -DCMAKE_BUILD_TYPE=Release -DVQE_ENABLE_MPI=ON && make -j16
+cmake .. -DCMAKE_C_COMPILER=cc -DCMAKE_CXX_COMPILER=CC -DVQE_ENABLE_MPI=ON -DCMAKE_CUDA_HOST_COMPILER=CC -DCMAKE_BUILD_TYPE=Release -DVQE_ENABLE_MPI=ON
+make -j16
 ```
 
 ## Running on CPU nodes
