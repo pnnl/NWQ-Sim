@@ -148,6 +148,12 @@ add_subdirectory(stabilizer)
 
 set(CMAKE_CUDA_ARCHITECTURES 80 90)
 
+option(NWQSIM_BUILD_PYTHON "Build NWQSim Python bindings" ON)
+
+if(NWQSIM_BUILD_PYTHON)
+    add_subdirectory(python)
+endif()
+
 
 if (EXISTS "${PROJECT_SOURCE_DIR}/vqe/nlopt/CMakeLists.txt")
     add_subdirectory(vqe)

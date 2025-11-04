@@ -58,6 +58,11 @@ namespace NWQSim
             SAFE_FREE_HOST(results);
         }
 
+        IdxType get_qubits() override
+        {
+            return n_qubits;
+        }
+
         void reset_state() override
         {
             // Reset CPU input & output
