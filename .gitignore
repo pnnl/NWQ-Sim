@@ -71,6 +71,7 @@ CMakeCache.txt
 /stabilizer/random_bench_dense/
 /stabilizer/fowler_improved/
 
+/stabilizer/damping_work/relay
 /stabilizer/damping_work/relay_bp_decoding/relay/examples/bb_code_qasm/
 /stabilizer/damping_work/relay_bp_decoding/relay/tests/
 /stabilizer/damping_work/surface_code_qasm/
