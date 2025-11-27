@@ -11,7 +11,7 @@
 #include "hamiltonian_parser.hpp"
 #include "jw_transform.hpp"
 #include "backend/statevector_cpu.hpp"
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
 #include "backend/statevector_gpu.hpp"
 #endif
 
@@ -51,7 +51,7 @@ namespace
     const auto &circuit = ansatz.get_circuit();
     const auto qubits = circuit.num_qubits();
 
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
     if (use_gpu)
     {
       vqe::backend::statevector_gpu backend(qubits);
@@ -62,7 +62,7 @@ namespace
 #else
     if (use_gpu)
     {
-      throw std::runtime_error("VQE built without CUDA support; GPU backend unavailable");
+      throw std::runtime_error("VQE built without CUDA/HIP support; GPU backend unavailable");
     }
 #endif
 
@@ -900,7 +900,7 @@ PYBIND11_MODULE(_core, m)
 
   m.def("check_gpu_support", []()
         {
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
           return true;
 #else
           return false;
@@ -910,13 +910,13 @@ PYBIND11_MODULE(_core, m)
         "Returns\n"
         "-------\n"
         "bool\n"
-        "    True if compiled with CUDA support");
+        "    True if compiled with CUDA or HIP support");
 
   // Version and build information
   m.attr("__version__") = "1.0.0";
   m.attr("__build_info__") = py::dict(
       py::arg("cuda_support") =
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
           true
 #else
           false

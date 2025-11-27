@@ -21,7 +21,7 @@
 
 #include "ansatz/ansatz.hpp"
 #include "backend/statevector_cpu.hpp"
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
 #include "backend/statevector_gpu.hpp"
 #endif
 #include "hamiltonian_parser.hpp"
@@ -1060,7 +1060,7 @@ struct MpiGuard
   adapt_ansatz ansatz(env, options.symmetry_level);
     ansatz.build_pool();
 
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
     if (options.use_gpu)
     {
   return run_adapt_impl<backend::statevector_gpu>(pauli_terms, ansatz, options, hamiltonian_path);
@@ -1068,7 +1068,7 @@ struct MpiGuard
 #else
     if (options.use_gpu)
     {
-      throw std::runtime_error("vqe built without CUDA support; GPU backend unavailable");
+      throw std::runtime_error("vqe built without CUDA/HIP support; GPU backend unavailable");
     }
 #endif
 

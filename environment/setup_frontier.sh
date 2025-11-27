@@ -9,4 +9,4 @@ export cc=gcc
 export CC=g++
 
 export MY_HIP_ARCH=gfx90a
-export MPICH_GPU_SUPPORT_ENABLED=1
+export MPICH_GPU_SUPPORT_ENABLED=0

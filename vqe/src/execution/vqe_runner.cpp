@@ -17,7 +17,7 @@
 
 #include "ansatz/ansatz.hpp"
 #include "backend/statevector_cpu.hpp"
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
 #include "backend/statevector_gpu.hpp"
 #endif
 #include "core/environment.hpp"
@@ -471,7 +471,7 @@ vqe::vqe_result vqe::run_default_vqe_with_ansatz(uccsd_ansatz &ansatz,
                                                  const std::vector<pauli_term> &pauli_terms,
                                                  const vqe_options &options)
 {
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
   if (options.use_gpu)
   {
     return run_default_vqe_backend<backend::statevector_gpu>(ansatz, pauli_terms, options);
@@ -479,7 +479,7 @@ vqe::vqe_result vqe::run_default_vqe_with_ansatz(uccsd_ansatz &ansatz,
 #else
   if (options.use_gpu)
   {
-    throw std::runtime_error("vqe built without CUDA support; GPU backend unavailable");
+    throw std::runtime_error("vqe built without CUDA/HIP support; GPU backend unavailable");
   }
 #endif
 

@@ -152,8 +152,10 @@ namespace
   void list_backends()
   {
     std::cout << "Available backends:\n  CPU";
-#ifdef VQE_ENABLE_CUDA
-    std::cout << "\n  GPU";
+#if defined(VQE_ENABLE_CUDA)
+    std::cout << "\n  NVGPU";
+#elif defined(VQE_ENABLE_HIP)
+    std::cout << "\n  AMDGPU";
 #endif
     std::cout << "\n";
   }
@@ -215,6 +217,11 @@ namespace
       return true;
     }
     if (upper == "GPU" || upper == "NVGPU" || upper == "NVGPU_MPI")
+    {
+      config.options.use_gpu = true;
+      return true;
+    }
+    if (upper == "AMDGPU" || upper == "HIP" || upper == "HIP_MPI")
     {
       config.options.use_gpu = true;
       return true;

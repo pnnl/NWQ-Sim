@@ -4,7 +4,7 @@
 
 # To control if ADAPT VQE use MPI for parallel execution, by default off for daily usage
 # should be enabled for HPC.
-option(VQE_ENABLE_MPI "Enable MPI for ADAPT_VQE parallelization" OFF)
+option(VQE_ENABLE_MPI "Enable MPI for ADAPT_VQE parallelization" ON)
 
 # Collect source files
 set(VQE_SRCS
@@ -22,13 +22,26 @@ set(VQE_SRCS
     src/execution/vqe_runner.cpp
 )
 
+find_package(HIP QUIET)
+
 set(VQE_GPU_SOURCE src/backend/statevector_gpu.cu)
+set(VQE_HIP_SOURCE src/backend/statevector_hip.cpp)
 set(VQE_GPU_STUB   src/backend/statevector_gpu_stub.cpp)
 
 if(CUDAToolkit_FOUND)
+    #NVIDIA GPU Build
+    message(STATUS "VQE: CUDA Toolkit found. Building with Nvidia GPU support.")
     enable_language(CUDA)
     list(APPEND VQE_SRCS ${VQE_GPU_SOURCE})
     set_source_files_properties(${VQE_GPU_SOURCE} PROPERTIES LANGUAGE CUDA)
+    add_compile_definitions(VQE_ENABLE_CUDA)
+elseif(HIP_FOUND)
+    # AMD Build
+    message(STATUS "VQE: HIP found. Building with AMD GPU support.")
+    enable_language(HIP)
+    list(APPEND VQE_SRCS ${VQE_HIP_SOURCE})
+    set_source_files_properties(${VQE_HIP_SOURCE} PROPERTIES LANGUAGE HIP)
+    add_compile_definitions(VQE_ENABLE_HIP)
 else()
     list(APPEND VQE_SRCS ${VQE_GPU_STUB})
 endif()
@@ -82,6 +95,58 @@ if(CUDAToolkit_FOUND)
     endforeach()
     target_compile_options(vqe PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
 endif()
+
+
+if(HIP_FOUND)
+    set(hip_found_str "TRUE")
+    set(CMAKE_HIP_FLAGS_RELEASE "-O3")
+
+    # Check for command line option, then environment variable
+    if(NOT DEFINED HIP_ARCH)
+        if(DEFINED ENV{MY_HIP_ARCH})
+            set(CMAKE_HIP_ARCHITECTURES "$ENV{MY_HIP_ARCH}")
+        else()
+            message(FATAL_ERROR "HIP architecture is not set. Please set it manually using cmake -DHIP_ARCH=N .. or by setting the MY_HIP_ARCH environment variable.")
+        endif()
+    else()
+        set(CMAKE_HIP_ARCHITECTURES "${HIP_ARCH}")
+    endif()
+    # set(CMAKE_HIP_ARCHITECTURES "$ENV{MY_HIP_ARCH}")
+    # Check for HIP architecture and rocWMMA library
+    if("$ENV{MY_HIP_ARCH}" MATCHES "gfx908|gfx90a|gfx940|gfx942")
+      # Check if rocWMMA is installed
+      find_path(ROCWMMA_INCLUDE_DIR
+        NAMES rocwmma/rocwmma.hpp
+        PATHS /opt/rocm-5.4.0/include
+        NO_DEFAULT_PATH
+      )
+
+      if(ROCWMMA_INCLUDE_DIR)
+        # Both conditions are met, add the definition
+        add_compile_definitions(FP64_HIPMC_AVAILABLE)
+        set(ma_enable "TRUE") 
+        else()
+        # HIP architecture matches, but rocWMMA not found
+        set(ma_enable "FALSE, rocWMMA not found ") 
+      endif()
+    else()
+      # HIP architecture doesn't match
+      message(WARNING "FP64_HIPMC_AVAILABLE not defined: ")
+      set(ma_enable "FALSE, MY_HIP_ARCH does not match required architectures (gfx90a|gfx940|gfx942)") 
+    endif()
+else()
+    set(hip_found_str "FALSE")
+endif()
+
+if (HIP_FOUND)
+    foreach(target ${ALL_TARGETS})
+        # Link HIP libraries
+        target_compile_definitions(${target} PUBLIC VQE_ENABLE_HIP)
+        target_link_libraries(${target} PRIVATE hip::host)
+    endforeach()
+    # Add AMD/HIP specific flags if needed (e.g. -Wno-gpu-possibly-wrong-side)
+endif()
+
 
 if(OpenMP_CXX_FOUND)
     target_link_libraries(vqe PUBLIC OpenMP::OpenMP_CXX)
