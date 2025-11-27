@@ -22,15 +22,30 @@ set(VQE_SRCS
     src/execution/vqe_runner.cpp
 )
 
-set(VQE_GPU_SOURCE src/backend/statevector_gpu.cu)
-set(VQE_GPU_STUB   src/backend/statevector_gpu_stub.cpp)
+set(VQE_GPU_SOURCE     src/backend/statevector_gpu.cu)
+set(VQE_GPU_HIP_SOURCE src/backend/statevector_gpu_hip.cpp)
+set(VQE_GPU_STUB       src/backend/statevector_gpu_stub.cpp)
 
-if(CUDAToolkit_FOUND)
+# Check for HIP/ROCm support
+find_package(HIP QUIET)
+
+# Determine which GPU backend to use (HIP takes precedence if both are available)
+if(HIP_FOUND)
+    message(STATUS "VQE GPU Backend: AMD HIP/ROCm")
+    enable_language(HIP)
+    list(APPEND VQE_SRCS ${VQE_GPU_HIP_SOURCE})
+    set_source_files_properties(${VQE_GPU_HIP_SOURCE} PROPERTIES LANGUAGE HIP)
+    set(VQE_GPU_BACKEND "HIP")
+elseif(CUDAToolkit_FOUND)
+    message(STATUS "VQE GPU Backend: NVIDIA CUDA")
     enable_language(CUDA)
     list(APPEND VQE_SRCS ${VQE_GPU_SOURCE})
     set_source_files_properties(${VQE_GPU_SOURCE} PROPERTIES LANGUAGE CUDA)
+    set(VQE_GPU_BACKEND "CUDA")
 else()
+    message(STATUS "VQE GPU Backend: None (using CPU-only stub)")
     list(APPEND VQE_SRCS ${VQE_GPU_STUB})
+    set(VQE_GPU_BACKEND "NONE")
 endif()
 
 # Add nlopt subdirectory first (dependency)
@@ -75,7 +90,12 @@ foreach(target ${ALL_TARGETS})
     target_compile_features(${target} PRIVATE cxx_std_17)
 endforeach()
 
-if(CUDAToolkit_FOUND)
+if(VQE_GPU_BACKEND STREQUAL "HIP")
+    foreach(target ${ALL_TARGETS})
+        target_compile_definitions(${target} PUBLIC VQE_ENABLE_HIP)
+    endforeach()
+    target_compile_options(vqe PRIVATE $<$<COMPILE_LANGUAGE:HIP>:--std=c++17>)
+elseif(VQE_GPU_BACKEND STREQUAL "CUDA")
     foreach(target ${ALL_TARGETS})
         target_compile_features(${target} PRIVATE cuda_std_17)
         target_compile_definitions(${target} PUBLIC VQE_ENABLE_CUDA)
@@ -158,13 +178,22 @@ endif()
 # CUDA support registration (propagate CUDA language to relevant sources)
 # ===============================================================================
 
-if(CUDAToolkit_FOUND)
+if(VQE_GPU_BACKEND STREQUAL "CUDA")
     set(CUDA_SOURCE_FILES
         "src/backend/statevector_gpu.cu"
     )
     foreach(file ${CUDA_SOURCE_FILES})
         if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${file}")
             set_source_files_properties("${file}" PROPERTIES LANGUAGE CUDA)
+        endif()
+    endforeach()
+elseif(VQE_GPU_BACKEND STREQUAL "HIP")
+    set(HIP_SOURCE_FILES
+        "src/backend/statevector_gpu_hip.cpp"
+    )
+    foreach(file ${HIP_SOURCE_FILES})
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${file}")
+            set_source_files_properties("${file}" PROPERTIES LANGUAGE HIP)
         endif()
     endforeach()
 endif()
