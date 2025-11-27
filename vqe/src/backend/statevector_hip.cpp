@@ -326,6 +326,174 @@ namespace vqe::backend
       }
     }
 
+	//======================================================================
+	// Helper: Find first set bit (0-indexed) for 64-bit integer
+    __device__ __forceinline__ int get_pivot_bit(uint64_t mask) 
+	{
+        return __ffsll(static_cast<unsigned long long>(mask)) - 1;
+    }
+    // Helper: Count set bits
+    __device__ __forceinline__ int count_set_bits(uint64_t mask) 
+	{
+        return __popcll(static_cast<unsigned long long>(mask));
+    }
+    // New optimization: directly implement the Pauli in one kernel:
+    __device__ inline void apply_pauli_device_opt(const device_state &st, 
+			cg::grid_group &grid, const sim_gate &gate)
+    {
+        // 1. Extract Operator Properties from the gate
+        const uint64_t x_mask = gate.pauli.x_mask;
+        const uint64_t z_mask = gate.pauli.z_mask;
+        
+        // Count Y operators (where bit is set in both X and Z masks)
+        // Y = iXZ, so we need to track the phase factor i^y_count
+        const uint64_t y_mask = x_mask & z_mask;
+        const int y_count = count_set_bits(y_mask);
+        
+        // Determine rotation coefficients
+        // Matrix exponential: exp(-i * theta * P) = cos(theta) * I - i * sin(theta) * P
+        // P|k> = phase * |k ^ x_mask>
+        // phase comes from: (-1)^(k & z_mask) * (i)^y_count
+        
+        const double theta = gate.angle; // coeff is usually included in angle by gate builder
+        const double c = cos(theta);
+        const double s = sin(theta);
+
+        // Global sign adjustment for P based on y_count
+        // Hermitian P implies y_count is even for real-valued P, but exp(-iP) handles general cases.
+        // We handle the imaginary unit 'i' from the sine term and 'i^y_count' together.
+        // Logic:
+        // y_count % 4 == 0: phase ~ 1
+        // y_count % 4 == 1: phase ~ i
+        // y_count % 4 == 2: phase ~ -1
+        // y_count % 4 == 3: phase ~ -i
+        
+        // We define 'global_phase' to capture the real/imaginary scalar part of (i)^y_count
+        // integer division y_count / 2 gives the power of (-1)
+        double global_sign = ((y_count / 2) & 1) ? -1.0 : 1.0;
+        
+        // Flag to switch between real/imaginary update logic
+        // If y_count is odd, we have an extra 'i' factor
+        bool has_imag_factor = (y_count & 1);
+
+        const NWQSim::IdxType tid = blockDim.x * blockIdx.x + threadIdx.x;
+        const NWQSim::IdxType total_threads = blockDim.x * gridDim.x;
+        const NWQSim::IdxType half_dim = st.dimension >> 1;
+
+        // 2. Grid-Stride Loop over HALF the state vector
+        // Each thread processes a pair of states (|k>, |k ^ x_mask>)
+        for (NWQSim::IdxType i = tid; i < half_dim; i += total_threads)
+        {
+            NWQSim::IdxType idx0, idx1;
+
+            if (x_mask == 0) 
+			{
+                // Diagonal Term (Z-only): idx0 and idx1 are independent
+                // We map one thread to two indices just to keep throughput high
+                idx0 = i;
+                idx1 = i + half_dim;
+            } 
+			else 
+			{
+                // Off-Diagonal Term (X/Y): We must find the unique pair (k, k^x)
+                // Use "Pivot Bit" expansion to map linear 'i' to unique 'idx0'
+                int pivot = get_pivot_bit(x_mask);
+                NWQSim::IdxType low_mask = (1ULL << pivot) - 1;
+                NWQSim::IdxType high_part = (i & ~low_mask) << 1;
+                NWQSim::IdxType low_part = i & low_mask;
+                
+                idx0 = high_part | low_part; // The index with 0 at pivot
+                idx1 = idx0 ^ x_mask;        // The index with 1 at pivot
+            }
+
+            // 3. Load State
+            double v0_r = st.real[idx0];
+            double v0_i = st.imag[idx0];
+            double v1_r = st.real[idx1];
+            double v1_i = st.imag[idx1];
+
+            // 4. Compute Parity and Apply Rotation
+            if (x_mask == 0) 
+			{
+                // --- Diagonal Case ---
+                // P|k> = S_k * |k>
+                
+                // Index 0
+                int p0 = count_set_bits(idx0 & z_mask) & 1;
+                double S0 = (p0 ? -1.0 : 1.0) * global_sign; 
+                // has_imag_factor should be 0 for Diagonal (Y count must be even for Hermitian diagonal), 
+                // but if Z operators are present, it's just real phase.
+                
+                // U = cos(th) - i*sin(th)*S0
+                // new = (c - i*s*S0) * (r + i*im)
+                st.real[idx0] = c * v0_r + s * S0 * v0_i;
+                st.imag[idx0] = c * v0_i - s * S0 * v0_r;
+
+                // Index 1
+                int p1 = count_set_bits(idx1 & z_mask) & 1;
+                double S1 = (p1 ? -1.0 : 1.0) * global_sign;
+                st.real[idx1] = c * v1_r + s * S1 * v1_i;
+                st.imag[idx1] = c * v1_i - s * S1 * v1_r;
+
+            } 
+			else 
+			{
+                // --- Off-Diagonal Case ---
+                // P|k> = phase * |k^x>
+                
+                // Parity for idx0
+                int p0 = count_set_bits(idx0 & z_mask) & 1;
+                double S0 = (p0 ? -1.0 : 1.0) * global_sign;
+
+                double out0_r, out0_i, out1_r, out1_i;
+
+                if (!has_imag_factor) {
+                    // Y count is even -> Phase is Real (+/- 1)
+                    // P|0> = S0 |1>
+                    // P|1> = S0 |0> (Hermitian property ensures symmetry here)
+                    
+                    double term = s * S0; // -i * sin * S0
+                    
+                    // out = c*v - i*term*v_pair
+                    out0_r = c * v0_r + term * v1_i;
+                    out0_i = c * v0_i - term * v1_r;
+                    
+                    out1_r = c * v1_r + term * v0_i;
+                    out1_i = c * v1_i - term * v0_r;
+
+                } 
+				else 
+				{
+                    // Y count is odd -> Phase is Imaginary (+/- i)
+                    // P|0> = i * S0 |1>
+                    // P|1> = -i * S0 |0> (Anti-symmetry for odd Ys)
+                    
+                    double term = s * S0; 
+                    // Op is: exp(-i theta P)
+                    // P|0> = i S0 |1>  => -i sin P|0> = -i sin (i S0 |1>) = sin S0 |1>
+                    // P|1> = -i S0 |0> => -i sin P|1> = -i sin (-i S0 |0>) = -sin S0 |0>
+                    
+                    // out0 = c*v0 + term*v1 (Real mixing)
+                    out0_r = c * v0_r + term * v1_r;
+                    out0_i = c * v0_i + term * v1_i;
+                    
+                    // out1 = c*v1 - term*v0
+                    out1_r = c * v1_r - term * v0_r;
+                    out1_i = c * v1_i - term * v0_i;
+                }
+
+                // Store
+                st.real[idx0] = out0_r; st.imag[idx0] = out0_i;
+                st.real[idx1] = out1_r; st.imag[idx1] = out1_i;
+            }
+        }
+        
+        // 5. Global Synchronization
+        // Essential because other gates in the queue depend on this result
+        grid.sync();
+    }
+	//======================================================================
+
     __global__ void apply_gates_kernel(device_state state,
                                        const sim_gate *gates,
                                        std::size_t gate_count)
@@ -340,11 +508,14 @@ namespace vqe::backend
         }
         else if (gate.op == sim_gate::kind::two)
         {
-          apply_two_device(state, grid, gate.control, gate.target, gate.real.data(), gate.imag.data());
+			apply_two_device(state, grid, gate.control, gate.target, gate.real.data(), gate.imag.data());
         }
         else if (gate.op == sim_gate::kind::pauli)
         {
-          apply_pauli_device(state, grid, gate);
+			//----------------------
+			//apply_pauli_device(state, grid, gate);
+			//----------------------
+			apply_pauli_device_opt(state, grid, gate);
         }
         grid.sync();
       }
@@ -361,7 +532,6 @@ namespace vqe::backend
       {
         return;
       }
-
       const expectation_parameters param = params[term_idx];
       const double2 coeff = coefficients[term_idx];
       const std::size_t total_work = param.total_work;
