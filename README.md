@@ -1,5 +1,5 @@
 # NWQSim: Northwest Quantum Circuit Simulation Environment
-## Please check the user manual here: [User Manual](doc/user_manual.md)
+## Please check the user manual here: [User Manual](doc/user_manual.md), [VQE](https://github.com/pnnl/NWQ-Sim/tree/vqe_memory/vqe)
 A Quantum System Simulation Environment on classical multi-node, multi-CPU/GPU heterogeneous HPC systems. It currently includes a state-vector simulator SV-Sim ([SC'21](doc/svsim_sc21)) for high-performance ideal simulation, and a density matrix simulator DM-Sim ([SC'20](doc/dmsim_sc20)) for noise-aware simulation. It supports C++, Python, Q#/QIR, Qiskit, QASM, XACC as the front-ends, and X86/PPC CPU, NVIDIA/AMD GPU as the backends, see below:
 
 ![alt text](img/nwqsim.png)

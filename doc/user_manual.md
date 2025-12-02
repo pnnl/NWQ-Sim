@@ -27,11 +27,12 @@ Additional dependencies depend on the specific features you require:
 
 NWQ-Sim uses CMake for building, which automatically detects the execution environment, determines which backends to build, and includes the appropriate libraries accordingly. To build NWQ-Sim from source, follow these steps:
 
-1. Clone the NWQ-Sim repository:
+1. Clone the NWQ-Sim repository (the `--recursive` flag ensures required submodules, such as `vqe/nlopt`, are available):
 ```bash
 git clone --recursive https://github.com/pnnl/NWQ-Sim.git
 cd NWQ-Sim
 ```
+   If you cloned without `--recursive`, run `git submodule update --init --recursive vqe/nlopt` before configuring the build.
 2. Create a build directory and navigate into it:
 ```bash
 mkdir build
@@ -43,6 +44,11 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j4
 ```
 
+4. If you enable VQE module by setting NWQSIM\_ENABLE\_VQE in main CMakeLists.txt to 'ON' (default is 'OFF'), you will first need to configure nlopt submodule by
+```bash
+git submodule update --init --recursive vqe/nlopt
+```
+before cmake.
 
 ## Build on HPC Systems
 
