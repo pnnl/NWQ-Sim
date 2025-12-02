@@ -1,0 +1,13 @@
+code: surf_unrot_z_d5
+generator: surface_code:unrotated_memory_z
+distance: 5
+rounds_per_shot: 2
+requested_rounds: 2
+decoder_used: pymatching
+shots: 10000000
+logical_failures: 2186
+failure_rate: 2.1860e-04
+avg_survival_rounds: 4574.5654
+encoding_rate: 0.0123
+lower_bound_only: False
+timestamp: 2025-11-30T16:40:46.103797Z

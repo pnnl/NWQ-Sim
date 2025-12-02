@@ -1,0 +1,13 @@
+code: color_midout_z_d9
+generator: chromobius:midout_color_code_Z
+distance: 9
+rounds_per_shot: 2
+requested_rounds: 2
+decoder_used: chromobius
+shots: 10000000
+logical_failures: 1305
+failure_rate: 1.3050e-04
+avg_survival_rounds: 7662.8352
+encoding_rate: 0.0145
+lower_bound_only: False
+timestamp: 2025-11-30T16:41:58.413596Z
