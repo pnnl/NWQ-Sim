@@ -65,22 +65,25 @@ CMakeCache.txt
 *.iml
 
 #Ignore stabilizer testing files
-/stabilizer/previous_graphics
-/stabilizer/previous_runtime_data
-/stabilizer/previous_T_data
-/stabilizer/old_tests
-/stabilizer/damping_work/qasm_circuits
-/stabilizer/random_bench/
-/stabilizer/random_bench_new/
-/stabilizer/random_bench_dense/
-/stabilizer/fowler_improved/
 
-/stabilizer/damping_work/relay
-/stabilizer/damping_work/relay_bp_decoding/relay/examples/bb_code_qasm/
-/stabilizer/damping_work/relay_bp_decoding/relay/tests/
-/stabilizer/damping_work/surface_code_qasm/
-/stabilizer/damping_work/surface_results_archive/
-/stabilizer/damping_work/qPLDC-circuits/tomas/bposd_archive/
-/stabilizer/damping_work/relay_bp_decoding/relay/examples/relay_archive/
-/stabilizer/damping_work/qPLDC-circuits/tomas/bb_code_qasm/
-/stabilizer/damping_work/qPLDC-circuits/tomas/bb_code72_qasm/
+/stabilizer/
+
+# /stabilizer/previous_graphics
+# /stabilizer/previous_runtime_data
+# /stabilizer/previous_T_data
+# /stabilizer/old_tests
+# /stabilizer/damping_work/qasm_circuits
+# /stabilizer/random_bench/
+# /stabilizer/random_bench_new/
+# /stabilizer/random_bench_dense/
+# /stabilizer/fowler_improved/
+
+# /stabilizer/damping_work/relay
+# /stabilizer/damping_work/relay_bp_decoding/relay/examples/bb_code_qasm/
+# /stabilizer/damping_work/relay_bp_decoding/relay/tests/
+# /stabilizer/damping_work/surface_code_qasm/
+# /stabilizer/damping_work/surface_results_archive/
+# /stabilizer/damping_work/qPLDC-circuits/tomas/bposd_archive/
+# /stabilizer/damping_work/relay_bp_decoding/relay/examples/relay_archive/
+# /stabilizer/damping_work/qPLDC-circuits/tomas/bb_code_qasm/
+# /stabilizer/damping_work/qPLDC-circuits/tomas/bb_code72_qasm/
