@@ -455,6 +455,7 @@ struct MpiGuard
       bool compute_gradient = false;
       bool use_spsa_gradient = false;  // Use SPSA-style gradient estimation
       std::mt19937 *rng = nullptr;     // Random number generator for SPSA
+      double gradient_step = 1e-5;     // Forward-difference step size
     };
 
     template <typename Backend>
@@ -535,7 +536,11 @@ struct MpiGuard
         else
         {
           // Standard finite difference gradient
-          const double epsilon = 1e-5;  // finite difference step size
+          const double epsilon = ctx->gradient_step;  // finite difference step size
+          if (epsilon <= 0.0)
+          {
+            throw std::runtime_error("Finite-difference step must be positive");
+          }
 
           for (std::size_t i = 0; i < x.size(); ++i)
           {
@@ -894,7 +899,8 @@ struct MpiGuard
       static std::mt19937 rng(std::random_device{}());
 
       objective_context<Backend> ctx{&circ, &backend, &pauli_terms, &total_energy_evals,
-                                      needs_grad, options.use_spsa_gradient, &rng};
+                                      needs_grad, options.use_spsa_gradient, &rng,
+                                      options.gradient_step};
       opt.set_min_objective(objective_function_impl<Backend>, &ctx);
 
       current_params = circ.parameters();

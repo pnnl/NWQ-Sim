@@ -509,6 +509,15 @@ PYBIND11_MODULE(_core, m)
           }
           opts.iteration_improvement_tolerance = tol;
         }, "Minimum improvement required to log iteration progress")
+      .def_property("gradient_step", [](const vqe::vqe_options &opts)
+                    { return opts.gradient_step; }, [](vqe::vqe_options &opts, double step)
+                    {
+          if (step <= 0)
+          {
+            throw std::invalid_argument("gradient_step must be positive");
+          }
+          opts.gradient_step = step;
+        }, "Forward-difference step size for optimizer gradients")
       .def_property("status_interval", [](const vqe::vqe_options &opts)
                     { return opts.status_interval; }, [](vqe::vqe_options &opts, std::size_t interval)
                     {

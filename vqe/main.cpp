@@ -131,6 +131,7 @@ namespace
               << "  -ub, --ubound         Optimizer upper bound (default π).\n"
               << "  --reltol              Relative tolerance termination criterion.\n"
               << "  --abstol              Absolute tolerance termination criterion.\n"
+              << "  --grad-step           Forward-difference gradient step for derivative-based optimizers (VQE and ADAPT inner solves) (Default 3e-6).\n"
               << "  --stopval             Objective stop value.\n"
               << "  --maxeval             Maximum number of function evaluations in VQE optimization (default 100).\n"
               << "  --maxtime             Maximum VQE optimizer time (seconds).\n"
@@ -140,6 +141,7 @@ namespace
               << "OPTIONAL (ADAPT-VQE)\n"
               << "  --adapt               Enable ADAPT-VQE instead of standard VQE.\n"
               << "  -ag, --adapt-gradtol  Operator Gradient norm tolerance (default 1e-3).\n"
+              << "  --adapt-grad-step     Central-difference step for ADAPT operator gradients (default 1e-4).\n"
               << "  -af, --adapt-fvaltol  Energy change tolerance (default disabled).\n"
               << "  -am, --adapt-maxeval  Maximum ADAPT iterations (default 50).\n"
               << "  -as, --adapt-save     Save parameters every iteration to {hamiltonian_path}-adapt_params.txt.\n"
@@ -536,6 +538,22 @@ namespace
         set_absolute_tolerance(config.options, std::stod(argv[++i]));
         continue;
       }
+      if (arg == "--grad-step")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --grad-step";
+          return false;
+        }
+        const double step = std::stod(argv[++i]);
+        if (step <= 0.0)
+        {
+          error = "grad-step must be positive";
+          return false;
+        }
+        config.options.gradient_step = step;
+        continue;
+      }
       if (arg == "--maxeval")
       {
         if (i + 1 >= argc)
@@ -614,6 +632,22 @@ namespace
           return false;
         }
         config.options.adapt_gradient_tolerance = std::stod(argv[++i]);
+        continue;
+      }
+      if (arg == "--adapt-grad-step")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --adapt-grad-step";
+          return false;
+        }
+        const double step = std::stod(argv[++i]);
+        if (step <= 0.0)
+        {
+          error = "adapt-grad-step must be positive";
+          return false;
+        }
+        config.options.adapt_gradient_step = step;
         continue;
       }
       if (arg == "-af" || arg == "--adapt-fvaltol")
@@ -807,6 +841,7 @@ namespace
         std::cout << " (SPSA gradient)";
       }
       std::cout << std::endl;
+      std::cout << "  Grad step (FD)        : " << opts.gradient_step << std::endl;
       std::cout << "  Parameter bounds      : [" << opts.lower_bound << ", " << opts.upper_bound << "]" << std::endl;
       if (opts.max_evaluations > 0)
       {
@@ -963,8 +998,9 @@ namespace
       std::cout << "  Backend               : " << config.backend << std::endl;
       std::cout << "  Symmetry level        : " << opts.symmetry_level << std::endl;
       std::cout << "  Max iterations        : " << opts.adapt_max_iterations << std::endl;
-      std::cout << "  Gradient step         : " << opts.adapt_gradient_step << std::endl;
-      std::cout << "  Gradient tolerance    : " << opts.adapt_gradient_tolerance << std::endl;
+      std::cout << "  OP Gradient step (CD) : " << opts.adapt_gradient_step << std::endl;
+      std::cout << "  OP Gradient tolerance : " << opts.adapt_gradient_tolerance << std::endl;
+      std::cout << "  VQE grad step (FD)    : " << opts.gradient_step << std::endl;
       if (opts.adapt_energy_tolerance > 0.0)
       {
         std::cout << "  Energy tolerance      : " << opts.adapt_energy_tolerance << std::endl;

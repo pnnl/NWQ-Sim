@@ -38,6 +38,7 @@ namespace vqe
     std::size_t max_evaluations = 100;
     double relative_tolerance = -1.0;
     double absolute_tolerance = -1.0;
+    double gradient_step = 3e-6; // Forward-difference step for optimizer gradients (tuned for ~1e-6 tolerances)
     double stop_value = -std::numeric_limits<double>::infinity();
     double max_time = -1.0;
     double iteration_improvement_tolerance = 1e-8;
