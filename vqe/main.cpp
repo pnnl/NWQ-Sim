@@ -121,7 +121,7 @@ namespace
               << "  --xacc                Enable XACC/Qiskit indexing scheme (default).\n"
               << "  --ducc                Enable DUCC indexing scheme.\n"
               << "  --sym, --symm         UCCSD symmetry level (0->none, 1->spin, 2->orbital, 3->full). Default to 3.\n"
-              << "  -b, --backend         Simulation backend (CPU, MPI, NVGPU|GPU|NVGPU_MPI). Defaults to CPU.\n"
+              << "  -b, --backend         Simulation backend (CPU, NVGPU, AMDGPU, MPI (not supported)). Defaults to CPU.\n"
               << "  --seed                Random seed for reproducibility.\n"
               << "OPTIONAL (Global Minimizer)\n"
               << "  -v, --verbose         Print additional progress information.\n"
@@ -998,7 +998,7 @@ namespace
       std::cout << "  Backend               : " << config.backend << std::endl;
       std::cout << "  Symmetry level        : " << opts.symmetry_level << std::endl;
       std::cout << "  Max iterations        : " << opts.adapt_max_iterations << std::endl;
-      std::cout << "  OP Gradient step (CD) : " << opts.adapt_gradient_step << std::endl;
+      std::cout << "  OP Gradient step (FD) : " << opts.adapt_gradient_step << std::endl;
       std::cout << "  OP Gradient tolerance : " << opts.adapt_gradient_tolerance << std::endl;
       std::cout << "  VQE grad step (FD)    : " << opts.gradient_step << std::endl;
       if (opts.adapt_energy_tolerance > 0.0)

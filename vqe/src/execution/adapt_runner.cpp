@@ -572,7 +572,6 @@ struct MpiGuard
     } // objective_function_impl() ends
 
 
-
     template <typename Backend>
     double compute_energy(Backend &backend,
                           const std::vector<pauli_term> &terms)
@@ -798,15 +797,7 @@ struct MpiGuard
         const double energy_plus = compute_energy(scratch, pauli_terms);
         ++total_energy_evals;
 
-        for (const auto &component : pool_components[idx])
-        {
-          apply_pool_operator(scratch, backend.num_qubits(), component.terms,
-                              -2.0 * options.adapt_gradient_step * component.parameter_scale);
-        }
-        const double energy_minus = compute_energy(scratch, pauli_terms);
-        ++total_energy_evals;
-
-        const double gradient = (energy_plus - energy_minus) / (2.0 * options.adapt_gradient_step);
+        const double gradient = (energy_plus - base_energy) / options.adapt_gradient_step;
         const double magnitude = std::abs(gradient);
 
         if (magnitude > max_gradient)
@@ -949,7 +940,7 @@ struct MpiGuard
       backend.reset();
       backend.apply(circ);
       const double expectation = backend.expectation(pauli_terms).real();
-      const double optimized_energy = expectation;
+      double optimized_energy = expectation;
       ++total_energy_evals;
 
       result.energy = optimized_energy;
