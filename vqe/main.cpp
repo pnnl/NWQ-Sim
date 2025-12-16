@@ -144,6 +144,8 @@ namespace
               << "  --adapt-grad-step     Central-difference step for ADAPT operator gradients (default 1e-4).\n"
               << "  -af, --adapt-fvaltol  Energy change tolerance (default disabled).\n"
               << "  -am, --adapt-maxeval  Maximum ADAPT iterations (default 50).\n"
+              << "  -ak, --adapt-batch-k  Maximum operators appended per ADAPT iteration (default 1).\n"
+              << "  -at, --adapt-tau      Gradient threshold fraction for batched selection (default 1.0).\n"
               << "  -as, --adapt-save     Save parameters every iteration to {hamiltonian_path}-adapt_params.txt.\n"
               << "  -al, --adapt-load     Load ADAPT-VQE state from file to resume optimization.\n"
               << "SIMULATOR OPTIONS\n"
@@ -375,20 +377,23 @@ namespace
   bool parse_args(int argc, char **argv, cli_config &config, std::string &error)
   {
     config.options = vqe::vqe_options{};
-    config.options.symmetry_level = 3; // MZ: changed to 3
-    config.options.trotter_steps = 1;
-    config.options.use_xacc_indexing = true;
-    set_bounds(config.options, -1.0 * kPi, 1.0 * kPi);  // MZ: changed to [-pi, pi]
-    set_relative_tolerance(config.options, -1.0);
-    set_absolute_tolerance(config.options, -1.0);
-    set_stop_value(config.options, -std::numeric_limits<double>::infinity());
-    set_max_evaluations(config.options, 100);
-    set_max_time(config.options, -1.0);
-    config.options.optimizer = nlopt::LN_COBYLA;
-    config.options.adapt_optimizer = nlopt::LN_COBYLA;
-    config.options.adapt_gradient_tolerance = 1e-3;
-    config.options.adapt_energy_tolerance = -1.0;
-    config.options.adapt_max_iterations = 50;
+    // Defaults now live in vqe_options; keep overrides here only when diverging.
+    // config.options.symmetry_level = 3;
+    // config.options.trotter_steps = 1;
+    // config.options.use_xacc_indexing = true;
+    // set_bounds(config.options, -1.0 * kPi, 1.0 * kPi);
+    // set_relative_tolerance(config.options, -1.0);
+    // set_absolute_tolerance(config.options, -1.0);
+    // set_stop_value(config.options, -std::numeric_limits<double>::infinity());
+    // set_max_evaluations(config.options, 100);
+    // set_max_time(config.options, -1.0);
+    // config.options.optimizer = nlopt::LN_COBYLA;
+    // config.options.adapt_optimizer = nlopt::LN_COBYLA;
+    // config.options.adapt_gradient_tolerance = 1e-3;
+    // config.options.adapt_energy_tolerance = -1.0;
+    // config.options.adapt_max_iterations = 50;
+    // config.options.adapt_batch_max_operators = 2;
+    // config.options.adapt_batch_tau = 0.5;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -668,6 +673,38 @@ namespace
           return false;
         }
         config.options.adapt_max_iterations = static_cast<std::size_t>(std::stoull(argv[++i]));
+        continue;
+      }
+      if (arg == "-ak" || arg == "--adapt-batch-k")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --adapt-batch-k";
+          return false;
+        }
+        const std::size_t batch_k = static_cast<std::size_t>(std::stoull(argv[++i]));
+        if (batch_k == 0)
+        {
+          error = "adapt-batch-k must be positive";
+          return false;
+        }
+        config.options.adapt_batch_max_operators = batch_k;
+        continue;
+      }
+      if (arg == "-at" || arg == "--adapt-tau")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --adapt-tau";
+          return false;
+        }
+        const double tau = std::stod(argv[++i]);
+        if (tau <= 0.0 || tau > 1.0)
+        {
+          error = "adapt-tau must be in the interval (0, 1]";
+          return false;
+        }
+        config.options.adapt_batch_tau = tau;
         continue;
       }
       if (arg == "-as" || arg == "--adapt-save")
@@ -1000,6 +1037,8 @@ namespace
       std::cout << "  Max iterations        : " << opts.adapt_max_iterations << std::endl;
       std::cout << "  OP Gradient step (FD) : " << opts.adapt_gradient_step << std::endl;
       std::cout << "  OP Gradient tolerance : " << opts.adapt_gradient_tolerance << std::endl;
+      std::cout << "  Batch size (K)        : " << opts.adapt_batch_max_operators << std::endl;
+      std::cout << "  Batch threshold (tau) : " << opts.adapt_batch_tau << std::endl;
       std::cout << "  VQE grad step (FD)    : " << opts.gradient_step << std::endl;
       if (opts.adapt_energy_tolerance > 0.0)
       {

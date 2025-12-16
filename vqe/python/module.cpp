@@ -536,6 +536,24 @@ PYBIND11_MODULE(_core, m)
           }
           opts.adapt_max_iterations = value;
         }, "Maximum number of ADAPT iterations")
+      .def_property("adapt_batch_max_operators", [](const vqe::vqe_options &opts)
+                    { return opts.adapt_batch_max_operators; }, [](vqe::vqe_options &opts, std::size_t value)
+                    {
+          if (value == 0)
+          {
+            throw std::invalid_argument("adapt_batch_max_operators must be positive");
+          }
+          opts.adapt_batch_max_operators = value;
+        }, "Maximum operators appended per ADAPT iteration (K)")
+      .def_property("adapt_batch_tau", [](const vqe::vqe_options &opts)
+                    { return opts.adapt_batch_tau; }, [](vqe::vqe_options &opts, double value)
+                    {
+          if (value <= 0.0 || value > 1.0)
+          {
+            throw std::invalid_argument("adapt_batch_tau must be in the interval (0, 1]");
+          }
+          opts.adapt_batch_tau = value;
+        }, "Gradient threshold fraction for batched selection (tau)")
       .def_property("adapt_gradient_step", [](const vqe::vqe_options &opts)
                     { return opts.adapt_gradient_step; }, [](vqe::vqe_options &opts, double step)
                     {

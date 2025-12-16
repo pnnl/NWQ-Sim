@@ -731,7 +731,7 @@ struct MpiGuard
                 << " max|θ|=" << format_double(stats.max_abs, 6)
                 << " ||θ||₂=" << format_double(stats.l2_norm, 6) << std::endl;
       std::cout << "Running ADAPT-VQE..." << std::endl;
-      std::cout << " Iter   Objective Value     # Evals  Grad Norm    Time   |  #1q Gates  #2q Gates  |  Selected Operator\n" << std::endl;
+      std::cout << " Iter   Objective Value     # Evals  Grad Norm    Time   |  #1q Gates  #2q Gates  |  Selected Operator(s)\n" << std::endl;
       std::cout << "-----------------------------------------------------------------------------------------------------------------------\n" << std::endl;
     }
 
@@ -772,18 +772,17 @@ struct MpiGuard
       }
 
       double max_gradient = 0.0;
-      std::size_t max_index = pool_size;
       Backend scratch(backend.num_qubits());
+      std::vector<double> gradient_magnitudes(pool_size, 0.0);
 
-	  //=========================== MPI Parallelization =======================
-	#ifdef VQE_ENABLE_MPI
+      //=========================== MPI Parallelization =======================
+#ifdef VQE_ENABLE_MPI
       MPI_Barrier(MPI_COMM_WORLD);
-	  for (std::size_t idx = world_rank; idx < pool_size; idx += world_size) 
-	  {
-	#else
+      for (std::size_t idx = world_rank; idx < pool_size; idx += world_size)
+#else
       for (std::size_t idx = 0; idx < pool_size; ++idx)
+#endif
       {
-	#endif
         if (selected[idx])
         {
           continue;
@@ -799,34 +798,29 @@ struct MpiGuard
 
         const double gradient = (energy_plus - base_energy) / options.adapt_gradient_step;
         const double magnitude = std::abs(gradient);
+        gradient_magnitudes[idx] = magnitude;
 
         if (magnitude > max_gradient)
         {
           max_gradient = magnitude;
-          max_index = idx;
         }
       }
 
-	#ifdef VQE_ENABLE_MPI
-	  // MPI_MAXLOC works with (double,int), so we map size_t to int temporarily
-	  // If N might exceed INT_MAX, we need to use a custom reduction instead.
-	  struct { double val; int idx; } in_pair, out_pair;
-	  in_pair.val = max_gradient;
-	  in_pair.idx = static_cast<int>(max_index);
-	  MPI_Allreduce(&in_pair, &out_pair, 1, MPI_DOUBLE_INT, MPI_MAXLOC, MPI_COMM_WORLD);
-	  max_gradient = out_pair.val;
-	  max_index = static_cast<std::size_t>(out_pair.idx);
-	#endif
+#ifdef VQE_ENABLE_MPI
+      double global_max_gradient = 0.0;
+      MPI_Allreduce(&max_gradient, &global_max_gradient, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+      max_gradient = global_max_gradient;
 
-	  //=========================================================================
-
-      std::string selected_label = "<none>";
-      if (max_index < pool_size && max_index < pool_excitations.size())
+      // Aggregate gradient magnitudes from all ranks
+      if (pool_size > static_cast<std::size_t>(std::numeric_limits<int>::max()))
       {
-        selected_label = pool_excitations[max_index].label;
+        throw std::runtime_error("ADAPT operator pool too large for MPI reduction");
       }
+      const int gradient_count = static_cast<int>(pool_size);
+      MPI_Allreduce(MPI_IN_PLACE, gradient_magnitudes.data(), gradient_count, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+#endif
 
-      if (max_index == pool_size || max_gradient < options.adapt_gradient_tolerance) // MZ: not sure when max_index == pool_size will happen
+      if (max_gradient < options.adapt_gradient_tolerance)
       {
         auto iteration_end = std::chrono::steady_clock::now();  // MZ: timer end
         std::chrono::duration<double> iteration_duration = iteration_end - iteration_start;
@@ -849,8 +843,57 @@ struct MpiGuard
         break;
       }
 
-      ansatz.add_operator(max_index, 0.0);
-      selected[max_index] = true;
+      const double batch_threshold = options.adapt_batch_tau * max_gradient;
+      std::vector<std::pair<std::size_t, double>> candidate_ops;
+      candidate_ops.reserve(pool_size);
+      for (std::size_t idx = 0; idx < pool_size; ++idx)
+      {
+        if (selected[idx])
+        {
+          continue;
+        }
+        const double magnitude = gradient_magnitudes[idx];
+        if (magnitude >= batch_threshold && magnitude > 0.0)
+        {
+          candidate_ops.emplace_back(idx, magnitude);
+        }
+      }
+
+      std::sort(candidate_ops.begin(), candidate_ops.end(),
+                [](const auto &a, const auto &b) { return a.second > b.second; });
+      if (candidate_ops.size() > options.adapt_batch_max_operators)
+      {
+        candidate_ops.resize(options.adapt_batch_max_operators);
+      }
+
+      std::vector<std::size_t> selected_batch_indices;
+      selected_batch_indices.reserve(candidate_ops.size());
+      for (const auto &entry : candidate_ops)
+      {
+        const std::size_t idx = entry.first;
+        ansatz.add_operator(idx, 0.0);
+        selected[idx] = true;
+        selected_batch_indices.push_back(idx);
+      }
+
+      std::string selected_label = "<none>";
+      if (!selected_batch_indices.empty())
+      {
+        std::ostringstream label_stream;
+        for (std::size_t i = 0; i < selected_batch_indices.size(); ++i)
+        {
+          const auto idx = selected_batch_indices[i];
+          if (idx < pool_excitations.size())
+          {
+            if (i > 0)
+            {
+              label_stream << ", ";
+            }
+            label_stream << pool_excitations[idx].label;
+          }
+        }
+        selected_label = label_stream.str();
+      }
 
       auto &circ = ansatz.mutable_circuit();
       auto current_params = circ.parameters();

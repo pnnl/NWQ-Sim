@@ -28,7 +28,7 @@ namespace vqe
     std::optional<unsigned> random_seed{};
 
     // Shared physical configuration
-    std::size_t symmetry_level = 0;
+    std::size_t symmetry_level = 3;
     std::size_t trotter_steps = 1;
 
     // Optimizer configuration for standard VQE
@@ -38,7 +38,7 @@ namespace vqe
     std::size_t max_evaluations = 100;
     double relative_tolerance = -1.0;
     double absolute_tolerance = -1.0;
-    double gradient_step = 3e-6; // Forward-difference step for optimizer gradients (tuned for ~1e-6 tolerances)
+    double gradient_step = 3e-6; // Forward-difference step for optimizer gradients
     double stop_value = -std::numeric_limits<double>::infinity();
     double max_time = -1.0;
     double iteration_improvement_tolerance = 1e-8;
@@ -47,12 +47,16 @@ namespace vqe
     std::vector<double> initial_parameters;
 
     // ADAPT-VQE specific controls
-    std::size_t adapt_max_iterations = 20;
+    std::size_t adapt_max_iterations = 50;
     double adapt_gradient_step = 1e-4; // Note: this is for forward difference in operator gradient comoutation
     double adapt_gradient_tolerance = 1e-3;
     double adapt_energy_tolerance = -1.0;
     bool adapt_log_memory = false;
     bool adapt_save_params = false; // Save parameters every iteration
+
+    // Batched ADAPT-VQE controls
+    std::size_t adapt_batch_max_operators = 1; // Maximum operators appended per ADAPT iteration
+    double adapt_batch_tau = 1.0;              // Gradient threshold fraction relative to max gradient
 
     // Optimizer configuration for ADAPT inner VQE solves
     nlopt::algorithm adapt_optimizer = nlopt::LN_COBYLA;

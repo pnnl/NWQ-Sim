@@ -102,6 +102,8 @@ ADAPT-VQE OPTIONS
   -ag, --adapt-gradtol  Gradient-norm termination threshold (default 1e-3).
   -af, --adapt-fvaltol  Energy-change termination threshold (default disabled).
   -am, --adapt-maxeval  Maximum ADAPT iterations (default 50).
+  -ak, --adapt-batch-k  Maximum operators appended per ADAPT iteration (default 1).
+  -at, --adapt-tau      Gradient threshold fraction for batched selection (default 1.0).
   -as, --adapt-save     Save ADAPT parameters every iteration to {hamiltonian_path}-adapt_params.txt.
   -al, --adapt-load     Load ADAPT state from file to resume optimization from checkpoint.
   --adapt-log-memory    Log RSS memory usage per ADAPT iteration.
