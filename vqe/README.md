@@ -141,6 +141,14 @@ Example – ADAPT-VQE with SPSA gradient and GPU acceleration:
 ./build/vqe/nwq_vqe -f vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -p 4 --adapt -b NVGPU --spsa --adapt-maxeval 50
 ```
 
+Example - Batched-ADAPT-VQE: include at most `-ak` number of operators in each outter ADAPT iteration if their operator gradient norms are larger than $\tau |g_{max}|$ where $ \tau > 0$ is defined by `-at`.
+
+```bash
+./build/vqe/nwq_vqe -f vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -p 4 --adapt -ak 10 -at 0.5
+```
+
+
+
 ## Python API
 
 The `nwqsim_vqe` package provides a Python interface with error handling and type hints.

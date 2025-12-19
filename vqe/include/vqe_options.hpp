@@ -48,7 +48,7 @@ namespace vqe
 
     // ADAPT-VQE specific controls
     std::size_t adapt_max_iterations = 50;
-    double adapt_gradient_step = 1e-4; // Note: this is for forward difference in operator gradient comoutation
+    double adapt_gradient_step = 1e-4; // Note: this is for central difference
     double adapt_gradient_tolerance = 1e-3;
     double adapt_energy_tolerance = -1.0;
     bool adapt_log_memory = false;

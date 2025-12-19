@@ -772,7 +772,8 @@ struct MpiGuard
       }
 
       double max_gradient = 0.0;
-      Backend scratch(backend.num_qubits());
+      Backend scratch_plus(backend.num_qubits());
+      Backend scratch_minus(backend.num_qubits());
       std::vector<double> gradient_magnitudes(pool_size, 0.0);
 
       //=========================== MPI Parallelization =======================
@@ -787,16 +788,26 @@ struct MpiGuard
         {
           continue;
         }
-        scratch.copy_state_from(backend);
+        scratch_plus.copy_state_from(backend);
         for (const auto &component : pool_components[idx])
         {
-          apply_pool_operator(scratch, backend.num_qubits(), component.terms,
+          apply_pool_operator(scratch_plus, backend.num_qubits(), component.terms,
                               options.adapt_gradient_step * component.parameter_scale);
         }
-        const double energy_plus = compute_energy(scratch, pauli_terms);
+        const double energy_plus = compute_energy(scratch_plus, pauli_terms);
         ++total_energy_evals;
 
-        const double gradient = (energy_plus - base_energy) / options.adapt_gradient_step;
+
+        scratch_minus.copy_state_from(backend);
+        for (const auto &component : pool_components[idx])
+        {
+          apply_pool_operator(scratch_minus, backend.num_qubits(), component.terms,
+                              -1.0 * options.adapt_gradient_step * component.parameter_scale);
+        }
+        const double energy_minus = compute_energy(scratch_minus, pauli_terms);
+        ++total_energy_evals;
+
+        const double gradient = (energy_plus - energy_minus) / (2.0 * options.adapt_gradient_step);
         const double magnitude = std::abs(gradient);
         gradient_magnitudes[idx] = magnitude;
 

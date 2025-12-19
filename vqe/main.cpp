@@ -1035,7 +1035,7 @@ namespace
       std::cout << "  Backend               : " << config.backend << std::endl;
       std::cout << "  Symmetry level        : " << opts.symmetry_level << std::endl;
       std::cout << "  Max iterations        : " << opts.adapt_max_iterations << std::endl;
-      std::cout << "  OP Gradient step (FD) : " << opts.adapt_gradient_step << std::endl;
+      std::cout << "  OP Gradient step (CD) : " << opts.adapt_gradient_step << std::endl;
       std::cout << "  OP Gradient tolerance : " << opts.adapt_gradient_tolerance << std::endl;
       std::cout << "  Batch size (K)        : " << opts.adapt_batch_max_operators << std::endl;
       std::cout << "  Batch threshold (tau) : " << opts.adapt_batch_tau << std::endl;
