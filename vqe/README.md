@@ -63,50 +63,46 @@ Running `cmake --build <build-dir>` produces:
 Launch VQE via the `nwq_vqe` executable. The two mandatory arguments are the Hamiltonian file and electron count.
 
 ```
-INFORMATIONAL
-  -h, --help            Show usage information and exit.
-  -l, --list-backends   List compiled back-ends and exit.
-
-REQUIRED
-  -f, --hamiltonian     Path to Hamiltonian file (sum of Fermionic operators).
-  -p, -n, --nparticles  Number of electrons in the system.
-
-HAMILTONIAN / ANSATZ / BACKEND OPTIONS
-  --ducc                Use DUCC orbital indexing (default).
-  --xacc                Use XACC/Qiskit orbital indexing.
-  --sym, --symm         UCCSD symmetry level (0 none, 1 spin, 2 orbital, 3 full).
-  -b, --backend         Simulation backend (CPU | GPU). Defaults to CPU.
-  --seed                Seed for initial parameters and stochastic gradients.
-
-OPTIMIZER OPTIONS
-  -v, --verbose         Print additional optimization progress.
-  -o, --optimizer       NLopt algorithm name (default LN_COBYLA).
-  --opt-config          JSON file with NLopt parameter overrides.
-  -lb, --lbound         Lower bound for all parameters (default -π).
-  -ub, --ubound         Upper bound for all parameters (default π).
-  --reltol              Relative objective tolerance (default disabled).
-  --abstol              Absolute objective tolerance (default disabled).
-  --maxeval             Maximum objective evaluations (default 100).
-  --maxtime             Wall-clock limit for the optimizer (seconds).
-  --stopval             Objective value threshold for early exit.
-  --spsa                Use SPSA gradient estimation (2 evals) instead of forward difference (N+1 evals).
-  --init-params         [For VQE only] Initial parameters: single value (repeat for all) or file with comma-separated values.
-  --save-params         [For VQE only] Save optimized parameters to {hamiltonian_path}-vqe_params.txt.
-
-SIMULATION OPTIONS
-  --num_threads         Requested CPU thread count (advisory).
-  --disable_fusion      Disable gate fusion (advisory).
-
-ADAPT-VQE OPTIONS
-  --adapt               Enable ADAPT-VQE loop.
-  -ag, --adapt-gradtol  Gradient-norm termination threshold (default 1e-3).
-  -af, --adapt-fvaltol  Energy-change termination threshold (default disabled).
-  -am, --adapt-maxeval  Maximum ADAPT iterations (default 50).
-  -ak, --adapt-batch-k  Maximum operators appended per ADAPT iteration (default 1).
-  -at, --adapt-tau      Gradient threshold fraction for batched selection (default 1.0).
-  -as, --adapt-save     Save ADAPT parameters every iteration to {hamiltonian_path}-adapt_params.txt.
-  -al, --adapt-load     Load ADAPT state from file to resume optimization from checkpoint.
-  --adapt-log-memory    Log RSS memory usage per ADAPT iteration.
+"INFORMATIONAL"
+"  -h, --help            Show help menu."
+"  -l, --list-backends   List available backends and exit."
+"REQUIRED"
+"  -f, --hamiltonian     Path to the input Hamiltonian file (sum of Fermionic operators)."
+"  -p, -n, --nparticles  Number of electrons in molecule."
+"OPTIONAL (Hamiltonian, Ansatz and Backend)"
+"  --xacc                Enable XACC/Qiskit indexing scheme (default)."
+"  --ducc                Enable DUCC indexing scheme."
+"  --sym, --symm         UCCSD symmetry level (0->none, 1->spin, 2->orbital, 3->full). Default to 3."
+"  -b, --backend         Simulation backend (CPU, NVGPU, AMDGPU, MPI (not supported)). Defaults to CPU."
+"  --seed                Random seed for reproducibility."
+"OPTIONAL (Global Minimizer)"
+"  -v, --verbose         Print additional progress information."
+"  -o, --optimizer       NLopt optimizer (e.g. LN_COBYLA, LN_BOBYQA, LN_NEWUOA, LD_LBFGS)."
+"  --opt-config          Path to JSON file with optimizer parameter overrides."
+"  -lb, --lbound         Optimizer lower bound (default -π)."
+"  -ub, --ubound         Optimizer upper bound (default π)."
+"  --reltol              Relative tolerance termination criterion."
+"  --abstol              Absolute tolerance termination criterion (default 1e-6)."
+"  --grad-step           Forward-difference gradient step for derivative-based optimizers (VQE and ADAPT inner solves) (default 1e-5)."
+"  --stopval             Objective stop value."
+"  --maxeval             Maximum number of function evaluations in VQE optimization (default 100)."
+"  --maxtime             Maximum VQE optimizer time (seconds)."
+"  --spsa                Enable SPSA gradient estimation (2 evals) instead of forward difference (N+1 evals)."
+"  --init-params         [For VQE only] Initial parameters: single value (repeat for all) or file with comma-separated values."
+"  --save-params         [For VQE only] Save optimized parameters to {hamiltonian_path}-vqe_params.txt."
+"OPTIONAL (ADAPT-VQE)"
+"  --adapt               Enable ADAPT-VQE instead of standard VQE."
+"  -ag, --adapt-gradtol  Operator Gradient norm tolerance (Default 1e-3)."
+"  --adapt-grad-step     Central-difference step for ADAPT operator gradients (default 1e-4)."
+"  -af, --adapt-fvaltol  Energy change tolerance (default disabled)."
+"  -am, --adapt-maxeval  Maximum ADAPT iterations (default 50)."
+"  -ak, --adapt-batch-k  Maximum operators appended per ADAPT iteration (default 1)."
+"  -at, --adapt-tau      Gradient threshold fraction for batched selection (default 1.0)."
+"  -as, --adapt-save     Save parameters every iteration to {hamiltonian_path}-adapt_params.txt."
+"  -al, --adapt-load     Load ADAPT-VQE state from file to resume optimization."
+"SIMULATOR OPTIONS"
+"  --num_threads         Specify number of threads (ignored in current backend)."
+"  --disable_fusion      Disable gate fusion (ignored in current backend).";
 ```
 
 Example – plain VQE run on the supplied `H4_4_0.9_xacc.hamil` benchmark:

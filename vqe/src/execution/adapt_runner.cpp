@@ -559,6 +559,7 @@ struct MpiGuard
             }
 
             grad[i] = (energy_plus - energy) / epsilon;
+            // std::cout << ">>>>>>>>>> DEBUG: grad[" << i << "] = " << grad[i] << std::endl;
             circuit_ref.set_parameter(i, x_original);
           }
         }
