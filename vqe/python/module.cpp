@@ -11,7 +11,7 @@
 #include "hamiltonian_parser.hpp"
 #include "jw_transform.hpp"
 #include "backend/statevector_cpu.hpp"
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
 #include "backend/statevector_gpu.hpp"
 #endif
 
@@ -51,7 +51,7 @@ namespace
     const auto &circuit = ansatz.get_circuit();
     const auto qubits = circuit.num_qubits();
 
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
     if (use_gpu)
     {
       vqe::backend::statevector_gpu backend(qubits);
@@ -62,7 +62,7 @@ namespace
 #else
     if (use_gpu)
     {
-      throw std::runtime_error("VQE built without CUDA support; GPU backend unavailable");
+      throw std::runtime_error("VQE built without CUDA/HIP support; GPU backend unavailable");
     }
 #endif
 
@@ -509,6 +509,15 @@ PYBIND11_MODULE(_core, m)
           }
           opts.iteration_improvement_tolerance = tol;
         }, "Minimum improvement required to log iteration progress")
+      .def_property("gradient_step", [](const vqe::vqe_options &opts)
+                    { return opts.gradient_step; }, [](vqe::vqe_options &opts, double step)
+                    {
+          if (step <= 0)
+          {
+            throw std::invalid_argument("gradient_step must be positive");
+          }
+          opts.gradient_step = step;
+        }, "Forward-difference step size for optimizer gradients")
       .def_property("status_interval", [](const vqe::vqe_options &opts)
                     { return opts.status_interval; }, [](vqe::vqe_options &opts, std::size_t interval)
                     {
@@ -527,6 +536,24 @@ PYBIND11_MODULE(_core, m)
           }
           opts.adapt_max_iterations = value;
         }, "Maximum number of ADAPT iterations")
+      .def_property("adapt_batch_max_operators", [](const vqe::vqe_options &opts)
+                    { return opts.adapt_batch_max_operators; }, [](vqe::vqe_options &opts, std::size_t value)
+                    {
+          if (value == 0)
+          {
+            throw std::invalid_argument("adapt_batch_max_operators must be positive");
+          }
+          opts.adapt_batch_max_operators = value;
+        }, "Maximum operators appended per ADAPT iteration (K)")
+      .def_property("adapt_batch_tau", [](const vqe::vqe_options &opts)
+                    { return opts.adapt_batch_tau; }, [](vqe::vqe_options &opts, double value)
+                    {
+          if (value <= 0.0 || value > 1.0)
+          {
+            throw std::invalid_argument("adapt_batch_tau must be in the interval (0, 1]");
+          }
+          opts.adapt_batch_tau = value;
+        }, "Gradient threshold fraction for batched selection (tau)")
       .def_property("adapt_gradient_step", [](const vqe::vqe_options &opts)
                     { return opts.adapt_gradient_step; }, [](vqe::vqe_options &opts, double step)
                     {
@@ -900,7 +927,7 @@ PYBIND11_MODULE(_core, m)
 
   m.def("check_gpu_support", []()
         {
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
           return true;
 #else
           return false;
@@ -910,13 +937,13 @@ PYBIND11_MODULE(_core, m)
         "Returns\n"
         "-------\n"
         "bool\n"
-        "    True if compiled with CUDA support");
+        "    True if compiled with CUDA or HIP support");
 
   // Version and build information
   m.attr("__version__") = "1.0.0";
   m.attr("__build_info__") = py::dict(
       py::arg("cuda_support") =
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
           true
 #else
           false

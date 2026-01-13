@@ -121,7 +121,7 @@ namespace
               << "  --xacc                Enable XACC/Qiskit indexing scheme (default).\n"
               << "  --ducc                Enable DUCC indexing scheme.\n"
               << "  --sym, --symm         UCCSD symmetry level (0->none, 1->spin, 2->orbital, 3->full). Default to 3.\n"
-              << "  -b, --backend         Simulation backend (CPU, MPI, NVGPU|GPU|NVGPU_MPI). Defaults to CPU.\n"
+              << "  -b, --backend         Simulation backend (CPU, NVGPU, AMDGPU, MPI (not supported)). Defaults to CPU.\n"
               << "  --seed                Random seed for reproducibility.\n"
               << "OPTIONAL (Global Minimizer)\n"
               << "  -v, --verbose         Print additional progress information.\n"
@@ -130,7 +130,8 @@ namespace
               << "  -lb, --lbound         Optimizer lower bound (default -π).\n"
               << "  -ub, --ubound         Optimizer upper bound (default π).\n"
               << "  --reltol              Relative tolerance termination criterion.\n"
-              << "  --abstol              Absolute tolerance termination criterion.\n"
+              << "  --abstol              Absolute tolerance termination criterion (default 1e-6).\n"
+              << "  --grad-step           Forward-difference gradient step for derivative-based optimizers (VQE and ADAPT inner solves) (default 1e-5).\n"
               << "  --stopval             Objective stop value.\n"
               << "  --maxeval             Maximum number of function evaluations in VQE optimization (default 100).\n"
               << "  --maxtime             Maximum VQE optimizer time (seconds).\n"
@@ -139,9 +140,12 @@ namespace
               << "  --save-params         [For VQE only] Save optimized parameters to {hamiltonian_path}-vqe_params.txt.\n"
               << "OPTIONAL (ADAPT-VQE)\n"
               << "  --adapt               Enable ADAPT-VQE instead of standard VQE.\n"
-              << "  -ag, --adapt-gradtol  Operator Gradient norm tolerance (default 1e-3).\n"
+              << "  -ag, --adapt-gradtol  Operator Gradient norm tolerance (Default 1e-3).\n"
+              << "  --adapt-grad-step     Central-difference step for ADAPT operator gradients (default 1e-4).\n"
               << "  -af, --adapt-fvaltol  Energy change tolerance (default disabled).\n"
               << "  -am, --adapt-maxeval  Maximum ADAPT iterations (default 50).\n"
+              << "  -ak, --adapt-batch-k  Maximum operators appended per ADAPT iteration (default 1).\n"
+              << "  -at, --adapt-tau      Gradient threshold fraction for batched selection (default 1.0).\n"
               << "  -as, --adapt-save     Save parameters every iteration to {hamiltonian_path}-adapt_params.txt.\n"
               << "  -al, --adapt-load     Load ADAPT-VQE state from file to resume optimization.\n"
               << "SIMULATOR OPTIONS\n"
@@ -152,8 +156,10 @@ namespace
   void list_backends()
   {
     std::cout << "Available backends:\n  CPU";
-#ifdef VQE_ENABLE_CUDA
-    std::cout << "\n  GPU";
+#if defined(VQE_ENABLE_CUDA)
+    std::cout << "\n  NVGPU";
+#elif defined(VQE_ENABLE_HIP)
+    std::cout << "\n  AMDGPU";
 #endif
     std::cout << "\n";
   }
@@ -215,6 +221,11 @@ namespace
       return true;
     }
     if (upper == "GPU" || upper == "NVGPU" || upper == "NVGPU_MPI")
+    {
+      config.options.use_gpu = true;
+      return true;
+    }
+    if (upper == "AMDGPU" || upper == "HIP" || upper == "HIP_MPI")
     {
       config.options.use_gpu = true;
       return true;
@@ -366,20 +377,23 @@ namespace
   bool parse_args(int argc, char **argv, cli_config &config, std::string &error)
   {
     config.options = vqe::vqe_options{};
-    config.options.symmetry_level = 3; // MZ: changed to 3
-    config.options.trotter_steps = 1;
-    config.options.use_xacc_indexing = true;
-    set_bounds(config.options, -1.0 * kPi, 1.0 * kPi);  // MZ: changed to [-pi, pi]
-    set_relative_tolerance(config.options, -1.0);
-    set_absolute_tolerance(config.options, -1.0);
-    set_stop_value(config.options, -std::numeric_limits<double>::infinity());
-    set_max_evaluations(config.options, 100);
-    set_max_time(config.options, -1.0);
-    config.options.optimizer = nlopt::LN_COBYLA;
-    config.options.adapt_optimizer = nlopt::LN_COBYLA;
-    config.options.adapt_gradient_tolerance = 1e-3;
-    config.options.adapt_energy_tolerance = -1.0;
-    config.options.adapt_max_iterations = 50;
+    // Defaults now live in vqe_options; keep overrides here only when diverging.
+    // config.options.symmetry_level = 3;
+    // config.options.trotter_steps = 1;
+    // config.options.use_xacc_indexing = true;
+    // set_bounds(config.options, -1.0 * kPi, 1.0 * kPi);
+    // set_relative_tolerance(config.options, -1.0);
+    // set_absolute_tolerance(config.options, -1.0);
+    // set_stop_value(config.options, -std::numeric_limits<double>::infinity());
+    // set_max_evaluations(config.options, 100);
+    // set_max_time(config.options, -1.0);
+    // config.options.optimizer = nlopt::LN_COBYLA;
+    // config.options.adapt_optimizer = nlopt::LN_COBYLA;
+    // config.options.adapt_gradient_tolerance = 1e-3;
+    // config.options.adapt_energy_tolerance = -1.0;
+    // config.options.adapt_max_iterations = 50;
+    // config.options.adapt_batch_max_operators = 2;
+    // config.options.adapt_batch_tau = 0.5;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -529,6 +543,22 @@ namespace
         set_absolute_tolerance(config.options, std::stod(argv[++i]));
         continue;
       }
+      if (arg == "--grad-step")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --grad-step";
+          return false;
+        }
+        const double step = std::stod(argv[++i]);
+        if (step <= 0.0)
+        {
+          error = "grad-step must be positive";
+          return false;
+        }
+        config.options.gradient_step = step;
+        continue;
+      }
       if (arg == "--maxeval")
       {
         if (i + 1 >= argc)
@@ -609,6 +639,22 @@ namespace
         config.options.adapt_gradient_tolerance = std::stod(argv[++i]);
         continue;
       }
+      if (arg == "--adapt-grad-step")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --adapt-grad-step";
+          return false;
+        }
+        const double step = std::stod(argv[++i]);
+        if (step <= 0.0)
+        {
+          error = "adapt-grad-step must be positive";
+          return false;
+        }
+        config.options.adapt_gradient_step = step;
+        continue;
+      }
       if (arg == "-af" || arg == "--adapt-fvaltol")
       {
         if (i + 1 >= argc)
@@ -627,6 +673,38 @@ namespace
           return false;
         }
         config.options.adapt_max_iterations = static_cast<std::size_t>(std::stoull(argv[++i]));
+        continue;
+      }
+      if (arg == "-ak" || arg == "--adapt-batch-k")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --adapt-batch-k";
+          return false;
+        }
+        const std::size_t batch_k = static_cast<std::size_t>(std::stoull(argv[++i]));
+        if (batch_k == 0)
+        {
+          error = "adapt-batch-k must be positive";
+          return false;
+        }
+        config.options.adapt_batch_max_operators = batch_k;
+        continue;
+      }
+      if (arg == "-at" || arg == "--adapt-tau")
+      {
+        if (i + 1 >= argc)
+        {
+          error = "Missing value for --adapt-tau";
+          return false;
+        }
+        const double tau = std::stod(argv[++i]);
+        if (tau <= 0.0 || tau > 1.0)
+        {
+          error = "adapt-tau must be in the interval (0, 1]";
+          return false;
+        }
+        config.options.adapt_batch_tau = tau;
         continue;
       }
       if (arg == "-as" || arg == "--adapt-save")
@@ -800,6 +878,7 @@ namespace
         std::cout << " (SPSA gradient)";
       }
       std::cout << std::endl;
+      std::cout << "  Grad step (FD)        : " << opts.gradient_step << std::endl;
       std::cout << "  Parameter bounds      : [" << opts.lower_bound << ", " << opts.upper_bound << "]" << std::endl;
       if (opts.max_evaluations > 0)
       {
@@ -956,8 +1035,11 @@ namespace
       std::cout << "  Backend               : " << config.backend << std::endl;
       std::cout << "  Symmetry level        : " << opts.symmetry_level << std::endl;
       std::cout << "  Max iterations        : " << opts.adapt_max_iterations << std::endl;
-      std::cout << "  Gradient step         : " << opts.adapt_gradient_step << std::endl;
-      std::cout << "  Gradient tolerance    : " << opts.adapt_gradient_tolerance << std::endl;
+      std::cout << "  OP Gradient step (CD) : " << opts.adapt_gradient_step << std::endl;
+      std::cout << "  OP Gradient tolerance : " << opts.adapt_gradient_tolerance << std::endl;
+      std::cout << "  Batch size (K)        : " << opts.adapt_batch_max_operators << std::endl;
+      std::cout << "  Batch threshold (tau) : " << opts.adapt_batch_tau << std::endl;
+      std::cout << "  VQE grad step (FD)    : " << opts.gradient_step << std::endl;
       if (opts.adapt_energy_tolerance > 0.0)
       {
         std::cout << "  Energy tolerance      : " << opts.adapt_energy_tolerance << std::endl;

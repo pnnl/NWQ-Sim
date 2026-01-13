@@ -17,7 +17,7 @@
 
 #include "ansatz/ansatz.hpp"
 #include "backend/statevector_cpu.hpp"
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
 #include "backend/statevector_gpu.hpp"
 #endif
 #include "core/environment.hpp"
@@ -177,6 +177,7 @@ namespace vqe
       bool compute_gradient = false;
       bool use_spsa_gradient = false;  // Use SPSA-style gradient estimation
       std::mt19937 *rng = nullptr;     // Random number generator for SPSA
+      double gradient_step = 1e-5;     // Forward-difference step size
     };
 
     template <typename Backend>
@@ -257,7 +258,11 @@ namespace vqe
         else
         {
           // Standard finite difference gradient
-          const double epsilon = 1e-5;  // finite difference step size
+          const double epsilon = ctx->gradient_step;  // finite difference step size
+          if (epsilon <= 0.0)
+          {
+            throw std::runtime_error("Finite-difference step must be positive");
+          }
 
           for (std::size_t i = 0; i < x.size(); ++i)
           {
@@ -400,7 +405,8 @@ namespace vqe
       // Random number generator for SPSA (if enabled)
       static std::mt19937 rng(std::random_device{}());
       objective_context<Backend> context{&ansatz, &backend, &pauli_terms, &eval_count, &apply_time, &expectation_time, &logger,
-                                          needs_grad, options.use_spsa_gradient, &rng};
+                                          needs_grad, options.use_spsa_gradient, &rng,
+                                          options.gradient_step};
       opt.set_min_objective(objective_function_impl<Backend>, &context);
 
       double min_value = 0.0;
@@ -471,7 +477,7 @@ vqe::vqe_result vqe::run_default_vqe_with_ansatz(uccsd_ansatz &ansatz,
                                                  const std::vector<pauli_term> &pauli_terms,
                                                  const vqe_options &options)
 {
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
   if (options.use_gpu)
   {
     return run_default_vqe_backend<backend::statevector_gpu>(ansatz, pauli_terms, options);
@@ -479,7 +485,7 @@ vqe::vqe_result vqe::run_default_vqe_with_ansatz(uccsd_ansatz &ansatz,
 #else
   if (options.use_gpu)
   {
-    throw std::runtime_error("vqe built without CUDA support; GPU backend unavailable");
+    throw std::runtime_error("vqe built without CUDA/HIP support; GPU backend unavailable");
   }
 #endif
 

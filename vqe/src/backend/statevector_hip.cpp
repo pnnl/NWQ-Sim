@@ -1,13 +1,14 @@
+#include "hip/hip_runtime.h"
 #include "backend/statevector_gpu.hpp"
 
-#ifdef VQE_ENABLE_CUDA
+#ifdef VQE_ENABLE_HIP
 
 #include "backend/gate_builder.hpp"
 #include "backend/gate_fusion.hpp"
 #include "backend/statevector_cpu.hpp"
 
-#include <cooperative_groups.h>
-#include <cuda_runtime.h>
+#include <hip/hip_cooperative_groups.h>
+#include <hip/hip_runtime.h>
 
 #include <algorithm>
 #include <cmath>
@@ -18,7 +19,7 @@
 #include <utility>
 #include <vector>
 
-constexpr int THREADS_CTA_CUDA = 256;
+constexpr int THREADS_CTA_HIP = 256;
 
 namespace NWQSim
 {
@@ -34,11 +35,11 @@ namespace vqe::backend
   namespace
   {
 
-    inline void check_cuda(cudaError_t err, const char *what)
+    inline void check_cuda(hipError_t err, const char *what)
     {
-      if (err != cudaSuccess)
+      if (err != hipSuccess)
       {
-        throw std::runtime_error(std::string(what) + ": " + cudaGetErrorString(err));
+        throw std::runtime_error(std::string(what) + ": " + hipGetErrorString(err));
       }
     }
 
@@ -384,6 +385,7 @@ namespace vqe::backend
         for (NWQSim::IdxType i = tid; i < half_dim; i += total_threads)
         {
             NWQSim::IdxType idx0, idx1;
+
             if (x_mask == 0) 
 			{
                 // Diagonal Term (Z-only): idx0 and idx1 are independent
@@ -403,11 +405,13 @@ namespace vqe::backend
                 idx0 = high_part | low_part; // The index with 0 at pivot
                 idx1 = idx0 ^ x_mask;        // The index with 1 at pivot
             }
+
             // 3. Load State
             double v0_r = st.real[idx0];
             double v0_i = st.imag[idx0];
             double v1_r = st.real[idx1];
             double v1_i = st.imag[idx1];
+
             // 4. Compute Parity and Apply Rotation
             if (x_mask == 0) 
 			{
@@ -430,48 +434,60 @@ namespace vqe::backend
                 double S1 = (p1 ? -1.0 : 1.0) * global_sign;
                 st.real[idx1] = c * v1_r + s * S1 * v1_i;
                 st.imag[idx1] = c * v1_i - s * S1 * v1_r;
+
             } 
 			else 
 			{
                 // --- Off-Diagonal Case ---
                 // P|k> = phase * |k^x>
+                
                 // Parity for idx0
                 int p0 = count_set_bits(idx0 & z_mask) & 1;
                 double S0 = (p0 ? -1.0 : 1.0) * global_sign;
+
                 double out0_r, out0_i, out1_r, out1_i;
-                if (!has_imag_factor) 
-                {
+
+                if (!has_imag_factor) {
                     // Y count is even -> Phase is Real (+/- 1)
                     // P|0> = S0 |1>
                     // P|1> = S0 |0> (Hermitian property ensures symmetry here)
+                    
                     double term = s * S0; // -i * sin * S0
+                    
                     // out = c*v - i*term*v_pair
                     out0_r = c * v0_r + term * v1_i;
                     out0_i = c * v0_i - term * v1_r;
+                    
                     out1_r = c * v1_r + term * v0_i;
                     out1_i = c * v1_i - term * v0_r;
+
                 } 
 				else 
 				{
                     // Y count is odd -> Phase is Imaginary (+/- i)
                     // P|0> = i * S0 |1>
                     // P|1> = -i * S0 |0> (Anti-symmetry for odd Ys)
+                    
                     double term = s * S0; 
                     // Op is: exp(-i theta P)
                     // P|0> = i S0 |1>  => -i sin P|0> = -i sin (i S0 |1>) = sin S0 |1>
                     // P|1> = -i S0 |0> => -i sin P|1> = -i sin (-i S0 |0>) = -sin S0 |0>
+                    
                     // out0 = c*v0 + term*v1 (Real mixing)
                     out0_r = c * v0_r + term * v1_r;
                     out0_i = c * v0_i + term * v1_i;
+                    
                     // out1 = c*v1 - term*v0
                     out1_r = c * v1_r - term * v0_r;
                     out1_i = c * v1_i - term * v0_i;
                 }
+
                 // Store
                 st.real[idx0] = out0_r; st.imag[idx0] = out0_i;
                 st.real[idx1] = out1_r; st.imag[idx1] = out1_i;
             }
         }
+        
         // 5. Global Synchronization
         // Essential because other gates in the queue depend on this result
         grid.sync();
@@ -492,14 +508,14 @@ namespace vqe::backend
         }
         else if (gate.op == sim_gate::kind::two)
         {
-          apply_two_device(state, grid, gate.control, gate.target, gate.real.data(), gate.imag.data());
+			apply_two_device(state, grid, gate.control, gate.target, gate.real.data(), gate.imag.data());
         }
         else if (gate.op == sim_gate::kind::pauli)
         {
 			//----------------------
-            //apply_pauli_device(state, grid, gate);
+			//apply_pauli_device(state, grid, gate);
 			//----------------------
-            apply_pauli_device_opt(state, grid, gate);
+			apply_pauli_device_opt(state, grid, gate);
         }
         grid.sync();
       }
@@ -516,7 +532,6 @@ namespace vqe::backend
       {
         return;
       }
-
       const expectation_parameters param = params[term_idx];
       const double2 coeff = coefficients[term_idx];
       const std::size_t total_work = param.total_work;
@@ -624,23 +639,23 @@ namespace vqe::backend
       dimension = qubits == 0 ? std::size_t{1} : (std::size_t{1} << qubits);
       half_dimension = qubits < 1 ? std::size_t{0} : (dimension >> 1);
 
-      check_cuda(cudaSetDevice(0), "cudaSetDevice");
-      check_cuda(cudaGetDeviceProperties(&device_properties, 0), "cudaGetDeviceProperties init");
-      check_cuda(cudaMalloc(&d_real, dimension * sizeof(double)), "cudaMalloc real");
-      check_cuda(cudaMalloc(&d_imag, dimension * sizeof(double)), "cudaMalloc imag");
-      check_cuda(cudaMemset(d_real, 0, dimension * sizeof(double)), "cudaMemset real");
-      check_cuda(cudaMemset(d_imag, 0, dimension * sizeof(double)), "cudaMemset imag");
+      check_cuda(hipSetDevice(0), "hipSetDevice");
+      check_cuda(hipGetDeviceProperties(&device_properties, 0), "hipGetDeviceProperties init");
+      check_cuda(hipMalloc(&d_real, dimension * sizeof(double)), "hipMalloc real");
+      check_cuda(hipMalloc(&d_imag, dimension * sizeof(double)), "hipMalloc imag");
+      check_cuda(hipMemset(d_real, 0, dimension * sizeof(double)), "hipMemset real");
+      check_cuda(hipMemset(d_imag, 0, dimension * sizeof(double)), "hipMemset imag");
       double one = 1.0;
-      check_cuda(cudaMemcpy(d_real, &one, sizeof(double), cudaMemcpyHostToDevice), "cudaMemcpy real init");
-      check_cuda(cudaStreamCreateWithFlags(&compute_stream, cudaStreamNonBlocking), "cudaStreamCreate compute");
-      check_cuda(cudaStreamCreateWithFlags(&expectation_stream, cudaStreamNonBlocking), "cudaStreamCreate expectation");
+      check_cuda(hipMemcpy(d_real, &one, sizeof(double), hipMemcpyHostToDevice), "hipMemcpy real init");
+      check_cuda(hipStreamCreateWithFlags(&compute_stream, hipStreamNonBlocking), "hipStreamCreate compute");
+      check_cuda(hipStreamCreateWithFlags(&expectation_stream, hipStreamNonBlocking), "hipStreamCreate expectation");
 
-      compute_block = dim3(THREADS_CTA_CUDA, 1, 1);
+      compute_block = dim3(THREADS_CTA_HIP, 1, 1);
       int blocks_per_sm = 0;
-      check_cuda(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&blocks_per_sm, apply_gates_kernel, THREADS_CTA_CUDA, 0), "cudaOccupancyMaxActiveBlocksPerMultiprocessor init");
+      check_cuda(hipOccupancyMaxActiveBlocksPerMultiprocessor(&blocks_per_sm, apply_gates_kernel, THREADS_CTA_HIP, 0), "hipOccupancyMaxActiveBlocksPerMultiprocessor init");
       const int max_blocks = std::max(1, blocks_per_sm * device_properties.multiProcessorCount);
       const std::size_t work_items = std::max<std::size_t>(1, dimension);
-      const int required_blocks = static_cast<int>((work_items + THREADS_CTA_CUDA - 1) / THREADS_CTA_CUDA);
+      const int required_blocks = static_cast<int>((work_items + THREADS_CTA_HIP - 1) / THREADS_CTA_HIP);
       const int total_blocks = std::max(1, std::min(max_blocks, required_blocks));
       compute_grid = dim3(static_cast<unsigned int>(total_blocks), 1, 1);
     }
@@ -649,56 +664,56 @@ namespace vqe::backend
     {
       if (h_expectation_params_pinned != nullptr)
       {
-        cudaFreeHost(h_expectation_params_pinned);
+        hipHostFree(h_expectation_params_pinned);
       }
       if (h_expectation_coeffs_pinned != nullptr)
       {
-        cudaFreeHost(h_expectation_coeffs_pinned);
+        hipHostFree(h_expectation_coeffs_pinned);
       }
       if (h_expectation_results_pinned != nullptr)
       {
-        cudaFreeHost(h_expectation_results_pinned);
+        hipHostFree(h_expectation_results_pinned);
       }
       if (d_expectation_params != nullptr)
       {
-        cudaFree(d_expectation_params);
+        hipFree(d_expectation_params);
       }
       if (d_expectation_coeffs != nullptr)
       {
-        cudaFree(d_expectation_coeffs);
+        hipFree(d_expectation_coeffs);
       }
       if (d_expectation_results != nullptr)
       {
-        cudaFree(d_expectation_results);
+        hipFree(d_expectation_results);
       }
       if (d_gates != nullptr)
       {
-        cudaFree(d_gates);
+        hipFree(d_gates);
       }
       if (d_real != nullptr)
       {
-        cudaFree(d_real);
+        hipFree(d_real);
       }
       if (d_imag != nullptr)
       {
-        cudaFree(d_imag);
+        hipFree(d_imag);
       }
       if (compute_stream != nullptr)
       {
-        cudaStreamDestroy(compute_stream);
+        hipStreamDestroy(compute_stream);
       }
       if (expectation_stream != nullptr)
       {
-        cudaStreamDestroy(expectation_stream);
+        hipStreamDestroy(expectation_stream);
       }
     }
 
     void reset()
     {
-      check_cuda(cudaMemset(d_real, 0, dimension * sizeof(double)), "cudaMemset real");
-      check_cuda(cudaMemset(d_imag, 0, dimension * sizeof(double)), "cudaMemset imag");
+      check_cuda(hipMemset(d_real, 0, dimension * sizeof(double)), "hipMemset real");
+      check_cuda(hipMemset(d_imag, 0, dimension * sizeof(double)), "hipMemset imag");
       double one = 1.0;
-      check_cuda(cudaMemcpy(d_real, &one, sizeof(double), cudaMemcpyHostToDevice), "cudaMemcpy reset");
+      check_cuda(hipMemcpy(d_real, &one, sizeof(double), hipMemcpyHostToDevice), "hipMemcpy reset");
       amplitudes_valid = false;
       cached_expectation_valid = false;
     }
@@ -711,10 +726,10 @@ namespace vqe::backend
       }
       if (d_gates != nullptr)
       {
-        cudaFree(d_gates);
+        hipFree(d_gates);
       }
       gate_capacity = std::max<std::size_t>(count, 1);
-      check_cuda(cudaMalloc(&d_gates, gate_capacity * sizeof(sim_gate)), "cudaMalloc gates");
+      check_cuda(hipMalloc(&d_gates, gate_capacity * sizeof(sim_gate)), "hipMalloc gates");
     }
 
     void apply(const circuit &circ)
@@ -730,7 +745,7 @@ namespace vqe::backend
       }
 
       ensure_gate_capacity(gate_count);
-      check_cuda(cudaMemcpy(d_gates, fused_buffer.data(), gate_count * sizeof(sim_gate), cudaMemcpyHostToDevice), "cudaMemcpy gates");
+      check_cuda(hipMemcpy(d_gates, fused_buffer.data(), gate_count * sizeof(sim_gate), hipMemcpyHostToDevice), "hipMemcpy gates");
 
       device_state state{};
       state.dimension = static_cast<NWQSim::IdxType>(dimension);
@@ -740,8 +755,8 @@ namespace vqe::backend
       state.imag = d_imag;
 
       void *args[] = {&state, &d_gates, const_cast<std::size_t *>(&gate_count)};
-      check_cuda(cudaLaunchCooperativeKernel(reinterpret_cast<void *>(apply_gates_kernel), compute_grid, compute_block, args, 0, compute_stream), "cudaLaunchCooperativeKernel apply gates");
-      check_cuda(cudaStreamSynchronize(compute_stream), "cudaStreamSynchronize apply");
+      check_cuda(hipLaunchCooperativeKernel(reinterpret_cast<void *>(apply_gates_kernel), compute_grid, compute_block, args, 0, compute_stream), "hipLaunchCooperativeKernel apply gates");
+      check_cuda(hipStreamSynchronize(compute_stream), "hipStreamSynchronize apply");
 
       amplitudes_valid = false;
     }
@@ -752,8 +767,8 @@ namespace vqe::backend
       {
         std::vector<double> host_real(dimension);
         std::vector<double> host_imag(dimension);
-        check_cuda(cudaMemcpy(host_real.data(), d_real, dimension * sizeof(double), cudaMemcpyDeviceToHost), "cudaMemcpy amplitudes real");
-        check_cuda(cudaMemcpy(host_imag.data(), d_imag, dimension * sizeof(double), cudaMemcpyDeviceToHost), "cudaMemcpy amplitudes imag");
+        check_cuda(hipMemcpy(host_real.data(), d_real, dimension * sizeof(double), hipMemcpyDeviceToHost), "hipMemcpy amplitudes real");
+        check_cuda(hipMemcpy(host_imag.data(), d_imag, dimension * sizeof(double), hipMemcpyDeviceToHost), "hipMemcpy amplitudes imag");
         amplitude_cache.resize(dimension);
         for (std::size_t idx = 0; idx < dimension; ++idx)
         {
@@ -777,8 +792,8 @@ namespace vqe::backend
         host_real[idx] = amplitudes_vec[idx].real();
         host_imag[idx] = amplitudes_vec[idx].imag();
       }
-      check_cuda(cudaMemcpy(d_real, host_real.data(), dimension * sizeof(double), cudaMemcpyHostToDevice), "cudaMemcpy load real");
-      check_cuda(cudaMemcpy(d_imag, host_imag.data(), dimension * sizeof(double), cudaMemcpyHostToDevice), "cudaMemcpy load imag");
+      check_cuda(hipMemcpy(d_real, host_real.data(), dimension * sizeof(double), hipMemcpyHostToDevice), "hipMemcpy load real");
+      check_cuda(hipMemcpy(d_imag, host_imag.data(), dimension * sizeof(double), hipMemcpyHostToDevice), "hipMemcpy load imag");
       amplitudes_valid = false;
       cached_expectation_valid = false;
     }
@@ -789,8 +804,8 @@ namespace vqe::backend
       {
         throw std::invalid_argument("state dimension mismatch in copy_state_from");
       }
-      check_cuda(cudaMemcpy(d_real, other.d_real, dimension * sizeof(double), cudaMemcpyDeviceToDevice), "cudaMemcpy copy real");
-      check_cuda(cudaMemcpy(d_imag, other.d_imag, dimension * sizeof(double), cudaMemcpyDeviceToDevice), "cudaMemcpy copy imag");
+      check_cuda(hipMemcpy(d_real, other.d_real, dimension * sizeof(double), hipMemcpyDeviceToDevice), "hipMemcpy copy real");
+      check_cuda(hipMemcpy(d_imag, other.d_imag, dimension * sizeof(double), hipMemcpyDeviceToDevice), "hipMemcpy copy imag");
       amplitudes_valid = false;
       cached_expectation_valid = false;
     }
@@ -830,20 +845,20 @@ namespace vqe::backend
       {
         if (d_expectation_params != nullptr)
         {
-          cudaFree(d_expectation_params);
+          hipFree(d_expectation_params);
         }
         if (d_expectation_coeffs != nullptr)
         {
-          cudaFree(d_expectation_coeffs);
+          hipFree(d_expectation_coeffs);
         }
         if (d_expectation_results != nullptr)
         {
-          cudaFree(d_expectation_results);
+          hipFree(d_expectation_results);
         }
         expectation_term_capacity = std::max<std::size_t>(count, 1);
-        check_cuda(cudaMalloc(&d_expectation_params, expectation_term_capacity * sizeof(expectation_parameters)), "cudaMalloc expectation params");
-        check_cuda(cudaMalloc(&d_expectation_coeffs, expectation_term_capacity * sizeof(double2)), "cudaMalloc expectation coeffs");
-        check_cuda(cudaMalloc(&d_expectation_results, expectation_term_capacity * sizeof(double2)), "cudaMalloc expectation results");
+        check_cuda(hipMalloc(&d_expectation_params, expectation_term_capacity * sizeof(expectation_parameters)), "hipMalloc expectation params");
+        check_cuda(hipMalloc(&d_expectation_coeffs, expectation_term_capacity * sizeof(double2)), "hipMalloc expectation coeffs");
+        check_cuda(hipMalloc(&d_expectation_results, expectation_term_capacity * sizeof(double2)), "hipMalloc expectation results");
         ensure_expectation_host_capacity(expectation_term_capacity);
         cached_expectation_valid = false;
       }
@@ -859,20 +874,20 @@ namespace vqe::backend
       {
         if (h_expectation_params_pinned != nullptr)
         {
-          cudaFreeHost(h_expectation_params_pinned);
+          hipHostFree(h_expectation_params_pinned);
         }
         if (h_expectation_coeffs_pinned != nullptr)
         {
-          cudaFreeHost(h_expectation_coeffs_pinned);
+          hipHostFree(h_expectation_coeffs_pinned);
         }
         if (h_expectation_results_pinned != nullptr)
         {
-          cudaFreeHost(h_expectation_results_pinned);
+          hipHostFree(h_expectation_results_pinned);
         }
         expectation_host_pinned_capacity = std::max<std::size_t>(count, 1);
-        check_cuda(cudaMallocHost(reinterpret_cast<void **>(&h_expectation_params_pinned), expectation_host_pinned_capacity * sizeof(expectation_parameters)), "cudaMallocHost expectation params");
-        check_cuda(cudaMallocHost(reinterpret_cast<void **>(&h_expectation_coeffs_pinned), expectation_host_pinned_capacity * sizeof(double2)), "cudaMallocHost expectation coeffs");
-        check_cuda(cudaMallocHost(reinterpret_cast<void **>(&h_expectation_results_pinned), expectation_host_pinned_capacity * sizeof(double2)), "cudaMallocHost expectation results");
+        check_cuda(hipHostMalloc(reinterpret_cast<void **>(&h_expectation_params_pinned), expectation_host_pinned_capacity * sizeof(expectation_parameters)), "hipHostMalloc expectation params");
+        check_cuda(hipHostMalloc(reinterpret_cast<void **>(&h_expectation_coeffs_pinned), expectation_host_pinned_capacity * sizeof(double2)), "hipHostMalloc expectation coeffs");
+        check_cuda(hipHostMalloc(reinterpret_cast<void **>(&h_expectation_results_pinned), expectation_host_pinned_capacity * sizeof(double2)), "hipHostMalloc expectation results");
         cached_expectation_valid = false;
       }
     }
@@ -931,8 +946,8 @@ namespace vqe::backend
           host_coeffs[idx] = make_double2(term.coefficient.real(), term.coefficient.imag());
         }
 
-        check_cuda(cudaMemcpyAsync(d_expectation_params, host_params, term_count * sizeof(expectation_parameters), cudaMemcpyHostToDevice, expectation_stream), "cudaMemcpyAsync expectation params");
-        check_cuda(cudaMemcpyAsync(d_expectation_coeffs, host_coeffs, term_count * sizeof(double2), cudaMemcpyHostToDevice, expectation_stream), "cudaMemcpyAsync expectation coeffs");
+        check_cuda(hipMemcpyAsync(d_expectation_params, host_params, term_count * sizeof(expectation_parameters), hipMemcpyHostToDevice, expectation_stream), "hipMemcpyAsync expectation params");
+        check_cuda(hipMemcpyAsync(d_expectation_coeffs, host_coeffs, term_count * sizeof(double2), hipMemcpyHostToDevice, expectation_stream), "hipMemcpyAsync expectation coeffs");
 
         cached_expectation_terms = terms;
         cached_expectation_count = term_count;
@@ -946,13 +961,13 @@ namespace vqe::backend
       state.real = d_real;
       state.imag = d_imag;
 
-      const int threads = THREADS_CTA_CUDA;
+      const int threads = THREADS_CTA_HIP;
       const std::size_t shared = static_cast<std::size_t>(threads) * sizeof(double);
       expectation_terms_kernel<<<static_cast<unsigned int>(term_count), threads, shared, expectation_stream>>>(state, d_expectation_params, d_expectation_coeffs, d_expectation_results, term_count);
-      check_cuda(cudaGetLastError(), "expectation_terms_kernel launch");
+      check_cuda(hipGetLastError(), "expectation_terms_kernel launch");
 
-      check_cuda(cudaMemcpyAsync(h_expectation_results_pinned, d_expectation_results, term_count * sizeof(double2), cudaMemcpyDeviceToHost, expectation_stream), "cudaMemcpyAsync expectation results");
-      check_cuda(cudaStreamSynchronize(expectation_stream), "cudaStreamSynchronize expectation");
+      check_cuda(hipMemcpyAsync(h_expectation_results_pinned, d_expectation_results, term_count * sizeof(double2), hipMemcpyDeviceToHost, expectation_stream), "hipMemcpyAsync expectation results");
+      check_cuda(hipStreamSynchronize(expectation_stream), "hipStreamSynchronize expectation");
 
       const double2 *result_data = h_expectation_results_pinned;
       for (std::size_t idx = 0; idx < term_count; ++idx)
@@ -980,10 +995,10 @@ namespace vqe::backend
     mutable double2 *h_expectation_coeffs_pinned = nullptr;
     mutable double2 *h_expectation_results_pinned = nullptr;
     mutable std::size_t expectation_host_pinned_capacity = 0;
-    cudaStream_t compute_stream = nullptr;
-    cudaStream_t expectation_stream = nullptr;
+    hipStream_t compute_stream = nullptr;
+    hipStream_t expectation_stream = nullptr;
     mutable std::vector<std::complex<double>> expectation_host_complex;
-    cudaDeviceProp device_properties{};
+    hipDeviceProp_t device_properties{};
     dim3 compute_grid{};
     dim3 compute_block{};
 
@@ -1047,4 +1062,4 @@ namespace vqe::backend
 
 } // namespace vqe::backend
 
-#endif // VQE_ENABLE_CUDA
+#endif // VQE_ENABLE_HIP

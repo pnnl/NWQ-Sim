@@ -28,7 +28,7 @@ class statevector_gpu {
   [[nodiscard]] std::size_t num_qubits() const;
 
  private:
-#ifdef VQE_ENABLE_CUDA
+#if defined(VQE_ENABLE_CUDA) || defined(VQE_ENABLE_HIP)
   struct impl;
   std::unique_ptr<impl> impl_;
 #else
