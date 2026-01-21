@@ -418,7 +418,9 @@ namespace vqe
       }
       catch (const std::exception &ex)
       {
-        throw std::runtime_error(std::string("NLopt optimization failed: ") + ex.what());
+        std::string err_msg = std::string("NLopt optimization failed: ") + ex.what();
+        std::cout << "[vqe] " << err_msg << std::endl;
+        // throw std::runtime_error(std::string("NLopt optimization failed: ") + ex.what());
       }
 
       logger.finalize(min_value);

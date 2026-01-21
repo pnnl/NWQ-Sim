@@ -154,7 +154,7 @@ std::vector<std::pair<std::string, std::complex<double>>> parseHamiltonianFile(c
   return result;
 }
 
-std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim(
+std::tuple<double, bool, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim(
     const std::vector<std::pair<std::string, std::complex<double>>> &hamiltonian_ops,
     int n_part,
     std::string backend,
@@ -242,7 +242,7 @@ std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim
     parameter_output.emplace_back(parse_parameter_label(label), result.parameters[index]);
   }
 
-  return {result.energy, parameter_output};
+  return {result.energy, result.converged, parameter_output};
 }
 
 // MZ: "local gradient" (SPSA gradient) is not implemnted after re-organized anyway

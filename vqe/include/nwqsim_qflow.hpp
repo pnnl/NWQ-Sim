@@ -10,7 +10,7 @@
 
 std::vector<std::pair<std::string, std::complex<double>>> parseHamiltonianFile(const std::string &filename);
 
-std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim(
+std::tuple<double, bool, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim(
     const std::vector<std::pair<std::string, std::complex<double>>> &hamiltonian_ops,
     int n_part,
     std::string backend = "CPU",

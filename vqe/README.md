@@ -381,7 +381,7 @@ opts.max_time = -1.0; // -1 for no max time
 opts.optimizer = nlopt::LD_LBFGS; // Use a derivative-based optimizer to enable gradient computation
 opts.initial_parameters = {0.1, 0.2, 0.3, ...};  // Must match parameter count for the used ansatz (UCCSD)
 
-auto [energy, parameters] = qflow_nwqsim(ham_ops, n_electrons, "NVGPU", opts);
+auto [energy, converged, parameters] = qflow_nwqsim(ham_ops, n_electrons, "NVGPU", opts);
 ```
 
 
