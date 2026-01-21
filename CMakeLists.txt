@@ -26,12 +26,20 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 nwqsim_option(CMAKE_BUILD_TYPE Release)
+nwqsim_option(NWQSIM_ENABLE_CUDA ON)
+nwqsim_option(NWQSIM_ENABLE_HIP ON)
 
 # Find required packages
-find_package(CUDAToolkit)
+if (NWQSIM_ENABLE_CUDA)
+  find_package(CUDAToolkit)
+endif()
+
+if (NWQSIM_ENABLE_HIP)
+  find_package(HIP QUIET)
+endif()
+
 find_package(MPI)
 find_package(OpenMP)
-find_package(HIP QUIET)
 
 set(ma_enable "N/A") 
 if(CUDAToolkit_FOUND)
