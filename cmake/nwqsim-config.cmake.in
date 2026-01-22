@@ -1,9 +1,18 @@
 @PACKAGE_INIT@
 
+set(NWQSIM_ENABLE_CUDA @NWQSIM_ENABLE_CUDA@)
+set(NWQSIM_ENABLE_HIP @NWQSIM_ENABLE_HIP@)
+
+if (NWQSIM_ENABLE_CUDA)
+  find_package(CUDAToolkit)
+endif()
+
+if (NWQSIM_ENABLE_HIP)
+  find_package(HIP QUIET)
+endif()
+
 find_package(MPI)
 find_package(OpenMP)
-find_package(CUDAToolkit QUIET)
-find_package(HIP QUIET)
 
 if(NOT TARGET nwqsim::nwqsim)
     include("${CMAKE_CURRENT_LIST_DIR}/nwqsim-targets.cmake")
