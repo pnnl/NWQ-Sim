@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include <nlopt.hpp>
 
@@ -154,7 +155,7 @@ std::vector<std::pair<std::string, std::complex<double>>> parseHamiltonianFile(c
   return result;
 }
 
-std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim(
+std::tuple<double, std::vector<std::pair<std::vector<int>, double>>, bool> qflow_nwqsim(
     const std::vector<std::pair<std::string, std::complex<double>>> &hamiltonian_ops,
     int n_part,
     std::string backend,
@@ -222,27 +223,38 @@ std::pair<double, std::vector<std::pair<std::vector<int>, double>>> qflow_nwqsim
   vqe::uccsd_ansatz ansatz(env, options.trotter_steps, options.symmetry_level);
   ansatz.build();
 
-  auto result = vqe::run_default_vqe_with_ansatz(ansatz, pauli_terms, options);
-
-  std::vector<std::pair<std::vector<int>, double>> parameter_output;
-  const auto labels = collect_parameter_labels(ansatz);
-  const auto &map = ansatz.excitation_parameter_map();
-  for (const auto &label : labels)
+  try
   {
-    const auto it = map.find(label);
-    if (it == map.end())
-    {
-      continue;
-    }
-    const std::size_t index = it->second;
-    if (index >= result.parameters.size())
-    {
-      continue;
-    }
-    parameter_output.emplace_back(parse_parameter_label(label), result.parameters[index]);
-  }
+    auto result = vqe::run_default_vqe_with_ansatz(ansatz, pauli_terms, options);
 
-  return {result.energy, parameter_output};
+    std::vector<std::pair<std::vector<int>, double>> parameter_output;
+    const auto labels = collect_parameter_labels(ansatz);
+    const auto &map = ansatz.excitation_parameter_map();
+    for (const auto &label : labels)
+    {
+      const auto it = map.find(label);
+      if (it == map.end())
+      {
+        continue;
+      }
+      const std::size_t index = it->second;
+      if (index >= result.parameters.size())
+      {
+        continue;
+      }
+      parameter_output.emplace_back(parse_parameter_label(label), result.parameters[index]);
+    }
+
+    return {result.energy, parameter_output, true};
+  }
+  catch (const std::runtime_error &e)
+  {
+    // NLopt optimization failed. Print error, then return 0 for energy, 
+    // an empty parameter list, and a failure flag.
+    std::cout << "An error occurred during VQE optimization: " << e.what() << std::endl;
+    std::vector<std::pair<std::vector<int>, double>> empty_params;                                                                                                                 
+    return {0.0, empty_params, false};
+  }
 }
 
 // MZ: "local gradient" (SPSA gradient) is not implemnted after re-organized anyway
