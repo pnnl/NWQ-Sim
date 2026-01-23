@@ -1012,14 +1012,14 @@ def inject_amplitude_damp(qasm_text: str, error_model: "ErrorModel") -> str:
             new_lines.append(line)
         
         # --- Handle Reset ---
-        elif p_reset_args and stripped_line.startswith("reset"):
-            in_measurement_block = False # Reset ends a measurement block
-            targets = qubit_target_re.findall(line)
-            new_lines.append(line) # Add reset instruction first
-            indent = line[:line.find(stripped_line[0])] if stripped_line else ""
-            for target in targets:
-                damp_inst = f"damp({p_reset_args[0]},{p_reset_args[1]}) q[{target}];"
-                new_lines.append(indent + damp_inst)
+        # elif p_reset_args and stripped_line.startswith("reset"):
+        #     in_measurement_block = False # Reset ends a measurement block
+        #     targets = qubit_target_re.findall(line)
+        #     new_lines.append(line) # Add reset instruction first
+        #     indent = line[:line.find(stripped_line[0])] if stripped_line else ""
+        #     for target in targets:
+        #         damp_inst = f"damp({p_reset_args[0]},{p_reset_args[1]}) q[{target}];"
+        #         new_lines.append(indent + damp_inst)
         
         else:
             # Any other instruction also ends a measurement block
@@ -1029,77 +1029,77 @@ def inject_amplitude_damp(qasm_text: str, error_model: "ErrorModel") -> str:
     return "\n".join(new_lines)
 
     # Track the first contiguous block of RESET statements
-    in_first_reset_block = False
-    first_reset_block_done = False
+    # in_first_reset_block = False
+    # first_reset_block_done = False
 
-    for raw_line in qasm_text.splitlines():
-        # Preserve completely empty lines
-        if not raw_line.strip():
-            out_lines.append(raw_line)
-            continue
+    # for raw_line in qasm_text.splitlines():
+    #     # Preserve completely empty lines
+    #     if not raw_line.strip():
+    #         out_lines.append(raw_line)
+    #         continue
 
-        # Split trailing comment (// ...)
-        code_part = raw_line
-        comment_part = ""
-        cidx = raw_line.find("//")
-        if cidx != -1:
-            code_part = raw_line[:cidx]
-            comment_part = raw_line[cidx:]
+    #     # Split trailing comment (// ...)
+    #     code_part = raw_line
+    #     comment_part = ""
+    #     cidx = raw_line.find("//")
+    #     if cidx != -1:
+    #         code_part = raw_line[:cidx]
+    #         comment_part = raw_line[cidx:]
 
-        # If the line contains only comment after stripping code_part
-        if not code_part.strip():
-            out_lines.append(raw_line)
-            continue
+    #     # If the line contains only comment after stripping code_part
+    #     if not code_part.strip():
+    #         out_lines.append(raw_line)
+    #         continue
 
-        indent_match = indent_re.match(code_part)
-        indent = indent_match.group(1) if indent_match else ""
+    #     indent_match = indent_re.match(code_part)
+    #     indent = indent_match.group(1) if indent_match else ""
 
-        # Split into statements while preserving order; we will re-emit per statement
-        stmts = [s.strip() for s in code_part.split(';') if s.strip()]
+    #     # Split into statements while preserving order; we will re-emit per statement
+    #     stmts = [s.strip() for s in code_part.split(';') if s.strip()]
 
-        for stmt in stmts:
-            r = reset_stmt_re.match(stmt)
-            if r:
-                qtok = r.group(1)
-                # Seeing reset: if first block not finished, we are inside it
-                if not first_reset_block_done:
-                    in_first_reset_block = True
-                # Emit RESET
-                out_lines.append(f"{indent}{stmt};")
-                # If inside first contiguous reset block, inject POST-RESET damp
-                if in_first_reset_block:
-                    p = _pick_post_reset_params()
-                    if p:
-                        out_lines.append(f"{indent}damp({p[0]},{p[1]}) {qtok};")
-                # Do not inject for later resets (handled before measurements instead)
-                continue
+    #     for stmt in stmts:
+    #         r = reset_stmt_re.match(stmt)
+    #         if r:
+    #             qtok = r.group(1)
+    #             # Seeing reset: if first block not finished, we are inside it
+    #             if not first_reset_block_done:
+    #                 in_first_reset_block = True
+    #             # Emit RESET
+    #             out_lines.append(f"{indent}{stmt};")
+    #             # If inside first contiguous reset block, inject POST-RESET damp
+    #             if in_first_reset_block:
+    #                 p = _pick_post_reset_params()
+    #                 if p:
+    #                     out_lines.append(f"{indent}damp({p[0]},{p[1]}) {qtok};")
+    #             # Do not inject for later resets (handled before measurements instead)
+    #             continue
 
-            m = meas_stmt_re.match(stmt)
-            if m:
-                qtok = m.group(1)
-                # Any non-reset breaks the initial reset block if it was in progress
-                if in_first_reset_block and not first_reset_block_done:
-                    in_first_reset_block = True #flip to make all resets have error after
-                    first_reset_block_done = False
-                # Inject PRE-MEAS damp (for all subsequent rounds)
-                p = _pick_pre_meas_params()
-                if p:
-                    out_lines.append(f"{indent}damp({p[0]},{p[1]}) {qtok};")
-                # Emit MEAS after the damp
-                out_lines.append(f"{indent}{stmt};")
-                continue
+    #         m = meas_stmt_re.match(stmt)
+    #         if m:
+    #             qtok = m.group(1)
+    #             # Any non-reset breaks the initial reset block if it was in progress
+    #             if in_first_reset_block and not first_reset_block_done:
+    #                 in_first_reset_block = True #flip to make all resets have error after
+    #                 first_reset_block_done = False
+    #             # Inject PRE-MEAS damp (for all subsequent rounds)
+    #             p = _pick_pre_meas_params()
+    #             if p:
+    #                 out_lines.append(f"{indent}damp({p[0]},{p[1]}) {qtok};")
+    #             # Emit MEAS after the damp
+    #             out_lines.append(f"{indent}{stmt};")
+    #             continue
 
-            if in_first_reset_block and not first_reset_block_done:
-                in_first_reset_block = True #flip to make all resets have error after
-                first_reset_block_done = False
+    #         if in_first_reset_block and not first_reset_block_done:
+    #             in_first_reset_block = True #flip to make all resets have error after
+    #             first_reset_block_done = False
 
-            out_lines.append(f"{indent}{stmt};")
+    #         out_lines.append(f"{indent}{stmt};")
 
-        # Attach trailing comment as its own line to avoid corrupting code layout
-        if comment_part:
-            out_lines.append(f"{indent}{comment_part}")
+    #     # Attach trailing comment as its own line to avoid corrupting code layout
+    #     if comment_part:
+    #         out_lines.append(f"{indent}{comment_part}")
 
-    return "\n".join(out_lines)
+    # return "\n".join(out_lines)
 
 if __name__ == '__main__':
     # Test code that constructs an example circuit with DEPOLARIZE1 on multiple targets,
