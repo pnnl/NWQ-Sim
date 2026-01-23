@@ -132,6 +132,7 @@ int main(int argc, char **argv)
         else if (config_parser.is_flag_set("all_tests"))
         {
             bool passed = true;
+            total_shots = 16384; // for verification
             for (int benchmark_index = 12; benchmark_index < 36; benchmark_index++)
             {
                 ValType fidelity = run_brnchmark(backend, benchmark_index, total_shots, simulation_method, run_with_basis);

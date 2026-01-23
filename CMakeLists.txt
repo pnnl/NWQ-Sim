@@ -9,22 +9,23 @@ else()
     message("Environment variables cc and/or CC are not set, using default settings")
 endif()
 
+option(NWQSIM_ENABLE_VQE "Build VQE components (requires NLopt)" OFF)
+
 
 # Specify the project details
-project(MyPackage
-        VERSION 0.0.1
-        DESCRIPTION "NWQSim Qasm"
-        LANGUAGES C CXX)
+project(NWQ-Sim
+    VERSION 1.0.0
+    DESCRIPTION "NWQ-Sim Quantum Simulation Toolkit"
+    LANGUAGES C CXX)
+
+list(INSERT CMAKE_MODULE_PATH 0 "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(nwqsim-utils)
 
 # Set C++ and CUDA standards
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-
-
-if (NOT XACC_DIR)
-  set(XACC_DIR "$ENV{HOME}/.xacc")
-endif()
+nwqsim_option(CMAKE_BUILD_TYPE Release)
 
 # Find required packages
 find_package(CUDAToolkit)
@@ -79,14 +80,6 @@ else()
     set(nvshmem_found_str "N/A")
 endif()
 
-
-if(XACC_FOUND)
-    set(xacc_found_str "TRUE")
-else()
-    set(xacc_found_str "FALSE")
-endif()
-
-
 if(HIP_FOUND)
     set(hip_found_str "TRUE")
     set(CMAKE_HIP_FLAGS_RELEASE "-O3")
@@ -135,9 +128,10 @@ message(STATUS "MPI found: ${MPI_FOUND}")
 message(STATUS "CUDA found: ${CUDAToolkit_FOUND}")
 message(STATUS "HIP found: ${hip_found_str}")
 message(STATUS "NVSHMEM found: ${nvshmem_found_str}")
-message(STATUS "XACC found: ${xacc_found_str}")
 message(STATUS "Matrix Accelerator ENABLED: ${ma_enable}")
+message(STATUS "Build VQE component: ${NWQSIM_ENABLE_VQE}")
 message(STATUS "==========================================================================\n")
+
 
 # Include directories
 include_directories(${PROJECT_SOURCE_DIR}/include)
@@ -148,13 +142,111 @@ add_subdirectory(stabilizer)
 
 set(CMAKE_CUDA_ARCHITECTURES 80 90)
 
+option(NWQSIM_BUILD_PYTHON "Build NWQSim Python bindings" ON)
 
-if (EXISTS "${PROJECT_SOURCE_DIR}/vqe/nlopt/CMakeLists.txt")
+if(NWQSIM_BUILD_PYTHON)
+    add_subdirectory(python)
+endif()
+
+
+if(NWQSIM_ENABLE_VQE)
+    message(STATUS "NWQSIM_ENABLE_VQE=ON (will look for NLopt and pybind11)")
+    message(STATUS "If NLopt or pybind11 is not found, use 'git submodule update --init --recursive'")
     add_subdirectory(vqe)
 endif()
 
-
-if(XACC_FOUND)
-    add_subdirectory(xacc)
+set(NWQSIM_INSTALL_TARGETS nwqsim)
+# Create nwqsim library - if VQE exists, interface otherwise
+if (TARGET nwqsim)
+    target_include_directories(nwqsim PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/nwqsim>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/nwqsim/vqe>
+    )
+    list(APPEND NWQSIM_INSTALL_TARGETS vqe nlopt)
+    install(FILES
+        "vqe/include/nwqsim_qflow.hpp"
+        "vqe/include/vqe_options.hpp"
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim/vqe)
+    install(FILES
+        "vqe/include/execution/adapt_runner.hpp"
+        "vqe/include/execution/vqe_runner.hpp"
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim/vqe/execution)
+else()
+    add_library(nwqsim INTERFACE)
+    target_include_directories(nwqsim INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/nwqsim>
+    )
 endif()
 
+add_library(nwqsim::nwqsim ALIAS nwqsim)
+
+
+# Install
+include(GNUInstallDirs)
+set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/nwqsim)
+
+# Install main nwqsim library
+
+install(TARGETS ${NWQSIM_INSTALL_TARGETS}
+    EXPORT nwqsim-targets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+set(NWQSIM_HEADERS
+    include/backendManager.hpp
+    include/circuit.hpp
+    include/config.hpp
+    include/gate.hpp
+    include/nwq_util.hpp
+    include/state.hpp
+)
+
+install(FILES ${NWQSIM_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim)
+install(DIRECTORY include/svsim DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim)
+install(DIRECTORY include/dmsim DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim)
+install(DIRECTORY include/circuit_pass DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/nwqsim)
+
+# VQE headers are handled by the vqe/CMakeLists.txt installation
+
+#Export the targets to a script
+install(EXPORT nwqsim-targets
+    FILE
+        nwqsim-targets.cmake
+    NAMESPACE
+        nwqsim::
+    DESTINATION
+        ${INSTALL_CONFIGDIR}
+)
+
+#Create a ConfigVersion.cmake file
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/nwqsim-config-version.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
+configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/nwqsim-config.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/nwqsim-config.cmake
+    INSTALL_DESTINATION ${INSTALL_CONFIGDIR}
+    PATH_VARS CMAKE_INSTALL_INCLUDEDIR
+)
+
+#Install the config, configversion and custom find modules
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/nwqsim-config.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/nwqsim-config-version.cmake
+    DESTINATION ${INSTALL_CONFIGDIR}
+)
+
+#Export build tree
+export(EXPORT nwqsim-targets
+    FILE ${CMAKE_CURRENT_BINARY_DIR}/nwqsim-targets.cmake
+    NAMESPACE nwqsim::)
+
+#Register package in user's package registry
+# export(PACKAGE nwqsim)

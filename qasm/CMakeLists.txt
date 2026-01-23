@@ -11,7 +11,7 @@ endif()
 
 # Link against MPI if available
 if(MPI_FOUND)
-    target_link_libraries(nwq_qasm PUBLIC MPI::MPI_CXX)
+    target_link_libraries(nwq_qasm PUBLIC MPI::MPI_C)
     target_compile_definitions(nwq_qasm PUBLIC MPI_ENABLED)
 endif()
 

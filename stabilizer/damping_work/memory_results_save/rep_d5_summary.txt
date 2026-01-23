@@ -1,0 +1,13 @@
+code: rep_d5
+generator: repetition_code:memory
+distance: 5
+rounds_per_shot: 2
+requested_rounds: 2
+decoder_used: pymatching
+shots: 10000000
+logical_failures: 28
+failure_rate: 2.8000e-06
+avg_survival_rounds: 357142.8571
+encoding_rate: 0.1111
+lower_bound_only: False
+timestamp: 2025-11-30T16:40:38.958181Z
