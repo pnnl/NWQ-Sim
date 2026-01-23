@@ -384,6 +384,9 @@ namespace NWQSim
         std::vector<IdxType> mod_qubits;
         std::vector<double> channel_probabilities;
 
+        IdxType mod_qubits_offset = -1;
+        IdxType mod_qubits_size = 0;
+
         Gate(enum OP _op_name,
              IdxType _qubit,
              IdxType _ctrl = -1,
@@ -416,7 +419,9 @@ namespace NWQSim
                               data(g.data),
                               mod_op(g.mod_op),
                               mod_noise(g.mod_noise),
-                              mod_value(g.mod_value)
+                              mod_value(g.mod_value),
+                              mod_qubits_offset(g.mod_qubits_offset),
+                              mod_qubits_size(g.mod_qubits_size)
         {
             for (auto q : g.mod_qubits)
             {

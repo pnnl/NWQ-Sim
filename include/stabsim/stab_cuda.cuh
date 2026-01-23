@@ -100,6 +100,7 @@ namespace NWQSim
             SAFE_FREE_GPU(r_bit_gpu);
             SAFE_FREE_GPU(gates_gpu);
             SAFE_FREE_GPU(d_local_sums);
+            SAFE_FREE_GPU(gate_mod_qubits_gpu);
         }
 
         //Packs down 32 rows in each column and flattens
@@ -399,6 +400,8 @@ namespace NWQSim
             std::vector<Gate> gates2D = circuit2D->get_gates();
             int32_t num_gates = gates2D.size();
             copy_gates_to_gpu(gates2D);
+            cudaSafeCall(cudaMemcpy(stab_gpu, this,
+                                    sizeof(STAB_CUDA), cudaMemcpyHostToDevice));
             std::cout << "2D circuit parsed" << std::endl;
 
             /*Simulate*/
@@ -670,6 +673,8 @@ namespace NWQSim
 
         int32_t* d_local_sums = nullptr;
 
+        IdxType* gate_mod_qubits_gpu = nullptr;
+
         IdxType seed;
 
         int32_t* d_measurement_results = nullptr;
@@ -709,14 +714,50 @@ namespace NWQSim
 
         void copy_gates_to_gpu(std::vector<Gate> &cpu_vec)
         {
-            // Allocate memory on CPU
             size_t vec_size = cpu_vec.size() * sizeof(Gate);
 
-            // Allocate memory on GPU
             SAFE_FREE_GPU(gates_gpu);
+            SAFE_FREE_GPU(gate_mod_qubits_gpu);
+            gate_mod_qubits_gpu = nullptr;
+
+            size_t total_mod_qubits = 0;
+            for (auto &gate : cpu_vec)
+            {
+                total_mod_qubits += gate.mod_qubits.size();
+            }
+
+            std::vector<IdxType> flat_mod_qubits;
+            flat_mod_qubits.reserve(total_mod_qubits);
+
+            for (auto &gate : cpu_vec)
+            {
+                if (!gate.mod_qubits.empty())
+                {
+                    gate.mod_qubits_offset = flat_mod_qubits.size();
+                    gate.mod_qubits_size = gate.mod_qubits.size();
+                    flat_mod_qubits.insert(flat_mod_qubits.end(),
+                                           gate.mod_qubits.begin(),
+                                           gate.mod_qubits.end());
+                }
+                else
+                {
+                    gate.mod_qubits_offset = -1;
+                    gate.mod_qubits_size = 0;
+                }
+            }
+
+            if (!flat_mod_qubits.empty())
+            {
+                SAFE_ALOC_GPU(gate_mod_qubits_gpu, flat_mod_qubits.size() * sizeof(IdxType));
+                cudaSafeCall(cudaMemcpy(gate_mod_qubits_gpu, flat_mod_qubits.data(),
+                                        flat_mod_qubits.size() * sizeof(IdxType),
+                                        cudaMemcpyHostToDevice));
+            }
+
             SAFE_ALOC_GPU(gates_gpu, vec_size);
             cudaSafeCall(cudaMemcpy(gates_gpu, cpu_vec.data(), vec_size, cudaMemcpyHostToDevice));
         }
+
     }; //End tableau class
 
     __device__ int32_t global_p;
@@ -805,6 +846,33 @@ namespace NWQSim
                         //Entry -- swap x and z bits
                         x_arr[index] = z;
                         z_arr[index] = x;
+                    }
+                    break;
+                }
+                
+                case OP::H_MULTI:
+                {
+                    if (i < scratch_row)
+                    {
+                        IdxType target_offset = gates_gpu[k].mod_qubits_offset;
+                        IdxType target_count  = gates_gpu[k].mod_qubits_size;
+                        int32_t phase = 0;
+
+                        const IdxType* multi_targets = stab_gpu->gate_mod_qubits_gpu + target_offset;
+                        for (IdxType t = 0; t < target_count; ++t)
+                        {
+                            IdxType target = multi_targets[t];
+                            IdxType t_index = i * cols + target;
+
+                            int32_t x_val = x_arr[t_index];
+                            int32_t z_val = z_arr[t_index];
+
+                            phase ^= (x_val & z_val);
+                            x_arr[t_index] = z_val;
+                            z_arr[t_index] = x_val;
+                        }
+
+                        r_arr[i] ^= phase;
                     }
                     break;
                 }
@@ -943,83 +1011,6 @@ namespace NWQSim
                             }
                         }
 
-    //                     for (int k = 0; k < scratch_row; k++) 
-    //                     {
-    //                         if (k != p && x_arr[k * cols + a])
-    //                         {
-    //                             extern __shared__ int32_t shared_mem[];
-
-    //                             if(i < cols)
-    //                             {
-    //                                 // All threads check for anticommutation. This is a safe, redundant read.
-    //                                 IdxType h_idx = k * cols + i;
-    //                                 IdxType p_idx = p * cols + i;
-
-    //                                 int32_t thread_sum = 0;
-
-    //                                 // --- STAGE 1: Parallel Phase Calculation ---
-    //                                 // ALL threads (including i=0) participate in calculating the phase contribution.
-    //                                 // for (int32_t j = i; j < n_qubits; j += (gridDim.x * blockDim.x)) {
-    //                                 int32_t x_p = x_arr[p_idx];
-    //                                 int32_t z_p = z_arr[p_idx];
-    //                                 int32_t x_h = x_arr[h_idx];
-    //                                 int32_t z_h = z_arr[h_idx];
-    // // ... existing code ...
-    //                                 thread_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
-    //                                             + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
-                                    
-    //                                 x_arr[h_idx]^= x_p;
-    //                                 z_arr[h_idx]^= z_p;
-                                        
-
-    //                                 // --- FASTER WARP-BASED REDUCTION ---
-
-    //                                 // --- CORRECTED: Use block-local threadIdx.x for shared memory operations ---
-
-
-    //                                 // STAGE 1: Intra-Warp Reduction
-    //                                 // Each warp reduces its 32 thread_sum values. This is divergence-free.
-    //                                 int32_t warp_sum = __reduce_add_sync(__activemask(), thread_sum);
-
-    //                                 // The first thread of each warp writes its partial sum to shared memory.
-    //                                 if (block_lane_id == 0) 
-    //                                 {
-    //                                     shared_mem[block_warp_id] = warp_sum;
-    //                                 }
-    //                             }
-
-    //                             // Synchronize to ensure all warp sums are written to shared memory.
-    //                             __syncthreads();
-
-    //                             if(i < cols)
-    //                             {
-    //                                 // STAGE 2: Inter-Warp Reduction
-    //                                 // The first warp (32 threads) now reduces the 32 partial sums from shared memory.
-    //                                 // All other warps are idle, but this is a very small amount of work.
-    //                                 thread_sum = shared_mem[block_lane_id];
-    //                                 int32_t block_sum = __reduce_add_sync(__activemask(), thread_sum);
-
-    //                                 // The first thread of the block (thread 0) has the final sum and adds it to the global accumulator.
-    //                                 if(threadIdx.x == 0) {
-    //                                     atomicAdd(&smuggle_scratch, block_sum);
-    //                                 }//The first thread of the grid now has a global accumulated value to use
-    //                             }
-
-    //                             grid.sync(); //Sync for global sum, and update the scratch row while we're here
-
-    //                             if(i == 0)
-    //                             {
-    //                                 r_arr[k] =
-    //                                     (((smuggle_scratch + 2 * r_arr[p] + 2 * r_arr[k])%4)==0) ? 0 : 1;
-    //                                 smuggle_scratch = 0;
-    //                             }
-                                
-    //                             // Wait for all blocks to finish their atomicAdds.
-    //                             grid.sync();
-    // // ... existing code ...
-    //                         }
-    //                     }
-
                         grid.sync();
 
                         if(i < cols)
@@ -1060,7 +1051,6 @@ namespace NWQSim
                             smuggle_scratch = 0;
                         }
 
-                        // ... existing code ...
                         // This sync ensures the scratch row is zeroed out before we begin.
                         grid.sync();
 
@@ -1089,7 +1079,7 @@ namespace NWQSim
                                     int32_t z_p = z_arr[p_idx];
                                     int32_t x_h = x_arr[h_idx];
                                     int32_t z_h = z_arr[h_idx];
-    // ... existing code ...
+
                                     thread_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
                                                 + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
                                     // thread_sum += (x_h & z_p) - (x_p & z_h) + 
@@ -1136,8 +1126,6 @@ namespace NWQSim
 
                                 if(i == 0) //Update the scratch bit and reset the global accumulator
                                 {
-                                    // printf("r[row]%d ", r_arr[p_row]);
-
 
                                     r_arr[scratch_row] =
                                         (((smuggle_scratch + 2 * r_arr[p_row] + 2 * r_arr[scratch_row])%4)==0) ? 0 : 1;
@@ -1149,7 +1137,6 @@ namespace NWQSim
                                 
                                 //No particular reason
                                 grid.sync();
-// ... existing code ...
                             }
                         }
 
@@ -1160,93 +1147,6 @@ namespace NWQSim
                             int32_t meas_idx = atomicAdd(d_measurement_idx_counter, 1);
                             stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
                         }
-// ... existing code ...
-
-
-
-                        /*
-                        Unsafe version
-                        */
-
-                        // for (IdxType local_i = warp_id; local_i < cols; local_i += n_warps) //capture only the stabilizer rows (num stabilizer rows == num cols)
-                        // {
-                        //     IdxType local_index = local_i * cols + a;
-                        //     if (x_arr[local_index])
-                        //     {
-                        //         //Parallel rowsum
-                        //         int32_t local_sum = 0;
-                        //         IdxType p_row = local_i + cols;
-
-                        //         for (int32_t j = lane_id; j < n_qubits; j+=32) //Capture all the columns in a row
-                        //         {
-                        //             IdxType h_idx = scratch_row * cols + j;
-                        //             IdxType p_idx = p_row * cols + j;
-                        //             int32_t x_p = x_arr[p_idx];
-                        //             int32_t z_p = z_arr[p_idx];
-                        //             int32_t x_h = x_arr[h_idx];
-                        //             int32_t z_h = z_arr[h_idx];
-
-                        //             local_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
-                        //                 + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
-
-                        //             atomicXor(&x_arr[h_idx], x_p);
-                        //             atomicXor(&z_arr[h_idx], z_p);
-                        //         }
-                        //         //Merge warp-wise local_sum
-                        //         for (int32_t offset = 16; offset > 0; offset /= 2) 
-                        //         {
-                        //             local_sum += __shfl_down_sync(0xffffffff, local_sum, offset);
-                        //         }
-                        //         //Per head-lane owns the merged local_sum and contributes to the final sum
-                        //         if (lane_id == 0)
-                        //         {
-                        //             int32_t row_term = 2*((((local_sum + 2*r_arr[p_row])%4)==0) ? 0:1);
-
-                        //             //The length of the queue for this atomicAdd is \Theta(n/32) (or O(n/32) if we don't let 0's contribute)
-                        //             atomicAdd(&smuggle_scratch, row_term); //Only one add per warp.
-
-                        //             // printf("global_sums[%lld] = %d + 2 * %d\n", local_i, local_sum, r_arr[p_row]);
-                        //             // global_sums[local_i] = local_sum + 2 * r_arr[p_row];
-                        //             // printf("m%d sum: %d\n", *d_measurement_idx_counter, global_sums[local_i]%4);
-
-                        //             // if((((global_sums[local_i]+2*smuggle_scratch)%4) == 0) ? false:true) atomicXor(&smuggle_scratch, 1);
-                        //         }
-                        //     }
-                        //     // else
-                        //     // {
-                        //     //     if (lane_id == 0) 
-                        //     //     {
-                        //     //         printf("global_sums[%lld] = 0\n", local_i);
-                        //     //         global_sums[local_i] = 0;
-                        //     //     }
-                        //     // }
-                        // }
-
-                        // grid.sync();
-
-                        // // if(i < 32) //First warp does the final reduction
-                        // // {
-                        // // int32_t total = singular_reduction(global_sums, lane_id, cols);                       
-                        // if(i == 0) 
-                        // {
-                        //     // if((total % 4 != 0) && (abs(total % 2) != 0))
-                        //     //     printf("determ m%d total = %d\n", *d_measurement_idx_counter, total);
-                        //     // printf("m%d sum: %d\n", *d_measurement_idx_counter, total);
-
-                        //     // total += 2 * smuggle_scratch;
-
-                        //     // printf("r[h]%d: %d\n", *d_measurement_idx_counter, r_arr[scratch_row]);
-                        //     r_arr[scratch_row] = ((smuggle_scratch%4) == 0) ? 0: 1;
-                        //     // printf("m%d r_scratch = %d\n", *d_measurement_idx_counter, r_arr[scratch_row]);
-
-                        //     int32_t meas_idx = atomicAdd(d_measurement_idx_counter, 1);
-                        //     stab_gpu->d_measurement_results[meas_idx] = r_arr[scratch_row];
-                        // }
-
-
-                        /*
-                            End unsafe version
-                        */
 
                         /*
                         Direct match version
@@ -1423,11 +1323,9 @@ namespace NWQSim
                             smuggle_scratch = 0;
                         }
 
-                        // ... existing code ...
                         // This sync ensures the scratch row is zeroed out before we begin.
                         grid.sync();
 
-                        // --- CORRECT HYBRID SERIAL-PARALLEL LOOP ---
                         // The loop over stabilizers 'k' is serial to respect the recursive phase dependency.
                         // ALL threads execute this loop. Thread 0 has the special role of updating the
                         // tableau state after each parallel computation is complete.
@@ -1456,7 +1354,7 @@ namespace NWQSim
                                     int32_t z_p = z_arr[p_idx];
                                     int32_t x_h = x_arr[h_idx];
                                     int32_t z_h = z_arr[h_idx];
-    // ... existing code ...
+
                                     thread_sum += x_p * ( z_p * (z_h - x_h) + (1 - z_p) * z_h * (2 * x_h - 1) )
                                                 + (1 - x_p) * z_p * x_h * (1 - 2 * z_h);
                                     
@@ -1509,7 +1407,6 @@ namespace NWQSim
 
                                 // Wait for all blocks to finish their atomicAdds.
                                 grid.sync();
-// ... existing code ...
                             }
                         }
 
@@ -1531,69 +1428,6 @@ namespace NWQSim
         //if (threadIdx.x == 0 && blockIdx.x == 0) printf("Kernel is done!\n");
         // printf("Kernel is done!\n");
     }//end kernel
-
-    __global__ void simulation_kernel_cuda2D(STAB_CUDA* stab_gpu, Gate* gates_gpu, IdxType gate_chunk) 
-    {
-        int32_t row = blockIdx.x * blockDim.x + threadIdx.x;  //Index for stabilizers (rows)
-        int32_t col = blockIdx.y * blockDim.y + threadIdx.y;  //Index for gates (columns)
-
-        if(row >= stab_gpu->packed_rows) return;  //Check out-of-bounds for qubits
-
-        if(col >= gate_chunk) return;  //Check out-of-bounds for gate
-
-        // printf("Inside 2D kernel %d, gate chunk %lld gate qubit %lld \n", col, gate_chunk, gates_gpu[col].qubit);
-        // printf("Gates gpu size %lld \n", (sizeof(gates_gpu)));
-        
-        int32_t target = gates_gpu[col].qubit; //Qubit target
-        OP op_name = gates_gpu[col].op_name;  //Operation to perform
-        int32_t* x_arr = stab_gpu->x_packed_gpu;
-        int32_t* z_arr = stab_gpu->z_packed_gpu;
-
-        //Calculate the index for this qubit in the packed arrays
-        IdxType index = row * stab_gpu->cols + target;
-
-        //Perform operations for all possible gates, but mask non-relevant ones
-        //Start with the common operation - calculate phase and entry for all gates
-        int32_t x = x_arr[index];
-        int32_t z = z_arr[index];
-
-        //Gate operations
-        if(op_name == OP::H) {
-            // printf("Inside h gate \n");
-            // H Gate: Swap x and z
-            stab_gpu->r_packed_gpu[row] ^= (x & z);
-            //Entry -- swap x and z bits
-            x_arr[index] = z;
-            z_arr[index] = x;
-            return;
-        } 
-        if(op_name == OP::S) {
-            //S Gate: Entry (z_arr[index] ^= x_arr[index])
-            stab_gpu->r_packed_gpu[row] ^= (x & z);
-            z_arr[index] = x ^ z;
-            return;
-        }
-        if(op_name == OP::SDG) {
-            // SDG Gate: Phase (x_arr[index] ^ (x_arr[index] & z_arr[index]))
-            stab_gpu->r_packed_gpu[row] ^= (x ^ (x & z));  // SDG Phase operation
-            z_arr[index] = x ^ z;  // Entry (same as S gate)
-            return;
-        }
-        if(op_name == OP::CX) {
-            int32_t ctrl_index = row * stab_gpu->cols + gates_gpu[col].ctrl;
-
-            int32_t x_ctrl = x_arr[ctrl_index];
-            int32_t z_ctrl = z_arr[ctrl_index];
-
-            //Phase
-            stab_gpu->r_packed_gpu[row] ^= ((x_ctrl & z) & (x^z_ctrl^1));
-
-            //Entry
-            x_arr[index] = x ^ x_ctrl;
-            z_arr[ctrl_index] = z ^ z_ctrl;
-            return;
-        }
-    }
 
 } //namespace NWQSim
 
