@@ -26,12 +26,22 @@ int main()
 
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
+    // circuit->CX(1,2);
     circuit->H(0);
-    circuit->RZ(PI/4, 0);
     circuit->S(0);
-    circuit->S(0); 
+    // circuit->S(0);
+    circuit->S(0);
+    circuit->RZ(PI/4, 0);
     circuit->H(0);
+    // circuit->CX(0,1);
+    // circuit->H(2);
+    // circuit->M(2);
     circuit->M(0);
+    // circuit->M(1);
+    // circuit->X(0);
+    // circuit->M(0);
+
+
 
     // Random circuit generator (reproducible)
     std::mt19937 rng(12345); // change seed to vary the circuit
@@ -104,16 +114,19 @@ int main()
     double m_results = 0;
     
     std::uniform_int_distribution<int> dist(1, 999999999);
-
-    for(int i = 0; i < 1; i++)
+    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+    std::mt19937 engine(seed);
+    for(int i = 0; i < 1000; i++)
     {
-        unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-        std::mt19937 engine(seed);
-        cpu_state->set_seed(dist(engine));
+        cpu_state->set_seed(dist(engine)+i);
         cpu_state->sim(circuit, timer_cpu);
         m_results += cpu_state->get_measurement_results()[0];
-        std::cout << cpu_state->get_measurement_results()[0] << std::endl;
-        // cpu_state->print_res_state();
+        std::cout << "first: " << cpu_state->get_measurement_results()[0] << std::endl;
+        // std::cout << "second: "  << cpu_state->get_measurement_results()[1] << std::endl;
+        // std::cout << "third: "  << cpu_state->get_measurement_results()[2] << std::endl;
+
+
+        cpu_state->print_res_state();
 
         cpu_state->reset_state();
     }
@@ -122,7 +135,6 @@ int main()
 
     std::cout << "CPU sim time: " << timer_cpu / 1000.0 << "s" << std::endl;
     // auto cpu_measurements = cpu_state->get_measurement_results();
-    // cpu_state->print_res_state();
     std::cout << m_results << std::endl;
 
     // std::cout << "Simulating on GPU..." << std::endl;

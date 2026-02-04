@@ -119,6 +119,7 @@ namespace NWQSim
                 std::fill(row.begin(), row.end(), 0);
             }
             std::fill(r.begin(), r.end(), 0);
+            if(rz_flag) std::fill(rz_r.begin(), rz_r.end(), 0);
             //The 2n+1 th row is scratch space
 
             //Intialize the identity tableau
@@ -839,9 +840,11 @@ namespace NWQSim
             // printf("m%d sum: %d\n", measurement_count, sum);
             // printf("r[i]%d: %d\n", measurement_count, r[i]);
             
+            // std::cout << "r[" << h << "]" <<  " before if = " <<  r[h] << std::endl;
 
+            // printf("r[h]%d: %d\n", measurement_count, r[h]);
 
-            int rowsum = sum + 2*r[h]+ 2*r[i];
+            int rowsum = sum + 2*r[h] + 2*r[i];
             //  printf("m%d sum: %d\n", *d_measurement_idx_counter, total);
 
             // printf("m%d tot: %d\n", measurement_count, sum);
@@ -854,9 +857,8 @@ namespace NWQSim
                 rz_r[h] = (rzsum % 4 == 0) ? 0 : 1;
             }
 
-            // printf("r[h]%d: %d\n", measurement_count, r[h]);
 
-            // std::cout << "r[" << h << "]" <<  " after if = " <<  r[h] << std::endl;
+            std::cout << "r[" << h << "]" <<  " after if = " <<  r[h] << std::endl;
 
 
         } //End rowsum
@@ -2042,6 +2044,13 @@ namespace NWQSim
             }
         }
 
+        void reset_rz()
+        {
+            rz_flag = false;
+            rz_coeff = {1.0,0.0};
+            rz_r.resize(rows,0);
+        }
+
         void simulation_kernel(std::vector<Gate>& gates)
         {
             int g = gates.size();
@@ -2080,6 +2089,8 @@ namespace NWQSim
                     z[i][target] ^= x[i][target];
                 }
             };
+
+
             //Loop over every gate in the circuit and apply them
             for (int k = 0; k < g; k++)
             {
@@ -2487,17 +2498,21 @@ namespace NWQSim
                         }
                         else if(rz_flag == false)
                         {
-                            rz_flag = true;
-                            rz_r.resize(2*n+1, 0);
-
+                            rz_r.resize(rows, 0);
                             for(int i = 0; i < rows-1; i++)
                             {
-                                rz_r[i] = r[i]^x[i][a];
+                                if(x[i][a])
+                                {
+                                    rz_r[i] = r[i]^x[i][a];
+                                    rz_flag = true;
+                                }
                             }
-
-                            rz_coeff.first = cos(gate.theta/2);
-                            // std::cout << "cos: " << rz_coeff.first << std::endl;
-                            rz_coeff.second = sin(gate.theta/2);
+                            if(rz_flag == true)
+                            {
+                                rz_coeff.first = cos(gate.theta/2);
+                                // std::cout << "cos: " << rz_coeff.first << std::endl;
+                                rz_coeff.second = sin(gate.theta/2);
+                            }
                         }
                         // else
                         // {
@@ -2667,7 +2682,6 @@ namespace NWQSim
                                 {
                                     rowsum(i, p);
                                     // printf("rand r%d row%d\n", r[i], i);
-
                                 }
                             }
                             
@@ -2680,28 +2694,31 @@ namespace NWQSim
                                 z[p][i] = 0;                        
                             }
                             
-                            if(rz_flag)
+                            if(rz_flag && (r[p] != rz_r[p]))
                             {
                                 double random = prng_uniform01(seed, measurement_count);
-                                std::cout << "cos2: " << pow(rz_coeff.first,2) << std::endl;
+                                std::cout << "Rand random: " << random << std::endl;
+
+                                // std::cout << "Rand cos2: " << pow(rz_coeff.first,2) << std::endl;
                                 
                                 if (random < pow(rz_coeff.first, 2))
                                 {
-                                    r[p] = 1;
                                     m_results.push_back(r[p]);
-                                    rz_r[p] = r[p];
                                 }
                                 else 
                                 {
-                                    r[p] = 0;
-                                    m_results.push_back(r[p]);
-                                    rz_r[p] = r[p];
+                                    m_results.push_back(rz_r[p]);
+                                    for(int i = 0; i < rows-1; i++)
+                                        r[i] = rz_r[i];
                                 }
+                                reset_rz();
                             }
+
                             else
                             {
                                 int randomBit = prng_bit(seed, measurement_count);
                                 r[p] = randomBit;
+                                if(rz_flag) rz_r[p] = randomBit;
                                 m_results.push_back(randomBit);
                             }
 
@@ -2734,24 +2751,25 @@ namespace NWQSim
                                     // printf("determ r%d row%lld\n", r[rows-1], i+half_rows);
                                 }
                             }
-                            // std::cout << "Determ measurement " << measurement_count << ": " << r[rows-1] << std::endl;
-                            if(rz_flag)
+                            if(rz_flag && (r[rows-1] != rz_r[rows-1]))
                             {
                                 double random = prng_uniform01(seed, measurement_count);
-                                // std::cout << "cos2: " << pow(rz_coeff.first,2) << std::endl;
+                                std::cout << "Determ rand: " << random << std::endl;
+
+                                // std::cout << "Determ cos2: " << pow(rz_coeff.first,2) << std::endl;
                                 
-                                if (random < pow(rz_coeff.first, 2))
+                                if(random < pow(rz_coeff.first, 2))
                                 {
                                     m_results.push_back(r[rows-1]);
-                                    rz_r[rows-1] = r[rows-1];
                                 }
                                 else 
                                 {
                                     m_results.push_back(rz_r[rows-1]);
-                                    r[rows-1] = rz_r[rows-1];
+                                    for(int i = 0; i < rows-1; i++)
+                                        r[i] = rz_r[i];
                                 }
+                                reset_rz();
                             }
-                            
                             else 
                                 m_results.push_back(r[rows-1]);
                                 
@@ -2787,26 +2805,67 @@ namespace NWQSim
                                 if((x[i][a]) && (i != p))
                                 {
                                     rowsum(i, p);
+                                    // printf("rand r%d row%d\n", r[i], i);
+
                                 }
                             }
                             
                             x[p-half_rows] = x[p];
                             z[p-half_rows] = z[p];
+                            
                             //Change all the columns in row p to be 0
                             for(int i = 0; i < n; i++)
                             {
                                 x[p][i] = 0;
                                 z[p][i] = 0;                        
                             }
+                            int randomBit = 0;
 
-                            int randomBit = prng_bit(seed, measurement_count);
-                            // std::cout << "Seed for measurement " << measurement_count << ": " << seed << std::endl;
-                            r[p] = randomBit;
-                            if(rz_flag==true) rz_r[p] = randomBit;
+                            if(rz_flag && (r[p] != rz_r[p]))
+                            {
+                                double random = prng_uniform01(seed, measurement_count);
+                                std::cout << "Rand random: " << random << std::endl;
+
+                                // std::cout << "Rand cos2: " << pow(rz_coeff.first,2) << std::endl;
+                                
+                                if(random < pow(rz_coeff.first, 2))
+                                {
+                                    randomBit = r[p];
+                                }
+                                else 
+                                {
+                                    randomBit = rz_r[p];
+                                    for(int i = 0; i < rows-1; i++)
+                                        r[i] = rz_r[i];
+                                }
+                                reset_rz();
+                            }
+                            else
+                            {
+                                randomBit = prng_bit(seed, measurement_count);
+                                r[p] = randomBit;
+                                if(rz_flag) rz_r[p] = randomBit;
+                            }
+
+                            if(randomBit)
+                            {
+                                if(rz_flag)
+                                {
+                                    for(int i = 0; i < rows-1; i++)
+                                    {
+                                        r[i] ^= z[i][a];
+                                        rz_r[i] ^= z[i][a];
+                                    }
+                                }
+                                else
+                                {
+                                    for(int i = 0; i < rows-1; i++)
+                                    {
+                                        r[i] ^= z[i][a];
+                                    }
+                                }
+                            }
                             z[p][a] = 1;
-
-                            temp_result = randomBit;
-                            // std::cout << "Random measurement at qubit " << a << " value: " << (r[p] << a) << std::endl;
                         }
                         //Deterministic
                         else
@@ -2825,36 +2884,54 @@ namespace NWQSim
                             {
                                 if(x[i][a] == 1)
                                 {
+                                    // printf("r[row]%d ", r[i+half_rows]);
                                     rowsum(rows-1, i+half_rows);
+                                    // printf("determ r%d row%lld\n", r[rows-1], i+half_rows);
                                 }
                             }
-                            // if(rz_flag)
-                            // {
-                            //     double random = prng_uniform01(seed, measurement_count);
+                            if(rz_flag && (r[rows-1] != rz_r[rows-1])) //Case: branches disagree on measurement outcome. Collapse the branching.
+                            {
+                                double random = prng_uniform01(seed, measurement_count);
+                                std::cout << "Determ rand: " << random << std::endl;
+
+                                // std::cout << "Determ cos2: " << pow(rz_coeff.first,2) << std::endl;
                                 
-                            //     if (random > pow(rz_coeff.first,2))
-                            //         temp_result = r[rows-1];
-                            //     else 
-                            //         temp_result = rz_r[rows-1];
-                            // }
-                        
-                            // else 
-                            //     temp_result = r[rows-1];
-                        }
-                        // measurement_results.push_back(temp_result);
-                        if(r[rows-1] == 1) //Apply X to flip back to 0
-                        {
-                            for(int i = 0; i < rows-1; i++)
-                            {
-                                r[i] ^= z[i][a];
+                                if(random < pow(rz_coeff.first, 2))
+                                {
+                                    m_results.push_back(r[rows-1]);
+                                }
+                                else 
+                                {
+                                    m_results.push_back(rz_r[rows-1]);
+                                    for(int i = 0; i < rows-1; i++)
+                                        r[i] = rz_r[i];
+                                }
+                                reset_rz();
+                                if(r[rows-1] == 1) //Apply X to the updated r column
+                                {
+                                    for(int i = 0; i < rows-1; i++)
+                                    {
+                                        r[i] ^= z[i][a];
+                                    }
+                                }
                             }
-                        }
-                        if(rz_r[rows-1] == 0)
-                        {
-                            for(int i = 0; i < rows-1; i++)
+                            else if(rz_flag && (r[rows-1] == 1)) //Case: both branches agree on one. Apply X to both to flip back to 0.
                             {
-                                if(rz_flag) rz_r[i] ^= z[i][a];
+                                for(int i = 0; i < rows-1; i++)
+                                {
+                                    r[i] ^= z[i][a];
+                                    rz_r[i] ^= z[i][a];
+                                }
                             }
+                            else if(r[rows-1] == 1) //Case: no branching, just flip r if it resulted in 1.
+                            {
+                                for(int i = 0; i < rows-1; i++)
+                                {
+                                    r[i] ^= z[i][a];
+                                }
+                            }
+                            else //Case: r resulted in 0, no flip needed (if rz_r disagreed the first case would handle it).
+                                continue;
 
                         }
                         break;
