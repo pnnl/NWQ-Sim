@@ -108,6 +108,19 @@ namespace
     return value;
   }
 
+  unsigned make_default_seed()
+  {
+    try
+    {
+      return std::random_device{}();
+    }
+    catch (...)
+    {
+      // Fallback to a deterministic seed if system entropy is unavailable.
+      return 5489u;
+    }
+  }
+
   void print_help()
   {
     std::cout << "NWQ-VQE Options\n"
@@ -1110,7 +1123,13 @@ namespace
 
 int main(int argc, char **argv)
 {
+  // Unified process exit status for the single return path.
+  int exit_code = EXIT_SUCCESS;
+  // Gate for all execution blocks after argument/precondition handling.
+  bool should_run = true;
+
 #ifdef VQE_ENABLE_MPI
+  // MPI lifecycle is owned by main() in MPI-enabled builds.
   MPI_Init(&argc, &argv);
   //Disable printing for processes other than node-0:
   int rank = 0;
@@ -1128,56 +1147,108 @@ int main(int argc, char **argv)
 
   cli_config config;
   std::string error;
-  if (!parse_args(argc, argv, config, error))
-  {
-    std::cerr << "Error: " << error << "\n";
-    print_help();
-    return EXIT_FAILURE;
-  }
-
-  if (config.show_help)
-  {
-    print_help();
-    return EXIT_SUCCESS;
-  }
-
-  if (config.list_backends)
-  {
-    list_backends();
-    return EXIT_SUCCESS;
-  }
-
-  if (config.hamiltonian_path.empty())
-  {
-    std::cerr << "Error: Hamiltonian file not specified (--hamiltonian)." << std::endl;
-    print_help();
-    return EXIT_FAILURE;
-  }
-
-  if (!config.have_particles)
-  {
-    std::cerr << "Error: Number of particles not specified (--nparticles)." << std::endl;
-    print_help();
-    return EXIT_FAILURE;
-  }
-
-  emit_warnings(config);
-
   try
   {
-    if (config.options.mode == vqe::run_mode::adapt)
+    // parse_args may throw on malformed numeric values.
+    if (!parse_args(argc, argv, config, error))
     {
-      return run_adapt_mode(config);
+      std::cerr << "Error: " << error << "\n";
+      print_help();
+      exit_code = EXIT_FAILURE;
+      should_run = false;
     }
-    return run_vqe_mode(config);
   }
   catch (const std::exception &ex)
   {
-    std::cerr << "error: " << ex.what() << std::endl;
-    return EXIT_FAILURE;
+    std::cerr << "Error: Failed to parse command-line arguments: " << ex.what() << "\n";
+    print_help();
+    exit_code = EXIT_FAILURE;
+    should_run = false;
   }
+
+  if (should_run && config.show_help)
+  {
+    print_help();
+    should_run = false;
+  }
+
+  if (should_run && config.list_backends)
+  {
+    list_backends();
+    should_run = false;
+  }
+
+  if (should_run && config.hamiltonian_path.empty())
+  {
+    std::cerr << "Error: Hamiltonian file not specified (--hamiltonian)." << std::endl;
+    print_help();
+    exit_code = EXIT_FAILURE;
+    should_run = false;
+  }
+
+  if (should_run && !config.have_particles)
+  {
+    std::cerr << "Error: Number of particles not specified (--nparticles)." << std::endl;
+    print_help();
+    exit_code = EXIT_FAILURE;
+    should_run = false;
+  }
+
 #ifdef VQE_ENABLE_MPI
-  MPI_Finalize();
+  if (should_run)
+  {
+    // Only synchronize RNG seed when this rank will execute solver code.
+    // Keep stochastic paths (e.g., SPSA) synchronized across ranks by sharing one seed.
+    unsigned shared_seed = 0;
+    if (rank == 0)
+    {
+      shared_seed = config.options.random_seed.has_value() ? *config.options.random_seed
+                                                           : make_default_seed();
+    }
+    MPI_Bcast(&shared_seed, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
+    config.options.random_seed = shared_seed;
+  }
 #endif
 
+  if (should_run)
+  {
+    // Enter solver only when argument parsing and required inputs succeeded.
+    emit_warnings(config);
+
+    try
+    {
+      if (config.options.mode == vqe::run_mode::adapt)
+      {
+        exit_code = run_adapt_mode(config);
+      }
+      else
+      {
+        exit_code = run_vqe_mode(config);
+      }
+    }
+    catch (const std::exception &ex)
+    {
+      std::cerr << "error: " << ex.what() << std::endl;
+      exit_code = EXIT_FAILURE;
+    }
+  }
+
+#ifdef VQE_ENABLE_MPI
+  {
+    // Finalize MPI exactly once if initialization succeeded.
+    int initialized = 0;
+    MPI_Initialized(&initialized);
+    if (initialized)
+    {
+      int finalized = 0;
+      MPI_Finalized(&finalized);
+      if (!finalized)
+      {
+        MPI_Finalize();
+      }
+    }
+  }
+#endif
+
+  return exit_code;
 }
