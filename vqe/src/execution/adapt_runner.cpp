@@ -204,19 +204,6 @@ struct MpiGuard
       return oss.str();
     }
 
-    unsigned make_default_seed()
-    {
-      try
-      {
-        return std::random_device{}();
-      }
-      catch (...)
-      {
-        // Fallback to a deterministic seed if system entropy is unavailable.
-        return 5489u;
-      }
-    }
-
     double current_rss_mebibytes()
     {
       struct rusage usage{};
@@ -646,25 +633,9 @@ struct MpiGuard
     result.energy = reference_energy;
     const bool needs_grad = optimizer_needs_gradient(options.adapt_optimizer);
 
-    unsigned rng_seed = 0;
-    // Runtime flag: honor explicit --seed when provided.
-    if (options.random_seed.has_value())
-    {
-      rng_seed = *options.random_seed;
-    }
-    else
-    {
-#ifdef VQE_ENABLE_MPI
-      // Compile-time/runtime flags: in MPI mode, rank 0 chooses one seed and broadcasts it.
-      if (world_rank == 0)
-      {
-        rng_seed = make_default_seed();
-      }
-      MPI_Bcast(&rng_seed, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
-#else
-      rng_seed = make_default_seed();
-#endif
-    }
+    // Honor --seed for reproducibility.
+    const unsigned rng_seed = options.random_seed.has_value() ? *options.random_seed
+                                                              : static_cast<unsigned>(std::random_device{}());
     std::mt19937 rng(rng_seed);
 
     // Load state from file if requested

@@ -61,19 +61,6 @@ namespace vqe
       return oss.str();
     }
 
-    unsigned make_default_seed()
-    {
-      try
-      {
-        return std::random_device{}();
-      }
-      catch (...)
-      {
-        // Fallback to a deterministic seed if system entropy is unavailable.
-        return 5489u;
-      }
-    }
-
     struct iteration_logger
     {
       void configure(bool verbose_mode, double tolerance_value, std::size_t status_stride)
@@ -415,9 +402,9 @@ namespace vqe
       double expectation_time = 0.0;
       const bool needs_grad = optimizer_needs_gradient(options.optimizer);
 
-      // Runtime flag: honor --seed for reproducibility; otherwise use system entropy fallback.
+      // Honor --seed for reproducibility.
       const unsigned rng_seed = options.random_seed.has_value() ? *options.random_seed
-                                                                : make_default_seed();
+                                                                : static_cast<unsigned>(std::random_device{}());
       std::mt19937 rng(rng_seed);
       objective_context<Backend> context{&ansatz, &backend, &pauli_terms, &eval_count, &apply_time, &expectation_time, &logger,
                                           needs_grad, options.use_spsa_gradient, &rng,
