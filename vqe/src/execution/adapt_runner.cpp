@@ -914,44 +914,6 @@ struct MpiGuard
 
       auto &circ = ansatz.mutable_circuit();
       auto current_params = circ.parameters();
-
-      nlopt::opt opt(options.adapt_optimizer, current_params.size());
-      const double lower = std::min(options.adapt_lower_bound, options.adapt_upper_bound);
-      const double upper = std::max(options.adapt_lower_bound, options.adapt_upper_bound);
-      opt.set_lower_bounds(std::vector<double>(current_params.size(), lower));
-      opt.set_upper_bounds(std::vector<double>(current_params.size(), upper));
-      if (options.adapt_max_evaluations > 0)
-      {
-        opt.set_maxeval(static_cast<int>(options.adapt_max_evaluations));
-      }
-      if (options.adapt_max_time > 0)
-      {
-        opt.set_maxtime(options.adapt_max_time);
-      }
-      if (options.adapt_relative_tolerance >= 0)
-      {
-        opt.set_ftol_rel(options.adapt_relative_tolerance);
-      }
-      if (options.adapt_absolute_tolerance >= 0)
-      {
-        opt.set_ftol_abs(options.adapt_absolute_tolerance);
-      }
-      if (std::isfinite(options.adapt_stop_value))
-      {
-        opt.set_stopval(options.adapt_stop_value);
-      }
-
-      for (const auto &param : options.adapt_algorithm_parameters)
-      {
-        opt.set_param(param.first.c_str(), param.second);
-      }
-
-      objective_context<Backend> ctx{&circ, &backend, &pauli_terms, &total_energy_evals,
-                                      needs_grad, options.use_spsa_gradient, &rng,
-                                      options.gradient_step};
-      opt.set_min_objective(objective_function_impl<Backend>, &ctx);
-
-      current_params = circ.parameters();
       if (options.adapt_initial_parameters.size() == current_params.size())
       {
         current_params = options.adapt_initial_parameters;
@@ -962,32 +924,128 @@ struct MpiGuard
       }
       double min_value = 0.0;
       int num_evals = 0;
-      nlopt::result status;
-      try
+      nlopt::result status = nlopt::FAILURE;
+#ifdef VQE_ENABLE_MPI
+      int opt_failed = 0;
+      std::string opt_error;
+      auto sync_opt_result = [&]()
       {
-        status = opt.optimize(current_params, min_value);
-        num_evals = opt.get_numevals(); //MZ: number of optimization iterations is the iterative info to return
-      }
-      catch (const nlopt::roundoff_limited &ex)
-      {
-        // Roundoff errors - optimization may have converged as much as possible
-        if (options.verbose)
+        MPI_Bcast(&opt_failed, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+        int error_len = (world_rank == 0) ? static_cast<int>(opt_error.size()) : 0;
+        MPI_Bcast(&error_len, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+        std::string error_msg;
+        if (error_len > 0)
         {
-          std::cout << "[adapt][warning] NLopt roundoff limited: " << ex.what() << std::endl;
+          error_msg.resize(static_cast<std::size_t>(error_len));
+          if (world_rank == 0)
+          {
+            std::copy(opt_error.begin(), opt_error.end(), error_msg.begin());
+          }
+          MPI_Bcast(error_msg.data(), error_len, MPI_CHAR, 0, MPI_COMM_WORLD);
         }
-        num_evals = opt.get_numevals();
-        status = nlopt::ROUNDOFF_LIMITED;
-      }
-      catch (const nlopt::forced_stop &ex)
+
+        int status_code = (world_rank == 0) ? static_cast<int>(status) : 0;
+        MPI_Bcast(&status_code, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        status = static_cast<nlopt::result>(status_code);
+
+        MPI_Bcast(&num_evals, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&min_value, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        if (!current_params.empty())
+        {
+          const int param_count = static_cast<int>(current_params.size());
+          MPI_Bcast(current_params.data(), param_count, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        }
+
+        if (opt_failed != 0)
+        {
+          if (error_msg.empty())
+          {
+            error_msg = "NLopt optimization failed with unknown error";
+          }
+          throw std::runtime_error(error_msg);
+        }
+      };
+
+      if (world_rank == 0)
+#endif
       {
-        throw std::runtime_error(std::string("NLopt forced stop: ") + ex.what());
+        try
+        {
+          nlopt::opt opt(options.adapt_optimizer, current_params.size());
+          const double lower = std::min(options.adapt_lower_bound, options.adapt_upper_bound);
+          const double upper = std::max(options.adapt_lower_bound, options.adapt_upper_bound);
+          opt.set_lower_bounds(std::vector<double>(current_params.size(), lower));
+          opt.set_upper_bounds(std::vector<double>(current_params.size(), upper));
+          if (options.adapt_max_evaluations > 0)
+          {
+            opt.set_maxeval(static_cast<int>(options.adapt_max_evaluations));
+          }
+          if (options.adapt_max_time > 0)
+          {
+            opt.set_maxtime(options.adapt_max_time);
+          }
+          if (options.adapt_relative_tolerance >= 0)
+          {
+            opt.set_ftol_rel(options.adapt_relative_tolerance);
+          }
+          if (options.adapt_absolute_tolerance >= 0)
+          {
+            opt.set_ftol_abs(options.adapt_absolute_tolerance);
+          }
+          if (std::isfinite(options.adapt_stop_value))
+          {
+            opt.set_stopval(options.adapt_stop_value);
+          }
+
+          for (const auto &param : options.adapt_algorithm_parameters)
+          {
+            opt.set_param(param.first.c_str(), param.second);
+          }
+
+          objective_context<Backend> ctx{&circ, &backend, &pauli_terms, &total_energy_evals,
+                                          needs_grad, options.use_spsa_gradient, &rng,
+                                          options.gradient_step};
+          opt.set_min_objective(objective_function_impl<Backend>, &ctx);
+
+          try
+          {
+            status = opt.optimize(current_params, min_value);
+            num_evals = opt.get_numevals(); //MZ: number of optimization iterations is the iterative info to return
+          }
+          catch (const nlopt::roundoff_limited &ex)
+          {
+            // Roundoff errors - optimization may have converged as much as possible
+            if (options.verbose)
+            {
+              std::cout << "[adapt][warning] NLopt roundoff limited: " << ex.what() << std::endl;
+            }
+            num_evals = opt.get_numevals();
+            status = nlopt::ROUNDOFF_LIMITED;
+          }
+          catch (const nlopt::forced_stop &ex)
+          {
+            throw std::runtime_error(std::string("NLopt forced stop: ") + ex.what());
+          }
+        }
+        catch (const std::exception &ex)
+        {
+          const std::string message = std::string("NLopt optimization failed (iter=") + std::to_string(iter) +
+                                      ", params=" + std::to_string(current_params.size()) +
+                                      ", needs_grad=" + std::to_string(needs_grad) + "): " + ex.what();
+#ifdef VQE_ENABLE_MPI
+          opt_failed = 1;
+          opt_error = message;
+#else
+          throw std::runtime_error(message);
+#endif
+        }
       }
-      catch (const std::exception &ex)
-      {
-        throw std::runtime_error(std::string("NLopt optimization failed (iter=") + std::to_string(iter) +
-                                 ", params=" + std::to_string(current_params.size()) +
-                                 ", needs_grad=" + std::to_string(needs_grad) + "): " + ex.what());
-      }
+
+#ifdef VQE_ENABLE_MPI
+      sync_opt_result();
+#endif
 
       for (std::size_t i = 0; i < current_params.size(); ++i)
       {
@@ -1088,6 +1146,9 @@ struct MpiGuard
       }
       result.selected_labels.push_back(pool_excitations[idx].label);
     }
+#ifdef VQE_ENABLE_MPI
+    MPI_Barrier(MPI_COMM_WORLD);
+#endif
     result.energy_evaluations = total_energy_evals;
     return result;
   }
