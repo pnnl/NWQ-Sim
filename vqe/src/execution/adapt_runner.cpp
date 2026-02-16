@@ -784,7 +784,6 @@ struct MpiGuard
 
       //=========================== MPI Parallelization =======================
 #ifdef VQE_ENABLE_MPI
-      MPI_Barrier(MPI_COMM_WORLD);
       for (std::size_t idx = world_rank; idx < pool_size; idx += world_size)
 #else
       for (std::size_t idx = 0; idx < pool_size; ++idx)
@@ -834,7 +833,7 @@ struct MpiGuard
         throw std::runtime_error("ADAPT operator pool too large for MPI reduction");
       }
       const int gradient_count = static_cast<int>(pool_size);
-      MPI_Allreduce(MPI_IN_PLACE, gradient_magnitudes.data(), gradient_count, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+      MPI_Allreduce(MPI_IN_PLACE, gradient_magnitudes.data(), gradient_count, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 #endif
 
       if (max_gradient < options.adapt_gradient_tolerance)

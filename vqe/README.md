@@ -44,10 +44,12 @@ pip install .
 This automatically handles all dependencies including `scikit-build-core`, `pybind11`, CMake, and compilers. The installation creates the `nwqsim_vqe` package with proper library bundling and rpath configuration.
 
 **Optional Dependencies:**
+
 - For development: `pip install .[dev]`
 - For SciPy optimization: `pip install scipy numpy` (user responsibility)
 
 **Installation Options:**
+
 - Production: `pip install .` (recommended)
 - Development: Configure with CMake and add `build/vqe` to `PYTHONPATH`
 - C++ only: Set `-DVQE_BUILD_PYTHON=OFF` during CMake configuration
@@ -73,7 +75,7 @@ Launch VQE via the `nwq_vqe` executable. The two mandatory arguments are the Ham
 "  --xacc                Enable XACC/Qiskit indexing scheme (default)."
 "  --ducc                Enable DUCC indexing scheme."
 "  --sym, --symm         UCCSD symmetry level (0->none, 1->spin, 2->orbital, 3->full). Default to 3."
-"  -b, --backend         Simulation backend (CPU, NVGPU, AMDGPU, MPI (not supported)). Defaults to CPU."
+"  -b, --backend         Simulation backend (CPU, NVGPU, AMDGPU). MPI parallelism is controlled by mpirun/srun. Default to CPU."
 "  --seed                Random seed for reproducibility."
 "OPTIONAL (Global Minimizer)"
 "  -v, --verbose         Print additional progress information."
@@ -142,8 +144,6 @@ Example - Batched-ADAPT-VQE: include at most `-ak` number of operators in each o
 ```bash
 ./build/vqe/nwq_vqe -f vqe/example_hamiltonians/H4_4_0.9_xacc.hamil -p 4 --adapt -ak 10 -at 0.5
 ```
-
-
 
 ## Python API
 
@@ -215,6 +215,7 @@ print(f"Function evaluations: {result.nfev}")
 ### Usage Examples
 
 #### Energy Evaluation
+
 ```python
 # Create reusable energy evaluator for optimization loops
 evaluator = vqe.EnergyEvaluator(ansatz, pauli_terms, use_gpu=True)
@@ -228,6 +229,7 @@ energy = energy_func([0.1, -0.2, 0.3])
 ```
 
 #### Data Structures
+
 ```python
 # All classes have meaningful __repr__ and __str__
 print(system)  # System(orbitals=2, electrons=2, qubits=4)
@@ -240,6 +242,7 @@ for term in pauli_terms[:3]:
 ```
 
 #### Configuration Classes
+
 ```python
 options = vqe.Options()
 try:
@@ -291,7 +294,6 @@ print(f"Selected operators: {result.selected_labels}")
 print(f"Converged: {result.success}")
 ```
 
-
 ### Error Handling
 
 The API provides error handling:
@@ -320,14 +322,16 @@ except ValueError as e:
 ## API Reference Summary
 
 ### Core Classes
+
 - **`System`**: Molecular system specification
-- **`UCCSD`**: UCCSD ansatz builder with parameter management  
+- **`UCCSD`**: UCCSD ansatz builder with parameter management
 - **`Options`**: Unified configuration options
 - **`VQEResult`** / **`AdaptResult`**: Results with metadata
 - **`EnergyEvaluator`**: Energy evaluation
 - **`HamiltonianData`** / **`PauliTerm`**: Data structures with string representations
 
 ### Key Functions
+
 - **`system()`**: Convenience constructor
 - **`load_hamiltonian()`**: File loading with error context
 - **`run_vqe()` / `run_vqe_with_ansatz()`**: Main VQE entry points
@@ -336,21 +340,21 @@ except ValueError as e:
 - **`list_optimizers()` / `check_gpu_support()`**: System introspection
 
 ### Enumerations (Python-style)
+
 - **`Spin.UP`** / **`Spin.DOWN`**: Electron spin states
 - **`OrbitalKind.OCCUPIED`** / **`OrbitalKind.VIRTUAL`**: Orbital types
 - **`OperatorKind.CREATION`** / **`OperatorKind.ANNIHILATION`**: Fermion operators
 
 ### Key Features
+
 - **Error handling**
-- **Input validation** for all configuration parameters  
+- **Input validation** for all configuration parameters
 - **String representations** (`__repr__`, `__str__`) for all classes
 - **Property-based access** with getters/setters instead of raw attributes
 - **Parallel computation support**
 - **Clean external optimizer interface** via `EnergyEvaluator`
 - **GPU auto-fallback** with warnings instead of crashes
 - **Type hints and documentation** throughout the API
-
-
 
 ## C++ Library Usage
 
@@ -360,7 +364,6 @@ The shared library `libnwqsim` exports the QFlow ABI defined in `include/nwqsim_
 - `qflow_nwqsim` – run a UCCSD VQE and obtain the ground-state energy plus the parameter list. Pass an optional `vqe::vqe_options` instance (from `vqe_options.hpp`) to override defaults such as optimizer, bounds, GPU usage, or initial parameters.
 
 Link against `libvqe` for native access to the solver primitives (environment, ansatz builders, state-vector backends, and the `execution` runners).
-
 
 Example with custom options:
 
@@ -384,9 +387,6 @@ opts.initial_parameters = {0.1, 0.2, 0.3, ...};  // Must match parameter count f
 auto [energy, converged, parameters] = qflow_nwqsim(ham_ops, n_electrons, "NVGPU", opts);
 ```
 
-
-
-
 ## Advanced CLI Features
 
 ### Parameter Management
@@ -394,6 +394,7 @@ auto [energy, converged, parameters] = qflow_nwqsim(ham_ops, n_electrons, "NVGPU
 Initial parameters can be provided as a starting point for VQE optimization. This is useful when you have a good initial guess from prior optimization or another method.
 
 **From file (CLI):**
+
 ```bash
 ./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --init-params params.txt
 ```
@@ -401,6 +402,7 @@ Initial parameters can be provided as a starting point for VQE optimization. Thi
 The file should contain comma-separated values, one per parameter. If the file has fewer parameters than required, missing values are filled with zeros. If it has more, only the first N values are used.
 
 **From single value (CLI):**
+
 ```bash
 ./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --init-params 0.5
 ```
@@ -408,6 +410,7 @@ The file should contain comma-separated values, one per parameter. If the file h
 This repeats the value for all parameters in the ansatz.
 
 **Saving optimized parameters (CLI):**
+
 ```bash
 ./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --maxeval 1000 --save-params
 ```
@@ -419,11 +422,13 @@ Creates `hamiltonian.txt-vqe_params.txt` with the final optimized parameters.
 The module supports multiple gradient estimation methods for optimization:
 
 **Numerical gradients (default for derivative-based optimizers):**
+
 - Uses forward finite difference with step size 1e-5
 - Requires N+1 function evaluations per gradient
 - More accurate for smooth functions
 
 **SPSA gradient (Simultaneous Perturbation Stochastic Approximation):**
+
 ```bash
 ./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --spsa
 ```
@@ -437,17 +442,20 @@ The module supports multiple gradient estimation methods for optimization:
 Long-running ADAPT-VQE optimizations can be saved and resumed:
 
 **Saving parameters every iteration:**
+
 ```bash
 ./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --adapt --adapt-save
 ```
 
 Creates `hamiltonian.txt-adapt_params.txt` with full ADAPT state including:
+
 - Selected operators and their indices
 - Optimized parameters at each iteration
 - Energy values
 - Metadata (pool type, symmetry level, iteration number)
 
 **Resuming from checkpoint:**
+
 ```bash
 ./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --adapt --adapt-load hamiltonian.txt-adapt_params.txt
 ```
@@ -457,6 +465,7 @@ The optimizer validates that symmetry settings match and resumes from the saved 
 ### Memory and Performance Monitoring
 
 **Memory tracking:**
+
 ```bash
 ./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --adapt --adapt-log-memory
 ```
@@ -464,11 +473,13 @@ The optimizer validates that symmetry settings match and resumes from the saved 
 Logs RSS memory usage per ADAPT iteration to track memory growth.
 
 **Verbose output:**
+
 ```bash
 ./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --verbose
 ```
 
 Provides detailed iteration information including:
+
 - Parameter statistics (max absolute value, L2 norm)
 - Energy changes between iterations
 - Selected operators (for ADAPT)
@@ -480,10 +491,11 @@ Provides detailed iteration information including:
 Operator gradient computation in ADAPT-VQE can be parallelized using MPI:
 
 ```bash
-mpirun -np 8 ./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 --adapt --adapt-maxeval 50
+mpirun -np 8 ./build/vqe/nwq_vqe -f hamiltonian.txt -p 4 -b NVGPU --adapt --adapt-maxeval 50
 ```
 
 Each MPI rank evaluates a subset of operators, reducing wall-clock time for large operator pools.
+On multi-GPU nodes, launch one MPI rank per GPU (`--gpus-per-task=1` with scheduler-specific GPU binding).
 
 ## Configuration Reference
 
@@ -496,6 +508,7 @@ Each MPI rank evaluates a subset of operators, reducing wall-clock time for larg
 **ADAPT-VQE Iterations:** Default maximum is 50 iterations.
 
 **Tolerances:**
+
 - Gradient tolerance (ADAPT): 1e-3 (convergence when gradient norm is below this)
 - Energy tolerance (ADAPT): Disabled by default. When enabled, ADAPT stops when energy change between iterations drops below this threshold.
 

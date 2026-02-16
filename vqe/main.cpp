@@ -121,7 +121,7 @@ namespace
               << "  --xacc                Enable XACC/Qiskit indexing scheme (default).\n"
               << "  --ducc                Enable DUCC indexing scheme.\n"
               << "  --sym, --symm         UCCSD symmetry level (0->none, 1->spin, 2->orbital, 3->full). Default to 3.\n"
-              << "  -b, --backend         Simulation backend (CPU, NVGPU, AMDGPU, MPI (not supported)). Defaults to CPU.\n"
+              << "  -b, --backend         Simulation backend (CPU, NVGPU, AMDGPU). MPI parallelism is controlled by mpirun/srun. Default to CPU.\n"
               << "  --seed                Random seed for reproducibility.\n"
               << "OPTIONAL (Global Minimizer)\n"
               << "  -v, --verbose         Print additional progress information.\n"
@@ -232,8 +232,11 @@ namespace
     }
     if (upper == "MPI")
     {
-      error = "MPI backend is not supported in the new implementation";
-      return false;
+      std::cerr << "[warning] Legacy backend 'MPI' maps to CPU backend. "
+                << "Use mpirun/srun to enable MPI ADAPT parallelism." << std::endl;
+      config.backend = "CPU";
+      config.options.use_gpu = false;
+      return true;
     }
     error = "Unknown backend: " + value;
     return false;
@@ -1131,10 +1134,8 @@ int main(int argc, char **argv)
   {
       // Redirect C stdio
       freopen("/dev/null", "w", stdout);
-      freopen("/dev/null", "w", stderr);
       // Optional: also silence C++ streams
       std::cout.setstate(std::ios::failbit);
-      std::cerr.setstate(std::ios::failbit);
   }
 #endif
 

@@ -20,20 +20,20 @@
 
 VQE with UCCSD and Symmetry level 2 (0 lowest, 2 highest)
 ```shell
-mpirun -n 4 ./vqe/nwq_vqe -f ./LiH34.hamil -p 4 -b MPI -o LN_NEWUOA -v --abstol 1e-10 -lb -0.9 -ub 0.9 --maxeval 4000 --sym 2
+mpirun -n 4 ./vqe/nwq_vqe -f ./LiH34.hamil -p 4 -b CPU -o LN_NEWUOA -v --abstol 1e-10 -lb -0.9 -ub 0.9 --maxeval 4000 --sym 2
 ```
 
 VQE with Singlet and Triplet excitations
 ```shell
-mpirun -n 4 ./vqe/nwq_vqe -f ./LiH34.hamil -p 4 -b MPI -o LN_NEWUOA -v --abstol 1e-10 --maxeval 20000 --gsd
+mpirun -n 4 ./vqe/nwq_vqe -f ./LiH34.hamil -p 4 -b CPU -o LN_NEWUOA -v --abstol 1e-10 --maxeval 20000 --gsd
 ```
 
 ADAPT-VQE with UCCSD ansatz pool
 ```shell
-mpirun -n 4 ./vqe/nwq_vqe -f ./LiH34.hamil -p 4 -b MPI --abstol 1e-10 --maxeval 4000 -lb -0.9 -ub 0.9 --adapt --adapt-fvaltol -1
+mpirun -n 4 ./vqe/nwq_vqe -f ./LiH34.hamil -p 4 -b CPU --abstol 1e-10 --maxeval 4000 -lb -0.9 -ub 0.9 --adapt --adapt-fvaltol -1
 ```
 
 ADAPT-VQE with singlet and triplet ansatz pool (this pool is currently not normalized, unlike its VQE/QFlow version. The non-normalized version appears to give 10% smaller error only for ADAPT-VQE in this example)
 ```shell
-mpirun -n 4 ./vqe/nwq_vqe -f ./LiH34.hamil -p 4 -b MPI --abstol 1e-10 --maxeval 16000 --gsd --adapt --adapt-fvaltol -1
+mpirun -n 4 ./vqe/nwq_vqe -f ./LiH34.hamil -p 4 -b CPU --abstol 1e-10 --maxeval 16000 --gsd --adapt --adapt-fvaltol -1
 ```

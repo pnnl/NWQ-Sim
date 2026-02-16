@@ -78,7 +78,12 @@ namespace
     std::string value = backend;
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c)
                    { return static_cast<char>(std::toupper(c)); });
-    return value == "GPU" || value == "NVGPU" || value == "NVGPU_MPI";
+    return value == "GPU" ||
+           value == "NVGPU" ||
+           value == "NVGPU_MPI" ||
+           value == "AMDGPU" ||
+           value == "HIP" ||
+           value == "HIP_MPI";
   }
 
   std::vector<std::string> collect_parameter_labels(const vqe::uccsd_ansatz &ansatz)
