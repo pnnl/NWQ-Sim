@@ -17,7 +17,7 @@
 
 int main() 
 {
-    int n_qubits = 1; //15 // A few hundred qubits 
+    int n_qubits = 3; //15 // A few hundred qubits 
     int rounds = 1; //3 // Number of rounds to simulate
     
     double timer_cpu = 0;
@@ -26,17 +26,16 @@ int main()
 
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
-    // circuit->CX(1,2);
     circuit->H(0);
-    circuit->S(0);
-    // circuit->S(0);
-    circuit->S(0);
-    circuit->RZ(PI/4, 0);
+
+
+    circuit->RZ(PI/2, 0);
+
     circuit->H(0);
-    // circuit->CX(0,1);
-    // circuit->H(2);
-    // circuit->M(2);
     circuit->M(0);
+
+
+
     // circuit->M(1);
     // circuit->X(0);
     // circuit->M(0);
@@ -118,15 +117,17 @@ int main()
     std::mt19937 engine(seed);
     for(int i = 0; i < 1000; i++)
     {
+        // cpu_state->print_res_state();
+
         cpu_state->set_seed(dist(engine)+i);
         cpu_state->sim(circuit, timer_cpu);
         m_results += cpu_state->get_measurement_results()[0];
-        std::cout << "first: " << cpu_state->get_measurement_results()[0] << std::endl;
+        // std::cout << "first: " << cpu_state->get_measurement_results()[0] << std::endl;
         // std::cout << "second: "  << cpu_state->get_measurement_results()[1] << std::endl;
         // std::cout << "third: "  << cpu_state->get_measurement_results()[2] << std::endl;
 
 
-        cpu_state->print_res_state();
+        // cpu_state->print_res_state();
 
         cpu_state->reset_state();
     }
