@@ -1,5 +1,5 @@
 #pragma once
-
+#include <complex>
 #include "../state.hpp"
 #include "./src/prng.hpp"
 
@@ -1345,7 +1345,7 @@ namespace NWQSim
 
         bool rz_flag;
         std::vector<int> rz_r;
-        std::pair<double, double> rz_coeff;
+        std::pair<std::complex<double>, std::complex<double>> rz_coeff;
 
 
         std::vector<std::vector<int>> x_erasure;
@@ -2046,7 +2046,7 @@ namespace NWQSim
         void reset_rz()
         {
             rz_flag = false;
-            rz_coeff = {1.0,0.0};
+            rz_coeff = {{1.0,0.0},{0.0, 0.0}};
             rz_r.assign(rows, 0);
         }
 
@@ -2471,9 +2471,9 @@ namespace NWQSim
                             }
                             if(rz_flag == true)
                             {
-                                rz_coeff.first = cos(gate.theta/2);
+                                rz_coeff.first = {cos(gate.theta/2), 0.0};
                                 // std::cout << "cos: " << rz_coeff.first << std::endl;
-                                rz_coeff.second = sin(gate.theta/2);
+                                rz_coeff.second = {0.0, sin(gate.theta/2)};
                             }
                         }
                         else
@@ -2653,9 +2653,11 @@ namespace NWQSim
                             if(rz_flag && (r[p] != rz_r[p]))
                             {
                                 double random = prng_uniform01(seed, measurement_count);
-                                // std::cout << "Rand random: " << random << std::endl;          
-
-                                if(random < .5*(1 + rz_coeff.first * rz_coeff.second + rz_coeff.first * rz_coeff.second))
+                                std::cout << "first norm: " << std::norm(rz_coeff.second)<< std::endl;   
+                                double sum = .5 * (1 + std::real(rz_coeff.first * std::complex<double>(0,1)
+                                 * rz_coeff.second + rz_coeff.first * std::complex<double>(0,1) * rz_coeff.second));
+                                // std::cout << "Sum: " << sum << std::endl;          
+                                if(random > sum)
                                 {
                                     m_results.push_back(r[p]);
                                 }
@@ -2709,11 +2711,8 @@ namespace NWQSim
                             if(rz_flag && (r[rows-1] != rz_r[rows-1]))
                             {
                                 double random = prng_uniform01(seed, measurement_count);
-                                // std::cout << "Determ rand: " << random << std::endl;
-
-                                // std::cout << "Determ cos2: " << pow(rz_coeff.first,2) << std::endl;
                                 
-                                if(random < .5 * (1 + rz_coeff.first * rz_coeff.second + rz_coeff.first * rz_coeff.second))
+                                if(random < std::norm(rz_coeff.first))
                                 {
                                     m_results.push_back(r[rows-1]);
                                 }
@@ -2782,8 +2781,9 @@ namespace NWQSim
                                 // std::cout << "Rand random: " << random << std::endl;
 
                                 // std::cout << "Rand coeff: " << .5*(1 + rz_coeff.first * rz_coeff.second + rz_coeff.first * rz_coeff.second) << std::endl;
-                                
-                                if(random < .5*(1 + rz_coeff.first * rz_coeff.second + rz_coeff.first * rz_coeff.second))
+                                double sum = .5 * (1 + std::real(rz_coeff.first * std::complex<double>(0,1)
+                                 * rz_coeff.second + rz_coeff.first * std::complex<double>(0,1) * rz_coeff.second));
+                                if(random > sum)
                                 {
                                     randomBit = r[p];
                                 }
@@ -2853,7 +2853,7 @@ namespace NWQSim
 
                                 // std::cout << "Determ cos2: " << pow(rz_coeff.first,2) << std::endl;
                                 
-                                if(random < pow(rz_coeff.first, 2))
+                                if(random < std::norm(rz_coeff.first))
                                 {
                                     m_results.push_back(r[rows-1]);
                                 }
