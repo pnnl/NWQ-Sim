@@ -26,11 +26,18 @@ int main()
 
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
 
+
     circuit->H(0);
     circuit->S(0);
-    circuit->RZ(5*PI/4, 0);
+    circuit->RZ(PI/8, 0);
     circuit->H(0);
+
     circuit->M(0);
+
+
+
+
+
 
 
     auto cpu_state = BackendManager::create_state("cpu", n_qubits, "stab");
@@ -38,27 +45,43 @@ int main()
     // Simulate on both backends
     std::cout << "Simulating on CPU..." << std::endl;
     double m_results = 0;
-    
+
     std::uniform_int_distribution<int> dist(1, 999999999);
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
     std::mt19937 engine(seed);
     for(int i = 0; i < 1000; i++)
     {
+        cpu_state->set_seed(seed+i);
+        cpu_state->sim(circuit, timer_cpu);
+
+        m_results += cpu_state->get_measurement_results()[0];
+    
         // cpu_state->print_res_state();
 
-        cpu_state->set_seed(dist(engine)+i);
-        cpu_state->sim(circuit, timer_cpu);
-        m_results += cpu_state->get_measurement_results()[0];
+        // circuit->M(0);
+        // cpu_state->set_seed(dist(engine)+i);
+        // cpu_state->sim(circuit, timer_cpu);
+        // cpu_state->print_res_state();
+
         // std::cout << "first: " << cpu_state->get_measurement_results()[0] << std::endl;
         // std::cout << "second: "  << cpu_state->get_measurement_results()[1] << std::endl;
         // std::cout << "third: "  << cpu_state->get_measurement_results()[2] << std::endl;
 
 
-        // cpu_state->print_res_state();
 
         cpu_state->reset_state();
     }
     
+    // cpu_state->print_res_state();
+    // cpu_state->reset_state();
+
+    // circuit->H(0);
+    // cpu_state->sim(circuit, timer_cpu);
+    // cpu_state->print_res_state();
+    // cpu_state->reset_state();
+
+
+
 
     std::cout << "CPU sim time: " << timer_cpu / 1000.0 << "s" << std::endl;
     std::cout << m_results << std::endl;
