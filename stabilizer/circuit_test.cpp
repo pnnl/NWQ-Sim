@@ -25,22 +25,35 @@ int main()
     int num_measurements = 0;
 
     auto circuit = std::make_shared<NWQSim::Circuit>(n_qubits);
+    auto cpu_state = BackendManager::create_state("cpu", n_qubits, "stab");
 
+    circuit->H(1);
+    circuit->S(1);
+    // circuit->S(1);
 
-    circuit->H(0);
-    circuit->S(0);
-    circuit->RZ(PI/8, 0);
-    circuit->H(0);
+    // circuit->S(1);
+
+    circuit->RZ(PI/8, 1);
+    circuit->H(1);
+
+    // circuit->H(0);
+    circuit->CX(1,0);
+    // circuit->H(0);
 
     circuit->M(0);
 
+    // cpu_state->set_seed(42);
+    // cpu_state->sim(circuit, timer_cpu);
+    // cpu_state->print_res_state();
 
 
 
 
 
 
-    auto cpu_state = BackendManager::create_state("cpu", n_qubits, "stab");
+
+
+
 
     // Simulate on both backends
     std::cout << "Simulating on CPU..." << std::endl;
@@ -71,8 +84,26 @@ int main()
 
         cpu_state->reset_state();
     }
-    
+    // cpu_state->set_seed(seed);
+
+    // auto circuit2 = std::make_shared<NWQSim::Circuit>(n_qubits);
+    // circuit2->H(1);
+    // circuit2->S(1);
+    // circuit2->RZ(PI/8, 1);
+    // // circuit2->H(1);
+    // circuit2->H(0);
+    // circuit2->CX(0,1);
+
+    // cpu_state->sim(circuit2, timer_cpu);
     // cpu_state->print_res_state();
+    // cpu_state->reset_state();
+    
+    // circuit2->H(0);
+    // cpu_state->sim(circuit2, timer_cpu);
+    // cpu_state->print_res_state();
+    // cpu_state->reset_state();
+
+    // print(cpu_state->rz_tracker);
     // cpu_state->reset_state();
 
     // circuit->H(0);

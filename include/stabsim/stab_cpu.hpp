@@ -1346,7 +1346,7 @@ namespace NWQSim
         bool rz_flag;
         std::vector<int> rz_r;
         std::pair<std::complex<double>, std::complex<double>> rz_coeff;
-        std::vector<int> rz_global_phase;
+        int rz_tracker;
 
 
         std::vector<std::vector<int>> x_erasure;
@@ -2049,6 +2049,7 @@ namespace NWQSim
             rz_flag = false;
             rz_coeff = {{1.0,0.0},{0.0, 0.0}};
             rz_r.assign(rows, 0);
+            rz_tracker = -1;
         }
 
         void simulation_kernel(std::vector<Gate>& gates)
@@ -2063,7 +2064,7 @@ namespace NWQSim
             {
                 if(rz_flag)
                 {
-                    for (int i = 0; i < rows - 1; i++)
+                    for(int i = 0; i < rows - 1; i++)
                     {
                         int y = x[i][target] & z[i][target];
                         // rz_coeff.first *= -y;
@@ -2073,8 +2074,9 @@ namespace NWQSim
                         int temp = x[i][target];
                         x[i][target] = z[i][target];
                         z[i][target] = temp;
+                        
                     }
-
+                    // std::cout << "Rz_tracler: " << rz_tracker  << std::endl;
                 }
                 else
                 {
@@ -2096,7 +2098,6 @@ namespace NWQSim
                     for (int i = 0; i < rows - 1; i++)
                     {
                         int y = x[i][target] & z[i][target];
-                        // rz_coeff.first *= -y;
                         rz_coeff.second *= std::complex<double>(0.0,1.0);
                         r[i] ^= y;
                         rz_r[i] ^= y;
@@ -2159,7 +2160,7 @@ namespace NWQSim
                             {
                                 //Phase
                                 r[i] = r[i] ^ (x[i][a] & z[i][b] & (x[i][b]^z[i][a]^1));
-                                rz_r[i] ^= (x[i][a] & z[i][b] & (x[i][b]^z[i][a]^1));
+                                rz_r[i] = rz_r[i] ^ (x[i][a] & z[i][b] & (x[i][b]^z[i][a]^1));
 
                                 //Entry
                                 x[i][b] ^= x[i][a];
@@ -2664,6 +2665,10 @@ namespace NWQSim
                                 }
                             }
                             
+                            // double coeff = (x[p][a]&&z[p][a]) ? 1 : 0;
+                            if(z[p][a] == 1 && rz_r[p] != rz_r[p]) rz_tracker = -1;
+                            else rz_tracker = 1;
+
                             x[p-half_rows] = x[p];
                             z[p-half_rows] = z[p];
                             //Change all the columns in row p to be 0
@@ -2672,23 +2677,23 @@ namespace NWQSim
                                 x[p][i] = 0;
                                 z[p][i] = 0;                        
                             }
-                            
+
                             if(rz_flag && (r[p] != rz_r[p]))
                             {
                                 double random = prng_uniform01(seed, measurement_count);
-                                std::cout << "RZ Random " << random << std::endl;   
+                                // std::cout << "RZ Random " << random << std::endl;   
                                 double sum = .5 * (1 + std::real(rz_coeff.first * std::complex<double>(0,1)
-                                 * rz_coeff.second + rz_coeff.first * std::complex<double>(0,1) * rz_coeff.second));
+                                 * rz_coeff.second + rz_coeff.first * std::complex<double>(0,1) * rz_coeff.second * std::complex<double>(rz_tracker,0)));
                                 // double sum = .5 * (1 + 2*std::real(std::conj(rz_coeff.first)*rz_coeff.second));
 
-                                std::cout << "Sum: " << sum << std::endl;          
+                                // std::cout << "Sum: " << sum << std::endl;          
                                 if(random > sum)
                                 {
-                                    m_results.push_back(0);
+                                    m_results.push_back(r[p]);
                                 }
                                 else 
                                 {
-                                    m_results.push_back(1);
+                                    m_results.push_back(rz_r[p]);
                                 }
                                 reset_rz();
                             }
@@ -2818,6 +2823,8 @@ namespace NWQSim
 
                                 }
                             }
+                            if(z[p][a] == 1) rz_tracker = -1;
+                            else rz_tracker = 1;
                             
                             x[p-half_rows] = x[p];
                             z[p-half_rows] = z[p];
@@ -2837,7 +2844,7 @@ namespace NWQSim
 
                                 // std::cout << "Rand coeff: " << .5*(1 + rz_coeff.first * rz_coeff.second + rz_coeff.first * rz_coeff.second) << std::endl;
                                 double sum = .5 * (1 + std::real(rz_coeff.first * std::complex<double>(0,1)
-                                 * rz_coeff.second + rz_coeff.first * std::complex<double>(0,1) * rz_coeff.second));
+                                 * rz_coeff.second + rz_coeff.first * std::complex<double>(0,1) * rz_coeff.second * std::complex<double>(rz_tracker,0)));
                                 if(random > sum)
                                 {
                                     randomBit = r[p];
