@@ -62,7 +62,7 @@ void expand_terms(const std::vector<std::array<pauli_term, 2>>& per_op_terms,
 
 }  // namespace
 
-std::vector<pauli_term> jordan_wigner_transform(const hamiltonian_data& data) {
+std::vector<pauli_term> jordan_wigner_transform(const hamiltonian_data& data, double cutoff) {
   if (data.num_qubits() > 63) {
     throw std::runtime_error("jordan-wigner mapping currently supports up to 63 qubits");
   }
@@ -97,7 +97,7 @@ std::vector<pauli_term> jordan_wigner_transform(const hamiltonian_data& data) {
     }
   }
 
-  return normalize_terms(accumulator, n_qubits);
+  return normalize_terms(accumulator, n_qubits, cutoff);
 }
 
 }  // namespace vqe

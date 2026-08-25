@@ -7,6 +7,6 @@
 
 namespace vqe {
 
-std::vector<pauli_term> jordan_wigner_transform(const hamiltonian_data& data);
+std::vector<pauli_term> jordan_wigner_transform(const hamiltonian_data& data, double cutoff = 1e-12);
 
 }  // namespace vqe

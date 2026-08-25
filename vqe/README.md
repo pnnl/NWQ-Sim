@@ -595,3 +595,37 @@ The default orbital ordering is XACC/Qiskit. For H4 example, the spin orbital or
 ```
 
 That is, `2^ 0` represents $t^{2}_0$ or a single excitation from spin-orbital 0 (spatial 0, alpha) to spin-orbital 2 (spatial 2, alpha). And similarly, `6^ 3^ 4 1` represents $t^{6 3}_{4 1}$ or a double excitation from spin-orbitals 4 (spatial 0, beta) and 1 (spatial 1, alpha) to 6 (spatial 2, beta) and 3 (spatial 3, alpha).
+
+## Pauli Hamiltonian Dump Tool
+
+`vqe/tools/dump_pauli.cpp` is a standalone tool that writes the Jordan-Wigner Pauli representation of an XACC-format fermionic Hamiltonian to disk without running VQE. It links against the same frontend sources the VQE flow uses (`hamiltonian_parser.cpp`, `jw_transform.cpp`, `pauli_term.cpp`), so the emitted terms are exactly what the simulator consumes internally.
+
+To support it, `jordan_wigner_transform` takes an optional `cutoff` argument that is forwarded to `normalize_terms`. The default of `1e-12` matches the previously hard-coded value, and all existing call sites use the default, so VQE and ADAPT behavior is unchanged. Passing a smaller cutoff keeps terms whose coefficients fall below `1e-12`.
+
+The tool is not part of the CMake build. Compile it directly from the repository root (g++ works equally, and `-ffp-contract=off` keeps results bit-identical across compilers):
+
+```bash
+clang++ -std=c++17 -O2 -ffp-contract=off -Ivqe/include \
+  vqe/src/hamiltonian_parser.cpp vqe/src/jw_transform.cpp \
+  vqe/src/pauli_term.cpp vqe/tools/dump_pauli.cpp -o dump_pauli
+```
+
+Usage:
+
+```bash
+./dump_pauli <input-xacc> <output-basename> <cutoff|none> [occ_qubits_csv]
+```
+
+- `input-xacc`: fermionic Hamiltonian in XACC format. The qubit count is inferred from the largest spin-orbital index, and constant lines are folded into the identity term.
+- `output-basename`: two files are written, `<basename>.txt` and `<basename>.json`.
+- `cutoff`: either a number such as `1e-12` (the internal VQE default) or `none`, which drops only exactly-zero coefficients.
+- `occ_qubits_csv` (optional): comma-separated occupied spin-orbital indices of a reference determinant, e.g. `0,1,2,3,12,13,14,15`. When given, the tool prints the diagonal expectation value of that determinant to stdout, which should reproduce the SCF energy for a bare Hamiltonian over the Hartree-Fock reference. It does not affect the output files.
+
+The `.txt` file has one term per line in the form `coeff_real coeff_imag [X0 Z3 Y12]`, with `[]` for the identity term and qubit indices equal to the XACC spin-orbital indices described in the previous section. The `.json` file is `{"n_qubits": N, "terms": [[label, [re, im]], ...]}` with labels of length `N` in the Qiskit `SparsePauliOp` convention (leftmost character acts on the highest qubit). Coefficients are printed with `%.17g`, which round-trips IEEE-754 doubles exactly. Loading in Qiskit:
+
+```python
+import json
+from qiskit.quantum_info import SparsePauliOp
+d = json.load(open("hamiltonian.json"))
+H = SparsePauliOp.from_list([(l, complex(re, im)) for l, (re, im) in d["terms"]])
+```
