@@ -26,16 +26,28 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 nwqsim_option(CMAKE_BUILD_TYPE Release)
-nwqsim_option(NWQSIM_ENABLE_CUDA ON)
-nwqsim_option(NWQSIM_ENABLE_HIP ON)
+
+if(NOT DEFINED NWQSIM_ENABLE_CUDA AND DEFINED ENV{NWQSIM_ENABLE_CUDA})
+    set(NWQSIM_ENABLE_CUDA "$ENV{NWQSIM_ENABLE_CUDA}")
+endif()
+if(NOT DEFINED NWQSIM_ENABLE_HIP AND DEFINED ENV{NWQSIM_ENABLE_HIP})
+    set(NWQSIM_ENABLE_HIP "$ENV{NWQSIM_ENABLE_HIP}")
+endif()
+
+nwqsim_option(NWQSIM_ENABLE_CUDA OFF)
+nwqsim_option(NWQSIM_ENABLE_HIP OFF)
+
+if(NWQSIM_ENABLE_CUDA AND NWQSIM_ENABLE_HIP)
+    message(FATAL_ERROR "NWQSIM_ENABLE_CUDA and NWQSIM_ENABLE_HIP cannot both be ON. Pick one GPU backend.")
+endif()
 
 # Find required packages
 if (NWQSIM_ENABLE_CUDA)
-  find_package(CUDAToolkit)
+  find_package(CUDAToolkit REQUIRED)
 endif()
 
 if (NWQSIM_ENABLE_HIP)
-  find_package(HIP QUIET)
+  find_package(HIP REQUIRED)
 endif()
 
 find_package(MPI)

@@ -5,4 +5,4 @@ export cc=gcc
 export CC=g++
 
 export MY_HIP_ARCH=gfx908
-export MY_CUDA_ARCH=70
+export NWQSIM_ENABLE_HIP=ON

@@ -4,11 +4,11 @@ set(NWQSIM_ENABLE_CUDA @NWQSIM_ENABLE_CUDA@)
 set(NWQSIM_ENABLE_HIP @NWQSIM_ENABLE_HIP@)
 
 if (NWQSIM_ENABLE_CUDA)
-  find_package(CUDAToolkit)
+  find_package(CUDAToolkit REQUIRED)
 endif()
 
 if (NWQSIM_ENABLE_HIP)
-  find_package(HIP QUIET)
+  find_package(HIP REQUIRED)
 endif()
 
 find_package(MPI)
