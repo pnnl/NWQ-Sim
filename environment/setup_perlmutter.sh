@@ -9,6 +9,7 @@ export LD_LIBRARY_PATH=/opt/nvidia/hpc_sdk/Linux_x86_64/22.7/comm_libs/mpi/lib:$
 export LD_LIBRARY_PATH=$HOME/nvshmem/lib:/opt/nvidia/hpc_sdk/Linux_x86_64/22.7/compilers/lib/:$LD_LIBRARY_PATH
 
 export MY_CUDA_ARCH=80
+export NWQSIM_ENABLE_CUDA=ON
 export NVSHMEM_SYMMETRIC_SIZE=32g
 
 export NVSHMEM_REMOTE_TRANSPORT=libfabric

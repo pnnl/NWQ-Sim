@@ -22,8 +22,6 @@ set(VQE_SRCS
     src/execution/vqe_runner.cpp
 )
 
-find_package(HIP QUIET)
-
 set(VQE_GPU_SOURCE src/backend/statevector_gpu.cu)
 set(VQE_HIP_SOURCE src/backend/statevector_hip.cpp)
 set(VQE_GPU_STUB   src/backend/statevector_gpu_stub.cpp)
