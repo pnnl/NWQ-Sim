@@ -202,7 +202,7 @@ namespace NWQSim
         std::uniform_real_distribution<ValType> uni_dist;
 
         // CPU memory usage
-        ValType cpu_mem;
+        ValType cpu_mem = 0;
 
         virtual void simulation_kernel(const std::vector<SVGate> &gates)
         {

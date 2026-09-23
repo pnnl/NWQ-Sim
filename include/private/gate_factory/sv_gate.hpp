@@ -225,14 +225,17 @@ namespace NWQSim
             OP::U,
             [](const Gate &g, ValType *gm_real, ValType *gm_imag)
             {
+                // Compose the finite phases without overflowing phi + lambda.
+                const ValType cp = cos(g.phi), sp = sin(g.phi);
+                const ValType cl = cos(g.lam), sl = sin(g.lam);
                 ValType real[4] = {cos(HALF * g.theta),
-                                   -cos(g.lam) * sin(HALF * g.theta),
-                                   cos(g.phi) * sin(HALF * g.theta),
-                                   cos(g.phi + g.lam) * cos(HALF * g.theta)};
+                                   -cl * sin(HALF * g.theta),
+                                   cp * sin(HALF * g.theta),
+                                   (cp * cl - sp * sl) * cos(HALF * g.theta)};
                 ValType imag[4] = {0,
-                                   -sin(g.lam) * sin(HALF * g.theta),
-                                   sin(g.phi) * sin(HALF * g.theta),
-                                   sin(g.lam + g.phi) * cos(HALF * g.theta)};
+                                   -sl * sin(HALF * g.theta),
+                                   sp * sin(HALF * g.theta),
+                                   (sp * cl + cp * sl) * cos(HALF * g.theta)};
                 memcpy(gm_real, real, 4 * sizeof(ValType));
                 memcpy(gm_imag, imag, 4 * sizeof(ValType));
                 return OP::C1;

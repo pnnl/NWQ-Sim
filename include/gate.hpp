@@ -371,6 +371,7 @@ namespace NWQSim
                               theta(g.theta),
                               phi(g.phi),
                               lam(g.lam),
+                              gamma(g.gamma),
                               repetition(g.repetition),
                               data(g.data),
                               mod_op(g.mod_op),
@@ -393,7 +394,11 @@ namespace NWQSim
 
             std::stringstream ss;
             ss << OP_NAMES[op_name];
-            if (theta != 0.0 || phi != 0.0 || lam != 0.0)
+            if (op_name == OP::CU && gamma != 0.0)
+            {
+                ss << "(" << theta << "," << phi << "," << lam << "," << gamma << ") ";
+            }
+            else if (theta != 0.0 || phi != 0.0 || lam != 0.0)
             {
                 ss << "(";
                 if (theta != 0.0)

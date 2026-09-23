@@ -503,6 +503,7 @@ namespace NWQSim
                         [0 0 e^(i*(gamma+phi))sin(theta/2), e^(i*(gamma+phi+lam))cos(theta/2)]
             */
             Gate G(OP::CU, qubit, ctrl, 2, theta, phi, lam);
+            G.gamma = gamma;
             gates->push_back(G);
         }
         void ECR(IdxType ctrl, IdxType qubit)
