@@ -20,9 +20,8 @@ export FI_CXI_DISABLE_HMEM_DEV_REGISTER=1
 export PYTHONPATH=$PYTHONPATH:$HOME/.xacc
 export LD_LIBRARY_PATH=$HOME/.xacc/lib:$LD_LIBRARY_PATH
 
-export cc=cc
-export CC=CC
-
 #Use this when issues with MPI/NVSHMEM
 #FI_MR_CACHE_MONITOR=disabled 
 #FI_MR_CUDA_CACHE_MONITOR_ENABLED=0
+
+# CC=cc CXX=CC FC=ftn cmake  -DCUDA_ARCH=80  .. -DNWQSIM_ENABLE_CUDA=ON
