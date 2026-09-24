@@ -24,4 +24,6 @@ export LD_LIBRARY_PATH=$HOME/.xacc/lib:$LD_LIBRARY_PATH
 #FI_MR_CACHE_MONITOR=disabled 
 #FI_MR_CUDA_CACHE_MONITOR_ENABLED=0
 
-# CC=cc CXX=CC FC=ftn cmake  -DCUDA_ARCH=80  .. -DNWQSIM_ENABLE_CUDA=ON
+
+#Without CMAKE_CUDA_HOST_COMPILER=CC, CUDA targets are linked with nvcc's default g++ and the link fails with undefined omp_* references.
+# CC=cc CXX=CC cmake .. -DNWQSIM_ENABLE_CUDA=ON -DCUDA_ARCH=80 -DCMAKE_CUDA_HOST_COMPILER=CC
