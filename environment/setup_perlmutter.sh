@@ -20,9 +20,10 @@ export FI_CXI_DISABLE_HMEM_DEV_REGISTER=1
 export PYTHONPATH=$PYTHONPATH:$HOME/.xacc
 export LD_LIBRARY_PATH=$HOME/.xacc/lib:$LD_LIBRARY_PATH
 
-export cc=cc
-export CC=CC
-
 #Use this when issues with MPI/NVSHMEM
 #FI_MR_CACHE_MONITOR=disabled 
 #FI_MR_CUDA_CACHE_MONITOR_ENABLED=0
+
+
+#Without CMAKE_CUDA_HOST_COMPILER=CC, CUDA targets are linked with nvcc's default g++ and the link fails with undefined omp_* references.
+# CC=cc CXX=CC cmake .. -DNWQSIM_ENABLE_CUDA=ON -DCUDA_ARCH=80 -DCMAKE_CUDA_HOST_COMPILER=CC

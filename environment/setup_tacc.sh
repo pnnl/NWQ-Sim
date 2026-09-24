@@ -5,6 +5,4 @@ module load cuda/12.0
 
 export MY_CUDA_ARCH=90
 export NWQSIM_ENABLE_CUDA=ON
-export cc=gcc
-export CC=g++
 

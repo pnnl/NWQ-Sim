@@ -1,14 +1,6 @@
 # Specify a minimum CMake version
 cmake_minimum_required(VERSION 3.20) 
 
-if(DEFINED ENV{cc} AND DEFINED ENV{CC})
-    message("Environment variables cc and CC are set")
-    set(CMAKE_C_COMPILER "$ENV{cc}")
-    set(CMAKE_CXX_COMPILER "$ENV{CC}")
-else()
-    message("Environment variables cc and/or CC are not set, using default settings")
-endif()
-
 option(NWQSIM_ENABLE_VQE "Build VQE components (requires NLopt)" ON)
 
 
@@ -48,6 +40,13 @@ endif()
 
 if (NWQSIM_ENABLE_HIP)
   find_package(HIP REQUIRED)
+endif()
+
+# GPU sources are compiled by nvcc/hipcc with a plain host compiler, not the MPI
+# wrapper, so MPI include dirs and libraries must be populated on the MPI targets
+# even when CMAKE_CXX_COMPILER is an MPI wrapper (e.g. Cray CC).
+if((NWQSIM_ENABLE_CUDA OR NWQSIM_ENABLE_HIP) AND NOT DEFINED MPI_ASSUME_NO_BUILTIN_MPI)
+  set(MPI_ASSUME_NO_BUILTIN_MPI ON)
 endif()
 
 find_package(MPI)
