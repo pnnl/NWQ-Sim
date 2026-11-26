@@ -355,7 +355,7 @@ namespace vqe::backend
         // P|k> = phase * |k ^ x_mask>
         // phase comes from: (-1)^(k & z_mask) * (i)^y_count
         
-        const double theta = 0.5 * gate.angle; // exp(-i theta/2 P) like rz and the CPU backend [exachem fixme.sh]
+        const double theta = 0.5 * gate.angle; // exp(-i theta/2 P), the convention of rz and the CPU backend
         const double c = cos(theta);
         const double s = sin(theta);
 
