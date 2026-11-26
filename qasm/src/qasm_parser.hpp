@@ -22,6 +22,10 @@ using namespace NWQSim;
 using namespace lexertk;
 using namespace nlohmann;
 
+// Counts include classical bits written by mid-circuit measurements, and
+// classical registers are reset to 0 at the start of every shot.
+#define NWQSIM_QASM_MIDCIRCUIT_COUNTS 1
+
 class qasm_parser
 {
 public:
@@ -145,7 +149,9 @@ void qasm_parser::parse_qasm()
                     cur_gate.creg_name = cur_inst[INST_IF_CREG].value;
                     cur_gate.if_creg_val = stoll(cur_inst[INST_IF_VAL].value);
                     cur_gate.conditional_inst = new vector<qasm_gate>;
-                    auto c_inst = slices(cur_inst, INST_IF_INST_START, cur_inst.size() - 1);
+                    // Keep the trailing eof token: get_qubits checks for it, and
+                    // reads one past the end of the slice without it
+                    auto c_inst = slices(cur_inst, INST_IF_INST_START, cur_inst.size());
                     parse_gate(c_inst, cur_gate.conditional_inst);
                     list_gates->push_back(cur_gate);
                     multi_shot = true;
@@ -790,9 +796,9 @@ void qasm_parser::classify_measurements()
         {
             list_gates->at(i).final_measurements = final_measurements;
 
-            if (final_measurements)
-                measure_all = false; // If there are defined final measurements, we don't need to measure all qubits
-            else
+            // Measured classical registers are the output (don't measure all qubits)
+            measure_all = false;
+            if (!final_measurements)
                 multi_shot = true; // If there are intermediate measurements, we need to run the circuit multiple times
         }
         else
@@ -801,6 +807,22 @@ void qasm_parser::classify_measurements()
 
 map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::string initpath, std::string init_format, IdxType repetition)
 {
+    if (multi_shot && !measure_all)
+    {
+        // Mid-circuit measurements store their outcomes in the classical
+        // registers, which change from shot to shot: convert every shot right
+        // away (aggregating by final basis state first would lose them)
+        map<string, IdxType> *counts = new map<string, IdxType>;
+        for (IdxType i = 0; i < repetition; i++)
+        {
+            IdxType *sub_result = sub_execute(state, initpath, init_format, 1);
+            string key = convert_outcome(sub_result[0], list_cregs);
+            if (key.size() > 0)
+                (*counts)[key] += 1;
+        }
+        return counts;
+    }
+
     IdxType *results;
     if (multi_shot)
     {
@@ -831,6 +853,11 @@ map<string, IdxType> *qasm_parser::execute(shared_ptr<QuantumState> state, std::
 
 IdxType *qasm_parser::sub_execute(shared_ptr<QuantumState> state, std::string init_path, std::string init_format, IdxType repetition)
 {
+    // Classical registers start at 0 in every shot: otherwise an `if` (or the
+    // reported counts) would see values left over from the previous shot
+    for (auto &entry : list_cregs)
+        entry.second.val = 0;
+
     if (init_path != "")
     {
         state->set_initial(init_path, init_format);

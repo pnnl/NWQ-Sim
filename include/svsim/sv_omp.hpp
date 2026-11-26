@@ -12,6 +12,10 @@
 namespace NWQSim
 {
 
+    // M_GATE/MA_GATE are safe inside simulation_kernel's omp parallel region
+    // (the results buffer and random draws are made by a single thread)
+#define NWQSIM_OMP_IN_KERNEL_MEASURE_SAFE 1
+
     class SV_OMP : public SV_CPU
     {
 
@@ -57,6 +61,8 @@ namespace NWQSim
         }
 
     protected:
+        // Random draw shared by all threads of one M_GATE
+        ValType m_gate_rand = 0;
         void simulation_kernel(const std::vector<SVGate> &gates) override
         {
 #pragma omp parallel
@@ -267,11 +273,18 @@ namespace NWQSim
 
         void M_GATE(const IdxType qubit) override
         {
-            SAFE_FREE_HOST(results);
-            SAFE_ALOC_HOST(results, sizeof(IdxType));
-            memset(results, 0, sizeof(IdxType));
-
-            auto rand = uni_dist(rng);
+            // Inside simulation_kernel every thread runs this: one thread
+            // reallocates the shared results buffer and draws the random
+            // number (all threads must agree on the outcome); the implicit
+            // barrier publishes both
+#pragma omp single
+            {
+                SAFE_FREE_HOST(results);
+                SAFE_ALOC_HOST(results, sizeof(IdxType));
+                memset(results, 0, sizeof(IdxType));
+                m_gate_rand = uni_dist(rng);
+            }
+            auto rand = m_gate_rand;
             IdxType mask = ((IdxType)1 << qubit);
 
 #pragma omp for schedule(auto)
@@ -332,15 +345,20 @@ namespace NWQSim
                 }
             }
             BARR;
+#pragma omp single
             results[0] = rand < prob_of_one ? 1 : 0;
         }
 
         //============== MA Gate (Measure all qubits in Pauli-Z) ================
         void MA_GATE(const IdxType repetition) override
         {
-            SAFE_FREE_HOST(results);
-            SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
-            memset(results, 0, sizeof(IdxType) * repetition);
+            // See M_GATE: one thread owns the shared results buffer
+#pragma omp single
+            {
+                SAFE_FREE_HOST(results);
+                SAFE_ALOC_HOST(results, sizeof(IdxType) * repetition);
+                memset(results, 0, sizeof(IdxType) * repetition);
+            }
 
             IdxType n_size = (IdxType)1 << n_qubits;
 #pragma omp for schedule(auto)
@@ -391,7 +409,9 @@ namespace NWQSim
 //             }
 //             else
 //             {
-#pragma omp for schedule(auto)
+            // Sample serially: the shared rng isn't thread safe (the binary
+            // search per shot is cheap next to building the CDF above)
+#pragma omp single
             for (IdxType i = 0; i < repetition; i++)
             {
                 IdxType lo = 0;
