@@ -77,7 +77,7 @@ struct qasm_gate
     string creg_name;
     IdxType creg_index;
     IdxType measured_qubit_index;
-    bool final_measurements;
+    bool final_measurements = false;
 
     // Fields used for if operations
     IdxType if_offset;
