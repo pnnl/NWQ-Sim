@@ -77,7 +77,7 @@ struct qasm_gate
     string creg_name;
     IdxType creg_index;
     IdxType measured_qubit_index;
-    bool final_measurements;
+    bool final_measurements = false;
 
     // Fields used for if operations
     IdxType if_offset;
@@ -246,7 +246,9 @@ string convert_outcome(IdxType original_out, map<string, creg> &cregs)
 
             if (index == UN_DEF)
             {
-                ss << 0;
+                // Not measured at the end: the bit a mid-circuit measurement
+                // stored in the register (0 if the bit was never measured)
+                ss << ((val.val >> i) & 1);
             }
             else
                 ss << ((original_out >> index) & 1);
